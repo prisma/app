@@ -1,6 +1,6 @@
 # Design process and documentation workflow
 
-This directory documents **how this documentation system works** and the **expected design process** for evolving AppKit over time.
+This directory documents **how this documentation system works** and the **expected design process** for evolving MakerKit over time.
 
 ## The documentation system
 

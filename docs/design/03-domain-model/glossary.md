@@ -32,11 +32,11 @@ An addressable unit the platform can execute (by id/kind), defined by an artifac
 
 ## Control plane
 
-AppKit mode for importing descriptors, validating/normalizing, building topology, emitting manifests/artifacts, and driving provisioning/inspection.
+MakerKit mode for importing descriptors, validating/normalizing, building topology, emitting manifests/artifacts, and driving provisioning/inspection.
 
 ## Execution plane
 
-AppKit mode for instantiating implementations, satisfying the dependency graph, performing DI, and running entrypoints.
+MakerKit mode for instantiating implementations, satisfying the dependency graph, performing DI, and running entrypoints.
 
 ## Durable Stream
 

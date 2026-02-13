@@ -1,4 +1,4 @@
-# AppKit overview
+# MakerKit overview
 
 This document is the initial, broad design capture from early discussions. Over time, content here should be factored into:
 
@@ -8,13 +8,13 @@ This document is the initial, broad design capture from early discussions. Over 
 
 ---
 
-# AppKit Broad Design (Convex-, Wrangler-, and Prisma Next-inspired)
+# MakerKit Broad Design (Convex-, Wrangler-, and Prisma Next-inspired)
 
 ## Context
 
-AppKit is a **TypeScript framework** for defining applications deployed on the Prisma Platform (Prisma Postgres today; Prisma Compute, File Storage, and Durable Streams to follow).
+MakerKit is a **TypeScript framework** for defining applications deployed on the Prisma Platform (Prisma Postgres today; Prisma Compute, File Storage, and Durable Streams to follow).
 
-AppKit has two primary responsibilities:
+MakerKit has two primary responsibilities:
 
 1. **Static topology inference**: From TypeScript source structure, build a graph of platform components (services + dependencies) that can drive provisioning (IaC) and wiring.
 2. **Runtime execution + dependency injection (DI)**: Provide execution entrypoints for user code (HTTP, workers, subscribers, cron jobs, etc.) and inject environment-specific implementations (local/test/prod).
@@ -47,16 +47,16 @@ Wrangler is a great reference point for the *operational* side of the developer 
 
 Wrangler traditionally expresses this in a separate manifest (`wrangler.toml` / `wrangler.jsonc`) which is treated as the source of truth for configuration and bindings ([Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)).
 
-### Key difference: AppKit is code-first, not manifest-first
+### Key difference: MakerKit is code-first, not manifest-first
 
 We want the **ergonomics and end-to-end flow** of Wrangler, but without requiring developers (or agents) to maintain a parallel declarative config file that can drift from the application’s actual structure.
 
 - **Wrangler**: “declare IaC-ish intent in a manifest, then point to code”
-- **AppKit**: “declare resources + executables in TypeScript, then *compile* a manifest from code”
+- **MakerKit**: “declare resources + executables in TypeScript, then *compile* a manifest from code”
 
 Concretely:
 
-- AppKit should still emit a stable “deployment manifest” artifact (e.g. `appkit.map.json`) that plays a similar role to `wrangler.toml` for the platform control plane, but it should be **generated** from TypeScript descriptors rather than manually authored.
+- MakerKit should still emit a stable “deployment manifest” artifact (e.g. `makerkit.map.json`) that plays a similar role to `wrangler.toml` for the platform control plane, but it should be **generated** from TypeScript descriptors rather than manually authored.
 - Environment-specific configuration should be expressed as **typed, explicit code** (or typed configuration loaded by code) so agents can safely refactor and validate it.
 
 ## Inspiration: Prisma Next mechanics (what we’re borrowing)
@@ -64,22 +64,22 @@ Concretely:
 Prisma Next is a useful internal reference because it’s also designed for **agentic workflows** and is built around
 **structured, verifiable artifacts** rather than opaque generated runtime code.
 
-Key learnings to apply to AppKit:
+Key learnings to apply to MakerKit:
 
 - **Contract-first artifacts**: Prefer stable JSON artifacts + lightweight TypeScript types as the primary integration surface (machine-readable, diffable, inspectable).
 - **Determinism + verification**: Use hashes/IDs to tie artifacts to exact source inputs so the platform (and agents) can detect drift and verify compatibility.
 - **Composable DSL over magic codegen**: Provide a small, explicit, statically analyzable API surface that agents can synthesize and refactor reliably.
 - **Clear layering and boundaries**: Keep a modular package architecture and enforce boundaries to avoid “everything imports everything” over time (helps both humans and agents).
 
-How this maps onto AppKit:
+How this maps onto MakerKit:
 
-- The “contract artifact” becomes the **application topology map** (`appkit.map.json`) plus any typed contracts referenced by that map (stream payload schemas, service interfaces, etc.).
+- The “contract artifact” becomes the **application topology map** (`makerkit.map.json`) plus any typed contracts referenced by that map (stream payload schemas, service interfaces, etc.).
 - The “verification model” becomes **graph hashing** and compatibility checks (e.g., a hash of the descriptor graph and per-node hashes for executable/resource descriptors).
 - The “DSL surface” is the set of `define*` primitives + composition APIs that produce descriptors without hidden side effects, enabling static analysis.
 
-## AppKit: proposed programming model
+## MakerKit: proposed programming model
 
-AppKit aims to generalize the same code-first approach to **all Prisma Platform primitives** (database, compute, storage, streams) and to elevate “functions” into a more explicit graph of **executable units** and **resources**.
+MakerKit aims to generalize the same code-first approach to **all Prisma Platform primitives** (database, compute, storage, streams) and to elevate “functions” into a more explicit graph of **executable units** and **resources**.
 
 ### Core idea: “descriptors” define your app graph
 
@@ -92,14 +92,14 @@ User code defines **descriptors** (pure/serializable definitions) for:
 Descriptors are intended to be:
 
 - **Statically analyzable** (import graph + descriptor metadata).
-- **Serializable** to a stable metadata form (e.g. `appkit.map.json`) for provisioning.
+- **Serializable** to a stable metadata form (e.g. `makerkit.map.json`) for provisioning.
 - **Referenceable** via idiomatic TypeScript imports, so agents can scaffold and refactor predictably.
 
 ### Example (sketch)
 
 ```ts
 // db.ts
-import { definePostgres } from "@prisma/appkit";
+import { definePostgres } from "@prisma/makerkit";
 
 export const db = definePostgres({
   name: "main",
@@ -107,13 +107,13 @@ export const db = definePostgres({
 });
 
 // streams.ts
-import { defineStream } from "@prisma/appkit";
+import { defineStream } from "@prisma/makerkit";
 export const userEvents = defineStream<{ type: string; userId: string }>({
   name: "userEvents",
 });
 
 // api.ts
-import { defineHttpApi } from "@prisma/appkit";
+import { defineHttpApi } from "@prisma/makerkit";
 import { db } from "./db";
 import { userEvents } from "./streams";
 
@@ -132,7 +132,7 @@ Notes:
 
 ## Static topology inference (IaC from code)
 
-AppKit should be able to “compile” an app definition into a stable graph:
+MakerKit should be able to “compile” an app definition into a stable graph:
 
 - **Nodes**: executables + resources (compute units, DBs, buckets, streams, schedules).
 - **Edges**: dependencies (e.g., API → Postgres, Worker → Stream, Subscriber → Storage).
@@ -140,7 +140,7 @@ AppKit should be able to “compile” an app definition into a stable graph:
 
 Output artifacts (proposal):
 
-- `appkit.map.json`: the full dependency graph + metadata required for orchestration.
+- `makerkit.map.json`: the full dependency graph + metadata required for orchestration.
 - `dist/**`: bundled code artifacts for each executable entrypoint (e.g., API, worker).
 
 This graph is what a platform orchestration layer consumes to provision:
@@ -153,7 +153,7 @@ This graph is what a platform orchestration layer consumes to provision:
 
 ## Two planes: control plane vs execution plane (Prisma Next-inspired)
 
-Prisma Next has a useful split between **control plane** (CLI/admin-time) and **execution plane** (runtime), and AppKit should adopt the same mechanics.
+Prisma Next has a useful split between **control plane** (CLI/admin-time) and **execution plane** (runtime), and MakerKit should adopt the same mechanics.
 
 ### Control plane (CLI / inspection / provisioning-time)
 
@@ -161,10 +161,10 @@ Prisma Next has a useful split between **control plane** (CLI/admin-time) and **
 
 Responsibilities:
 
-- **Load app definition (descriptors-only):** Import the user’s AppKit descriptors and normalize defaults.
+- **Load app definition (descriptors-only):** Import the user’s MakerKit descriptors and normalize defaults.
 - **Validate shape + compatibility:** Ensure required dependencies are present, contracts are well-formed, and there’s no “hidden coupling” that will break DI later.
 - **Build topology:** Produce the service/resource dependency graph (what runs, what it depends on, what needs provisioning).
-- **Emit platform-facing metadata:** Generate `appkit.map.json` (analogous in role to Wrangler’s manifest, but generated from TypeScript rather than authored by hand; see [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)).
+- **Emit platform-facing metadata:** Generate `makerkit.map.json` (analogous in role to Wrangler’s manifest, but generated from TypeScript rather than authored by hand; see [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)).
 - **Plan/apply orchestration actions (TBD):** Provide a control API surface that can drive platform provisioning and wiring (create/update DBs, compute units, buckets, streams; attach bindings; configure routes).
 - **Local dev bootstrap (TBD):** Produce the runtime wiring for local emulation (ports, env, endpoints), and start local emulators where needed.
 
@@ -195,16 +195,16 @@ One of Prisma Next’s strongest learnings is to **separate control-plane entryp
 - Control plane code stays statically analyzable and does not pull in runtime-only concerns.
 - Runtime code can evolve without accidentally requiring CLI-only dependencies.
 
-AppKit should mirror this by establishing explicit import surfaces, e.g.:
+MakerKit should mirror this by establishing explicit import surfaces, e.g.:
 
-- `@prisma/appkit/control` — descriptor types, normalization, validation, topology build, manifest emission
-- `@prisma/appkit/runtime` — runtime interfaces, providers, DI container, entrypoint executors
+- `@prisma/makerkit/control` — descriptor types, normalization, validation, topology build, manifest emission
+- `@prisma/makerkit/runtime` — runtime interfaces, providers, DI container, entrypoint executors
 
 Packages that span both should expose separate entrypoints (e.g. `./control` vs `./runtime`) and keep dependencies directed to avoid accidental coupling.
 
 ## Runtime execution + DI
 
-At runtime, AppKit should:
+At runtime, MakerKit should:
 
 - Provide **entrypoint conventions** (“here is the HTTP server entrypoint”, “here is the cron entrypoint”, etc.).
 - Traverse the app graph and request concrete implementations from an **environment provider**:
@@ -216,7 +216,7 @@ This mirrors Convex’s use of a context object that grants access to platform f
 
 ## Durable Streams (backbone)
 
-Realtime and streaming communication is a core characteristic of the Prisma Platform and AppKit. AppKit’s default programming model should be **streaming-first**, with request/response built as an adapter on top when needed.
+Realtime and streaming communication is a core characteristic of the Prisma Platform and MakerKit. MakerKit’s default programming model should be **streaming-first**, with request/response built as an adapter on top when needed.
 
 ### Decision: log/topic first (A), build workflows/queues on top (B)
 
@@ -234,7 +234,7 @@ The DurableStream runtime contract includes first-class **consumer groups** and 
 
 Convex explicitly models both “run once later” and recurring cron ([Scheduling](https://docs.convex.dev/scheduling)).
 
-AppKit should support:
+MakerKit should support:
 
 - **Cron jobs**: recurring schedules bound to a handler.
 - **Scheduled functions**: one-off delayed execution (useful for durable workflows).
@@ -245,7 +245,7 @@ In the graph model, schedules are first-class nodes that target executable handl
 
 Convex documents file storage operations (upload/store/serve/delete) and emphasizes integrating storage into server-side functions and HTTP actions ([File Storage](https://docs.convex.dev/file-storage); [HTTP Actions](https://docs.convex.dev/functions/http-actions)).
 
-AppKit should define:
+MakerKit should define:
 
 - `defineBucket(...)` (or equivalent) as a resource descriptor.
 - Runtime interfaces for storing/serving files:
@@ -256,7 +256,7 @@ AppKit should define:
 
 Convex Components are sandboxed “mini backends” that are safe to install; they can’t access host app tables/functions unless explicitly passed, and they can include isolated DB tables and function environment ([Components](https://docs.convex.dev/components)).
 
-AppKit’s analogous concept (building on your brain dump):
+MakerKit’s analogous concept (building on your brain dump):
 
 - A **Component** is a package of descriptors (resources + executables).
 - Its **ports** are the external dependencies it needs (inputs) and the exports it provides (outputs).
@@ -269,10 +269,10 @@ This is also designed to be agent-friendly:
 
 ## Interface to the Prisma Platform
 
-AppKit needs a platform-facing contract for provisioning and execution. Minimum surface area:
+MakerKit needs a platform-facing contract for provisioning and execution. Minimum surface area:
 
 - **Artifact structure**: how code is bundled and uploaded (per executable).
-- **Metadata map**: the dependency graph + contracts (`appkit.map.json`).
+- **Metadata map**: the dependency graph + contracts (`makerkit.map.json`).
 - **Wiring contract**: how provisioned resources are surfaced to execution (env vars, service bindings, secrets).
 
 This is intentionally similar in spirit to Convex exposing a cohesive platform where functions integrate with database, scheduling, and storage through provided contexts and endpoints (see: [Actions](https://docs.convex.dev/functions/actions), [HTTP Actions](https://docs.convex.dev/functions/http-actions), [Scheduling](https://docs.convex.dev/scheduling), [File Storage](https://docs.convex.dev/file-storage)).
@@ -287,9 +287,9 @@ Assume the platform has:
 
 - Provisioned the required dependencies (e.g. a Prisma Postgres instance, an HTTP ingress attachment).
 - Staged the user’s code artifact(s) onto a VM with Bun.
-- Loaded the AppKit metadata (topology/manifest).
+- Loaded the MakerKit metadata (topology/manifest).
 
-Now it wants to run the app by delegating to AppKit:
+Now it wants to run the app by delegating to MakerKit:
 
 > “Execute entrypoint `X`, and here are the provisioned bindings for the dependencies that entrypoint requires.”
 
@@ -297,12 +297,12 @@ Now it wants to run the app by delegating to AppKit:
 
 An entrypoint is a tuple:
 
-- **Entrypoint ID**: stable identifier chosen by AppKit (e.g. `service.api#http`).
+- **Entrypoint ID**: stable identifier chosen by MakerKit (e.g. `service.api#http`).
 - **Kind**: the execution shape (e.g. `http-service`, `worker`, `subscriber`, `cron`).
 - **Artifact reference**: how to load it (bundle key + module path + export name).
 - **Declared dependency bindings**: the list of required resource bindings (e.g. `db.main`) and runtime/system bindings (e.g. `ingress.public`).
 
-Example (conceptual) JSON in `appkit.map.json`:
+Example (conceptual) JSON in `makerkit.map.json`:
 
 ```json
 {
@@ -325,7 +325,7 @@ Example (conceptual) JSON in `appkit.map.json`:
 At runtime, the platform calls something like:
 
 ```ts
-await appkit.executeEntrypoint({
+await makerkit.executeEntrypoint({
   entrypointId: "service.api#http",
   artifactRoot: "/app", // where bundles/modules are staged
   bindings: {
@@ -339,14 +339,14 @@ await appkit.executeEntrypoint({
 });
 ```
 
-Important: **user application code does not read globals** to find these things. The platform can source config from env vars internally, but the only interface AppKit exposes to user code is injected dependencies (see `docs/design/01-principles/architectural-principles.md`).
+Important: **user application code does not read globals** to find these things. The platform can source config from env vars internally, but the only interface MakerKit exposes to user code is injected dependencies (see `docs/design/01-principles/architectural-principles.md`).
 
 ### Where DI happens (Express model)
 
 For an `http-service` entrypoint, the user’s artifact export should be something that is “runnable” once dependencies are injected. With the Express-first choice, the most direct contract is:
 
 - User exports a factory that receives injected dependencies and returns an Express app instance.
-- AppKit (or a platform adapter) is responsible for binding that Express app to the provided ingress.
+- MakerKit (or a platform adapter) is responsible for binding that Express app to the provided ingress.
 
 Conceptual shape:
 
@@ -354,7 +354,7 @@ Conceptual shape:
 export type HttpServiceFactory<TDeps> = (deps: TDeps) => Promise<Express.Application> | Express.Application;
 ```
 
-Then AppKit’s runtime adapter can do:
+Then MakerKit’s runtime adapter can do:
 
 - instantiate `deps` (e.g. `{ db }`) from `bindings.resources`
 - call factory to get `app`
@@ -366,4 +366,4 @@ Then AppKit’s runtime adapter can do:
 - **Code packaging/bundling**: which bundler, what module boundary rules, how to split artifacts per entrypoint.
 - **Durability & retries**: what guarantees exist for scheduled functions / workflows (Convex has higher-level durable workflow components; see the scheduling page’s pointers to components ([Scheduling](https://docs.convex.dev/scheduling))).
 - **Auth propagation model**: how identities flow into handlers and between services (Convex exposes auth via function context ([Actions](https://docs.convex.dev/functions/actions))).
-- **Data contracts**: how AppKit encodes stream payload schemas, DB schemas, and cross-service contracts for agents and platform enforcement.
+- **Data contracts**: how MakerKit encodes stream payload schemas, DB schemas, and cross-service contracts for agents and platform enforcement.

@@ -1,6 +1,6 @@
 # Domain map
 
-This is an evolving, high-level map of AppKit’s bounded contexts (domains) and their dependency direction.
+This is an evolving, high-level map of MakerKit’s bounded contexts (domains) and their dependency direction.
 
 ## Draft domain map (WIP)
 
@@ -8,8 +8,8 @@ This is an evolving, high-level map of AppKit’s bounded contexts (domains) and
 flowchart TD
   userFacing[UserFacingLibraries]
 
-  controlPlane[AppkitControlPlane]
-  executionPlane[AppkitExecutionPlane]
+  controlPlane[MakerkitControlPlane]
+  executionPlane[MakerkitExecutionPlane]
 
   streams[DurableStreams]
   ingress[Ingress]

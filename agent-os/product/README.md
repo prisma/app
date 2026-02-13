@@ -4,7 +4,7 @@ This directory contains artifacts produced by the **Agent OS product planning wo
 
 ## Source of truth for design/architecture
 
-AppKit design and architecture documentation lives in:
+MakerKit design and architecture documentation lives in:
 
 - `docs/design/`
 

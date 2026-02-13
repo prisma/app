@@ -1,9 +1,9 @@
 ---
 name: design-discussion
-description: Facilitate AppKit design discussions and update docs/design (principles, domain docs) and add ADRs for decisions using the documented workflow and templates.
+description: Facilitate MakerKit design discussions and update docs/design (principles, domain docs) and add ADRs for decisions using the documented workflow and templates.
 ---
 
-# Design discussion (AppKit)
+# Design discussion (MakerKit)
 
 ## When to use
 

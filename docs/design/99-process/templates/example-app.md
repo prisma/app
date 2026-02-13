@@ -18,8 +18,8 @@ Describe the app topology as nodes and edges. Include a mermaid diagram if helpf
 
 ## Control plane walkthrough
 
-How AppKit inspects the app, produces topology, emits artifacts, and drives provisioning.
+How MakerKit inspects the app, produces topology, emits artifacts, and drives provisioning.
 
 ## Execution plane walkthrough
 
-How the platform executes an entrypoint, provides bindings, and AppKit performs DI and runs the app.
+How the platform executes an entrypoint, provides bindings, and MakerKit performs DI and runs the app.

@@ -4,7 +4,7 @@ This directory contains bounded-context / domain deep dives.
 
 Start with:
 
-- `appkit-overview.md`
+- `makerkit-overview.md`
 
 Over time, we expect to split the overview into more focused domains such as:
 
@@ -16,8 +16,8 @@ Over time, we expect to split the overview into more focused domains such as:
 
 Current domain files:
 
-- `appkit-control-plane.md`
-- `appkit-execution-plane.md`
+- `makerkit-control-plane.md`
+- `makerkit-execution-plane.md`
 - `durable-streams.md`
 - `ingress.md`
 - `artifacts-and-manifest.md`

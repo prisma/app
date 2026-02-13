@@ -1,10 +1,10 @@
-# AppKit Design Docs
+# MakerKit Design Docs
 
-This directory is the **source of truth** for AppKit’s architecture and design. It is intended to be consumed by:
+This directory is the **source of truth** for MakerKit’s architecture and design. It is intended to be consumed by:
 
 - Humans reading the repository
 - The Agent OS workflows in this repo (product planning stays in `agent-os/product/`, but design/architecture lives here)
-- Other teams integrating with AppKit (platform/orchestration/tools)
+- Other teams integrating with MakerKit (platform/orchestration/tools)
 - Implementation contributors working in this codebase
 
 ## How this documentation system is organized (DDD/Clean-aligned)

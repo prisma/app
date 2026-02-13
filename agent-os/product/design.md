@@ -2,6 +2,6 @@
 
 This file is a stub kept for compatibility with Agent OS workflows.
 
-- AppKit design overview: `docs/design/10-domains/appkit-overview.md`
-- AppKit design docs root: `docs/design/README.md`
+- MakerKit design overview: `docs/design/10-domains/makerkit-overview.md`
+- MakerKit design docs root: `docs/design/README.md`
 

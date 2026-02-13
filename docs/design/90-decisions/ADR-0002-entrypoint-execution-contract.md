@@ -1,4 +1,4 @@
-# ADR-0002: Entrypoint execution contract (platform → AppKit)
+# ADR-0002: Entrypoint execution contract (platform → MakerKit)
 
 ## Status
 
@@ -10,23 +10,23 @@ The Prisma Platform will:
 
 - Provision dependencies (e.g. Prisma Postgres, ingress, streams)
 - Stage the user’s code artifact(s) onto compute (VM with Bun)
-- Load AppKit’s topology/manifest metadata
+- Load MakerKit’s topology/manifest metadata
 
 The platform needs a clear, minimal contract to say:
 
 > “Execute entrypoint `X`, and here are the provisioned bindings for its dependencies.”
 
-This is also where AppKit performs dependency injection under the “no globals” principle.
+This is also where MakerKit performs dependency injection under the “no globals” principle.
 
 ## Decision
 
-- Model **entrypoints** as first-class, addressable units (by id) described in AppKit’s emitted metadata.
+- Model **entrypoints** as first-class, addressable units (by id) described in MakerKit’s emitted metadata.
 - An entrypoint includes:
   - **id**
   - **kind** (http-service, worker, subscriber, cron, etc.)
   - **artifact reference** (bundle/module/export)
   - **declared required bindings** (resources + system bindings)
-- At runtime, the platform calls AppKit with:
+- At runtime, the platform calls MakerKit with:
   - `entrypointId`
   - `artifactRoot`
   - a bindings map of provisioned dependency instances
@@ -39,8 +39,8 @@ This is also where AppKit performs dependency injection under the “no globals�
 
 ## Consequences
 
-- The manifest (`appkit.map.json`) must list entrypoints and their required bindings.
-- AppKit runtime must validate bindings and inject dependencies deterministically.
+- The manifest (`makerkit.map.json`) must list entrypoints and their required bindings.
+- MakerKit runtime must validate bindings and inject dependencies deterministically.
 
 ## Alternatives considered
 
@@ -50,4 +50,4 @@ This is also where AppKit performs dependency injection under the “no globals�
 ## Links
 
 - Principles: `docs/design/01-principles/architectural-principles.md`
-- Overview: `docs/design/10-domains/appkit-overview.md`
+- Overview: `docs/design/10-domains/makerkit-overview.md`

@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Realtime and streaming communication is a core characteristic of the Prisma Platform and AppKit. We want trivial streaming primitives:
+Realtime and streaming communication is a core characteristic of the Prisma Platform and MakerKit. We want trivial streaming primitives:
 
 - Between compute services
 - From DB to compute
@@ -41,4 +41,4 @@ We expect Durable Streams to be the backbone primitive. Request/response can be 
 ## Links
 
 - Principles: `docs/design/01-principles/guiding-principles.md`
-- Overview: `docs/design/10-domains/appkit-overview.md`
+- Overview: `docs/design/10-domains/makerkit-overview.md`

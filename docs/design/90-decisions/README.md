@@ -17,5 +17,5 @@ Keep ADRs short:
 ## Index
 
 - ADR-0001: Durable Streams backbone (A) with queues/workflows layered on top (B)
-- ADR-0002: Entrypoint execution contract (platform → AppKit execute by entrypoint id with injected bindings)
+- ADR-0002: Entrypoint execution contract (platform → MakerKit execute by entrypoint id with injected bindings)
 

@@ -1,7 +1,7 @@
 # Product Mission
 
 ## Pitch
-AppKit is a TypeScript application framework that helps application developers (and the AI agents they work with) define
+MakerKit is a TypeScript application framework that helps application developers (and the AI agents they work with) define
 multi-service applications for the Prisma Platform by authoring code that can be statically analyzed into
 infrastructure-as-code requirements and wired at runtime via dependency injection.
 
@@ -39,11 +39,11 @@ appropriate to the environment (Prisma Platform, local emulation, isolated tests
 ## Differentiators
 
 ### Static topology inference from code structure
-Unlike traditional “config-first” IaC, AppKit infers the service map directly from TypeScript definitions.
+Unlike traditional “config-first” IaC, MakerKit infers the service map directly from TypeScript definitions.
 This results in fewer sources of truth and less drift between code and infrastructure.
 
 ### Environment-swappable implementations via DI
-Unlike frameworks that tightly couple runtime services, AppKit is designed to swap implementations for local dev and tests
+Unlike frameworks that tightly couple runtime services, MakerKit is designed to swap implementations for local dev and tests
 without changing app code, enabling fast iteration and easy isolation.
 
 ## Key Features

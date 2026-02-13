@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Define how external traffic enters an AppKit application (e.g. public HTTP) as a first-class node in the topology graph.
+Define how external traffic enters an MakerKit application (e.g. public HTTP) as a first-class node in the topology graph.
 
 ## Current source material
 
 Ingress is discussed implicitly via the entrypoint execution contract:
 
 - `docs/design/90-decisions/ADR-0002-entrypoint-execution-contract.md`
-- `docs/design/10-domains/appkit-overview.md` (entrypoint model requires system bindings like ingress)
+- `docs/design/10-domains/makerkit-overview.md` (entrypoint model requires system bindings like ingress)
 
 ## Notes
 

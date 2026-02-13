@@ -4,7 +4,7 @@ These are long-lived product/design constraints that should shape most decisions
 
 ## Streaming-first (Convex-inspired)
 
-AppKit should be designed for realtime, streaming-first applications. Data should flow through services and eventually to client devices via **streams/subscriptions**, not primarily via request/response “pull” patterns.
+MakerKit should be designed for realtime, streaming-first applications. Data should flow through services and eventually to client devices via **streams/subscriptions**, not primarily via request/response “pull” patterns.
 
 Decisions recorded:
 

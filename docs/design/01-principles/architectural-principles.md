@@ -1,6 +1,6 @@
 # Architectural Principles
 
-These are structural constraints that shape AppKit’s architecture and package boundaries.
+These are structural constraints that shape MakerKit’s architecture and package boundaries.
 
 ## No globals in user applications (DI-only)
 
@@ -14,15 +14,15 @@ Implications:
 
 ## Code-first topology (generated manifest)
 
-The application’s topology is defined in TypeScript (descriptors) and AppKit generates the deployment metadata (e.g. `appkit.map.json`) from that code.
+The application’s topology is defined in TypeScript (descriptors) and MakerKit generates the deployment metadata (e.g. `makerkit.map.json`) from that code.
 
-Wrangler is an inspiration for end-to-end developer experience, but AppKit avoids a hand-authored manifest as the source of truth to prevent drift.
+Wrangler is an inspiration for end-to-end developer experience, but MakerKit avoids a hand-authored manifest as the source of truth to prevent drift.
 
 ## Two-plane architecture: control plane vs execution plane
 
-AppKit must operate in two modes:
+MakerKit must operate in two modes:
 
 - **Control plane**: import descriptors, validate/normalize, build topology graph, emit metadata/artifacts, provide handles for provisioning/inspection.
 - **Execution plane**: instantiate implementations, satisfy the graph, perform DI, run entrypoints.
 
-To prevent drift, keep separate import surfaces (e.g. `@prisma/appkit/control` vs `@prisma/appkit/runtime`) and avoid cross-plane coupling.
+To prevent drift, keep separate import surfaces (e.g. `@prisma/makerkit/control` vs `@prisma/makerkit/runtime`) and avoid cross-plane coupling.
