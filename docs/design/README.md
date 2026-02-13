@@ -1,0 +1,46 @@
+# AppKit Design Docs
+
+This directory is the **source of truth** for AppKit’s architecture and design. It is intended to be consumed by:
+
+- Humans reading the repository
+- The Agent OS workflows in this repo (product planning stays in `agent-os/product/`, but design/architecture lives here)
+- Other teams integrating with AppKit (platform/orchestration/tools)
+- Implementation contributors working in this codebase
+
+## How this documentation system is organized (DDD/Clean-aligned)
+
+We keep docs in **three kinds of artifacts** so we can evolve the design incrementally without one giant “design.md”:
+
+- **North-star docs (low churn)**: goals/purpose, guiding principles, architectural principles.
+- **Reference docs (structured)**: example app, domain model map + glossary, domain deep dives.
+- **Decisions (append-only)**: ADRs capturing “we picked an answer”, linked from reference docs.
+
+This structure is intentionally aligned with **DDD + Clean Architecture**:
+
+- **Ubiquitous language** lives in the glossary and domain docs.
+- **Bounded contexts** and their relationships are documented in the domain map.
+- **Dependency direction** (Clean): low-level primitives stay decoupled; user-facing libraries are the **composition points** that wire primitives together.
+
+## How to evolve these docs (design process)
+
+The process and templates live under `docs/design/99-process/`:
+
+- **Process**: `docs/design/99-process/README.md`
+- **Templates**: `docs/design/99-process/templates/`
+
+Rule of thumb during design discussions:
+
+- Update **principles** only when it’s a stable guiding constraint.
+- Update **domain docs** when we refine boundaries, interfaces, invariants, or responsibilities.
+- Write an **ADR** when we make a decision we want to be able to reference later.
+
+## Reading order
+
+1. `docs/design/00-purpose/goals.md`
+2. `docs/design/01-principles/guiding-principles.md`
+3. `docs/design/01-principles/architectural-principles.md`
+4. `docs/design/02-example-app/README.md`
+5. `docs/design/03-domain-model/domain-map.md`
+6. `docs/design/03-domain-model/glossary.md`
+7. `docs/design/10-domains/` (deep dives)
+8. `docs/design/90-decisions/` (ADRs)
