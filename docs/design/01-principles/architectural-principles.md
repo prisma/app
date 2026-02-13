@@ -26,3 +26,13 @@ MakerKit must operate in two modes:
 - **Execution plane**: instantiate implementations, satisfy the graph, perform DI, run entrypoints.
 
 To prevent drift, keep separate import surfaces (e.g. `@prisma/makerkit/control` vs `@prisma/makerkit/runtime`) and avoid cross-plane coupling.
+
+## Platform-agnostic core (ports/adapters)
+
+MakerKit’s core packages should not be coupled to any specific deployment platform (including Prisma).
+
+Implications:
+
+- **Define ports in the core**: core packages define the interfaces for storage, streams, scheduling, ingress, and bindings resolution.
+- **Implement adapters outside the core**: Prisma Platform integrations live in adapters/providers that implement those interfaces.
+- **Keep dependency direction clean**: the core never imports Prisma-specific clients/SDKs; adapters depend on the core, not the other way around.
