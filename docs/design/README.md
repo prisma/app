@@ -13,6 +13,7 @@ We keep docs in **three kinds of artifacts** so we can evolve the design increme
 
 - **North-star docs (low churn)**: goals/purpose, guiding principles, architectural principles.
 - **Reference docs (structured)**: example app, domain model map + glossary, domain deep dives.
+- **Inspiration library (iterative)**: notes on systems we’re learning from (what to emulate, what to avoid).
 - **Decisions (append-only)**: ADRs capturing “we picked an answer”, linked from reference docs.
 
 This structure is intentionally aligned with **DDD + Clean Architecture**:
@@ -42,5 +43,6 @@ Rule of thumb during design discussions:
 4. `docs/design/02-example-app/README.md`
 5. `docs/design/03-domain-model/domain-map.md`
 6. `docs/design/03-domain-model/glossary.md`
-7. `docs/design/10-domains/` (deep dives)
-8. `docs/design/90-decisions/` (ADRs)
+7. `docs/design/04-inspirations/` (systems we’re learning from)
+8. `docs/design/10-domains/` (deep dives)
+9. `docs/design/90-decisions/` (ADRs)
