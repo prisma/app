@@ -50,4 +50,4 @@ This is also where MakerKit performs dependency injection under the “no global
 ## Links
 
 - Principles: `docs/design/01-principles/architectural-principles.md`
-- Overview: `docs/design/10-domains/makerkit-overview.md`
+- Layering: `docs/design/03-domain-model/layering.md`
