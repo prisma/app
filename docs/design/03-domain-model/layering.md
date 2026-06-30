@@ -1,8 +1,8 @@
 # Layering: MakerKit → Alchemy → Prisma Cloud
 
 MakerKit's model exists at three planes. The developer authors in MakerKit's
-plane; MakerKit **lowers** that into the Alchemy/Effect substrate; the substrate
-**provisions and runs** as Prisma Cloud hosting primitives.
+plane; MakerKit **lowers** that into the Alchemy/Effect **provisioning plane**,
+which provisions it to run as Prisma Cloud hosting primitives.
 
 This is the same shape as Prisma Next: an authored data contract lowers to an IR
 / plan, which executes against a database. Here, an authored topology lowers to a
@@ -18,7 +18,7 @@ resource graph, which deploys to the cloud.
   **Service**, **Resource**, **Input**, **Output**, **Data Contract**,
   **Topology**. Statically analyzable; this is the ubiquitous language (see
   `glossary.md`).
-- **Substrate plane (Alchemy / Effect)** — how MakerKit represents, wires, and
+- **Provisioning plane (Alchemy / Effect)** — how MakerKit represents, wires, and
   provisions. Nouns: Resource, Platform, Binding, Layer, Provider, Stack. MakerKit
   adopts Alchemy's *definition language*; the apply *engine* is an open question
   (see below).
@@ -29,7 +29,7 @@ resource graph, which deploys to the cloud.
 
 ## The mapping
 
-| Authoring (MakerKit) | Substrate (Alchemy/Effect) | Hosting (Prisma Cloud) |
+| Authoring (MakerKit) | Provisioning (Alchemy/Effect) | Hosting (Prisma Cloud) |
 | --- | --- | --- |
 | **Hex** (bounded context) | a subgraph: Resources/Platforms + a Layer exposing its ports | **no single object** — spans Compute services + a DB schema slice + streams + endpoints |
 | **Service** (entrypoint + ingress/egress) | Platform (compute Resource running the bundle) | ComputeService → ComputeVersion (tar.gz bundle + manifest + endpoint) |

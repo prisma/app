@@ -2,7 +2,7 @@
 
 The shared terms used across MakerKit's design docs. This is the **authoring
 plane** vocabulary — what a developer writes and thinks in. For how these lower
-to the substrate and hosting planes, see `layering.md`.
+to the provisioning and hosting planes, see `layering.md`.
 
 ## Core nouns
 
@@ -109,14 +109,14 @@ The cloud can verify the live DB satisfies the aggregate via the marker/ledger.
 
 ## Planes & process
 
-### Authoring / Substrate / Hosting planes
+### Authoring / Provisioning / Hosting planes
 
 The three layers MakerKit spans: what you write (MakerKit), how it's wired and
 provisioned (Alchemy/Effect), what runs (Prisma Cloud). See `layering.md`.
 
 ### Lowering
 
-The compilation from one plane to the next: authoring topology → substrate
+The compilation from one plane to the next: authoring topology → provisioning
 resource graph → hosting primitives. Analogous to Prisma Next lowering a contract
 to a plan.
 
