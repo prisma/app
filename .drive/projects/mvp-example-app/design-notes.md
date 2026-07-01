@@ -61,15 +61,35 @@ against real Prisma Cloud primitives.
 - Modelled as **two resources**: `ComputeService` (stable identity) + `Deployment`
   (one deploy). `Deployment.delete` is a no-op (versions are torn down with the
   service).
+- **Compute artifact format (ignite Terminal ADRs 0003/0005/0008).** The artifact
+  is a `.tar.gz` of a **client-side Bun bundle** + `compute.manifest.json`.
+  `prisma compute deploy` runs `Bun.build({ entrypoints, target: "bun", sourcemap:
+  "external" })` → one JS file (+ maps), writes the manifest
+  (`{ manifestVersion: "1", entrypoint: "<bundled JS>" }`, pointing at the *bundled*
+  output), tars it, uploads to the presigned `uploadUrl`. The VM init (Spark) runs
+  `bun <entrypoint>`; `node_modules` must be installed before bundling (the CLI
+  doesn't `bun install`). Build step = **Bun.build → write manifest → tar.gz**. Auth
+  (Bun/Hono) uses this directly; the Storefront uses `next build` standalone output
+  with the manifest pointing at Next's `server.js`.
 
 ## Open questions
 
-- Next.js → Compute artifact bundling (operator has prior art).
 - Direct vs pooled connection string from the Connection resource (currently using
   the connection's top-level `url`).
-- **Deployment redeploy-on-change** — does a changed artifact produce a new version
-  + promote, or does the resource short-circuit on the existing `versionId`? Under
-  review in Slice 1.
+- Next.js standalone → Compute assembly (Slice 3). The `bundleComputeArtifact`
+  `Bun.build` pipeline does **not** cover Next: the Storefront uses `next build`
+  standalone output with the manifest pointing at `.next/standalone/server.js`. Slice
+  3 needs a *variant* that packages a pre-built directory + manifest (reusing the
+  manifest-write + tar-at-root + sha256 pieces, not the `Bun.build` step). Confirm the
+  exact standalone assembly against the operator's prior art.
+
+## Slice 4 wiring notes
+
+- **Env injection.** `DATABASE_URL` is a separate branch-scoped env-var resource
+  (`/v1/environment-variables`), not a deploy prop. Slice 4 must set it before the
+  `Deployment`; the Auth service fails fast if it's unset.
+- **Port coordination.** The app's listen `PORT` and the Compute create-version
+  `portMapping.http` must line up — wire both from one source in Slice 4.
 
 ## References
 

@@ -29,6 +29,7 @@ as the first app proving that pipeline reads/writes its own Postgres.
 
 - **builds on:** — (independent).
 - **hands to:** a `build → artifact` step downstream apps reuse, and the Auth artifact.
+- **status:** ✅ delivered — implemented (Sonnet) + reviewed (Opus: SHIP + one hardening fix); `tsc` clean, artifact verified against the ADR format.
 
 ### Slice 3 — Storefront (Next.js) on the pipeline
 

@@ -2,5 +2,9 @@
   "name": "@makerkit/example-storefront-auth",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "typescript": "^6.0.3"
+  }
 }
