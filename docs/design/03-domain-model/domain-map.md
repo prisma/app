@@ -8,8 +8,6 @@ models and how they relate. For how these lower to Alchemy and Prisma Cloud, see
 emitter, runtime — is a separate concern for the architecture phase, not this
 map.)
 
-## The meta-model
-
 ```mermaid
 flowchart TB
   Topology["Topology — the emitted artifact"]
@@ -28,6 +26,7 @@ flowchart TB
 
   Hex -->|wraps| Service
   Hex -->|wraps or uses| Resource
+  Hex -->|nests| Hex
   Hex -->|has| Input
   Hex -->|has| Output
   Resource -->|has| Output
@@ -49,6 +48,10 @@ flowchart TB
 - **A Hex wraps Services and Resources** and is reachable from the outside *only*
   through its Inputs and Outputs. That boundary is what makes the topology
   truthful — every cross-Hex dependency is an edge.
+- **Nesting isn't a special case.** A Hex behaves like a Service — stateless, with
+  typed I/O — so a nested Hex is wired exactly as a Service is. A wrapped node's
+  Inputs/Outputs connect to the parent Hex's boundary or to a sibling inside the
+  Hex; it reaches outside only through the parent's Inputs/Outputs.
 - **Every node — Hex or Resource — can have Inputs and Outputs.** A connection
   always wires an Output to an Input.
 - **Every node carries a managed lifecycle** — Services (your code) and Resources
@@ -68,7 +71,7 @@ flowchart TB
     it satisfies); the Hex's **Data Input** requires a contract; the wire is valid
     iff the offered hashes satisfy it.
 - **The Topology is the artifact.** MakerKit infers the graph from TypeScript and
-  emits it for the platform to provision.
+  emits it.
 
 ## Dependency direction
 
@@ -78,8 +81,6 @@ wiring) is explicit and lives in the topology, not in ambient/global state.
 
 ## Open questions
 
-- **Nesting** — Hexes can contain Hexes (subsystems). The exact rules for how a
-  child Hex's Inputs/Outputs surface on its parent are not yet specified.
 - **Resource placement** — a Resource may be owned inside one Hex (private) or
   stand alone and be shared by several Hexes' Data Inputs. "One owner" is a
   convention, not an enforced rule (see `glossary.md` → Deferred).

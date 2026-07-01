@@ -14,13 +14,22 @@ lifecycle — an API key, an external URL — is **Configuration**, not a node.
 
 ### Hex (Subsystem)
 
-The unit of composition: a **bounded context** that wraps some Services and
-Resources, exposes **Inputs** and **Outputs**, and is connected to other Hexes
-only through them. A Hex can contain one or many Services, and Hexes can nest.
+The unit of composition: a **bounded context** that wraps some Services,
+Resources, and other Hexes, exposes **Inputs** and **Outputs**, and is connected to
+other Hexes only through them. A Hex runs **no code of its own** — its behaviour is
+the composition of what it wraps.
+
+A Hex **behaves like a Service**: stateless, reprovisionable, and equivalent to its
+past incarnations, with typed Inputs and Outputs. That shared behaviour is what
+makes nesting work — a nested Hex is wired exactly as a Service is. It stays a
+distinct type, with composition behaviours a Service doesn't have.
 
 - "Hex" is the working name; **Subsystem** is the literal fallback.
 - A Hex is an *authoring/reasoning* unit. It is not a single deployed object — it
   lowers to a subgraph of hosting primitives (see `layering.md`).
+- **Nesting.** A wrapped node's Inputs/Outputs connect either to the parent Hex's
+  Inputs/Outputs or to a sibling (Service, Resource, or Hex) inside the same Hex; a
+  wrapped node reaches outside the Hex only through the parent's boundary.
 
 ### Service
 
