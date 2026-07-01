@@ -13,4 +13,4 @@ The settled high-level model is recorded in:
 
 The earlier brain-dump and stub deep-dives were removed once their content was
 factored into the docs above. Fresh deep dives will be added here as we design
-each domain in detail; use [`../99-process/templates/domain.md`](../99-process/templates/domain.md).
+each domain in detail.
