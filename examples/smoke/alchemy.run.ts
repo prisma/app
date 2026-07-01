@@ -27,11 +27,12 @@ export default Alchemy.Stack(
       name: "makerkit-smoke",
     });
 
+    // A project auto-provisions its default database, so create a non-default one.
     const database = yield* Prisma.Database("smoke-db", {
       projectId: project.id,
       name: "smoke",
       region: "us-east-1",
-      isDefault: true,
+      isDefault: false,
     });
 
     const connection = yield* Prisma.Connection("smoke-conn", {

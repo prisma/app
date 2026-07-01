@@ -72,6 +72,15 @@ against real Prisma Cloud primitives.
   (Bun/Hono) uses this directly; the Storefront uses `next build` standalone output
   with the manifest pointing at Next's `server.js`.
 
+## Validated end-to-end (Postgres)
+
+The Postgres provider is **proven against real Prisma Cloud** via `examples/smoke`.
+`alchemy deploy` creates project → database → connection; a re-deploy is a project
+**noop** (idempotent `read`); `alchemy destroy` removes all three in reverse order.
+Auth = a workspace **service token** (Console → Settings → Service Tokens) in a
+gitignored `.env`, sourced into the process env before the CLI — `--env-file`
+doesn't populate `process.env`, which the stack reads directly.
+
 ## Open questions
 
 - Direct vs pooled connection string from the Connection resource (currently using
@@ -85,6 +94,9 @@ against real Prisma Cloud primitives.
 
 ## Slice 4 wiring notes
 
+- **A project auto-provisions a default database.** Creating a `Database` with
+  `isDefault: true` fails with "Default database already exists" — connect to the
+  project's default DB, or create a non-default named one (the smoke does the latter).
 - **Env injection.** `DATABASE_URL` is a separate branch-scoped env-var resource
   (`/v1/environment-variables`), not a deploy prop. Slice 4 must set it before the
   `Deployment`; the Auth service fails fast if it's unset.
