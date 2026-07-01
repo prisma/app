@@ -16,5 +16,5 @@ Keep ADRs short:
 
 ## Index
 
-- ADR-0002: Entrypoint execution contract (platform → MakerKit execute by entrypoint id with injected bindings)
+_No active ADRs yet — earlier drafts (ADR-0001, ADR-0002) were retired as the high-level design settled. The next ADR will be ADR-0003._
 
