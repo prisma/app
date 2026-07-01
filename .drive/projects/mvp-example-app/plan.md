@@ -41,6 +41,10 @@ Auth while serving a request, building to a Compute artifact via slice 2's pipel
 
 - **builds on:** slice 2 (the build pipeline).
 - **hands to:** the Storefront artifact + the ingress→Auth call path.
+- **status:** ✅ delivered + **live on real Prisma Cloud** — `next build` standalone
+  packaged by `bundle-next.ts`, deployed via our provider; serves `200`. Needed
+  `node-linker=hoisted` (pnpm isolates Next's peers like styled-jsx). The Auth call is
+  wired in Slice 4 (AUTH_URL currently unset → the page renders that).
 
 ### Slice 4 — Wire, deploy, verify
 

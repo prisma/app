@@ -109,12 +109,19 @@ Prisma ships its Compute deploy knowledge as the `prisma-compute` agent skill
 (`npx @prisma/cli agent install`, installed globally for this agent). What it
 changes for us:
 
-- **Don't reinvent the Next.js build.** `@prisma/cli app build --build-type nextjs`
-  produces a deployable artifact, and `@prisma/compute-sdk` exposes a `NextjsBuild`
-  strategy (requires `output: "standalone"`, entrypoint `server.js`) plus
-  `PreBuilt({ appPath, entrypoint })`. Slice 3 produces the Storefront artifact via
-  Prisma's Next build, then deploys it through our Alchemy provider — which consumes
-  a prebuilt artifact, exactly the seam we designed.
+- **Next.js build — what actually worked (Slice 3).** The artifact is `next build`
+  with `output: "standalone"`; `scripts/bundle-next.ts` copies in the static assets,
+  writes the Compute manifest (entrypoint = the standalone `server.js`), and tars it
+  for our `Deployment` to upload. Two traps hit and solved:
+  1. **pnpm hides Next's peers.** The isolated layout puts `styled-jsx` under `.pnpm`,
+     and the flattened standalone `next` copy can't resolve it → the server crashes at
+     boot (`Cannot find module 'styled-jsx/package.json'`). Fixed with a repo `.npmrc`
+     `node-linker=hoisted`, which yields a flat, self-contained standalone.
+  2. **`app build --build-type nextjs` is a dead end here.** Under isolated pnpm it
+     emits the crashing artifact; under hoisted it can't run `next build` (no
+     per-package node_modules). So we invoke `next build` directly, not `app build`.
+     `@prisma/compute-sdk`'s `NextjsBuild`/`PreBuilt` strategies likely hit the same
+     pnpm issue.
 - **`verify-public-url` is the PRO-200 gotcha, upstream.** The skill's own rule says
   to fetch the real public deployment URL after deploy rather than trust a
   readiness/create-time value — the same trap we hit and filed.
@@ -131,11 +138,9 @@ changes for us:
 
 - Direct vs pooled connection string from the Connection resource (currently using
   the connection's top-level `url`).
-- Next.js → Compute artifact (Slice 3). **Resolved approach:** use Prisma's own Next
-  build (`app build --build-type nextjs`, or the SDK `NextjsBuild`) to produce the
-  standalone artifact (entrypoint `server.js`); deploy it via our provider. Remaining
-  unknown: the exact shape `app build` emits (tar.gz vs staged dir) and how it maps to
-  our `Deployment` `artifactPath` — settle empirically against the real Storefront.
+- Next.js → Compute artifact (Slice 3). **Done and proven live** — `next build`
+  standalone + `node-linker=hoisted` + `bundle-next.ts`; see the Slice 3 note under
+  "Compute skill findings". The Storefront serves 200 on Compute via our provider.
 
 ## Slice 4 wiring notes
 
