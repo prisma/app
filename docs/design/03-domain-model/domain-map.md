@@ -14,8 +14,9 @@ map.)
 flowchart TB
   Topology["Topology — the emitted artifact"]
   Hex["Hex (Subsystem)"]
-  Service["Service — compute unit"]
-  Resource["Resource — Postgres (+ BYO)"]
+  Service["Service — your code (compute)"]
+  Resource["Resource — managed lifecycle (Postgres + BYO)"]
+  Config["Configuration — per-env, not a node"]
   Input["Input — requires"]
   Output["Output — provides"]
   Conn["Connection"]
@@ -38,6 +39,9 @@ flowchart TB
   Conn -.->|data method| DM["TCP · HTTP"]
   Input -.->|data: must satisfy| DC
   Output -.->|data: offers hashes of| DC
+
+  Service -.->|configured by| Config
+  Resource -.->|configured by| Config
 ```
 
 ## How to read it
@@ -47,8 +51,16 @@ flowchart TB
   truthful — every cross-Hex dependency is an edge.
 - **Every node — Hex or Resource — can have Inputs and Outputs.** A connection
   always wires an Output to an Input.
+- **Every node carries a managed lifecycle** — Services (your code) and Resources
+  (managed dependencies). That's what lets the whole topology be recreated in a new
+  environment and reproduced in the local emulator.
+- **Configuration is not a node.** Keys, URLs, and secrets parameterise Services
+  and Resources and are injected per environment. An external service you don't
+  provision lives here — surfaced as a Service's **egress** (an outbound dependency
+  plus its config), never an edge to a node. Provision it (a Resource) or wrap it
+  in a Service to bring it into the graph.
 - **Two families of connection:**
-  - **communication** (Hex ↔ Hex, or public/external) with a **style**:
+  - **communication** (Hex ↔ Hex, or public **ingress**) with a **style**:
     `request/response` or `stream`. The style is a property of the connection; no
     Resource sits "in" it.
   - **data** (Hex → Postgres Resource) with a **method** (`TCP` / `HTTP`) and a

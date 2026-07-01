@@ -19,7 +19,8 @@ resource graph, which deploys to the cloud.
   **Topology**. Statically analyzable; this is the ubiquitous language (see
   `glossary.md`).
 - **Provisioning plane (Alchemy / Effect)** — how MakerKit represents, wires, and
-  provisions. Nouns: Resource, Platform, Binding, Layer, Provider, Stack. MakerKit
+  provisions. Nouns: Resource, Platform, Binding, Layer, Provider, Stack, Config.
+  MakerKit
   adopts Alchemy's *definition language*; the apply *engine* is an open question
   (see below).
 - **Hosting plane (Prisma Cloud)** — what actually runs. Nouns: ComputeService /
@@ -32,11 +33,12 @@ resource graph, which deploys to the cloud.
 | Authoring (MakerKit) | Provisioning (Alchemy/Effect) | Hosting (Prisma Cloud) |
 | --- | --- | --- |
 | **Hex** (bounded context) | a subgraph: Resources/Platforms + a Layer exposing its ports | **no single object** — spans Compute services + a DB schema slice + streams + endpoints |
-| **Service** (entrypoint + ingress/egress) | Platform (compute Resource running the bundle) | ComputeService → ComputeVersion (tar.gz bundle + manifest + endpoint) |
-| **Resource: Postgres** | Resource (Prisma Postgres provider) | Database (1:1 in an Environment) |
+| **Service** (your code; entrypoint + ingress) | Platform (compute Resource running the bundle) | ComputeService → ComputeVersion (tar.gz bundle + manifest + endpoint) |
+| **Resource** (managed lifecycle, state-first) | Alchemy Resource + Provider (`reconcile`/`delete`/…); Postgres via the Prisma Postgres provider | a Database (1:1 in an Environment), bucket, cache, or provisioned third-party |
 | **Input/Output — communication** (request/response, stream) | Binding (RPC/HTTP client; stream pub/sub) | endpoint URL + injected client; stream |
 | **Data Input** (method TCP/HTTP + contract) | data binding to a Postgres Resource | connection injected, scoped by contract |
 | **Data Output** (offered contract hashes) | the Postgres Resource's provided data | the DB schema satisfying the aggregate contract |
+| **Configuration** (per-env values, secrets) | `effect/Config` (`Config.redacted`), bound to the Platform env | env var / secret on the running compute — not a node |
 | **Topology** (graph of Hexes/Resources) | Stack(s) **+ MakerKit's emit step** (which Alchemy lacks) | the provisioned set + injected wiring |
 
 ## Structural claims
@@ -99,6 +101,18 @@ Openness is delegated to Alchemy's resource/Layer ecosystem, not added as a
 MakerKit plugin enum. First-class resources lower to the Prisma plane; BYO
 resources lower to their own Alchemy providers, provisioned against the user's own
 cloud.
+
+**Managed lifecycle.** A Resource's provider implements its lifecycle
+(`reconcile`/`delete`/…). Those hooks can call cloud APIs *or* a third-party/partner
+API, so a provisioned third-party account — Stripe, Tigris, a Prisma-brokered
+Mailchimp — is a Resource. A service you only *call* (you hold a key, nobody
+provisions it) is **Configuration**, not a Resource.
+
+**Local emulation is MakerKit's job.** Alchemy deliberately doesn't emulate
+(`alchemy dev` = real cloud). So each Resource ships a **local stand-in Layer**
+beside its real provider, and MakerKit swaps it in for `prisma dev` — same
+interface, no cloud. This is what satisfies the reproduce-in-the-emulator goal
+(see `../00-purpose/goals.md`).
 
 ## Provisioning & state
 

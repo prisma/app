@@ -24,23 +24,31 @@ code.
 flowchart TB
   User((User))
 
-  subgraph Storefront["Hex: Storefront (Next.js)"]
+  subgraph Storefront["Hex: Storefront"]
+    SF["Next.js · Compute Service"]
   end
   subgraph Sales["Hex: Sales & Billing"]
+    SA["Sales API · Compute Service"]
+    INV[("Invoices · object storage")]
+    SA --- INV
   end
   subgraph Delivery["Hex: Delivery"]
+    DE["Delivery · Compute Service"]
+    RD[("Updates · Redis")]
+    DE --- RD
   end
   subgraph Auth["Hex: Auth"]
+    AU["Auth API · Compute Service"]
   end
   PG[("Postgres — shared Resource")]
 
-  User -->|request/response · ingress| Storefront
-  Storefront -->|request/response| Sales
-  Storefront -->|request/response| Auth
-  Sales -->|stream · order-placed| Delivery
-  Sales -->|data · sales contract| PG
-  Delivery -->|data · delivery contract| PG
-  Auth -->|data · auth contract| PG
+  User -->|request/response · ingress| SF
+  SF -->|request/response| SA
+  SF -->|request/response| AU
+  SA -->|stream · order-placed| DE
+  SA -->|data · sales contract| PG
+  DE -->|data · delivery contract| PG
+  AU -->|data · auth contract| PG
 ```
 
 ## Hexes
@@ -54,6 +62,13 @@ A Hex wraps two kinds of thing. **Services** are the units that run code — an 
 API, the Next.js storefront, a background worker. **Resources** are the stateful
 things it depends on: Postgres is first-class, and anything else (object storage,
 a cache, a queue) comes in as an Alchemy resource surfaced as a typed capability.
+
+You can see this in the diagram: every Hex has a Compute Service, Sales also owns
+a private invoices store, and Delivery a Redis instance for its live updates.
+Those private Resources sit inside the boundary, so they never become edges
+between Hexes — only the shared Postgres, used by several Hexes at once, does.
+
+> On the name "Hex." It's a nod to Hexagonal Architecture, whose bounded-context building block is drawn as a hexagon — its six sides standing in for the many inputs and outputs these units have (not literally six). I wanted a building-block feel without the word "block": picture magnetic hexagon tiles you snap together. And where a cell on a square grid — a chessboard — is a "square", on a hexagonal grid it's a "hex"; I like the image of these units sitting like tiles on a hex grid.
 
 ## Connections
 

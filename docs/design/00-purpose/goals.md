@@ -15,6 +15,12 @@ from the purpose, not the other way around.
   Prisma Cloud pack, and the core stays target-agnostic.
 - **A queryable topology.** The inferred topology is a first-class artifact you and
   your agents can interrogate from the CLI.
+- **Recreate the whole topology in a fresh environment.** Every element has a
+  managed lifecycle, so standing up a new environment provisions the entire system
+  from nothing — no click-ops, no manually-created prerequisites.
+- **Reproduce every element in the local dev emulator.** The same topology runs
+  locally: each Resource ships a local stand-in beside its real provider, so
+  `prisma dev` emulates the deployed system without touching the cloud.
 
 ## Non-goals
 
