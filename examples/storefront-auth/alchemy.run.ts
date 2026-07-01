@@ -6,15 +6,18 @@ import { fileURLToPath } from "node:url";
 import * as Effect from "effect/Effect";
 import * as Prisma from "@makerkit/prisma-alchemy";
 
+const artifact = (rel: string) => fileURLToPath(new URL(rel, import.meta.url));
+const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+
 /**
- * The storefront-auth MVP, provisioned through our v2 Alchemy providers against
- * real Prisma Cloud.
+ * The storefront-auth MVP: two hexes, each its own Prisma project (a Service
+ * plus its own default Postgres), wired so the Storefront calls Auth while
+ * serving a request. Provisioned through our v2 Alchemy providers against real
+ * Prisma Cloud.
  *
- * Slice 3 deploys the Storefront hex (the Next.js app) on Compute. Slice 4 adds
- * the Auth hex, each hex's Postgres, and wires Auth's URL into the Storefront.
- *
+ *   pnpm --filter @makerkit/example-storefront-auth-auth build
  *   pnpm --filter @makerkit/example-storefront-auth-storefront build:compute
- *   alchemy deploy   # provision project -> compute service -> deployment
+ *   alchemy deploy
  *
  * Requires env: PRISMA_SERVICE_TOKEN, PRISMA_WORKSPACE_ID, ALCHEMY_PASSWORD.
  */
@@ -27,33 +30,54 @@ export default Alchemy.Stack(
       return yield* Effect.die(new Error("PRISMA_WORKSPACE_ID is required"));
     }
 
-    const project = yield* Prisma.Project("storefront-auth", {
+    // Auth hex — Bun/Hono service + its own Postgres (the project's default
+    // database, auto-injected as DATABASE_URL).
+    const authArtifact = artifact("./hexes/auth/dist/auth.tar.gz");
+    const authProject = yield* Prisma.Project("auth-project", {
       workspaceId,
-      name: "makerkit-storefront-auth",
+      name: "makerkit-auth",
+    });
+    const authSvc = yield* Prisma.ComputeService("auth-svc", {
+      projectId: authProject.id,
+      name: "auth",
+      region: "us-east-1",
+    });
+    const authDeploy = yield* Prisma.Deployment("auth-deploy", {
+      computeServiceId: authSvc.id,
+      artifactPath: authArtifact,
+      artifactHash: sha256(authArtifact),
+      port: 3000,
     });
 
-    // Storefront hex — the Next.js app, prebuilt into ./hexes/storefront/dist.
-    const artifactPath = fileURLToPath(
-      new URL("./hexes/storefront/dist/storefront.tar.gz", import.meta.url),
-    );
-    const artifactHash = createHash("sha256").update(readFileSync(artifactPath)).digest("hex");
-
+    // Storefront hex — Next.js service + its own Postgres. AUTH_URL wires it to
+    // the Auth hex and is set before the Storefront version deploys, so the
+    // version resolves it from the project's production environment.
+    const storefrontArtifact = artifact("./hexes/storefront/dist/storefront.tar.gz");
+    const storefrontProject = yield* Prisma.Project("storefront-project", {
+      workspaceId,
+      name: "makerkit-storefront",
+    });
+    yield* Prisma.EnvironmentVariable("storefront-auth-url", {
+      projectId: storefrontProject.id,
+      key: "AUTH_URL",
+      value: authDeploy.deployedUrl ?? "",
+      class: "production",
+    });
     const storefrontSvc = yield* Prisma.ComputeService("storefront-svc", {
-      projectId: project.id,
+      projectId: storefrontProject.id,
       name: "storefront",
       region: "us-east-1",
     });
-
-    const storefront = yield* Prisma.Deployment("storefront-deploy", {
+    const storefrontDeploy = yield* Prisma.Deployment("storefront-deploy", {
       computeServiceId: storefrontSvc.id,
-      artifactPath,
-      artifactHash,
+      artifactPath: storefrontArtifact,
+      artifactHash: sha256(storefrontArtifact),
       port: 3000,
     });
 
     return {
-      projectId: project.id,
-      storefrontUrl: storefront.deployedUrl,
+      authUrl: authDeploy.deployedUrl,
+      storefrontUrl: storefrontDeploy.deployedUrl,
     };
   }),
 );

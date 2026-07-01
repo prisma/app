@@ -3,6 +3,10 @@ import * as Provider from "alchemy/Provider";
 import * as client from "./client.ts";
 import { ComputeService, ComputeServiceProvider } from "./compute/ComputeService.ts";
 import { Deployment, DeploymentProvider } from "./compute/Deployment.ts";
+import {
+  EnvironmentVariable,
+  EnvironmentVariableProvider,
+} from "./compute/EnvironmentVariable.ts";
 import { fromEnv } from "./credentials.ts";
 import { Connection, ConnectionProvider } from "./postgres/Connection.ts";
 import { Database, DatabaseProvider } from "./postgres/Database.ts";
@@ -24,7 +28,14 @@ export class Providers extends Provider.ProviderCollection<Providers>()("Prisma"
 export const providers = () =>
   Layer.effect(
     Providers,
-    Provider.collection([Project, Database, Connection, ComputeService, Deployment]),
+    Provider.collection([
+      Project,
+      Database,
+      Connection,
+      ComputeService,
+      Deployment,
+      EnvironmentVariable,
+    ]),
   ).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -33,6 +44,7 @@ export const providers = () =>
         ConnectionProvider(),
         ComputeServiceProvider(),
         DeploymentProvider(),
+        EnvironmentVariableProvider(),
       ),
     ),
     Layer.provideMerge(client.layer()),

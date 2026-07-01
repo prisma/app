@@ -20,7 +20,7 @@ app.get("/verify", async (c: Context) => {
 
 const port = Number(process.env.PORT ?? 3000);
 
-export default {
-  port,
-  fetch: app.fetch,
-};
+// Bind all interfaces explicitly — Compute routes external HTTP to the VM, so a
+// loopback-only listener would be unreachable.
+Bun.serve({ port, hostname: "0.0.0.0", fetch: app.fetch });
+console.log(`auth listening on 0.0.0.0:${port}`);
