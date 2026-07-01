@@ -19,7 +19,10 @@ Typechecks, smoke-covered, folded into `Prisma.providers()`.
 
 - **builds on:** the committed Postgres provider.
 - **hands to:** a `Prisma.providers()` bundle that provisions Compute *and* Postgres.
-- **status:** ✅ delivered — implemented (Sonnet) + reviewed (Opus) + reworked; `tsc` clean.
+- **status:** ✅ delivered + **proven end-to-end** against real Prisma Cloud via
+  `examples/smoke` — deploy runs create → upload → start → poll → promote and the
+  deployed app serves `200`; `destroy` cleans up. Postgres path proven the same
+  way. See design-notes "Validated end-to-end (Compute)".
 
 ### Slice 2 — Example workspace + Auth service + build-to-artifact pipeline
 
