@@ -1,6 +1,8 @@
 # Agent OS product artifacts
 
-This directory contains artifacts produced by the **Agent OS product planning workflow** (mission, roadmap, tech stack).
+This directory contains artifacts produced by the **Agent OS product planning workflow** (mission, roadmap, tech stack, naming).
+
+- [naming.md](naming.md) — product & piece names (Hex, Hexicon, Prisma Compose/Model) and the compose-from-blocks distribution model.
 
 ## Source of truth for design/architecture
 
