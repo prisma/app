@@ -17,12 +17,12 @@
  *
  * Re-runnable: existing values are kept unless you choose to replace them.
  */
+import * as p from "@clack/prompts";
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, readFile, writeFile } from "node:fs/promises";
 import * as path from "node:path";
-import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -90,130 +90,100 @@ async function setEnv(key: string, value: string): Promise<void> {
   await writeFile(ENV, upsertEnv(await readFile(ENV, "utf8"), key, value));
 }
 
-async function main() {
-  // Interactive on a TTY; when stdin is piped (tests / CI), read all answers up
-  // front and serve them from a queue — a single readline over a pipe closes on
-  // EOF between prompts. Created inside main() so importing this file for tests
-  // never touches stdin.
-  const isTTY = Boolean(process.stdin.isTTY);
-  let rl: readline.Interface | undefined;
-  let mute = false;
-  const queue: string[] = [];
-  if (isTTY) {
-    rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const rlInternal = rl as unknown as { _writeToOutput: (s: string) => void };
-    const echo = rlInternal._writeToOutput.bind(rlInternal);
-    rlInternal._writeToOutput = (s: string) => {
-      if (!mute) echo(s);
-    };
-  } else {
-    process.stdin.setEncoding("utf8");
-    const all: string = await new Promise((res) => {
-      let data = "";
-      process.stdin.on("data", (c) => (data += c));
-      process.stdin.on("end", () => res(data));
-    });
-    queue.push(...all.split("\n"));
+/** Unwrap a clack prompt result, exiting cleanly if the user cancelled (Ctrl-C). */
+function must<T>(value: T | symbol): T {
+  if (p.isCancel(value)) {
+    p.cancel("Cancelled.");
+    process.exit(1);
   }
-  const ask = (q: string): Promise<string> => {
-    if (rl) return new Promise((res) => rl!.question(q, (a) => res(a.trim())));
-    const a = (queue.shift() ?? "").trim();
-    console.log(q + a);
-    return Promise.resolve(a);
-  };
-  const askSecret = (q: string): Promise<string> => {
-    if (rl)
-      return new Promise((res) => {
-        rl!.question(q, (a) => ((mute = false), process.stdout.write("\n"), res(a.trim())));
-        mute = true; // question() printed the prompt synchronously; hide what's typed next
-      });
-    process.stdout.write(q + "\n"); // don't echo the secret
-    return Promise.resolve((queue.shift() ?? "").trim());
-  };
-  const close = () => rl?.close();
+  return value as T;
+}
+
+const required = (v: string) => (v.trim() ? undefined : "Required");
+
+async function main() {
+  p.intro("Set up .env for Prisma Cloud deploys");
 
   // 1. .env exists ------------------------------------------------------------
   if (!existsSync(EXAMPLE)) {
-    console.error(`Missing ${EXAMPLE}`);
+    p.cancel(`Missing ${EXAMPLE}`);
     process.exit(1);
   }
   if (existsSync(ENV)) {
-    console.log("• .env exists — filling in any missing values (existing ones are kept)");
+    p.log.info(".env exists — filling in any missing values (existing ones are kept)");
   } else {
     await copyFile(EXAMPLE, ENV);
-    console.log("• Created .env from .env.example");
+    p.log.success("Created .env from .env.example");
   }
 
   // 2. Authenticate the CLI ---------------------------------------------------
   if (cli(["auth", "whoami", "--json"], true).status === 0) {
-    console.log("• Prisma CLI already authenticated");
+    p.log.success("Prisma CLI already authenticated");
   } else {
-    console.log("\n• Not logged in — running `auth login` (opens your browser)…");
+    p.log.step("Not logged in — running `auth login` (opens your browser)…");
     if (cli(["auth", "login"]).status !== 0) {
-      console.error("auth login failed — re-run once you're logged in.");
+      p.cancel("auth login failed — re-run once you're logged in.");
       process.exit(1);
     }
   }
 
   // 3. Pick a workspace -------------------------------------------------------
-  console.log("\n• Fetching your workspaces…");
+  const spin = p.spinner();
+  spin.start("Fetching your workspaces");
   const list = cli(["auth", "workspace", "list", "--json"], true);
   const workspaces = parseWorkspaces(list.stdout ?? "");
+  spin.stop(`Found ${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`);
+
   let workspaceId: string;
   if (workspaces.length === 0) {
-    console.log("  Couldn't parse the workspace list. Raw output:\n");
-    console.log((list.stdout ?? "") + (list.stderr ?? ""));
-    workspaceId = await ask("  Enter the workspace id (wksp_…): ");
+    const raw = ((list.stdout ?? "") + (list.stderr ?? "")).trim();
+    if (raw) p.log.warn(`Couldn't parse the workspace list:\n${raw}`);
+    workspaceId = must(
+      await p.text({ message: "Enter the workspace id", placeholder: "wksp_…", validate: required }),
+    ).trim();
   } else {
-    workspaces.forEach((w, i) =>
-      console.log(`  [${i + 1}] ${w.name ?? "(unnamed)"} — ${w.id}${w.active ? "  (active)" : ""}`),
+    workspaceId = must(
+      await p.select({
+        message: "Which workspace should own provisioned projects?",
+        initialValue: (workspaces.find((w) => w.active) ?? workspaces[0]).id,
+        options: workspaces.map((w) => ({
+          value: w.id,
+          label: w.name ?? w.id,
+          hint: w.active ? "active" : undefined,
+        })),
+      }),
     );
-    const def = Math.max(1, workspaces.findIndex((w) => w.active) + 1);
-    const pick = await ask(`  Which workspace? [1-${workspaces.length}] (default ${def}) `);
-    workspaceId = (pick === "" ? workspaces[def - 1] : workspaces[Number(pick) - 1])?.id ?? "";
-  }
-  if (!workspaceId) {
-    console.error("No workspace selected.");
-    close();
-    process.exit(1);
   }
   await setEnv("PRISMA_WORKSPACE_ID", workspaceId);
-  console.log(`• PRISMA_WORKSPACE_ID = ${workspaceId}`);
+  p.log.success(`PRISMA_WORKSPACE_ID = ${workspaceId}`);
 
   // 4. Service token (Console-only) -------------------------------------------
-  const existingToken = await getEnv("PRISMA_SERVICE_TOKEN");
-  const replace =
-    !existingToken ||
-    (await ask("• PRISMA_SERVICE_TOKEN is already set — replace it? [y/N] ")).toLowerCase() === "y";
+  const existing = await getEnv("PRISMA_SERVICE_TOKEN");
+  const replace = existing
+    ? must(await p.confirm({ message: "PRISMA_SERVICE_TOKEN is already set — replace it?", initialValue: false }))
+    : true;
   if (replace) {
-    console.log(
-      `\n  Create a service token in the Prisma Console (there is no CLI/API for this):\n` +
-        `    https://console.prisma.io  →  your workspace (${workspaceId})  →  Settings → Service Tokens\n` +
-        `    → New Service Token, then copy it (it's shown only once).`,
+    p.note(
+      `console.prisma.io  →  workspace ${workspaceId}\n  →  Settings → Service Tokens → New Service Token\n\nIt's shown only once. There is no CLI/API to mint one.`,
+      "Create a service token",
     );
-    const token = await askSecret("  Paste PRISMA_SERVICE_TOKEN (input hidden): ");
-    if (token) {
-      await setEnv("PRISMA_SERVICE_TOKEN", token);
-      console.log("• PRISMA_SERVICE_TOKEN set");
-    } else {
-      console.log("• No token entered — set PRISMA_SERVICE_TOKEN before deploying.");
-    }
+    const token = must(await p.password({ message: "Paste PRISMA_SERVICE_TOKEN", validate: required }));
+    await setEnv("PRISMA_SERVICE_TOKEN", token.trim());
+    p.log.success("PRISMA_SERVICE_TOKEN set");
   } else {
-    console.log("• Keeping existing PRISMA_SERVICE_TOKEN");
+    p.log.info("Keeping existing PRISMA_SERVICE_TOKEN");
   }
 
   // 5. ALCHEMY_PASSWORD -------------------------------------------------------
   if (await getEnv("ALCHEMY_PASSWORD")) {
-    console.log("• ALCHEMY_PASSWORD already set — leaving it (must stay constant)");
+    p.log.info("ALCHEMY_PASSWORD already set — leaving it (must stay constant)");
   } else {
     await setEnv("ALCHEMY_PASSWORD", randomBytes(24).toString("hex"));
-    console.log("• Generated ALCHEMY_PASSWORD");
+    p.log.success("Generated ALCHEMY_PASSWORD");
   }
 
-  close();
-  console.log(
-    `\n.env is ready. Deploy the example (source .env — the CLI's --env-file doesn't populate process.env):\n` +
-      `  cd examples/storefront-auth && ( set -a; . ../../.env; set +a; pnpm exec alchemy deploy --yes )`,
+  p.outro(
+    ".env is ready. Deploy: cd examples/storefront-auth && ( set -a; . ../../.env; set +a; pnpm exec alchemy deploy --yes )",
   );
 }
 
