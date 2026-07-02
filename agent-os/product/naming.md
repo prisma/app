@@ -48,14 +48,15 @@ Topology is the machinery underneath.
 ## Name for value, not machinery
 
 That split — the word the user says versus the term for how it works — is the rule
-behind every name here. Users say "my app" and "my data"; they would never say "my
-topology" or "my contract." So the brand takes the first, and the precise term stays
-below, kept exact but unnamed in the marketing.
+behind every name here. Users say "my app" and "my data"; nobody says "my topology."
+So the brand takes the first, and the precise term stays below, kept exact but
+unnamed in the marketing.
 
 Four questions decide a name:
 
-1. **Would the user put "my" in front of it?** "My data," yes. "My contract," no —
-   that one is ours, not theirs.
+1. **Would the user put "my" in front of it?** "My app," "my data" — yes. "My
+   topology" — no; that's the wiring the tool produces, not the thing you set out to
+   build.
 2. **Does it predict the tooling?** "Data" tells you to expect model, migrate,
    query, types. A clever coinage tells you nothing.
 3. **Does it name the goal, not the tax?** People value data *access*; migration is
