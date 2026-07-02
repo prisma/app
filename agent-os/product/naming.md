@@ -1,35 +1,56 @@
 # Product Naming & Distribution
 
-We name every piece for the **value the user gets from it**, not the machinery that
-delivers it. A developer builds an **app** by snapping together **Hexes** — reusable
-blocks they find and install from **Hexicon**, wired together with **Prisma
-Compose** — while their data lives in **Prisma Data**. This document explains that
-rule, why each name follows from it, and how Hexes are distributed.
+A developer builds an **app** by composing Prisma primitives — Postgres, Compute,
+Data, and more — wired together by **Prisma Compose**. We name every piece for the
+**value the user gets from it**, not the machinery that delivers it. This document
+covers the product family, how Compose fits into it, the vocabulary Compose
+introduces, and how its building blocks (Hexes) are distributed.
 
 Some names are settled (Hex, Hexicon); the Prisma renames — Prisma Data (← Prisma
 Next) and Prisma Compose (← MakerKit) — are still proposed.
 
-## The pieces
+## The Prisma product family
 
-| Name | What it is | The value it names |
+Each primitive is named for its role. Read down the value column and it says what
+building an app is actually *for*:
+
+| Primitive | Role | The value to the user |
+|---|---|---|
+| Prisma Postgres | persist | my data has a home |
+| Prisma Compute | execute | my code runs |
+| Prisma Data *(← Prisma Next)* | data | I model, access, and manage my data |
+| Prisma Compose *(← MakerKit)* | compose | my app comes together from parts |
+| Durable Streams | stream | my events flow and survive |
+| Connection | connect | my services reach each other |
+
+A product name need not equal its role word — Compute's role is "execute," Compose's
+is "compose the rest." The name takes whichever word carries the most user value.
+
+## How Prisma Compose fits
+
+The other primitives each deliver one capability. **Prisma Compose is different: it
+is the primitive that assembles the others into a running app.** It is the
+composition layer of the family — and it introduces its own small vocabulary for the
+job:
+
+| Term | What it is | The value it names |
 |---|---|---|
 | **App** | the application you build | software with users and features — the whole point |
-| **Hex** | a building block | a capability you reuse instead of writing |
+| **Hex** | a building block you compose | a capability you reuse instead of writing |
 | **Hexicon** | the registry at `hexicon.dev` | finding and trusting those blocks |
-| **Prisma Compose** | the tool that wires Hexes together | your app comes together, without hand-wiring infra |
-| **Prisma Data** | the data layer | modeling, accessing, and managing *your data* |
+| **Topology** | the graph Compose produces | *(machinery — the user never says this)* |
 
-Beneath each of these sits a precise internal term the user never has to say — the
-**Topology** (the graph Compose produces), the **Contract** (what your data models
-compile to). Those stay machinery; the brand takes the value word. The rest of this
-doc explains why.
+You build an **App** by snapping together **Hexes** — each one wrapping primitives
+like Compute and Postgres — that you find on **Hexicon**; Compose infers the
+**Topology** and provisions it. App, Hex, and Hexicon are the words a developer says;
+Topology is the machinery underneath.
 
 ## Name for value, not machinery
 
-Every layer has two nouns: the one the user is invested in and says out loud, and
-the exact term for how it works underneath. Users say "my app" and "my data"; they
-would never say "my topology" or "my contract." So the brand takes the first, and
-the second stays below — kept precise, but unnamed in the marketing.
+That split — the word the user says versus the term for how it works — is the rule
+behind every name here. Users say "my app" and "my data"; they would never say "my
+topology" or "my contract." So the brand takes the first, and the precise term stays
+below, kept exact but unnamed in the marketing.
 
 Four questions decide a name:
 
@@ -43,7 +64,7 @@ Four questions decide a name:
 4. **Does it keep the family legible?** Components named for their role read as the
    parts-list of one app — worth more than any single clever standalone name.
 
-Taking the value word for the brand has a payoff: the precise words stay **free to
+The payoff of taking the value word for the brand: the precise words stay **free to
 mean exactly what they mean one level down**. The same shape repeats at every layer —
 the user names the left column, writes the middle, and the system consumes the
 right:
@@ -55,6 +76,17 @@ right:
 
 Name the product itself "Model" or "Contract" and you steal a word that is more
 useful below it.
+
+## The data layer: Prisma Data
+
+The value here is *your data* — and above all accessing and querying it. That is why
+the layer is named **Data**, not "Model" or "Contract." Modeling and migration are
+the way in, not the goal, and you don't brand a product after the tax it charges.
+Naming it "Data" also keeps the two precise words at work: you still author
+**models** in PSL — the part of Prisma developers love, untouched — and those models
+compile to a **Contract**, the typed boundary a Hex's input requires and a Postgres
+output satisfies. Data is the value; model is what you write; Contract is what the
+system wires against.
 
 ## The building block: Hex
 
@@ -78,17 +110,6 @@ The name also dodges two collisions that bare "Hex" would hit: `hex.pm`, the
 Elixir/Erlang package manager (a same-category registry — the most confusing kind of
 clash), and `hex.tech`, an established data-tools brand.
 
-## The data layer: Prisma Data
-
-The value here is *your data* — and above all accessing and querying it. That is why
-the layer is named **Data**, not "Model" or "Contract." Modeling and migration are
-the way in, not the goal, and you don't brand a product after the tax it charges.
-Naming it "Data" also keeps the two precise words at work: you still author
-**models** in PSL — the part of Prisma developers love, untouched — and those models
-compile to a **Contract**, the typed boundary a Hex's input requires and a Postgres
-output satisfies. Data is the value; model is what you write; Contract is what the
-system wires against.
-
 ## How Hexes are distributed
 
 Hosting and discovery are split:
@@ -106,25 +127,6 @@ the point, and it depends on the typed-contract model being sound.
 
 Because community Hexes are arbitrary npm packages, Hexicon recognizes them by
 convention — a `keywords` entry or a manifest field.
-
-## The Prisma primitives you compose from
-
-Prisma Compose and Prisma Data are two members of a larger set: the Prisma
-primitives a developer assembles into an app. Each is named for its role, and read
-down the value column it says what building an app is *for*:
-
-| Primitive | Role | The value to the user |
-|---|---|---|
-| Prisma Postgres | persist | my data has a home |
-| Prisma Compute | execute | my code runs |
-| Prisma Data *(← Prisma Next)* | data | I model, access, and manage my data |
-| Prisma Compose *(← MakerKit)* | compose | my app comes together from parts |
-| Durable Streams | stream | my events flow and survive |
-| Connection | connect | my services reach each other |
-
-A product name need not equal its role word — Compute's role is "execute." So
-"Prisma Data" naming the data layer is consistent with the family even though its
-role is data modeling.
 
 ## Names to avoid
 
