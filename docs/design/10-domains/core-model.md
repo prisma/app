@@ -191,7 +191,20 @@ interface LowerOptions {
 // naming the type and the target's known types.
 function lower(root: ServiceNode, target: Target, opts: LowerOptions): AlchemyStack
 class LowerError extends Error {}
+
+// Composable form — for MIXED topologies: MakerKit-authored nodes beside
+// hand-wired Alchemy resources in one stack. Runs the same Load → route walk
+// inside the caller's stack effect and returns the root's LoweredNode, whose
+// outputs (e.g. the deployed URL) hand-wired resources may consume.
+function lowering(root: ServiceNode, target: Target, opts: LowerOptions):
+  Effect.Effect<LoweredNode, LowerError, unknown>
 ```
+
+`lower()` is nothing but the whole-stack wrapper:
+`Alchemy.Stack(opts.name, { providers: target.providers() }, lowering(root, target, opts))`.
+In the mixed case the hand-written stack supplies providers itself (including the
+target's, via `target.providers()`), yields a `lowering(…)` per MakerKit-authored
+service, and wires its own resources around the returned `outputs`.
 
 Notes:
 

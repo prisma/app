@@ -117,12 +117,10 @@ test approach) survive restructuring, its architecture does not.
 
 ## Open questions
 
-- **Mixed-topology composition** — the partial migration puts a MakerKit-authored
-  service and hand-wired Alchemy resources in one deploy. `lower()` as specced owns a
-  whole Stack; the mixed case needs the lowering exposed in a composable form a
-  hand-written stack can yield alongside its own resources (with `lower()` as the
-  whole-stack wrapper around it). Small `core-model.md` addition — to settle at
-  re-plan, before build.
+- **Mixed-topology composition** — *settled at re-plan*: `core-model.md` now specs
+  `lowering(root, target, opts): Effect<LoweredNode>` as the composable form a
+  hand-written stack yields alongside its own resources, with `lower()` as the
+  whole-stack wrapper.
 - **PR mechanics** — rework in place on PR #6 (retitle when done) vs close and open
   fresh. Default: rework in place; one PR delivers the corrected layer.
 - **Pack package naming** — `packages/prisma-cloud` vs `packages/makerkit-prisma-cloud`
