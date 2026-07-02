@@ -24,14 +24,24 @@ surfaces at Load, a test can trust nothing ran until the graph was whole, and th
 topology can be inspected without a deploy. See
 [the authoring surface](../03-domain-model/authoring-surface.md).
 
+## Runtime-agnostic — no Node or Bun coupling
+
+MakerKit's shipped surface — core and target packs — never depends on a specific
+JavaScript runtime: no Bun APIs, no Node-only modules, not even type-only imports of
+a runtime's types in public signatures. Anything runtime-specific — a database
+driver, a server API — enters from application code, which owns its runtime choice,
+or through an adapter the app supplies. A deployment platform may fix a runtime
+(Prisma Compute runs Bun); that is a hosting fact about the target, not a dependency
+of the framework.
+
 ## Code over configuration
 
 Your topology is *inferred* from your application code — type-checked, and living in
 your TypeScript, not a separate manifest you maintain by hand. The structure you
-write is the structure that deploys; the two can't silently drift. The
-`defineService`/`hex` declaration *is* the manifest: one live value read by the
-control plane at deploy and by the runtime host at boot, so there is nothing to keep
-in sync.
+write is the structure that deploys; the two can't silently drift. The node
+constructor's declaration (`compute(…)`, `hex(…)`) *is* the manifest: one live value
+read by the control plane at deploy and by the runtime host at boot, so there is
+nothing to keep in sync.
 
 ## Tree-shakeable by default
 

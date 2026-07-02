@@ -110,8 +110,10 @@ the VM, but they **terminate at hydration** — user code never reads them.
 
 At boot, MakerKit's runtime loop walks the service's declared Inputs and, for each,
 calls the **hydrator the target attached** — handing the results to the handler. Core
-does not know that `db` becomes a `Bun.SQL` client from `DATABASE_URL`; only the
-target's `postgres` hydrator knows that. When the "handler" is a framework that owns
+does not know what `db` becomes: the target's `postgres` hydrator resolves
+`DATABASE_URL` into connection config, and an app-supplied client factory wraps it in
+the app's chosen driver — MakerKit ships none (the [runtime-agnostic
+principle](../01-principles/architectural-principles.md)). When the "handler" is a framework that owns
 its own server — Next.js — MakerKit does not wrap the handler signature; it wires the
 framework in as the implementation of an HTTP Output, and framework code reaches its
 dependencies through a DI accessor (`use(…)`), never through the environment. This is

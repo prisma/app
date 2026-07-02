@@ -39,7 +39,8 @@ underneath.
 export const postgres = () => ({
   kind: "resource",
   provider: /* the prisma-alchemy Prisma Postgres provider */,
-  hydrate: /* runtime: DATABASE_URL → Bun.SQL — behind the pack's /runtime entry */,
+  hydrate: /* runtime: DATABASE_URL → connection config → the app-supplied client
+              factory — behind the pack's /runtime entry */,
 })
 
 export const compute = (deps, handler) => ({
@@ -52,8 +53,10 @@ export const compute = (deps, handler) => ({
 The core never inspects `provider`, `host`, or `hydrate` — they are opaque to it. It
 knows only "this is a Service node, that is a Resource node," and that each carries a
 reference it can hand to Alchemy. All the intelligence about *how* a Prisma Postgres
-is provisioned or a `Bun.SQL` client is built lives in the pack, wrapped in the
-constructor.
+is provisioned, or how its connection config reaches the running service, lives in
+the pack, wrapped in the constructor. The client that wraps the connection is
+supplied by the app — MakerKit ships no driver (the [runtime-agnostic
+principle](../01-principles/architectural-principles.md)).
 
 ## Lowering is routing
 
@@ -68,16 +71,17 @@ logic in core; the router only ever follows references it was handed. Swap
 
 Inside the deployed bundle, core boots a loop that, for each declared Input, calls
 the hydrator the target attached and passes the result to the handler. Core does not
-know that `db` becomes a `Bun.SQL` client from `DATABASE_URL` — only the target's
-`postgres` hydrator knows that. Config still arrives as environment variables, but
-they terminate at that hydrator; user code is dependency-injected and never reads the
-environment.
+know what `db` becomes: the target's `postgres` hydrator resolves `DATABASE_URL` into
+connection config, and an **app-supplied client factory** wraps it in the app's
+chosen driver — MakerKit ships none. Config still arrives as environment variables,
+but they terminate at that hydrator; user code is dependency-injected and never reads
+the environment.
 
-Because the hydrator is heavy (a driver) and the provider heavier (Alchemy), a target
-pack splits along the same control/execution line the core does: `@makerkit/prisma-cloud`
+Because provisioning is heavy (Alchemy) and hydration is not, a target pack splits
+along the same control/execution line the core does: `@makerkit/prisma-cloud`
 (provisioning — imported only at deploy) and `@makerkit/prisma-cloud/runtime`
 (hydration — the only target code that lands in the deployed bundle). The authoring
-import stays lean.
+import stays lean, and no pack entry imports a runtime API or driver.
 
 ## Bundling is the app's
 

@@ -269,8 +269,9 @@ returning owned nodes' Outputs up.
 The boot [entrypoint](#entrypoint) the platform runs, over the code the app bundled
 (MakerKit does not bundle). It walks the service's declared Inputs and, for each,
 calls the **hydrator the target attached** — turning injected config into a typed
-client — then hands the results to the handler. Core never knows `DATABASE_URL` →
-`Bun.SQL`; the target's `postgres` hydrator does. A framework server (Next.js) is
+client — then hands the results to the handler. Core never knows what `DATABASE_URL`
+becomes: the target's hydrator resolves the config, and an app-supplied client
+factory wraps it in the app's chosen driver. A framework server (Next.js) is
 wired in as an HTTP Output, its deps reached via a DI accessor (`use(…)`), never the
 environment. Env vars carry config into the VM but **terminate at hydration** — user
 code is dependency-injection only.

@@ -14,12 +14,17 @@ Six entry points, split by dependency weight. The split is enforced, not aspirat
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
-| `@makerkit/core` | node factories (`service`, `resource`), `Load`, model types | nothing heavy (type-only `bun`) |
+| `@makerkit/core` | node factories (`service`, `resource`), `Load`, model types | nothing |
 | `@makerkit/core/lower` | `lower()`, `Target` types | `alchemy`, `effect` |
-| `@makerkit/core/runtime` | `runHost()`, `TargetRuntime` types | nothing heavy |
-| `@makerkit/prisma-cloud` | `compute()`, `postgres()` | `@makerkit/core` (type-only `bun`) |
+| `@makerkit/core/runtime` | `runHost()`, `TargetRuntime` types | nothing |
+| `@makerkit/prisma-cloud` | `compute()`, `postgres()` | `@makerkit/core` only |
 | `@makerkit/prisma-cloud/target` | `prismaCloud()` | `@makerkit/prisma-alchemy`, `alchemy`, `effect` |
-| `@makerkit/prisma-cloud/runtime` | `runtime()` | `bun` (`SQL`) |
+| `@makerkit/prisma-cloud/runtime` | `runtime()` | nothing — the DB client factory is app-supplied |
+
+Per the [runtime-agnostic
+principle](../01-principles/architectural-principles.md), no entry imports Bun or
+Node APIs — not even type-only. Runtime-specific code (the DB driver, the server
+API) appears only in **app files**.
 
 Who imports what, end to end:
 
@@ -27,7 +32,8 @@ Who imports what, end to end:
 - the **deploy script** (`alchemy.run.ts`) imports the service module +
   `@makerkit/core/lower` + `@makerkit/prisma-cloud/target` (heavy — deploy-time only);
 - the **runtime bundle entry** (`main.ts`, app-owned) imports the service module +
-  `@makerkit/core/runtime` + `@makerkit/prisma-cloud/runtime` (driver-weight).
+  `@makerkit/core/runtime` + `@makerkit/prisma-cloud/runtime`, plus the app's own
+  driver import (the client factory it hands to `runtime()`).
 
 The deploy path never loads the DB driver; the runtime bundle never contains Alchemy.
 
@@ -234,11 +240,11 @@ Authoring entry — data only:
 
 ```ts
 import { resource, service, type Deps, type ServiceHandler, type ServiceNode } from "@makerkit/core"
-import type { SQL } from "bun"                          // type-only; erased
 
-export type PostgresResource = ResourceNode<SQL>
-export const postgres = (): PostgresResource =>
-  resource<SQL>({ type: "prisma-cloud/postgres" })
+// C is the app-declared client type — whatever the app's client factory (see
+// runtime()) produces. The pack fixes neither the driver nor the JS runtime.
+export const postgres = <C = unknown>(): ResourceNode<C> =>
+  resource<C>({ type: "prisma-cloud/postgres" })
 
 export const compute = <D extends Deps>(deps: D, handler: ServiceHandler<D>): ServiceNode<D> =>
   service({ type: "prisma-cloud/compute", inputs: deps, handler })
@@ -283,19 +289,28 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
 })
 ```
 
-Runtime entry — the hydrator table:
+Runtime entry — the hydrator table. The pack owns the **platform convention**
+(Compute injects `DATABASE_URL`); the **client** that wraps the connection is
+app-supplied — MakerKit ships no driver:
 
 ```ts
-import { SQL } from "bun"
 import type { TargetRuntime } from "@makerkit/core/runtime"
 
-export const runtime = (): TargetRuntime => ({
+export interface PostgresConfig { readonly url: string }
+
+export interface RuntimeOptions {
+  readonly clients: {
+    readonly postgres: (config: PostgresConfig) => unknown   // the app's driver choice
+  }
+}
+
+export const runtime = (o: RuntimeOptions): TargetRuntime => ({
   context: (env) => ({ port: intOr(env.PORT, 3000) }),
   hydrate: {
     "prisma-cloud/postgres": ({ env, input }) => {
       const url = env.DATABASE_URL
       if (!url) throw new HydrateError(`input "${input}": DATABASE_URL is not set`)
-      return new SQL({ url })
+      return o.clients.postgres({ url })
     },
   },
 })
@@ -306,18 +321,21 @@ export const runtime = (): TargetRuntime => ({
 Three app-owned files; bundling stays hand-rolled in the app:
 
 ```ts
-// src/service.ts — the authored service (lean imports only)
+// src/service.ts — the authored service (lean imports; the app declares its client type)
 import { compute, postgres } from "@makerkit/prisma-cloud"
+import type { SQL } from "bun"        // the APP's choice of client — type-only here
 
-export default compute({ db: postgres() }, ({ db }, { port }) =>
+export default compute({ db: postgres<SQL>() }, ({ db }, { port }) =>
   Bun.serve({ port, hostname: "0.0.0.0",
     fetch: async () => Response.json(await db`select 1 as ok`) }))
 
-// src/main.ts — runtime bundle entry (what the app's bundler bundles)
+// src/main.ts — runtime bundle entry (app-owned); the driver import lives HERE
 import service from "./service"
 import { runHost } from "@makerkit/core/runtime"
 import { runtime } from "@makerkit/prisma-cloud/runtime"
-runHost(service, runtime())
+import { SQL } from "bun"
+
+runHost(service, runtime({ clients: { postgres: ({ url }) => new SQL({ url }) } }))
 
 // alchemy.run.ts — deploy (heavy imports; never bundled)
 import service from "./src/service"
@@ -332,6 +350,11 @@ export default lower(service, prismaCloud({ workspaceId: requiredEnv("PRISMA_WOR
 The app's build script bundles `src/main.ts`, writes `compute.manifest.json`
 pointing at the bundle, and tars — ~10 lines the app owns, not MakerKit.
 
+Note where Bun appears: only in these app files (`Bun.serve` in the handler, `new
+SQL` in `main.ts`) — the app's choice, since it deploys to a platform whose runtime
+is Bun. Switching the client to node-postgres, or the app to a Node platform, changes
+these app lines and nothing in MakerKit.
+
 ## Invariants (enforced, not aspirational)
 
 1. **Core has no target dependency**: `@makerkit/core`'s `package.json` depends on
@@ -345,6 +368,11 @@ pointing at the bundle, and tars — ~10 lines the app owns, not MakerKit.
 4. **`process.env` appears exactly once** in the system — `runHost`'s default `env`
    parameter. User code and core contain no other reads; hydrators receive `env`
    explicitly.
+5. **No runtime coupling**: neither core nor a target pack imports Bun or Node APIs
+   — even type-only — in its shipped surface (the [runtime-agnostic
+   principle](../01-principles/architectural-principles.md)). Drivers and server APIs
+   enter only from app files; the import-guard test extends to `"bun"`/`node:`
+   tokens.
 
 ## Extension points (designed for, not yet built)
 
@@ -357,6 +385,10 @@ pointing at the bundle, and tars — ~10 lines the app owns, not MakerKit.
 - **Registry exhaustiveness** — `Target.lower` / `TargetRuntime.hydrate` are
   string-keyed records; a pack can tighten them to its own type-id union for
   compile-time exhaustiveness. Core stays stringly-typed by design (it routes).
+- **Client-factory typing** — `postgres<C>()` declares the hydrated type; the factory
+  the app passes to `runtime()` is what actually produces it. Today that agreement is
+  a documented trust boundary; tying the factory's return type to the declared
+  phantom (so a mismatch fails at compile) is additive.
 - **Serialized topology** — the topology view of Graph is already JSON-safe; an emit
   step for external tooling is additive.
 
