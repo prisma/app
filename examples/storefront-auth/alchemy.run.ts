@@ -67,8 +67,12 @@ const stack = Effect.gen(function* () {
   // The hand-wired Connection gap: AUTH_URL in the storefront project's
   // production env. Upstream edges: {storefront project (projectId), auth
   // deployment (url)} — the same dependency structure the old hand-written
-  // stack had, so the env var lands as soon as both exist, ahead of the
-  // storefront version start.
+  // stack had. Those edges order the env var after its inputs exist; there is
+  // NO edge to the storefront Deployment, so the env var RACES the storefront
+  // version start (in practice the one-POST env var usually beats the
+  // minutes-long deployment — identical to the old stack, whose textual
+  // ordering was registration-order luck at unbounded apply concurrency). An
+  // enforced ordering edge is the Connection primitive's job (later project).
   yield* Prisma.EnvironmentVariable("storefront-auth-url", {
     projectId: storeProjectId,
     key: "AUTH_URL",
