@@ -100,20 +100,24 @@ target/tooling concerns the core must not absorb.
 
 ## Open questions
 
-- **Alchemy in core, or behind the target?** Core could hold Alchemy as the shared
-  provisioning engine (the target supplies only providers + the node→resource
-  mapping), or the target could own `apply` end-to-end (core stays agnostic of even
-  Alchemy). The first reuses Alchemy's engine/state across targets; the second is
-  maximally agnostic. The routing shape above holds either way.
+- **Alchemy in core, or behind the target?** — *Resolved*: Alchemy is core's
+  provisioning substrate (`@makerkit/core/lower` imports it); the principle forbids
+  knowledge of deployment *targets*, and Alchemy is the target-neutral engine
+  `layering.md` already commits to. Target packs supply only data (providers +
+  lowerings). See the decision note in
+  [`core-model.md`](../10-domains/core-model.md).
 - **Where connection types route.** A Connection (e.g. `http`) between two nodes
   lowers to config wiring — a URL carried in an env var. Whether that wiring is target
-  vocabulary (like a resource) or core structure is TBD; slice 1 has no connections.
+  vocabulary (like a resource) or core structure is TBD.
 - **A serializable neutral plan.** Routing can walk the in-memory graph directly. A
   serialized, target-neutral plan would also feed the inspectable-topology goal, at
-  the cost of an IR to maintain.
+  the cost of an IR to maintain. (The graph's topology view is JSON-safe by
+  construction — see `core-model.md` — so the emit step is additive.)
 
 ## Related
 
+- [`../10-domains/core-model.md`](../10-domains/core-model.md) — the complete
+  class/data-structure design implementing this split.
 - [`authoring-surface.md`](authoring-surface.md) — what the developer writes on top of this split.
 - [`layering.md`](layering.md) — the three planes (authoring → provisioning → hosting).
 - [`../01-principles/guiding-principles.md`](../01-principles/guiding-principles.md) — thin core, fat targets; compose, don't special-case.

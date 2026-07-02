@@ -1,8 +1,11 @@
 # Domain deep dives
 
 Lower-level, per-domain deep dives live here. They are written in the
-architecture/design phase that comes *after* the high-level model is settled — so
-this directory is currently empty by design.
+architecture/design phase that comes *after* the high-level model is settled.
+
+- [`core-model.md`](core-model.md) — the complete class/data-structure design of
+  `@makerkit/core` and the target-pack contract, with `@makerkit/prisma-cloud` as
+  the worked instance.
 
 The settled high-level model is recorded in:
 

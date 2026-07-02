@@ -81,6 +81,7 @@ Alchemy path; the new primitive is proven on a separate minimal example first.
 
 # References
 
+- [`docs/design/10-domains/core-model.md`](../../../docs/design/10-domains/core-model.md) — the complete class/data-structure design (types, entries, target contract) the build implements
 - [`docs/design/03-domain-model/core-and-targets.md`](../../../docs/design/03-domain-model/core-and-targets.md) — the thin-core/target-pack split
 - [`docs/design/03-domain-model/authoring-surface.md`](../../../docs/design/03-domain-model/authoring-surface.md) — what the developer writes
 - [`docs/design/01-principles/guiding-principles.md`](../../../docs/design/01-principles/guiding-principles.md) — thin core, fat targets; compose, don't special-case
