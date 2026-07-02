@@ -1,8 +1,8 @@
-import type { Dependencies } from "./descriptors.ts";
+import type { Dependencies, Hydrated } from "./descriptors.ts";
 
 /** The hydrated dependencies passed to a service handler, keyed by name. */
 export type HydratedDeps<D extends Dependencies> = {
-  [K in keyof D]: unknown;
+  [K in keyof D]: Hydrated<D[K]>;
 };
 
 /** A service's wiring body: hydrated Inputs in, Outputs out. */

@@ -1,0 +1,23 @@
+{
+  "name": "@makerkit/example-makerkit-hello",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun run scripts/build.ts",
+    "typecheck": "tsc --noEmit",
+    "deploy": "pnpm build && ( set -a; . ../../.env; set +a; pnpm exec alchemy deploy --yes )",
+    "destroy": "( set -a; . ../../.env; set +a; pnpm exec alchemy destroy --yes )"
+  },
+  "dependencies": {
+    "@makerkit/core": "workspace:*",
+    "@makerkit/prisma-alchemy": "workspace:*",
+    "alchemy": "2.0.0-beta.59",
+    "effect": "4.0.0-beta.92"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "typescript": "^6.0.3"
+  }
+}

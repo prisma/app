@@ -5,11 +5,18 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./runtime": "./src/runtime/index.ts"
+    "./lower": "./src/lower/index.ts",
+    "./runtime": "./src/runtime/index.ts",
+    "./build": "./src/build/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test"
+  },
+  "dependencies": {
+    "@makerkit/prisma-alchemy": "workspace:*",
+    "alchemy": "2.0.0-beta.59",
+    "effect": "4.0.0-beta.92"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",
