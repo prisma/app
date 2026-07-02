@@ -15,11 +15,11 @@ const sha256 = (path: string) => createHash("sha256").update(readFileSync(path))
  * serving a request. Provisioned through our v2 Alchemy providers against real
  * Prisma Cloud.
  *
- *   pnpm --filter @makerkit/example-storefront-auth-auth build
- *   pnpm --filter @makerkit/example-storefront-auth-storefront build:compute
- *   alchemy deploy
+ *   pnpm build     # builds both hex artifacts → dist/*.tar.gz
+ *   pnpm deploy    # builds, sources ../../.env, runs `alchemy deploy`
  *
- * Requires env: PRISMA_SERVICE_TOKEN, PRISMA_WORKSPACE_ID, ALCHEMY_PASSWORD.
+ * Requires env (in the repo-root .env, see `pnpm setup:env`):
+ * PRISMA_SERVICE_TOKEN, PRISMA_WORKSPACE_ID, ALCHEMY_PASSWORD.
  */
 export default Alchemy.Stack(
   "StorefrontAuth",
