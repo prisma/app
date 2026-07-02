@@ -19,6 +19,7 @@ The capture workflow is the Ignite `product-record-gotcha` skill.
 
 - [compute-services create returns a placeholder-region serviceEndpointDomain that 404s until a version is promoted](#compute-services-create-returns-a-placeholder-region-serviceendpointdomain-that-404s-until-a-version-is-promoted)
 - [app build --build-type nextjs yields a boot-crashing standalone for pnpm projects](#app-build---build-type-nextjs-yields-a-boot-crashing-standalone-for-pnpm-projects)
+- [Idle direct-connection close crashes a persistent Bun.SQL client into a 502 loop on scale-to-zero Compute](#idle-direct-connection-close-crashes-a-persistent-bunsql-client-into-a-502-loop-on-scale-to-zero-compute)
 
 ---
 
@@ -82,3 +83,38 @@ Same service id (created explicitly in `us-east-1`), different region subdomain 
 - Upstream: [PRO-201](https://linear.app/prisma-company/issue/PRO-201/app-build-build-type-nextjs-yields-a-boot-crashing-standalone-for-pnpm)
 - Workaround source: [`examples/storefront-auth/scripts/bundle-next.ts`](examples/storefront-auth/scripts/bundle-next.ts), [`.npmrc`](.npmrc)
 - Related: [`.drive/projects/mvp-example-app/design-notes.md`](.drive/projects/mvp-example-app/design-notes.md) — "Compute skill findings"
+
+---
+
+## Idle direct-connection close crashes a persistent Bun.SQL client into a 502 loop on scale-to-zero Compute
+
+**Filed upstream:** [FT-5219](https://linear.app/prisma-company/issue/FT-5219/idle-direct-connection-close-crashes-a-persistent-bunsql-client-into-a) — _"Idle direct-connection close crashes a persistent Bun.SQL client into a 502 loop on scale-to-zero Compute"_
+**Product:** Prisma Postgres (surfaced on Prisma Compute)
+**Version:** Bun 1.3.13 (`Bun.SQL`); Prisma Postgres direct connection; Prisma Compute (scale-to-zero)
+**First hit:** `examples/storefront-auth/hexes/auth` — the Auth hex after it sat idle
+**Cost:** ~1 hour; first presented as "the Storefront renders 500"
+
+**Symptom.** A Bun/Hono + `Bun.SQL` service worked right after deploy, then after idle returned 500 on its DB routes and then 502 in a restart loop. Logs: `PostgresError: Connection closed` (`ERR_POSTGRES_CONNECTION_CLOSED`) from `handleClose`, with `auth listening on 0.0.0.0:3000` reprinted on each restart.
+
+**Cause.** Prisma Postgres closes the idle direct connection (and Compute scales the service to zero). Bun.SQL surfaces the close as an async error with no awaiter → uncaught → the Bun process crashes → Compute restarts it → reconnect → idle → crash → 502 loop. The version still reports `status: running`.
+
+**Workaround.** Process guards + a short client `idleTimeout` + reconnect-on-demand, and catch the query error:
+
+```ts
+const sql = new SQL({ url, max: 1, idleTimeout: 10 });
+process.on("uncaughtException", (e) => console.error(e));
+process.on("unhandledRejection", (e) => console.error(e));
+// handler: try { await sql`SELECT 1` } catch { return 503 }
+```
+
+**Reproduction.**
+
+1. Bun app with a module-scope `new SQL({ url: process.env.DATABASE_URL })` and a route that runs `SELECT 1`.
+2. Deploy to Compute; `DATABASE_URL` = the project's default PPg direct connection.
+3. Hit the route → 200. Let it idle, hit again → 500, then a 502 restart loop.
+
+**References.**
+
+- Upstream: [FT-5219](https://linear.app/prisma-company/issue/FT-5219/idle-direct-connection-close-crashes-a-persistent-bunsql-client-into-a)
+- Workaround source: [`examples/storefront-auth/hexes/auth/src/index.ts`](examples/storefront-auth/hexes/auth/src/index.ts)
+- Related: PRO-200, PRO-201 (Compute Gotchas); [`dogfood-report.md`](dogfood-report.md)

@@ -76,7 +76,7 @@ unfiled — flagged inline.
   restart loop on Compute. The recommended connection is direct (pooled/accelerate are
   legacy per the `prisma-postgres` skill), but direct isn't resilient to idle without
   client-side `idleTimeout` + reconnection + process guards. A "hello world" Bun + PPg
-  app on Compute crash-loops the moment it goes idle. **Major — candidate gotcha.**
+  app on Compute crash-loops the moment it goes idle. **Major — filed [FT-5219].**
 
 - **A project auto-provisions a default database.** Creating a `Database` with
   `isDefault: true` then fails with `"Default database already exists"`. Not obvious the
@@ -213,8 +213,8 @@ These are upstream, but they surface specifically because of how Compute/PPg are
 
 - [PRO-200] — `compute-services` create returns a placeholder-region `serviceEndpointDomain` that 404s until a version is promoted.
 - [PRO-201] — `app build --build-type nextjs` yields a boot-crashing standalone for pnpm projects.
-
-Candidate to file next: the Prisma Postgres idle-connection crash loop (PPg + Bun.SQL on scale-to-zero Compute).
+- [FT-5219] — idle direct-connection close crashes a persistent Bun.SQL client into a 502 loop on scale-to-zero Compute (PPg gotchas).
 
 [PRO-200]: https://linear.app/prisma-company/issue/PRO-200/compute-services-create-returns-a-placeholder-region
 [PRO-201]: https://linear.app/prisma-company/issue/PRO-201/app-build-build-type-nextjs-yields-a-boot-crashing-standalone-for-pnpm
+[FT-5219]: https://linear.app/prisma-company/issue/FT-5219/idle-direct-connection-close-crashes-a-persistent-bunsql-client-into-a
