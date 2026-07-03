@@ -45,6 +45,24 @@ And the platform around them:
   is broad enough to be more than an ORM. Prisma ORM doesn't go anywhere — existing
   users keep it; new work starts on Prisma Data.
 
+## The SEO cost of "Data" (yes, it's real)
+
+Let's name the elephant: "Data" is about the most generic word in software. Nobody
+ranks for it, and "prisma data" even echoes the old Prisma Data Platform. If our plan
+were to market Prisma Data as a standalone product to search-driven developers, this
+name would be a handicap.
+
+But that's not the channel we're betting on. The primary consumption vector is
+**through Prisma Apps, Hexes, and agents** — an agent resolving "set up my app's data
+layer" pulls from the registry and our docs, not from a Google results page. Where
+humans do search, they search "prisma" plus a word, and the Prisma prefix carries it.
+Meanwhile Prisma ORM keeps its name, so the search equity we've built over a decade
+("prisma orm", "prisma schema", "prisma migrate") stays intact and keeps funneling
+people into the ecosystem.
+
+So: real cost, deliberately accepted, because it lands on the channel we're moving
+away from.
+
 ## One product, many components
 
 Right now each product has its own identity — MakerKit, Prisma Next, Prisma Postgres,
@@ -114,6 +132,38 @@ emulation of everything Prisma Cloud provides. Under the hood it leans on Alchem
 stand up local stand-ins for Compute, Postgres, Streams, and the rest, so local dev
 matches production without you wiring anything up. Build and test the whole thing
 before it ever ships.
+
+## Alternatives we considered for "Prisma Data"
+
+Three serious contenders, and why each lost:
+
+- **Prisma ORM (i.e. ship it as Prisma 8).** The original plan.
+  *Pros:* maximum continuity — keeps the version lineage, the household name, and a
+  decade of SEO. Zero re-education for existing users.
+  *Cons:* a version number promises a smooth upgrade we can't honor — it's a
+  different product with a different mental model, and any compatibility we shim on
+  top is a lie that leaks. It also locks us into the ORM category ("still the ORM"),
+  which is exactly the segmentation we want to escape, and it means a large, painful
+  compat project just to wear the name. Wrong word entirely for non-technical,
+  agent-assisted builders.
+- **Prisma Model.**
+  *Pros:* instantly predictable — "the model for my application." And models in PSL
+  are the thing people genuinely love about Prisma.
+  *Cons:* it names the authoring step, not the value — modeling is the way in;
+  querying and access are the goal. Worse, it steals its own best word: `model` is
+  the PSL construct (`model User { … }`), and a product named Model blurs the exact
+  place where the brand-love lives. Kept as what you *write*, not what we're called.
+- **Prisma Contract.**
+  *Pros:* names the genuine innovation — the machine-checkable schema definition the
+  rest of the app (and the agent) builds against. Speaks the same language as the
+  composition story.
+  *Cons:* it names the mechanism, not the value. Users want their data handled;
+  the Contract is *how* that promise holds, and it's cold and enterprise-flavored as
+  a front-door name. Kept as the sub-concept: models compile to a Contract.
+
+The pattern across all three: each candidate names a *part* of the product — its
+lineage, its authoring step, its mechanism. "Data" names the whole from the user's
+side, and leaves each of those words free to keep its precise meaning underneath.
 
 ## So, the pitch
 
