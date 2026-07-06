@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { lower } from "@makerkit/core/lower";
+import { lower } from "@makerkit/core/deploy";
 import { prismaCloud } from "@makerkit/prisma-cloud/target";
 import service from "./src/service.ts";
 

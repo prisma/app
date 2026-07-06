@@ -5,7 +5,7 @@
 import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import * as Prisma from "@makerkit/prisma-alchemy";
-import type { Target } from "@makerkit/core/lower";
+import type { Target } from "@makerkit/core/deploy";
 
 export interface PrismaCloudOptions {
   workspaceId: string;

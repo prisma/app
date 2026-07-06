@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
-import { lowering, LowerError, type LowerOptions, type Target } from "../lower/index.ts";
-import type { LoweredNode } from "../lower/index.ts";
+import { lowering, LowerError, type LowerOptions, type Target } from "../deploy/index.ts";
+import type { LoweredNode } from "../deploy/index.ts";
 import { resource, service } from "../node.ts";
 import { conn, testHost } from "./helpers.ts";
 

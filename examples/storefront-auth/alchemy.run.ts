@@ -6,7 +6,7 @@ import * as Output from "alchemy/Output";
 import { localState } from "alchemy/State/LocalState";
 import * as Effect from "effect/Effect";
 import * as Prisma from "@makerkit/prisma-alchemy";
-import { lowering } from "@makerkit/core/lower";
+import { lowering } from "@makerkit/core/deploy";
 import { prismaCloud } from "@makerkit/prisma-cloud/target";
 import authService from "./hexes/auth/src/service.ts";
 import storefrontService from "./hexes/storefront/src/service.ts";

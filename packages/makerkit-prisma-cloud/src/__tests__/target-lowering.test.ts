@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import * as Effect from "effect/Effect";
-import type { LoweredNode, LowerOptions } from "@makerkit/core/lower";
+import type { LoweredNode, LowerOptions } from "@makerkit/core/deploy";
 
 // Stub the provider layer so the compute lowering's data flow (id derivation,
 // props threading, outputs shape) runs purely — no Alchemy engine, no cloud.

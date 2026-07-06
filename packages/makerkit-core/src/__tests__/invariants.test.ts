@@ -22,6 +22,13 @@ function shippedSources(): { file: string; text: string }[] {
   return out;
 }
 
+describe("entry map: core splits into authoring + deploy + runtime", () => {
+  test("package.json exports exactly '.', './deploy', and './runtime'", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
+    expect(Object.keys(pkg.exports).sort()).toEqual([".", "./deploy", "./runtime"]);
+  });
+});
+
 describe("invariant 1: core has no target or runtime dependency", () => {
   test("package.json runtime deps name no prisma-*, bun, or node package", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
