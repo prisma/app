@@ -3,7 +3,7 @@
 This directory is the **source of truth** for MakerKit’s architecture and design. It is intended to be consumed by:
 
 - Humans reading the repository
-- The Agent OS workflows in this repo (product planning stays in `agent-os/product/`, but design/architecture lives here)
+- The agent workflows in this repo (product docs live in `docs/product/`, design/architecture lives here)
 - Other teams integrating with MakerKit (platform/orchestration/tools)
 - Implementation contributors working in this codebase
 
