@@ -2,4 +2,4 @@
 import { runHost } from "@makerkit/core/runtime";
 import service from "./service.ts";
 
-runHost(service);
+await runHost(service);

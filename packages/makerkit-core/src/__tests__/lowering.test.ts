@@ -3,16 +3,20 @@ import * as Effect from "effect/Effect";
 import { lowering, LowerError, type LowerOptions, type Target } from "../deploy/index.ts";
 import type { LoweredNode } from "../deploy/index.ts";
 import { resource, service } from "../node.ts";
-import { conn, testHost } from "./helpers.ts";
+import { conn, memoryAdapter } from "./helpers.ts";
 
 const opts: LowerOptions = {
   name: "hello",
   artifact: { path: "/tmp/hello.tar.gz", sha256: "abc123" },
 };
 
-const db = () => resource({ type: "fake/db", connection: conn([], () => ({})) });
-const app = (type: string, inputs: Record<string, ReturnType<typeof db>>, handler = () => null as unknown) =>
-  service({ type, inputs, host: testHost, handler });
+const adapter = memoryAdapter({});
+const db = () => resource({ type: "fake/db", connection: conn({}, () => ({})) });
+const app = (
+  type: string,
+  inputs: Record<string, ReturnType<typeof db>>,
+  handler = () => null as unknown,
+) => service({ type, inputs, params: {}, adapter, handler });
 
 // The fake lowerings are pure, so the composable form runs synchronously.
 const run = (eff: ReturnType<typeof lowering>): LoweredNode =>

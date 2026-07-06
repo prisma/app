@@ -2,26 +2,28 @@ import { describe, expect, test } from "bun:test";
 import { LoadError } from "../graph.ts";
 import { resource, service } from "../node.ts";
 import { ConfigError, runHost } from "../runtime/index.ts";
-import { conn, testHost } from "./helpers.ts";
+import { conn, memoryAdapter, untouchableAdapter } from "./helpers.ts";
 
-const dbNode = (record?: (cfg: Record<string, string>) => void) =>
+const dbNode = (record?: (values: { url: string }) => void) =>
   resource({
     type: "fake/db",
-    connection: conn([{ name: "url", secret: true }], (cfg) => {
-      record?.(cfg);
-      return { client: cfg.url };
+    connection: conn({ url: { type: "string", secret: true } }, (v) => {
+      record?.(v);
+      return { client: v.url };
     }),
   });
 
+const portParams = { port: { type: "number", default: 3000 } } as const;
+
 describe("runHost", () => {
-  test("resolves from env, hydrates each connection with its slice, builds the context", () => {
+  test("resolves via the node's adapter, hydrates typed values, passes service params as ctx", async () => {
     let received: unknown;
     let ctx: unknown;
-    const slices: Record<string, string>[] = [];
     const root = service({
       type: "fake/app",
-      inputs: { db: dbNode((cfg) => slices.push(cfg)) },
-      host: testHost,
+      inputs: { db: dbNode() },
+      params: portParams,
+      adapter: memoryAdapter({ "db.url": "postgres://x", port: "8080" }),
       handler: (deps, c) => {
         received = deps;
         ctx = c;
@@ -29,180 +31,268 @@ describe("runHost", () => {
       },
     });
 
-    const result = runHost(root, { env: { DB_URL: "postgres://x", PORT: "8080" } });
+    const result = await runHost(root);
 
     expect(result).toBe("served");
-    expect(slices).toEqual([{ url: "postgres://x" }]);
     expect(received).toEqual({ db: { client: "postgres://x" } });
     expect(ctx).toEqual({ port: 8080 });
   });
 
-  test("resolution precedence: override > env > default", () => {
-    let ctx: { port?: number } = {};
-    const slices: Record<string, string>[] = [];
+  test("opts.adapter swaps the platform adapter entirely", async () => {
+    let ctx: unknown;
     const root = service({
       type: "fake/app",
-      inputs: { db: dbNode((cfg) => slices.push(cfg)) },
-      host: testHost,
+      inputs: { db: dbNode() },
+      params: portParams,
+      adapter: untouchableAdapter, // the "platform" — must not be consulted
       handler: (_deps, c) => {
         ctx = c;
         return null;
       },
     });
 
-    runHost(root, {
-      env: { DB_URL: "postgres://from-env", PORT: "1111" },
-      config: { "db.url": "postgres://override", "context.port": "2222" },
-    });
+    await runHost(root, { adapter: memoryAdapter({ "db.url": "postgres://swap", port: "4001" }) });
 
-    expect(slices).toEqual([{ url: "postgres://override" }]); // override beats env
-    expect(ctx).toEqual({ port: 2222 });
-
-    runHost(root, { env: { DB_URL: "postgres://from-env" } });
-    expect(slices[1]).toEqual({ url: "postgres://from-env" }); // env beats default
-    expect(ctx).toEqual({ port: 3000 }); // default when env has no PORT
+    expect(ctx).toEqual({ port: 4001 });
   });
 
-  test("field-level override boots with no env at all", () => {
+  test("per-param overrides are applied BEFORE the adapter is consulted", async () => {
+    const adapter = memoryAdapter({ "db.url": "postgres://from-adapter", port: "1111" });
+    let received: unknown;
+    let ctx: unknown;
+    const root = service({
+      type: "fake/app",
+      inputs: { db: dbNode() },
+      params: portParams,
+      adapter,
+      handler: (deps, c) => {
+        received = deps;
+        ctx = c;
+        return null;
+      },
+    });
+
+    await runHost(root, { config: { "db.url": "postgres://override", port: 2222 } });
+
+    expect(received).toEqual({ db: { client: "postgres://override" } });
+    expect(ctx).toEqual({ port: 2222 });
+    // Overridden params were never requested from the adapter.
+    expect(adapter.requested).toEqual([]);
+  });
+
+  test("adapter value beats declared default", async () => {
+    let ctx: unknown;
+    const root = service({
+      type: "fake/app",
+      inputs: {},
+      params: portParams,
+      adapter: memoryAdapter({ port: "9000" }),
+      handler: (_deps, c) => {
+        ctx = c;
+        return null;
+      },
+    });
+
+    await runHost(root);
+
+    expect(ctx).toEqual({ port: 9000 });
+  });
+
+  test("full override set boots without the adapter returning anything", async () => {
     let received: unknown;
     const root = service({
       type: "fake/app",
       inputs: { db: dbNode() },
-      host: testHost,
+      params: {},
+      adapter: untouchableAdapter,
       handler: (deps) => {
         received = deps;
         return null;
       },
     });
 
-    runHost(root, { env: {}, config: { "db.url": "postgres://test" } });
+    await runHost(root, { config: { "db.url": "postgres://test" } });
 
     expect(received).toEqual({ db: { client: "postgres://test" } });
   });
 
-  test("ConfigError names EVERY missing required key at once, before any hydrate", () => {
+  test("ConfigError names EVERY missing/invalid param at once, before any hydrate", async () => {
     let hydrateCalls = 0;
     const root = service({
       type: "fake/app",
       inputs: {
         db: resource({
           type: "fake/db",
-          connection: conn([{ name: "url" }], () => {
+          connection: conn({ url: { type: "string" } }, () => {
             hydrateCalls += 1;
             return {};
           }),
         }),
         cache: resource({
           type: "fake/cache",
-          connection: conn([{ name: "url" }], () => {
+          connection: conn({ url: { type: "string" } }, () => {
             hydrateCalls += 1;
             return {};
           }),
         }),
       },
-      host: testHost,
+      params: { replicas: { type: "number" } },
+      adapter: memoryAdapter({ replicas: "not-a-number" }),
       handler: () => null,
     });
 
-    expect(() => runHost(root, { env: {} })).toThrow(ConfigError);
+    expect(runHost(root)).rejects.toThrow(ConfigError);
     try {
-      runHost(root, { env: {} });
+      await runHost(root);
     } catch (error) {
       const message = (error as Error).message;
-      expect(message).toContain("DB_URL");
-      expect(message).toContain("CACHE_URL");
       expect(message).toContain("db.url");
       expect(message).toContain("cache.url");
+      expect(message).toContain("replicas");
     }
     expect(hydrateCalls).toBe(0);
   });
 
-  test("optional fields may be absent; the hydrate slice simply omits them", () => {
-    const slices: Record<string, string>[] = [];
+  test('R4-F2 probe: "" with a default resolves to the default (PORT="" → 3000, not 0)', async () => {
+    let ctx: unknown;
+    const root = service({
+      type: "fake/app",
+      inputs: {},
+      params: portParams,
+      adapter: memoryAdapter({ port: "" }),
+      handler: (_deps, c) => {
+        ctx = c;
+        return null;
+      },
+    });
+
+    await runHost(root);
+
+    expect(ctx).toEqual({ port: 3000 });
+  });
+
+  test("R4-F2 probe: non-numeric with no default is a ConfigError naming the param", async () => {
+    const root = service({
+      type: "fake/app",
+      inputs: {},
+      params: { port: { type: "number" } },
+      adapter: memoryAdapter({ port: "not-a-number" }),
+      handler: () => null,
+    });
+
+    expect(runHost(root)).rejects.toThrow(ConfigError);
+    expect(runHost(root)).rejects.toThrow(/port/);
+  });
+
+  test('"" is unresolved for a required string param too — loud boot error', async () => {
+    const root = service({
+      type: "fake/app",
+      inputs: { db: dbNode() },
+      params: {},
+      adapter: memoryAdapter({ "db.url": "" }),
+      handler: () => null,
+    });
+
+    expect(runHost(root)).rejects.toThrow(ConfigError);
+    expect(runHost(root)).rejects.toThrow(/db\.url/);
+  });
+
+  test("optional param with no default resolves to undefined", async () => {
+    const slices: unknown[] = [];
     const root = service({
       type: "fake/app",
       inputs: {
         db: resource({
           type: "fake/db",
           connection: conn(
-            [{ name: "url" }, { name: "schema", optional: true }],
-            (cfg) => {
-              slices.push(cfg);
+            { url: { type: "string" }, schema: { type: "string", optional: true } },
+            (v) => {
+              slices.push(v);
               return {};
             },
           ),
         }),
       },
-      host: testHost,
+      params: {},
+      adapter: memoryAdapter({ "db.url": "postgres://x" }),
       handler: () => null,
     });
 
-    runHost(root, { env: { DB_URL: "postgres://x" } });
+    await runHost(root);
 
-    expect(slices).toEqual([{ url: "postgres://x" }]);
+    expect(slices).toEqual([{ url: "postgres://x", schema: undefined }]);
   });
 
-  test("a dep-less service boots with zero declared config", () => {
+  test("async hydrate is awaited", async () => {
+    let received: unknown;
+    const root = service({
+      type: "fake/app",
+      inputs: {
+        db: resource({
+          type: "fake/db",
+          connection: conn({ url: { type: "string" } }, async (v) => {
+            await Promise.resolve();
+            return { asyncClient: v.url };
+          }),
+        }),
+      },
+      params: {},
+      adapter: memoryAdapter({ "db.url": "postgres://x" }),
+      handler: (deps) => {
+        received = deps;
+        return null;
+      },
+    });
+
+    await runHost(root);
+
+    expect(received).toEqual({ db: { asyncClient: "postgres://x" } });
+  });
+
+  test("a dep-less service boots with zero declared config", async () => {
     let ctx: unknown;
     const root = service({
       type: "fake/app",
       inputs: {},
-      host: testHost,
+      params: portParams,
+      adapter: memoryAdapter({}),
       handler: (_deps, c) => {
         ctx = c;
         return "booted";
       },
     });
 
-    expect(runHost(root, { env: {} })).toBe("booted");
+    expect(await runHost(root)).toBe("booted");
     expect(ctx).toEqual({ port: 3000 });
   });
 
-  test("a non-numeric context value falls back to the declared default", () => {
-    let ctx: unknown;
-    const root = service({
-      type: "fake/app",
-      inputs: {},
-      host: testHost,
-      handler: (_deps, c) => {
-        ctx = c;
-        return null;
-      },
-    });
-
-    runHost(root, { env: { PORT: "not-a-number" } });
-
-    expect(ctx).toEqual({ port: 3000 });
-  });
-
-  test("Load runs first: a malformed graph fails with LoadError, nothing hydrates", () => {
-    let hydrateCalls = 0;
+  test("Load runs first: a malformed graph fails with LoadError, nothing hydrates", async () => {
     const root = service({
       type: "fake/app",
       inputs: { db: { not: "a node" } as never },
-      host: testHost,
+      params: {},
+      adapter: untouchableAdapter,
       handler: () => null,
     });
 
-    expect(() =>
-      runHost(root, { env: {}, config: { "db.url": "postgres://x" } }),
-    ).toThrow(LoadError);
-    expect(hydrateCalls).toBe(0);
+    expect(runHost(root, { config: { "db.url": "postgres://x" } })).rejects.toThrow(LoadError);
   });
 
-  test("does not call the handler when config validation fails", () => {
+  test("does not call the handler when config validation fails", async () => {
     let handlerCalls = 0;
     const root = service({
       type: "fake/app",
       inputs: { db: dbNode() },
-      host: testHost,
+      params: {},
+      adapter: memoryAdapter({}),
       handler: () => {
         handlerCalls += 1;
         return null;
       },
     });
 
-    expect(() => runHost(root, { env: {} })).toThrow(ConfigError);
+    expect(runHost(root)).rejects.toThrow(ConfigError);
+    await runHost(root).catch(() => {});
     expect(handlerCalls).toBe(0);
   });
 });

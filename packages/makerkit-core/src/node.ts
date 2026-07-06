@@ -2,10 +2,10 @@
  * Core model: node types and the factories that construct them. All nodes are
  * plain, frozen, serializable data — with exactly three sanctioned behavior
  * slots hanging off the graph: the Service node's handler (`run`), a
- * Connection's `hydrate` (config → client), and nothing else that executes.
- * The Service type's config knowledge is data (an addressing rule), not a
- * provider function. A node's `type` is its routing key at deploy; core never
- * interprets it beyond lookup.
+ * Connection's `hydrate` (validated values → client), and the Service's
+ * ConfigAdapter (the platform's config I/O). Config declarations are pure
+ * data; only the adapter touches a real environment. A node's `type` is its
+ * routing key at deploy; core never interprets it beyond lookup.
  */
 
 /** JSON-safe config values. */
@@ -26,45 +26,70 @@ export interface NodeBase {
   readonly config?: JsonObject;
 }
 
-// ——— Configuration model (core-owned; the pipeline lives in /runtime) ———
+// ——— Configuration model (core-owned pipeline; it lives in /runtime) ———
 
-/** A config field a connection needs at boot — declared shape, pure data. */
-export interface ConfigField {
-  readonly name: string;
+/** Runtime-validatable param types. Curated; extended consciously. */
+export type ParamType = "string" | "number";
+export type TypeOf<T extends ParamType> = T extends "string" ? string : number;
+
+/**
+ * A declared config param — pure data. The declaration does double duty: core
+ * validates raw values against `type` at boot, and TypeScript derives the
+ * hydrate/handler input types from it — the definition object ENFORCES the
+ * final param input types.
+ */
+export interface ConfigParam<T extends ParamType = ParamType> {
+  readonly type: T;
   /** Redacted in any introspection output. */
   readonly secret?: boolean;
   readonly optional?: boolean;
+  readonly default?: TypeOf<T>;
+}
+
+export type Params = Record<string, ConfigParam>;
+
+/** What implementations receive — undefined only for optional params with no default. */
+export type Values<P extends Params> = {
+  readonly [K in keyof P]: P[K]["optional"] extends true
+    ? undefined extends P[K]["default"]
+      ? TypeOf<P[K]["type"]> | undefined
+      : TypeOf<P[K]["type"]>
+    : TypeOf<P[K]["type"]>;
+};
+
+/**
+ * The connection face of a dependency: declared params (data) and how
+ * validated values become a client (the hydrate behavior slot). Both P and C
+ * are INFERRED — the declaration types hydrate's input; the factory types the
+ * handler's dep.
+ */
+export interface Connection<P extends Params = Params, C = unknown> {
+  readonly params: P;
+  hydrate(values: Values<P>): C | Promise<C>;
 }
 
 /**
- * The connection face of a dependency: what it needs (data) and how the
- * needed values become a client (the hydrate behavior slot). C is INFERRED
- * from the app's factory — no phantom types, no declared-vs-actual trust
- * boundary.
+ * The platform's config I/O, pack-provided and attached to the service node
+ * by its constructor. The mapping between semantic params and physical
+ * locations is the adapter's PRIVATE business — core never sees platform
+ * keys. The adapter owns its source: the platform adapter is the one
+ * sanctioned environment reader; an in-memory test adapter reads nothing.
  */
-export interface Connection<C = unknown> {
-  readonly config: readonly ConfigField[];
-  hydrate(config: Record<string, string>): C;
+export interface ConfigAdapter {
+  /** Raw values keyed by request id; core validates/coerces. */
+  get(requests: readonly ConfigRequest[]): Promise<Readonly<Record<string, string>>>;
+  /** Tests · deploy plane. */
+  set?(values: Readonly<Record<string, string>>): Promise<void>;
+  /** Ops introspection: "which physical location is this param?" */
+  describe?(request: ConfigRequest): Promise<{ location: string }>;
 }
 
-/**
- * How a Service KIND's platform delivers config — pack-declared DATA plus a
- * pure addressing rule core drives. Core does all reading/resolving; the pack
- * never touches an environment.
- */
-export interface HostConvention {
-  /** The only channel today. */
-  readonly channel: "env";
-  /** Addressing rule for input fields, e.g. (_, "url") => "DATABASE_URL". */
-  key(input: string, field: string): string;
-  /** Context fields resolve via their own key, not the rule above. */
-  readonly context: readonly ContextField[];
-}
-
-export interface ContextField {
-  readonly name: keyof RuntimeContext;
-  readonly key: string;
-  readonly default?: string | number;
+export interface ConfigRequest {
+  /** Core-assigned; keys the returned value map. */
+  readonly id: string;
+  readonly owner: "service" | { readonly input: string };
+  readonly name: string;
+  readonly param: ConfigParam;
 }
 
 // ——— Nodes ———
@@ -75,20 +100,22 @@ export interface ContextField {
  */
 export interface ResourceNode<C = unknown> extends NodeBase {
   readonly kind: "resource";
-  readonly connection: Connection<C>;
+  readonly connection: Connection<Params, C>;
 }
 
 /**
- * A Service: inputs + host convention + the opaque handler. This IS the
- * user's default export — inspectable (inputs/type/host/config) and runnable
- * (run), inert until invoked. There is no separate handle type: the node is
- * the handle.
+ * A Service: inputs + its own declared params + the platform's ConfigAdapter
+ * + the opaque handler. This IS the user's default export — inspectable
+ * (inputs/type/params/config) and runnable (run), inert until invoked. There
+ * is no separate handle type: the node is the handle.
  */
-export interface ServiceNode<D extends Deps = Deps> extends NodeBase {
+export interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends NodeBase {
   readonly kind: "service";
   readonly inputs: D;
-  readonly host: HostConvention;
-  run(deps: HydratedDeps<D>, ctx: RuntimeContext): unknown;
+  /** Service-level config (e.g. port) — no special "context" concept. */
+  readonly params: P;
+  readonly adapter: ConfigAdapter;
+  run(deps: HydratedDeps<D>, ctx: Values<P>): unknown;
 }
 
 /** Dependency map: name → ResourceNode. `any`, not `unknown` — keeps inference. */
@@ -98,14 +125,13 @@ export type Hydrated<N> = N extends ResourceNode<infer C> ? C : never;
 export type HydratedDeps<D extends Deps> = { readonly [K in keyof D]: Hydrated<D[K]> };
 
 /**
- * What the host provides a running service besides its deps. Core defines the
- * shape; values resolve through the service's HostConvention.
+ * ctx is nothing special: the service's own resolved params, typed by its
+ * declaration.
  */
-export interface RuntimeContext {
-  readonly port: number;
-}
-
-export type ServiceHandler<D extends Deps> = (deps: HydratedDeps<D>, ctx: RuntimeContext) => unknown;
+export type ServiceHandler<D extends Deps, P extends Params> = (
+  deps: HydratedDeps<D>,
+  ctx: Values<P>,
+) => unknown;
 
 function requireType(type: string, factory: string): void {
   if (typeof type !== "string" || type.length === 0) {
@@ -113,22 +139,30 @@ function requireType(type: string, factory: string): void {
   }
 }
 
+function freezeParams<P extends Params>(params: P): P {
+  const frozen: Record<string, ConfigParam> = {};
+  for (const [name, param] of Object.entries(params)) {
+    frozen[name] = Object.freeze({ ...param });
+  }
+  return Object.freeze(frozen) as P;
+}
+
 /** Constructs a branded, frozen Resource node. Pure — nothing executes. */
-export function resource<C>(def: {
+export function resource<P extends Params, C>(def: {
   type: string;
-  connection: Connection<C>;
+  connection: Connection<P, C>;
   config?: JsonObject;
 }): ResourceNode<C> {
   requireType(def.type, "resource");
-  const connection: Connection<C> = Object.freeze({
-    config: Object.freeze(def.connection.config.map((field) => Object.freeze({ ...field }))),
+  const connection: Connection<P, C> = Object.freeze({
+    params: freezeParams(def.connection.params),
     hydrate: def.connection.hydrate,
   });
   const node: ResourceNode<C> = {
     [NODE]: true,
     kind: "resource",
     type: def.type,
-    connection,
+    connection: connection as Connection<Params, C>,
     ...(def.config !== undefined ? { config: Object.freeze(def.config) } : {}),
   };
   return Object.freeze(node);
@@ -138,25 +172,22 @@ export function resource<C>(def: {
  * Constructs a branded, frozen Service node; `handler` becomes the node's
  * `run`. Pure — the handler is never called here.
  */
-export function service<D extends Deps>(def: {
+export function service<D extends Deps, P extends Params>(def: {
   type: string;
   inputs: D;
-  host: HostConvention;
-  handler: ServiceHandler<D>;
+  params: P;
+  adapter: ConfigAdapter;
+  handler: ServiceHandler<D, P>;
   config?: JsonObject;
-}): ServiceNode<D> {
+}): ServiceNode<D, P> {
   requireType(def.type, "service");
-  const host: HostConvention = Object.freeze({
-    channel: def.host.channel,
-    key: def.host.key,
-    context: Object.freeze(def.host.context.map((field) => Object.freeze({ ...field }))),
-  });
-  const node: ServiceNode<D> = {
+  const node: ServiceNode<D, P> = {
     [NODE]: true,
     kind: "service",
     type: def.type,
     inputs: Object.freeze({ ...def.inputs }) as D,
-    host,
+    params: freezeParams(def.params),
+    adapter: def.adapter,
     ...(def.config !== undefined ? { config: Object.freeze(def.config) } : {}),
     run(deps, ctx) {
       return def.handler(deps, ctx);

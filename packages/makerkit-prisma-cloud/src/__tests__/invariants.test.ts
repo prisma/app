@@ -54,15 +54,18 @@ describe("invariant 2: authoring imports stay lean (core + pack)", () => {
   });
 });
 
-describe("invariant 4: the pack reads no ambient environment", () => {
-  test("the process-env token appears nowhere in the pack's src", () => {
+describe("invariant 4: exactly one environment read — inside the ConfigAdapter", () => {
+  test("the process-env token appears exactly once in the pack's src, in the adapter", () => {
     const sources = shippedSources();
     expect(sources.length).toBeGreaterThan(0);
 
     const token = ["process", "env"].join(".");
-    for (const { file, text } of sources) {
-      expect({ file, count: text.split(token).length - 1 }).toEqual({ file, count: 0 });
-    }
+    const hits = sources.flatMap(({ file, text }) => {
+      const count = text.split(token).length - 1;
+      return count > 0 ? [{ file, count }] : [];
+    });
+
+    expect(hits).toEqual([{ file: "index.ts", count: 1 }]);
   });
 });
 

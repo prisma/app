@@ -5,19 +5,16 @@ import { configOf, Load, resource, service } from "../../index.ts";
 const db = resource({
   type: "probe/db",
   connection: {
-    config: [{ name: "url", secret: true }],
-    hydrate: (cfg) => ({ url: cfg.url }),
+    params: { url: { type: "string", secret: true } },
+    hydrate: (v) => ({ url: v.url }),
   },
 });
 
 const app = service({
   type: "probe/app",
   inputs: { db },
-  host: {
-    channel: "env",
-    key: (input, field) => `${input}_${field}`.toUpperCase(),
-    context: [{ name: "port", key: "PORT", default: 3000 }],
-  },
+  params: { port: { type: "number", default: 3000 } },
+  adapter: { get: async () => ({}) },
   handler: ({ db: client }) => client,
 });
 

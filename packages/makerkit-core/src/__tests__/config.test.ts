@@ -1,61 +1,71 @@
 import { describe, expect, test } from "bun:test";
 import { configOf } from "../config.ts";
 import { resource, service } from "../node.ts";
-import { conn, testHost } from "./helpers.ts";
+import { conn, memoryAdapter } from "./helpers.ts";
+
+const adapter = memoryAdapter({});
 
 describe("configOf", () => {
-  test("enumerates input fields through the host's key rule, secrets marked", () => {
+  test("enumerates input params then service params — semantic, no platform keys", () => {
     const root = service({
       type: "fake/app",
       inputs: {
         db: resource({
           type: "fake/db",
-          connection: conn([{ name: "url", secret: true }, { name: "schema", optional: true }], () => ({})),
+          connection: conn(
+            { url: { type: "string", secret: true }, schema: { type: "string", optional: true } },
+            () => ({}),
+          ),
         }),
       },
-      host: testHost,
+      params: { port: { type: "number", default: 3000 } },
+      adapter,
       handler: () => null,
     });
 
-    const manifest = configOf(root);
-
-    expect(manifest).toEqual([
-      { input: "db", field: "url", channel: "env", key: "DB_URL", secret: true, optional: false },
-      { input: "db", field: "schema", channel: "env", key: "DB_SCHEMA", secret: false, optional: true },
-      { field: "port", channel: "env", key: "PORT", secret: false, default: 3000, optional: true },
+    expect(configOf(root)).toEqual([
+      { owner: { input: "db" }, name: "url", type: "string", secret: true, optional: false },
+      { owner: { input: "db" }, name: "schema", type: "string", secret: false, optional: true },
+      { owner: "service", name: "port", type: "number", secret: false, optional: false, default: 3000 },
     ]);
   });
 
-  test("context fields resolve via ContextField.key, not the input key rule", () => {
+  test("owner discriminates service vs input params — same name cannot collide", () => {
+    const root = service({
+      type: "fake/app",
+      inputs: {
+        cache: resource({
+          type: "fake/cache",
+          connection: conn({ port: { type: "number" } }, () => ({})),
+        }),
+      },
+      params: { port: { type: "number", default: 3000 } },
+      adapter,
+      handler: () => null,
+    });
+
+    const owners = configOf(root).map((e) => ({ owner: e.owner, name: e.name }));
+    expect(owners).toEqual([
+      { owner: { input: "cache" }, name: "port" },
+      { owner: "service", name: "port" },
+    ]);
+  });
+
+  test("a dep-less service enumerates only its own params", () => {
     const root = service({
       type: "fake/app",
       inputs: {},
-      host: {
-        channel: "env",
-        key: () => {
-          throw new Error("key() must not be called for context fields");
-        },
-        context: [{ name: "port", key: "LISTEN_PORT" }],
-      },
+      params: { port: { type: "number", default: 3000 } },
+      adapter,
       handler: () => null,
     });
 
-    const manifest = configOf(root);
-
-    expect(manifest).toEqual([
-      { field: "port", channel: "env", key: "LISTEN_PORT", secret: false, optional: false },
-    ]);
-  });
-
-  test("a dep-less service enumerates only context fields", () => {
-    const root = service({ type: "fake/app", inputs: {}, host: testHost, handler: () => null });
-
     expect(configOf(root)).toEqual([
-      { field: "port", channel: "env", key: "PORT", secret: false, default: 3000, optional: true },
+      { owner: "service", name: "port", type: "number", secret: false, optional: false, default: 3000 },
     ]);
   });
 
-  test("executes nothing", () => {
+  test("executes nothing — no handler, no hydrate, no adapter", () => {
     let handlerCalls = 0;
     let hydrateCalls = 0;
     const root = service({
@@ -63,13 +73,14 @@ describe("configOf", () => {
       inputs: {
         db: resource({
           type: "fake/db",
-          connection: conn([{ name: "url" }], () => {
+          connection: conn({ url: { type: "string" } }, () => {
             hydrateCalls += 1;
             return {};
           }),
         }),
       },
-      host: testHost,
+      params: {},
+      adapter,
       handler: () => {
         handlerCalls += 1;
         return null;
@@ -80,5 +91,6 @@ describe("configOf", () => {
 
     expect(handlerCalls).toBe(0);
     expect(hydrateCalls).toBe(0);
+    expect(adapter.requested.length).toBe(0);
   });
 });

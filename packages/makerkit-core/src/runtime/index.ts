@@ -1,24 +1,23 @@
 /**
- * The boot pipeline. Core owns config management end to end: enumerate the
- * service's config surface (configOf), resolve each field
- * (override ?? env[key] ?? default), validate BEFORE any hydrate, hydrate
- * each connection with its resolved slice, build the RuntimeContext from the
- * resolved context fields, call the handler. Imports nothing.
+ * The boot pipeline. Core owns config management end to end while caring
+ * nothing about the mapping: enumerate the declarations, ask the service's
+ * ConfigAdapter for raw values, validate + coerce against the declared types,
+ * hydrate each connection with its typed values, call the handler with the
+ * service's own param values. Imports nothing; reads no environment — the
+ * platform adapter is the single sanctioned reader for its platform.
  */
 import { configOf, type ConfigManifestEntry } from "../config.ts";
 import { Load } from "../graph.ts";
-import type { ResourceNode, RuntimeContext, ServiceNode } from "../node.ts";
-
-export type Env = Record<string, string | undefined>;
+import type { ConfigAdapter, ConfigRequest, ResourceNode, ServiceNode } from "../node.ts";
 
 export interface RunHostOptions {
-  /** Source override (tests) — defaults to the ambient environment. */
-  readonly env?: Env;
-  /** Field-level overrides, keyed "input.field" / "context.field". */
-  readonly config?: Record<string, string>;
+  /** Swap the platform: in-memory tests, inspection harnesses. */
+  readonly adapter?: ConfigAdapter;
+  /** Per-param overrides, applied before the adapter is consulted. */
+  readonly config?: Record<string, string | number>;
 }
 
-/** Names every missing key at once — validation happens before any hydrate. */
+/** Names every missing/invalid param at once — before any hydrate. */
 export class ConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -26,62 +25,115 @@ export class ConfigError extends Error {
   }
 }
 
-// The ambient environment of whatever runtime hosts the bundle. Declared
-// structurally so this entry imports no runtime's types.
-declare const process: { readonly env: Env };
-
-const overrideKey = (entry: ConfigManifestEntry): string =>
-  entry.input !== undefined ? `${entry.input}.${entry.field}` : `context.${entry.field}`;
+// Param path: how overrides address params and how errors name them —
+// "input.name" for input params, the bare name for service params. Owners
+// discriminate structurally, so the two forms cannot collide (input paths
+// always carry a dot).
+const paramPath = (entry: ConfigManifestEntry): string =>
+  entry.owner === "service" ? entry.name : `${entry.owner.input}.${entry.name}`;
 
 /**
- * Load(root) → configOf → resolve each entry → validate (ALL missing required
- * fields reported in one ConfigError — Load-before-Hydrate applied to config)
- * → per input: connection.hydrate(resolvedSlice) → root.run(deps, context).
- * This default `env` read is the only place the ambient environment enters
- * the system.
+ * Load → configOf → adapter.get(requests) → per-param: override ?? raw ??
+ * default → validate + coerce against the declared type ("" is UNRESOLVED,
+ * not a value; a failed number parse with no default is an error) — ALL
+ * problems reported in one ConfigError, before any hydrate — then per input:
+ * await connection.hydrate(typedValues), and finally
+ * root.run(deps, serviceParamValues).
  */
-export function runHost(root: ServiceNode, opts?: RunHostOptions): unknown {
+export async function runHost(root: ServiceNode, opts?: RunHostOptions): Promise<unknown> {
   const graph = Load(root);
   const manifest = configOf(root);
-  const env = opts?.env ?? process.env;
+  const adapter = opts?.adapter ?? root.adapter;
 
-  const resolved = new Map<string, string | number>();
-  const missing: string[] = [];
+  // Overrides are applied first; only unsatisfied params are requested.
+  const overrides = new Map<string, string | number>();
+  for (const entry of manifest) {
+    const value = opts?.config?.[paramPath(entry)];
+    if (value !== undefined) overrides.set(paramPath(entry), value);
+  }
+
+  const requests: ConfigRequest[] = manifest
+    .filter((entry) => !overrides.has(paramPath(entry)))
+    .map((entry, index) => ({
+      id: `${index}:${paramPath(entry)}`,
+      owner: entry.owner,
+      name: entry.name,
+      param: {
+        type: entry.type,
+        secret: entry.secret,
+        optional: entry.optional,
+        ...(entry.default !== undefined ? { default: entry.default } : {}),
+      },
+    }));
+  const raw = requests.length > 0 ? await adapter.get(requests) : {};
+  const rawByPath = new Map<string, string>();
+  for (const request of requests) {
+    const value = raw[request.id];
+    if (value !== undefined) {
+      rawByPath.set(
+        request.owner === "service" ? request.name : `${request.owner.input}.${request.name}`,
+        value,
+      );
+    }
+  }
+
+  // Resolve + validate every param; report ALL problems in one error.
+  const resolved = new Map<string, string | number | undefined>();
+  const problems: string[] = [];
 
   for (const entry of manifest) {
-    const value = opts?.config?.[overrideKey(entry)] ?? env[entry.key] ?? entry.default;
+    const path = paramPath(entry);
+    // "" is UNRESOLVED, not a value — uniformly, overrides included.
+    let value: string | number | undefined = overrides.get(path) ?? rawByPath.get(path);
+    if (value === "") value = undefined;
+
     if (value === undefined) {
-      if (!entry.optional) missing.push(`${entry.key} (${overrideKey(entry)})`);
+      if (entry.default !== undefined) {
+        resolved.set(path, entry.default);
+      } else if (entry.optional) {
+        resolved.set(path, undefined);
+      } else {
+        problems.push(`missing required param "${path}" (${entry.type})`);
+      }
       continue;
     }
-    resolved.set(overrideKey(entry), value);
+
+    if (entry.type === "number") {
+      const parsed = typeof value === "number" ? value : Number(value);
+      if (Number.isFinite(parsed)) {
+        resolved.set(path, parsed);
+      } else if (entry.default !== undefined) {
+        // A failed parse with no default is an error; with one, the
+        // declaration's default stands in.
+        resolved.set(path, entry.default);
+      } else {
+        problems.push(`invalid number for param "${path}": got ${JSON.stringify(value)}`);
+      }
+    } else {
+      resolved.set(path, String(value));
+    }
   }
 
-  if (missing.length > 0) {
-    throw new ConfigError(`Missing required config: ${missing.join(", ")}.`);
+  if (problems.length > 0) {
+    throw new ConfigError(`Config validation failed: ${problems.join("; ")}.`);
   }
 
+  // Hydrate each input with its typed value slice.
   const deps: Record<string, unknown> = {};
   const byId = new Map(graph.nodes.map((entry) => [entry.id, entry]));
   for (const edge of graph.edges) {
     const node = byId.get(edge.from)?.node as ResourceNode;
-    const slice: Record<string, string> = {};
-    for (const field of node.connection.config) {
-      const value = resolved.get(`${edge.input}.${field.name}`);
-      if (value !== undefined) slice[field.name] = String(value);
+    const values: Record<string, string | number | undefined> = {};
+    for (const name of Object.keys(node.connection.params)) {
+      values[name] = resolved.get(`${edge.input}.${name}`);
     }
-    deps[edge.input] = node.connection.hydrate(slice);
+    deps[edge.input] = await node.connection.hydrate(values as never);
   }
 
-  const context: Record<string, unknown> = {};
-  for (const field of root.host.context) {
-    const value = resolved.get(`context.${field.name}`);
-    // RuntimeContext fields are numeric today (port); env delivers strings. A
-    // non-numeric resolved value falls back to the declared default.
-    const parsed = typeof value === "string" ? Number(value) : value;
-    context[field.name] =
-      typeof parsed === "number" && Number.isFinite(parsed) ? parsed : field.default;
+  const ctx: Record<string, string | number | undefined> = {};
+  for (const name of Object.keys(root.params)) {
+    ctx[name] = resolved.get(name);
   }
 
-  return root.run(deps as Parameters<typeof root.run>[0], context as unknown as RuntimeContext);
+  return root.run(deps as Parameters<typeof root.run>[0], ctx as Parameters<typeof root.run>[1]);
 }

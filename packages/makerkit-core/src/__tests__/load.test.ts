@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { Load, LoadError } from "../graph.ts";
 import { resource, service } from "../node.ts";
-import { conn, testHost } from "./helpers.ts";
+import { conn, memoryAdapter } from "./helpers.ts";
 
-const db = () => resource({ type: "fake/db", connection: conn([], () => ({})) });
+const adapter = memoryAdapter({});
+const db = () => resource({ type: "fake/db", connection: conn({}, () => ({})) });
 const app = (inputs: Record<string, ReturnType<typeof db>>) =>
-  service({ type: "fake/app", inputs, host: testHost, handler: () => null });
+  service({ type: "fake/app", inputs, params: {}, adapter, handler: () => null });
 
 describe("Load", () => {
   test("builds path-derived ids, edges, and topo-ordered nodes (deps first)", () => {
@@ -41,7 +42,8 @@ describe("Load", () => {
     const root = service({
       type: "fake/app",
       inputs: { db: db() },
-      host: testHost,
+      params: {},
+      adapter,
       handler: () => {
         calls += 1;
         return null;

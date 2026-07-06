@@ -76,18 +76,15 @@ describe("invariant 2: the '.' authoring entry bundles lean", () => {
   });
 });
 
-describe("invariant 4: the ambient environment is read exactly once", () => {
-  test("the process-env token appears exactly once in src, in runtime/index.ts", () => {
+describe("invariant 4: core contains zero environment reads", () => {
+  test("the process-env token appears nowhere in core's src", () => {
     const sources = shippedSources();
     expect(sources.length).toBeGreaterThan(0);
 
     const token = ["process", "env"].join(".");
-    const hits = sources.flatMap(({ file, text }) => {
-      const count = text.split(token).length - 1;
-      return count > 0 ? [{ file, count }] : [];
-    });
-
-    expect(hits).toEqual([{ file: path.join("runtime", "index.ts"), count: 1 }]);
+    for (const { file, text } of sources) {
+      expect({ file, count: text.split(token).length - 1 }).toEqual({ file, count: 0 });
+    }
   });
 });
 

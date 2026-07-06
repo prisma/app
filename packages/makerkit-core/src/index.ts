@@ -1,23 +1,27 @@
 /**
- * The authoring entry: node factories, Load, configOf, and the model types.
- * Imports nothing — bundling a module that uses this entry ships only this
- * code.
+ * The authoring + control entry: node factories, Load, configOf, and the
+ * model types. Imports nothing — bundling a module that uses this entry
+ * ships only this code. (/control carves out of here when the control
+ * surface grows.)
  */
 export { resource, service, isNode } from "./node.ts";
 export type {
   JsonValue,
   JsonObject,
   NodeBase,
-  ConfigField,
+  ParamType,
+  TypeOf,
+  ConfigParam,
+  Params,
+  Values,
   Connection,
-  HostConvention,
-  ContextField,
+  ConfigAdapter,
+  ConfigRequest,
   ResourceNode,
   ServiceNode,
   Deps,
   Hydrated,
   HydratedDeps,
-  RuntimeContext,
   ServiceHandler,
 } from "./node.ts";
 

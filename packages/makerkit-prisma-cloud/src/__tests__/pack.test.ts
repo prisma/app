@@ -1,19 +1,33 @@
 import { describe, expect, test } from "bun:test";
 import { configOf, isNode } from "@makerkit/core";
+import type { ConfigAdapter, ConfigRequest } from "@makerkit/core";
 import { ConfigError, runHost } from "@makerkit/core/runtime";
 import { compute, postgres } from "../index.ts";
 
+/** In-memory adapter keyed by param path — reads no environment. */
+const memoryAdapter = (values: Record<string, string>): ConfigAdapter => ({
+  async get(requests) {
+    const out: Record<string, string> = {};
+    for (const r of requests) {
+      const path = r.owner === "service" ? r.name : `${r.owner.input}.${r.name}`;
+      const value = values[path];
+      if (value !== undefined) out[r.id] = value;
+    }
+    return out;
+  },
+});
+
 describe("postgres({ client })", () => {
-  test("returns a branded resource node carrying the connection: url field, secret", () => {
+  test("returns a branded resource node declaring { url: string, secret }", () => {
     const node = postgres({ client: ({ url }) => ({ url }) });
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe("resource");
     expect(node.type).toBe("prisma-cloud/postgres");
-    expect(node.connection.config).toEqual([{ name: "url", secret: true }]);
+    expect(node.connection.params).toEqual({ url: { type: "string", secret: true } });
   });
 
-  test("hydrate delegates to the app's client factory; C is inferred", () => {
+  test("hydrate delegates to the app's client factory; C is inferred", async () => {
     const made: unknown[] = [];
     const node = postgres({
       client: (config) => {
@@ -22,7 +36,7 @@ describe("postgres({ client })", () => {
       },
     });
 
-    const client = node.connection.hydrate({ url: "postgres://u:p@host:5432/db" });
+    const client = await node.connection.hydrate({ url: "postgres://u:p@host:5432/db" });
 
     expect(made).toEqual([{ url: "postgres://u:p@host:5432/db" }]);
     expect(client).toEqual({ fake: "client", url: "postgres://u:p@host:5432/db" });
@@ -30,16 +44,15 @@ describe("postgres({ client })", () => {
 });
 
 describe("compute()", () => {
-  test("returns a branded service node carrying Compute's host convention", () => {
+  test("returns a branded service node declaring { port: number, default 3000 } with the platform adapter", () => {
     const node = compute({}, () => null);
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe("service");
     expect(node.type).toBe("prisma-cloud/compute");
-    expect(node.host.channel).toBe("env");
-    expect(node.host.key("db", "url")).toBe("DATABASE_URL");
-    expect(node.host.key("db", "other")).toBe("OTHER");
-    expect(node.host.context).toEqual([{ name: "port", key: "PORT", default: 3000 }]);
+    expect(node.params).toEqual({ port: { type: "number", default: 3000 } });
+    expect(typeof node.adapter.get).toBe("function");
+    expect(typeof node.adapter.describe).toBe("function");
   });
 
   test("is inert until run", () => {
@@ -55,6 +68,46 @@ describe("compute()", () => {
   });
 });
 
+describe("the platform adapter (private mapping)", () => {
+  const requestFor = (owner: ConfigRequest["owner"], name: string): ConfigRequest => ({
+    id: `test:${name}`,
+    owner,
+    name,
+    param: { type: "string" },
+  });
+
+  test("maps url ↔ DATABASE_URL and other params to their uppercased names", async () => {
+    const node = compute({}, () => null);
+    const previousUrl = process.env.DATABASE_URL;
+    const previousPort = process.env.PORT;
+    process.env.DATABASE_URL = "postgres://from-env";
+    process.env.PORT = "7777";
+    try {
+      const values = await node.adapter.get([
+        requestFor({ input: "db" }, "url"),
+        requestFor("service", "port"),
+      ]);
+      expect(values).toEqual({ "test:url": "postgres://from-env", "test:port": "7777" });
+    } finally {
+      if (previousUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousUrl;
+      if (previousPort === undefined) delete process.env.PORT;
+      else process.env.PORT = previousPort;
+    }
+  });
+
+  test("describe names the physical location without exposing it to core's manifest", async () => {
+    const node = compute({}, () => null);
+
+    expect(await node.adapter.describe?.(requestFor({ input: "db" }, "url"))).toEqual({
+      location: "env:DATABASE_URL",
+    });
+    expect(await node.adapter.describe?.(requestFor("service", "port"))).toEqual({
+      location: "env:PORT",
+    });
+  });
+});
+
 describe("importing a service module", () => {
   test("runs nothing (invariant 3)", async () => {
     const fixture = await import("./fixtures/side-effect-service.ts");
@@ -67,23 +120,17 @@ describe("importing a service module", () => {
 });
 
 describe("the config pipeline over pack nodes", () => {
-  test("configOf enumerates DATABASE_URL (secret) and PORT (default 3000)", () => {
+  test("configOf is semantic — owner/name/type/secret, no platform keys", () => {
     const app = compute({ db: postgres({ client: ({ url }) => ({ url }) }) }, () => null);
 
     expect(configOf(app)).toEqual([
-      {
-        input: "db",
-        field: "url",
-        channel: "env",
-        key: "DATABASE_URL",
-        secret: true,
-        optional: false,
-      },
-      { field: "port", channel: "env", key: "PORT", secret: false, default: 3000, optional: true },
+      { owner: { input: "db" }, name: "url", type: "string", secret: true, optional: false },
+      { owner: "service", name: "port", type: "number", secret: false, optional: false, default: 3000 },
     ]);
+    expect(JSON.stringify(configOf(app))).not.toContain("DATABASE_URL");
   });
 
-  test("end to end: runHost hydrates through the connection and passes the context", () => {
+  test("end to end with a swapped in-memory adapter", async () => {
     let received: unknown;
     let ctx: unknown;
     const app = compute(
@@ -95,14 +142,16 @@ describe("the config pipeline over pack nodes", () => {
       },
     );
 
-    const result = runHost(app, { env: { DATABASE_URL: "postgres://x", PORT: "4001" } });
+    const result = await runHost(app, {
+      adapter: memoryAdapter({ "db.url": "postgres://x", port: "4001" }),
+    });
 
     expect(result).toBe("served");
     expect(received).toEqual({ db: { url: "postgres://x" } });
     expect(ctx).toEqual({ port: 4001 });
   });
 
-  test("field-level override boots with no env", () => {
+  test("per-param override boots with an empty adapter", async () => {
     let received: unknown;
     const app = compute(
       { db: postgres({ client: ({ url }) => ({ url }) }) },
@@ -112,12 +161,12 @@ describe("the config pipeline over pack nodes", () => {
       },
     );
 
-    runHost(app, { env: {}, config: { "db.url": "postgres://test" } });
+    await runHost(app, { adapter: memoryAdapter({}), config: { "db.url": "postgres://test" } });
 
     expect(received).toEqual({ db: { url: "postgres://test" } });
   });
 
-  test("a missing DATABASE_URL is a ConfigError before any hydrate", () => {
+  test("a missing url is a ConfigError before the client factory runs", async () => {
     let factoryCalls = 0;
     const app = compute(
       {
@@ -131,19 +180,20 @@ describe("the config pipeline over pack nodes", () => {
       () => null,
     );
 
-    expect(() => runHost(app, { env: {} })).toThrow(ConfigError);
-    expect(() => runHost(app, { env: {} })).toThrow(/DATABASE_URL/);
+    expect(runHost(app, { adapter: memoryAdapter({}) })).rejects.toThrow(ConfigError);
+    expect(runHost(app, { adapter: memoryAdapter({}) })).rejects.toThrow(/db\.url/);
+    await runHost(app, { adapter: memoryAdapter({}) }).catch(() => {});
     expect(factoryCalls).toBe(0);
   });
 
-  test("a dep-less service boots with zero declared config", () => {
+  test("a dep-less service boots with zero declared config", async () => {
     let ctx: unknown;
     const app = compute({}, (_deps, c) => {
       ctx = c;
       return "booted";
     });
 
-    expect(runHost(app, { env: {} })).toBe("booted");
+    expect(await runHost(app, { adapter: memoryAdapter({}) })).toBe("booted");
     expect(ctx).toEqual({ port: 3000 });
   });
 });

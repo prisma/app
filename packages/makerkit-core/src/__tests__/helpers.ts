@@ -1,14 +1,40 @@
-import type { ConfigField, Connection, HostConvention } from "../node.ts";
+import type { ConfigAdapter, Connection, Params, Values } from "../node.ts";
 
-/** A test connection: declared fields + a recording/simple hydrate. */
-export const conn = <C>(
-  fields: readonly ConfigField[],
-  make: (cfg: Record<string, string>) => C,
-): Connection<C> => ({ config: fields, hydrate: make });
+/** A test connection: declared params + a recording/simple hydrate. */
+export const conn = <P extends Params, C>(
+  params: P,
+  make: (values: Values<P>) => C | Promise<C>,
+): Connection<P, C> => ({ params, hydrate: make });
 
-/** A test host convention: INPUT_FIELD env keys, PORT context with default 3000. */
-export const testHost: HostConvention = {
-  channel: "env",
-  key: (input, field) => `${input}_${field}`.toUpperCase(),
-  context: [{ name: "port", key: "PORT", default: 3000 }],
+/**
+ * An in-memory ConfigAdapter: values keyed by param path ("input.name" for
+ * input params, the bare name for service params). Reads no environment.
+ * Records the requests it receives.
+ */
+export function memoryAdapter(values: Record<string, string>): ConfigAdapter & {
+  readonly requested: string[][];
+} {
+  const requested: string[][] = [];
+  return {
+    requested,
+    async get(requests) {
+      requested.push(
+        requests.map((r) => (r.owner === "service" ? r.name : `${r.owner.input}.${r.name}`)),
+      );
+      const out: Record<string, string> = {};
+      for (const r of requests) {
+        const path = r.owner === "service" ? r.name : `${r.owner.input}.${r.name}`;
+        const value = values[path];
+        if (value !== undefined) out[r.id] = value;
+      }
+      return out;
+    },
+  };
+}
+
+/** An adapter that must never be consulted — throws if it is. */
+export const untouchableAdapter: ConfigAdapter = {
+  get() {
+    throw new Error("adapter must not be consulted");
+  },
 };
