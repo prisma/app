@@ -70,14 +70,14 @@ logic in core; the router only ever follows references it was handed. Swap
 ## Runtime: core owns the config pipeline
 
 Inside the deployed bundle, boot is a config pipeline that **core owns end to end**.
-The pieces divide by knowledge, not by plumbing: the *service type* declares where
-this platform delivers config (env vars, and which key holds what) — as **data**,
-never as a function that reads the environment; each *connection* declares what it
-needs and hydrates a client from resolved values (the app passed the driver factory
-into the connection when authoring it); *core* enumerates the declared config
-surface from the graph, resolves it against the environment, validates it before
-anything hydrates, applies any test/production overrides, hands each connection its
-slice, and calls the handler.
+The pieces divide by knowledge, not by plumbing: *declarations* (each connection's
+params, the service's own) say what is needed — semantic names and types, with no
+platform key names anywhere in the graph; the pack's **ConfigAdapter** (attached to
+the service node) answers get and set for its platform, and the semantic↔physical
+mapping — `url` ↔ `DATABASE_URL` — is its private business; *core* enumerates the
+declared surface, requests values from the adapter, validates them against the
+declared types before anything hydrates, applies any test/production overrides,
+hands each connection its typed values, and calls the handler.
 
 Owning the pipeline is what makes config **visible and interceptable**: the full
 config surface of a service is enumerable without booting it (keys, secret-ness,

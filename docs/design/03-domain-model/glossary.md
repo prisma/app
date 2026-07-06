@@ -275,11 +275,13 @@ returning owned nodes' Outputs up.
 
 The boot [entrypoint](#entrypoint) the platform runs, over the code the app bundled
 (MakerKit does not bundle). **Core owns config management**: it enumerates the
-config fields the service's Inputs declare, resolves them via the service type's
-addressing data (e.g. env key names — the pack declares *where*, core does the
-reading), validates before hydrating, applies overrides (the interception point for
-tests and introspection), then lets each connection hydrate its client from the
-resolved values — with the app-supplied driver factory. A framework server (Next.js) is
+params the service and its Inputs declare (semantic names + type tags — no
+platform keys in the graph), requests raw values from the pack's **ConfigAdapter**
+(whose semantic↔physical mapping, e.g. `url` ↔ `DATABASE_URL`, is its private
+business), validates them against the declared types before hydrating, applies
+overrides (the interception point for tests and introspection), then lets each
+connection hydrate its client from the typed values — with the app-supplied driver
+factory. A framework server (Next.js) is
 wired in as an HTTP Output, its deps reached via a DI accessor (`use(…)`), never the
 environment. Env vars carry config into the VM but **terminate at hydration** — user
 code is dependency-injection only.

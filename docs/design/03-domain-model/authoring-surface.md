@@ -108,12 +108,13 @@ the VM, but they **terminate at hydration** — user code never reads them.
 
 ## The runtime is a dumb loop; a framework is an Output adapter
 
-At boot, core runs the **config pipeline**: it enumerates every config field the
-service's Inputs declare, resolves each against the platform's addressing rule (the
-service type's data — e.g. Compute delivers the database URL at `DATABASE_URL`),
-validates the lot before anything hydrates, then hands each connection its resolved
-values so it can build its client — with the driver factory the app supplied at
-authoring time, since MakerKit ships none (the [runtime-agnostic
+At boot, core runs the **config pipeline**: it enumerates every param the service
+and its Inputs declare (semantic names + types — target-independent), requests the
+raw values from the platform's ConfigAdapter (which privately knows that `url`
+lives at `DATABASE_URL` on Compute), validates the lot against the declared types
+before anything hydrates, then hands each connection its typed values so it can
+build its client — with the driver factory the app supplied at authoring time,
+since MakerKit ships none (the [runtime-agnostic
 principle](../01-principles/architectural-principles.md)). Config is thereby
 enumerable without booting, overridable field-by-field in tests, and reportable
 (secrets redacted) in production. When the "handler" is a framework that owns

@@ -72,10 +72,11 @@ holds: replacing `@makerkit/prisma-cloud` with another pack changes nothing in c
 
 All nodes are **plain, frozen, serializable data** — with exactly **three
 sanctioned behavior slots** hanging off the graph: the Service node's handler
-(`run`), a Connection's `hydrate` (config → client), and nothing else that
-executes; the Service type's config knowledge is *data* (an addressing rule), not
-a provider function. The topology view simply drops the function slots. A node's
-`type` is its routing key at deploy; core never interprets it beyond lookup.
+(`run`), a Connection's `hydrate` (validated values → client), and the Service's
+`ConfigAdapter` (the platform's config I/O). Config *declarations* are pure data;
+only the adapter touches a real environment. The topology view simply drops the
+function slots. A node's `type` is its routing key at deploy; core never
+interprets it beyond lookup.
 
 ```ts
 // JSON-safe config values
@@ -93,35 +94,60 @@ interface NodeBase {
   readonly config?: JsonObject                 // constructor opts, opaque to core
 }
 
-// ——— Configuration model (core-owned; see § Runtime for the pipeline) ———
+// ——— Configuration model (core-owned pipeline; see § Runtime) ———
+//
+// Three components, each owned by exactly one party:
+//   1. DECLARE — nodes carry semantic param declarations (names + runtime type
+//      tags). Target-independent: no platform key names anywhere in the graph.
+//   2. GET — core collects declarations and asks the service's ConfigAdapter
+//      (pack-provided) for raw values, then validates them against the tags.
+//   3. SET — the same adapter concept writes config: in-memory for tests, the
+//      deploy plane for real environments (the two-readers idea applied to
+//      config — get and set share one mapping, so they cannot drift).
 
-// A config field a connection needs at boot — declared shape, pure data.
-interface ConfigField {
-  readonly name: string                        // e.g. "url"
+// Runtime-validatable param types. Curated; extended consciously.
+type ParamType = "string" | "number"
+type TypeOf<T extends ParamType> = T extends "string" ? string : number
+
+// A declared config param — pure data. The declaration does double duty: core
+// validates raw values against `type` at boot, and TypeScript derives the
+// hydrate/handler input types from it — the definition object ENFORCES the
+// final param input types.
+interface ConfigParam<T extends ParamType = ParamType> {
+  readonly type: T
   readonly secret?: boolean                    // redacted in any introspection output
   readonly optional?: boolean
+  readonly default?: TypeOf<T>
+}
+type Params = Record<string, ConfigParam>
+type Values<P extends Params> = {              // what implementations receive
+  readonly [K in keyof P]: TypeOf<P[K]["type"]>   // (| undefined when optional with no default)
 }
 
-// The connection face of a dependency: what it needs (data) and how the needed
-// values become a client (the hydrate behavior slot). C is INFERRED from the
-// app's factory — no phantom types, no declared-vs-actual trust boundary.
-interface Connection<C = unknown> {
-  readonly config: readonly ConfigField[]
-  hydrate(config: Record<string, string>): C
+// The connection face of a dependency: declared params (data) and how validated
+// values become a client (the hydrate behavior slot). Both P and C are INFERRED —
+// the declaration types hydrate's input; the factory types the handler's dep.
+interface Connection<P extends Params = Params, C = unknown> {
+  readonly params: P
+  hydrate(values: Values<P>): C | Promise<C>
 }
 
-// How a Service KIND's platform delivers config — pack-declared DATA plus a pure
-// addressing rule core drives. Core does all reading/resolving; the pack never
-// touches an environment.
-interface HostConvention {
-  readonly channel: "env"                            // the only channel today
-  key(input: string, field: string): string          // e.g. (_, "url") => "DATABASE_URL"
-  readonly context: readonly ContextField[]          // e.g. [{ name: "port", key: "PORT", default: 3000 }]
+// The platform's config I/O, pack-provided and attached to the service node by
+// its constructor. The mapping between semantic params and physical locations
+// (e.g. url ↔ DATABASE_URL) is the adapter's PRIVATE business — core never sees
+// platform keys. The adapter owns its source: the platform adapter is the one
+// sanctioned environment reader; an in-memory test adapter reads nothing.
+interface ConfigAdapter {
+  get(requests: readonly ConfigRequest[]): Promise<Readonly<Record<string, string>>>
+                                               // raw values keyed by request id; core validates/coerces
+  set?(values: Readonly<Record<string, string>>): Promise<void>   // tests · deploy plane
+  describe?(request: ConfigRequest): Promise<{ location: string }> // ops: "which env var is this?"
 }
-interface ContextField {
-  readonly name: keyof RuntimeContext
-  readonly key: string
-  readonly default?: string | number
+interface ConfigRequest {
+  readonly id: string                          // core-assigned; keys the returned value map
+  readonly owner: "service" | { readonly input: string }
+  readonly name: string
+  readonly param: ConfigParam
 }
 
 // ——— Nodes ———
@@ -130,17 +156,19 @@ interface ContextField {
 // the connection's hydrate return type into the handler's parameter.
 interface ResourceNode<C = unknown> extends NodeBase {
   readonly kind: "resource"
-  readonly connection: Connection<C>
+  readonly connection: Connection<Params, C>
 }
 
-// A Service: inputs + host convention + the opaque handler. This IS the user's
-// default export — inspectable (inputs/type/host/config) and runnable (run),
-// inert until invoked. There is no separate handle type: the node is the handle.
-interface ServiceNode<D extends Deps = Deps> extends NodeBase {
+// A Service: inputs + its own declared params + the platform's ConfigAdapter +
+// the opaque handler. This IS the user's default export — inspectable
+// (inputs/type/params/config) and runnable (run), inert until invoked. There is
+// no separate handle type: the node is the handle.
+interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends NodeBase {
   readonly kind: "service"
   readonly inputs: D
-  readonly host: HostConvention
-  run(deps: HydratedDeps<D>, ctx: RuntimeContext): unknown
+  readonly params: P                           // service-level config (e.g. port) — no special "context" concept
+  readonly adapter: ConfigAdapter
+  run(deps: HydratedDeps<D>, ctx: Values<P>): unknown
 }
 
 // Dependency map: name → ResourceNode. Widens to full connection ends when
@@ -150,11 +178,11 @@ type Deps = Record<string, ResourceNode<any>>   // `any`, not `unknown` — keep
 type Hydrated<N> = N extends ResourceNode<infer C> ? C : never
 type HydratedDeps<D extends Deps> = { readonly [K in keyof D]: Hydrated<D[K]> }
 
-// What the host provides a running service besides its deps. Core defines the
-// shape; values resolve through the service's HostConvention.
-interface RuntimeContext { readonly port: number }
-
-type ServiceHandler<D extends Deps> = (deps: HydratedDeps<D>, ctx: RuntimeContext) => unknown
+// ctx is nothing special: the service's own resolved params, typed by its
+// declaration. On Prisma Cloud, compute() declares { port: number } — so
+// handlers receive ({ db }, { port }).
+type ServiceHandler<D extends Deps, P extends Params> =
+  (deps: HydratedDeps<D>, ctx: Values<P>) => unknown
 ```
 
 ### Node factories
@@ -164,24 +192,25 @@ validate, and freeze. This is the whole "framework provides / pack wraps" contra
 
 ```ts
 // @makerkit/core
-function resource<C>(def: {
+function resource<P extends Params, C>(def: {
   type: string
-  connection: Connection<C>
+  connection: Connection<P, C>
   config?: JsonObject
 }): ResourceNode<C>
 
-function service<D extends Deps>(def: {
+function service<D extends Deps, P extends Params>(def: {
   type: string
   inputs: D
-  host: HostConvention
-  handler: ServiceHandler<D>
+  params: P
+  adapter: ConfigAdapter
+  handler: ServiceHandler<D, P>
   config?: JsonObject
-}): ServiceNode<D>
+}): ServiceNode<D, P>
 ```
 
-`service()` stores `handler` as the node's `run` and freezes `inputs`; `resource()`
-freezes the connection's declared fields. Both throw on an empty `type`. Nothing
-executes: constructing nodes is pure.
+`service()` stores `handler` as the node's `run` and freezes `inputs`/`params`;
+`resource()` freezes the connection's declared params. Both throw on an empty
+`type`. Nothing executes: constructing nodes is pure.
 
 ## Graph and Load (`@makerkit/core`)
 
@@ -291,65 +320,73 @@ Notes:
 
 ## Runtime: the config pipeline (`@makerkit/core/runtime` + `configOf` in core)
 
-At boot, three things have to happen: know where this platform puts config (env
-vars, for Compute), turn config values into clients, and call the handler. The
-responsibilities are split so that **core owns config management end to end**:
+At boot, three things have to happen: obtain this platform's config values, turn
+them into clients, and call the handler. The responsibilities are split so that
+**core owns config management end to end** while caring nothing about the mapping:
 
-- the **Service type** (pack) declares *where config arrives* — the
-  `HostConvention`: channel + addressing rule + context fields. Data, not a
-  provider function.
-- each **Connection** declares *what it needs* (`ConfigField[]`) and hydrates a
-  client from resolved values.
-- **core** does everything in between: enumerate, resolve, validate, intercept,
-  distribute, call.
+- **declarations** (connections' `params`, the service's own `params`) say *what*
+  is needed — semantic names + runtime type tags. Target-independent data.
+- the **`ConfigAdapter`** (pack-provided, on the service node) answers *get* and
+  *set* for its platform; the semantic↔physical mapping is its private business.
+- **core** does everything in between: enumerate, request, validate, coerce,
+  intercept, distribute, call.
 
 ```ts
-type Env = Record<string, string | undefined>
-
 // The enumerable config surface of a service — derivable from the graph alone,
-// nothing booted. This is the introspection artifact (secrets marked, values absent).
+// nothing booted, no platform keys. The introspection artifact (secrets marked,
+// values absent). Physical locations are the adapter's business (describe()).
 interface ConfigManifestEntry {
-  readonly input?: string            // absent for context fields
-  readonly field: string             // "url" · "port"
-  readonly channel: "env"
-  readonly key: string               // "DATABASE_URL" · "PORT"
+  readonly owner: "service" | { readonly input: string }
+  readonly name: string              // "url" · "port"
+  readonly type: ParamType
   readonly secret: boolean
-  readonly default?: string | number
   readonly optional: boolean
+  readonly default?: string | number
 }
 function configOf(root: ServiceNode): readonly ConfigManifestEntry[]   // in @makerkit/core (pure)
 
-// Boot: Load → configOf → resolve each entry (override ?? env[key] ?? default) →
-// validate (ALL missing required fields reported in one ConfigError, before any
-// hydrate — Load-before-Hydrate applied to config) → per input:
-// connection.hydrate(resolvedSlice) → root.run(deps, contextFromResolvedFields).
+// Boot: Load → configOf → adapter.get(requests) → per-param: override ?? raw ??
+// default → validate + coerce against the declared type ("" is UNRESOLVED, not a
+// value; a failed number parse with no default is an error) — ALL problems
+// reported in one ConfigError, before any hydrate (Load-before-Hydrate applied
+// to config) → per input: await connection.hydrate(typedValues) →
+// root.run(deps, serviceParamValues).
 function runHost(root: ServiceNode, opts?: {
-  env?: Env                                    // source override (tests) — default process.env
-  config?: Record<string, string>              // field-level overrides, keyed "input.field" / "context.field"
-}): unknown
-class ConfigError extends Error {}             // names every missing key at once
+  adapter?: ConfigAdapter                      // swap the platform: in-memory tests, inspection harnesses
+  config?: Record<string, string | number>     // per-param overrides, applied before the adapter is consulted
+}): Promise<unknown>
+class ConfigError extends Error {}             // names every missing/invalid param at once
 ```
 
-`runHost`'s default `env` is the **only** place `process.env` enters the system —
-the pack declares addressing but never reads an environment. Because core is the
-single resolver, there is one choke point for interception: tests override at the
-field level without faking an environment; a production host can report its
-resolved config with secrets redacted by construction (`secret` is declared on the
-shape).
+Core and user code contain **zero** environment reads: the platform's adapter is
+the single sanctioned reader for its platform (an in-memory test adapter reads
+nothing). Because core is the single resolver, there is one choke point for
+interception: tests override per-param or swap the adapter entirely; a production
+host can report its resolved config with secrets redacted by construction
+(`secret` is declared on the param).
 
-**Motivation (why this shape, recorded).** An earlier iteration had the pack export
-a `runtime()` value carrying a type-id–keyed hydrator table plus app-supplied
-client factories. It was discarded because: (1) an opaque `env → config` provider
-loses the config surface — no enumeration, no interception point, no introspection
-of a running service; (2) it made the pack a second environment reader, weakening
-the env-exactly-once invariant; (3) composition across packs required merging
-registries, where the node-carried design composes structurally — a service mixing
-two packs' inputs just works; (4) the app-declared phantom client type
-(`postgres<SQL>()`) created a declared-vs-actual trust boundary that factory
-inference eliminates; and (5) it contradicted the settled decision that *MakerKit
-manages the config-to-input mapping*. The replacement assigns: config *source
-conventions* to the Service type (as data), *client construction* to the
-Connection, and the *pipeline* to core.
+**Motivation (why this shape, recorded).** Two discarded iterations:
+
+*First*, a pack-exported `runtime()` carrying a type-id–keyed hydrator table plus
+app-supplied client factories. Discarded because: (1) an opaque `env → config`
+provider loses the config surface — no enumeration, no interception point, no
+introspection of a running service; (2) it made the pack a second environment
+reader; (3) composition across packs required merging registries, where the
+node-carried design composes structurally; (4) the app-declared phantom client
+type (`postgres<SQL>()`) created a declared-vs-actual trust boundary that factory
+inference eliminates; (5) it contradicted the settled decision that *MakerKit
+manages the config-to-input mapping*.
+
+*Second*, a `HostConvention` on the service node — addressing as data (channel
+enum + a `key(input, field)` naming rule + context fields). Discarded because:
+(1) it baked **platform key names into the graph**, coupling every service's
+config surface to its target — declarations should be target-independent; (2)
+the `channel` discriminator was an enum-switch waiting to grow inside core,
+against "compose, don't special-case"; (3) it had no *write* side — tests,
+deploy-plane config creation, and inspection all need `set`, which an addressing
+rule can't express. The adapter model keeps declarations semantic, makes the
+mapping the adapter's private business, and gives get/set/describe one home per
+platform.
 
 ## The Prisma Cloud pack (`@makerkit/prisma-cloud`) — worked instance
 
@@ -362,28 +399,46 @@ import { resource, service, type Connection, type Deps, type ServiceHandler, typ
 export interface PostgresConfig { readonly url: string }
 
 // The app supplies the client factory; C is inferred from its return type.
-export const postgres = <C>(opts: { client: (config: PostgresConfig) => C }): ResourceNode<C> =>
-  resource<C>({
+export const postgres = <C>(opts: { client: (config: PostgresConfig) => C | Promise<C> }): ResourceNode<C> =>
+  resource({
     type: "prisma-cloud/postgres",
     connection: {
-      config: [{ name: "url", secret: true }],
-      hydrate: (cfg) => opts.client({ url: cfg.url }),
+      params: { url: { type: "string", secret: true } },
+      hydrate: (v) => opts.client({ url: v.url }),   // v: { url: string } — enforced by the declaration
     },
   })
 
-export const compute = <D extends Deps>(deps: D, handler: ServiceHandler<D>): ServiceNode<D> =>
+const computeParams = { port: { type: "number", default: 3000 } } as const
+
+export const compute = <D extends Deps>(
+  deps: D,
+  handler: ServiceHandler<D, typeof computeParams>,   // ctx: { port: number }
+): ServiceNode<D, typeof computeParams> =>
   service({
     type: "prisma-cloud/compute",
     inputs: deps,
+    params: computeParams,
+    adapter: computeAdapter,
     handler,
-    host: {
-      channel: "env",
-      // Compute's convention: the project default DB arrives as DATABASE_URL
-      // (per-input naming arrives with multiple databases).
-      key: (_input, field) => (field === "url" ? "DATABASE_URL" : field.toUpperCase()),
-      context: [{ name: "port", key: "PORT", default: 3000 }],
-    },
   })
+
+// The platform adapter — the pack's single environment reader. The semantic↔
+// physical mapping (url ↔ DATABASE_URL, port ↔ PORT; per-input naming when
+// multiple databases arrive) lives HERE, private to the pack.
+const computeAdapter: ConfigAdapter = {
+  async get(requests) {
+    const values: Record<string, string> = {}
+    for (const r of requests) {
+      const key = r.name === "url" ? "DATABASE_URL" : r.name.toUpperCase()
+      const raw = process.env[key]
+      if (raw !== undefined) values[r.id] = raw
+    }
+    return values
+  },
+  async describe(r) {
+    return { location: `env:${r.name === "url" ? "DATABASE_URL" : r.name.toUpperCase()}` }
+  },
+}
 ```
 
 Target entry — the lowering table (the only place `prisma-alchemy` is imported):
@@ -499,10 +554,11 @@ the inputs — the same dependency inversion the model promises.
    guard test, extended to the pack.
 3. **Importing runs nothing**: constructing nodes is pure; only `runHost`/the alchemy
    CLI execute anything.
-4. **`process.env` appears exactly once** in the system — `runHost`'s default `env`
-   parameter. User code, packs, and the rest of core contain no reads at all: packs
-   declare addressing (`HostConvention`), core resolves, connections receive
-   already-resolved values.
+4. **Core and user code contain zero environment reads.** The platform adapter is
+   the single sanctioned reader for its platform — `process.env` appears exactly
+   once per pack, inside its `ConfigAdapter`; an in-memory test adapter reads
+   nothing. Declarations, resolution, validation, and distribution never touch an
+   environment.
 5. **No runtime coupling**: neither core nor a target pack imports Bun or Node APIs
    — even type-only — in its shipped surface (the [runtime-agnostic
    principle](../01-principles/architectural-principles.md)). Drivers and server APIs
@@ -521,13 +577,14 @@ the inputs — the same dependency inversion the model promises.
   tighten it to its own type-id union for compile-time exhaustiveness. Core stays
   stringly-typed by design at deploy (it routes); the runtime side has no registry
   at all — behavior rides the nodes.
-- **Per-input config naming** — Compute's default DB fixes `DATABASE_URL` today;
-  when multiple databases (or service-to-service Connections) arrive, the
-  `HostConvention.key` rule becomes a real per-input naming scheme, and the deploy
-  side sets values against the same rule (the two readers, applied to config).
-- **Config channels beyond env** — `HostConvention.channel` is `"env"` only; a
-  platform delivering config another way (files, metadata endpoints) adds a channel
-  without touching connections or core's pipeline shape.
+- **Deploy-side `set`** — when the Connection primitive wires a producer's URL
+  into a consumer (today's hand-wired `AUTH_URL`), the deploy plane writes it
+  through the same adapter mapping the runtime reads through — the two readers,
+  applied to config, so get and set cannot drift. Per-input key naming (multiple
+  databases) also lands privately in the pack adapter when it arrives.
+- **`ParamType` growth** — the tag set is `"string" | "number"`, curated; new tags
+  (`"boolean"`, `"url"`, …) are added consciously with their validation, never as
+  an open plugin surface.
 - **Serialized topology** — the topology view of Graph is already JSON-safe; an emit
   step for external tooling is additive.
 
