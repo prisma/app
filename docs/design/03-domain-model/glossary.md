@@ -196,6 +196,13 @@ instantiate implementations, satisfy the graph, inject dependencies, run
 entrypoints. Kept as separate import surfaces to avoid drift (and for
 tree-shaking).
 
+Refined into **four import planes** — **authoring** (write the model),
+**control** (load/interrogate/mutate it at build time), **deploy** (convert it to
+Alchemy), **execution** (run it) — mapped to concrete package entries in
+[`core-model.md`](../10-domains/core-model.md#package-and-entry-map).
+`@makerkit/core/control` is reserved as the control surface's home once it
+outgrows the core root.
+
 ### Entrypoint
 
 An addressable unit the platform can execute (by id/kind), defined by an artifact

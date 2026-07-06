@@ -10,10 +10,24 @@ Resource inputs; Hex and Connections are named as extension points.
 ## Package and entry map
 
 Five entry points, split by dependency weight. The split is enforced, not
-aspirational (see § Invariants). Entry names say **when you import them**
-(`/deploy` at deploy time, `/runtime` in the running bundle); mechanism terms stay
-on the functions (`lower()`/`lowering()` — the glossary's Lowering — live in
-`/deploy`).
+aspirational (see § Invariants).
+
+Entries map onto MakerKit's **four planes**. Entry names say *when you import
+them*; mechanism terms stay on the functions (`lower()`/`lowering()` — the
+glossary's Lowering — live in `/deploy`):
+
+| Plane | What it covers | Home today |
+| --- | --- | --- |
+| **authoring** | write the model — node factories, model types | `.` (usually reached through a pack's vocabulary) |
+| **control** | load / interrogate / mutate the model at build time — `Load`, `configOf`, the topology view | also `.` — see below |
+| **deploy** | convert the model to Alchemy for deployment — `lower()`, `lowering()`, `Target` | `/deploy` |
+| **execution** | run it — `runHost`, the config pipeline | `/runtime` |
+
+**`/control` is reserved as the settled design direction**: today the control
+surface is two pure, lean functions, too little to justify its own entry — but
+the moment it grows (the queryable-topology emit, config-manifest tooling, graph
+transforms when Hexes arrive), it carves out of `.` into `@makerkit/core/control`.
+The boundary is decided; only the carve is deferred.
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
