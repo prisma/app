@@ -78,7 +78,7 @@ export interface ConfigRequest {
  * (secrets marked, values absent). Physical locations are the adapter's
  * business (describe()).
  */
-export interface ConfigManifestEntry {
+export interface ConfigDeclaration {
   readonly owner: "service" | { readonly input: string };
   readonly name: string;
   readonly type: ParamType;
@@ -92,9 +92,9 @@ export interface ConfigManifestEntry {
  * connection params, then the service's own params. Pure — Loads the graph,
  * executes nothing.
  */
-export function configOf(root: ServiceNode): readonly ConfigManifestEntry[] {
+export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
   const graph = Load(root);
-  const entries: ConfigManifestEntry[] = [];
+  const entries: ConfigDeclaration[] = [];
 
   for (const edge of graph.edges) {
     const entry = graph.nodes.find((n) => n.id === edge.from);

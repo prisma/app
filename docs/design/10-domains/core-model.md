@@ -25,7 +25,7 @@ glossary's Lowering — live in `/deploy`):
 
 **`/control` is reserved as the settled design direction**: today the control
 surface is two pure, lean functions, too little to justify its own entry — but
-the moment it grows (the queryable-topology emit, config-manifest tooling, graph
+the moment it grows (the queryable-topology emit, config-declaration tooling, graph
 transforms when Hexes arrive), it carves out of `.` into `@makerkit/core/control`.
 The boundary is decided; only the carve is deferred.
 
@@ -328,7 +328,7 @@ them into clients, and call the handler. The responsibilities are split so that
 // The enumerable config surface of a service — derivable from the graph alone,
 // nothing booted, no platform keys. The introspection artifact (secrets marked,
 // values absent). Physical locations are the adapter's business (describe()).
-interface ConfigManifestEntry {
+interface ConfigDeclaration {
   readonly owner: "service" | { readonly input: string }
   readonly name: string              // "url" · "port"
   readonly type: ParamType
@@ -336,7 +336,7 @@ interface ConfigManifestEntry {
   readonly optional: boolean
   readonly default?: string | number
 }
-function configOf(root: ServiceNode): readonly ConfigManifestEntry[]   // in @makerkit/core (pure)
+function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @makerkit/core (pure)
 
 // Boot: Load → configOf → adapter.get(requests) → per-param: override ?? raw ??
 // default → validate + coerce against the declared type. Validation rules:

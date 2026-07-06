@@ -6,7 +6,7 @@
  * service's own param values. Imports nothing; reads no environment — the
  * platform adapter is the single sanctioned reader for its platform.
  */
-import { configOf, type ConfigAdapter, type ConfigManifestEntry, type ConfigRequest } from "./config.ts";
+import { configOf, type ConfigAdapter, type ConfigDeclaration, type ConfigRequest } from "./config.ts";
 import { Load } from "./graph.ts";
 import type { ResourceNode, ServiceNode } from "./node.ts";
 
@@ -29,7 +29,7 @@ export class ConfigError extends Error {
 // "input.name" for input params, the bare name for service params. Owners
 // discriminate structurally, so the two forms cannot collide (input paths
 // always carry a dot).
-const paramPath = (entry: ConfigManifestEntry): string =>
+const paramPath = (entry: ConfigDeclaration): string =>
   entry.owner === "service" ? entry.name : `${entry.owner.input}.${entry.name}`;
 
 /**
@@ -45,17 +45,17 @@ const paramPath = (entry: ConfigManifestEntry): string =>
  */
 export async function runHost(root: ServiceNode, opts?: RunHostOptions): Promise<unknown> {
   const graph = Load(root);
-  const manifest = configOf(root);
+  const declarations = configOf(root);
   const adapter = opts?.config ?? root.config;
 
   // Overrides are applied first; only unsatisfied params are requested.
   const overrides = new Map<string, string | number>();
-  for (const entry of manifest) {
+  for (const entry of declarations) {
     const value = opts?.overrides?.[paramPath(entry)];
     if (value !== undefined) overrides.set(paramPath(entry), value);
   }
 
-  const requests: ConfigRequest[] = manifest
+  const requests: ConfigRequest[] = declarations
     .filter((entry) => !overrides.has(paramPath(entry)))
     .map((entry, index) => ({
       id: `${index}:${paramPath(entry)}`,
@@ -84,7 +84,7 @@ export async function runHost(root: ServiceNode, opts?: RunHostOptions): Promise
   const resolved = new Map<string, string | number | undefined>();
   const problems: string[] = [];
 
-  for (const entry of manifest) {
+  for (const entry of declarations) {
     const path = paramPath(entry);
     // "" is UNRESOLVED, not a value — uniformly, overrides included.
     let value: string | number | undefined = overrides.get(path) ?? rawByPath.get(path);
@@ -117,7 +117,7 @@ export async function runHost(root: ServiceNode, opts?: RunHostOptions): Promise
   }
 
   // A typoed override must not silently fall through to the platform value.
-  const knownPaths = new Set(manifest.map(paramPath));
+  const knownPaths = new Set(declarations.map(paramPath));
   for (const key of Object.keys(opts?.overrides ?? {})) {
     if (!knownPaths.has(key)) {
       problems.push(`unknown override key "${key}"`);
