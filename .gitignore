@@ -16,3 +16,4 @@ packages/e2e-tests/.tmp-output
 /wip
 .pnpm-store
 .alchemy/
+.drive/projects/*/reviews/
