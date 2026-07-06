@@ -1,34 +1,55 @@
 import { describe, expect, test } from "bun:test";
-import * as Effect from "effect/Effect";
-import { isNode } from "@makerkit/core";
-import { HydrateError, runHost } from "@makerkit/core/runtime";
+import { configOf, isNode } from "@makerkit/core";
+import { ConfigError, runHost } from "@makerkit/core/runtime";
 import { compute, postgres } from "../index.ts";
-import { prismaCloud } from "../target/index.ts";
-import { runtime } from "../runtime/index.ts";
 
-describe("postgres()", () => {
-  test("returns a branded resource node with the pack's type id", () => {
-    const node = postgres();
+describe("postgres({ client })", () => {
+  test("returns a branded resource node carrying the connection: url field, secret", () => {
+    const node = postgres({ client: ({ url }) => ({ url }) });
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe("resource");
     expect(node.type).toBe("prisma-cloud/postgres");
-    expect(Object.isFrozen(node)).toBe(true);
+    expect(node.connection.config).toEqual([{ name: "url", secret: true }]);
+  });
+
+  test("hydrate delegates to the app's client factory; C is inferred", () => {
+    const made: unknown[] = [];
+    const node = postgres({
+      client: (config) => {
+        made.push(config);
+        return { fake: "client", ...config };
+      },
+    });
+
+    const client = node.connection.hydrate({ url: "postgres://u:p@host:5432/db" });
+
+    expect(made).toEqual([{ url: "postgres://u:p@host:5432/db" }]);
+    expect(client).toEqual({ fake: "client", url: "postgres://u:p@host:5432/db" });
   });
 });
 
 describe("compute()", () => {
-  test("returns a branded service node wiring the deps, inert until run", () => {
+  test("returns a branded service node carrying Compute's host convention", () => {
+    const node = compute({}, () => null);
+
+    expect(isNode(node)).toBe(true);
+    expect(node.kind).toBe("service");
+    expect(node.type).toBe("prisma-cloud/compute");
+    expect(node.host.channel).toBe("env");
+    expect(node.host.key("db", "url")).toBe("DATABASE_URL");
+    expect(node.host.key("db", "other")).toBe("OTHER");
+    expect(node.host.context).toEqual([{ name: "port", key: "PORT", default: 3000 }]);
+  });
+
+  test("is inert until run", () => {
     let calls = 0;
-    const db = postgres();
+    const db = postgres({ client: ({ url }) => ({ url }) });
     const node = compute({ db }, () => {
       calls += 1;
       return null;
     });
 
-    expect(isNode(node)).toBe(true);
-    expect(node.kind).toBe("service");
-    expect(node.type).toBe("prisma-cloud/compute");
     expect(node.inputs.db).toBe(db);
     expect(calls).toBe(0);
   });
@@ -40,121 +61,89 @@ describe("importing a service module", () => {
 
     expect(fixture.handlerCallCount).toBe(0);
 
-    fixture.default.run({ db: {} }, { port: 3000 });
+    fixture.default.run({ db: { url: "x" } }, { port: 3000 });
     expect(fixture.handlerCallCount).toBe(1);
   });
 });
 
-describe("runtime()", () => {
-  test("hydrates a postgres input by handing DATABASE_URL to the app's client factory", () => {
-    const made: unknown[] = [];
-    const rt = runtime({
-      clients: {
-        postgres: (config) => {
-          made.push(config);
-          return { fake: "client", ...config };
-        },
+describe("the config pipeline over pack nodes", () => {
+  test("configOf enumerates DATABASE_URL (secret) and PORT (default 3000)", () => {
+    const app = compute({ db: postgres({ client: ({ url }) => ({ url }) }) }, () => null);
+
+    expect(configOf(app)).toEqual([
+      {
+        input: "db",
+        field: "url",
+        channel: "env",
+        key: "DATABASE_URL",
+        secret: true,
+        optional: false,
       },
-    });
-
-    const client = rt.hydrate["prisma-cloud/postgres"]({
-      id: "hello.db",
-      input: "db",
-      node: postgres(),
-      env: { DATABASE_URL: "postgres://u:p@host:5432/db" },
-    });
-
-    expect(made).toEqual([{ url: "postgres://u:p@host:5432/db" }]);
-    expect(client).toEqual({ fake: "client", url: "postgres://u:p@host:5432/db" });
+      { field: "port", channel: "env", key: "PORT", secret: false, default: 3000, optional: true },
+    ]);
   });
 
-  test("throws HydrateError naming the input when DATABASE_URL is missing", () => {
-    const rt = runtime({ clients: { postgres: () => ({}) } });
-
-    expect(() =>
-      rt.hydrate["prisma-cloud/postgres"]({ id: "hello.db", input: "db", node: postgres(), env: {} }),
-    ).toThrow(HydrateError);
-    expect(() =>
-      rt.hydrate["prisma-cloud/postgres"]({ id: "hello.db", input: "db", node: postgres(), env: {} }),
-    ).toThrow(/"db".*DATABASE_URL/);
-  });
-
-  test("context resolves PORT with a 3000 default", () => {
-    const rt = runtime({ clients: { postgres: () => ({}) } });
-
-    expect(rt.context({ PORT: "8080" })).toEqual({ port: 8080 });
-    expect(rt.context({})).toEqual({ port: 3000 });
-    expect(rt.context({ PORT: "not-a-number" })).toEqual({ port: 3000 });
-  });
-
-  test("a dep-less service runs with bare runtime() — no phantom factory", () => {
-    let ran = false;
-    const app = compute({}, () => {
-      ran = true;
-      return "booted";
-    });
-
-    const result = runHost(app, runtime(), {});
-
-    expect(result).toBe("booted");
-    expect(ran).toBe(true);
-  });
-
-  test("a declared postgres input with no factory fails with a clear HydrateError", () => {
-    const app = compute({ db: postgres() }, () => null);
-
-    expect(() => runHost(app, runtime(), { DATABASE_URL: "postgres://x" })).toThrow(HydrateError);
-    expect(() => runHost(app, runtime(), { DATABASE_URL: "postgres://x" })).toThrow(
-      /input "db" requires a postgres client factory — pass runtime\(\{ clients: \{ postgres \} \}\)/,
-    );
-  });
-
-  test("end to end: runHost hydrates the client and passes the context", () => {
+  test("end to end: runHost hydrates through the connection and passes the context", () => {
     let received: unknown;
     let ctx: unknown;
-    const app = compute({ db: postgres<{ url: string }>() }, (deps, c) => {
-      received = deps;
-      ctx = c;
-      return "served";
-    });
-
-    const result = runHost(
-      app,
-      runtime({ clients: { postgres: ({ url }) => ({ url }) } }),
-      { DATABASE_URL: "postgres://x", PORT: "4001" },
+    const app = compute(
+      { db: postgres({ client: ({ url }) => ({ url }) }) },
+      (deps, c) => {
+        received = deps;
+        ctx = c;
+        return "served";
+      },
     );
+
+    const result = runHost(app, { env: { DATABASE_URL: "postgres://x", PORT: "4001" } });
 
     expect(result).toBe("served");
     expect(received).toEqual({ db: { url: "postgres://x" } });
     expect(ctx).toEqual({ port: 4001 });
   });
-});
 
-describe("prismaCloud()", () => {
-  test("declares the target name and a lowering per pack type id", () => {
-    const target = prismaCloud({ workspaceId: "ws_123" });
-
-    expect(target.name).toBe("prisma-cloud");
-    expect(Object.keys(target.lower).sort()).toEqual([
-      "prisma-cloud/compute",
-      "prisma-cloud/postgres",
-    ]);
-    expect(typeof target.providers).toBe("function");
-  });
-
-  test("the postgres lowering provisions nothing and yields empty outputs", () => {
-    const target = prismaCloud({ workspaceId: "ws_123" });
-
-    const result = Effect.runSync(
-      target.lower["prisma-cloud/postgres"]({
-        id: "hello.db",
-        node: postgres(),
-        graph: undefined as never,
-        opts: { name: "hello", artifact: { path: "/tmp/x.tar.gz", sha256: "abc" } },
-        lowered: new Map(),
-      }) as Effect.Effect<unknown>,
+  test("field-level override boots with no env", () => {
+    let received: unknown;
+    const app = compute(
+      { db: postgres({ client: ({ url }) => ({ url }) }) },
+      (deps) => {
+        received = deps;
+        return null;
+      },
     );
 
-    expect(result).toEqual({ outputs: {} });
+    runHost(app, { env: {}, config: { "db.url": "postgres://test" } });
+
+    expect(received).toEqual({ db: { url: "postgres://test" } });
+  });
+
+  test("a missing DATABASE_URL is a ConfigError before any hydrate", () => {
+    let factoryCalls = 0;
+    const app = compute(
+      {
+        db: postgres({
+          client: ({ url }) => {
+            factoryCalls += 1;
+            return { url };
+          },
+        }),
+      },
+      () => null,
+    );
+
+    expect(() => runHost(app, { env: {} })).toThrow(ConfigError);
+    expect(() => runHost(app, { env: {} })).toThrow(/DATABASE_URL/);
+    expect(factoryCalls).toBe(0);
+  });
+
+  test("a dep-less service boots with zero declared config", () => {
+    let ctx: unknown;
+    const app = compute({}, (_deps, c) => {
+      ctx = c;
+      return "booted";
+    });
+
+    expect(runHost(app, { env: {} })).toBe("booted");
+    expect(ctx).toEqual({ port: 3000 });
   });
 });

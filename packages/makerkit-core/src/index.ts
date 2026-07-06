@@ -1,12 +1,17 @@
 /**
- * The authoring entry: node factories, Load, and the model types. Imports
- * nothing — bundling a module that uses this entry ships only this code.
+ * The authoring entry: node factories, Load, configOf, and the model types.
+ * Imports nothing — bundling a module that uses this entry ships only this
+ * code.
  */
 export { resource, service, isNode } from "./node.ts";
 export type {
   JsonValue,
   JsonObject,
   NodeBase,
+  ConfigField,
+  Connection,
+  HostConvention,
+  ContextField,
   ResourceNode,
   ServiceNode,
   Deps,
@@ -18,3 +23,6 @@ export type {
 
 export { Load, LoadError } from "./graph.ts";
 export type { NodeId, GraphNode, Edge, Graph } from "./graph.ts";
+
+export { configOf } from "./config.ts";
+export type { ConfigManifestEntry } from "./config.ts";

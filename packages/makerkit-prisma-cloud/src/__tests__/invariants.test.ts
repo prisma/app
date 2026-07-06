@@ -22,6 +22,13 @@ function shippedSources(): { file: string; text: string }[] {
   return out;
 }
 
+describe("entry map: the pack splits into authoring + target only", () => {
+  test("package.json exports exactly '.' and './target' — no runtime entry", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
+    expect(Object.keys(pkg.exports).sort()).toEqual([".", "./target"]);
+  });
+});
+
 describe("invariant 2: authoring imports stay lean (core + pack)", () => {
   test("bundling both authoring entries yields no control/execution-plane tokens", async () => {
     const out = await Bun.build({

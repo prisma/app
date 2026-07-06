@@ -1,12 +1,12 @@
-import { compute, postgres } from "@makerkit/prisma-cloud";
-import type { SQL } from "bun"; // the APP's choice of client — type-only here
+import { compute } from "@makerkit/prisma-cloud";
+import { db } from "./connections.ts";
 
 /**
  * The authored service: a Compute service with a Postgres dependency. The
- * handler reads nothing from the environment — the host hydrates `db` (via
- * the app-supplied client factory in main.ts) and resolves `port`.
+ * handler reads nothing from the environment — core's pipeline hydrates `db`
+ * (through the connection defined in connections.ts) and resolves `port`.
  */
-export default compute({ db: postgres<SQL>() }, ({ db }, { port }) =>
+export default compute({ db }, ({ db }, { port }) =>
   Bun.serve({
     port,
     hostname: "0.0.0.0",

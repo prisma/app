@@ -3,11 +3,16 @@ import * as Effect from "effect/Effect";
 import { lowering, LowerError, type LowerOptions, type Target } from "../lower/index.ts";
 import type { LoweredNode } from "../lower/index.ts";
 import { resource, service } from "../node.ts";
+import { conn, testHost } from "./helpers.ts";
 
 const opts: LowerOptions = {
   name: "hello",
   artifact: { path: "/tmp/hello.tar.gz", sha256: "abc123" },
 };
+
+const db = () => resource({ type: "fake/db", connection: conn([], () => ({})) });
+const app = (type: string, inputs: Record<string, ReturnType<typeof db>>, handler = () => null as unknown) =>
+  service({ type, inputs, host: testHost, handler });
 
 // The fake lowerings are pure, so the composable form runs synchronously.
 const run = (eff: ReturnType<typeof lowering>): LoweredNode =>
@@ -40,30 +45,19 @@ function recordingTarget() {
 describe("lowering", () => {
   test("routes each node through the target's table, deps before dependents", () => {
     const { target, calls } = recordingTarget();
-    const root = service({
-      type: "fake/app",
-      inputs: { db: resource({ type: "fake/db" }) },
-      handler: () => null,
-    });
+    const root = app("fake/app", { db: db() });
 
     const result = run(lowering(root, target, opts));
 
     expect(calls.map((c) => c.id)).toEqual(["hello.db", "hello"]);
-    // The dependent sees its dep already lowered.
     expect(calls[1].loweredSoFar).toEqual(["hello.db"]);
-    // The root's LoweredNode is returned.
     expect(result).toEqual({ outputs: { url: "app://hello" } });
   });
 
   test("uses opts.name as the root node id", () => {
     const { target, calls } = recordingTarget();
-    const root = service({
-      type: "fake/app",
-      inputs: { db: resource({ type: "fake/db" }) },
-      handler: () => null,
-    });
 
-    run(lowering(root, target, { ...opts, name: "acme" }));
+    run(lowering(app("fake/app", { db: db() }), target, { ...opts, name: "acme" }));
 
     expect(calls.map((c) => c.id)).toEqual(["acme.db", "acme"]);
   });
@@ -82,20 +76,15 @@ describe("lowering", () => {
         },
       },
     };
-    const root = service({ type: "fake/app", inputs: {}, handler: () => null });
 
-    run(lowering(root, target, opts));
+    run(lowering(app("fake/app", {}), target, opts));
 
     expect(seen).toEqual({ graphRootId: "hello", artifactPath: "/tmp/hello.tar.gz" });
   });
 
   test("fails with LowerError naming the type and the known types on an unknown node type", () => {
     const { target } = recordingTarget();
-    const root = service({
-      type: "fake/unknown-kind",
-      inputs: { db: resource({ type: "fake/db" }) },
-      handler: () => null,
-    });
+    const root = app("fake/unknown-kind", { db: db() });
 
     const error = runError(lowering(root, target, opts));
 
@@ -108,13 +97,9 @@ describe("lowering", () => {
   test("runs no handler", () => {
     let calls = 0;
     const { target } = recordingTarget();
-    const root = service({
-      type: "fake/app",
-      inputs: { db: resource({ type: "fake/db" }) },
-      handler: () => {
-        calls += 1;
-        return null;
-      },
+    const root = app("fake/app", { db: db() }, () => {
+      calls += 1;
+      return null;
     });
 
     run(lowering(root, target, opts));

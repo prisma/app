@@ -4,7 +4,7 @@ import { compute, postgres } from "../../index.ts";
 // `.run(...)` on the exported node should.
 export let handlerCallCount = 0;
 
-export default compute({ db: postgres() }, ({ db }) => {
+export default compute({ db: postgres({ client: ({ url }) => ({ url }) }) }, ({ db }) => {
   handlerCallCount += 1;
   return { db };
 });

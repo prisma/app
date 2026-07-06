@@ -5,8 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./target": "./src/target/index.ts",
-    "./runtime": "./src/runtime/index.ts"
+    "./target": "./src/target/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
