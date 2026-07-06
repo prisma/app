@@ -112,7 +112,7 @@ target/tooling concerns the core must not absorb.
 ## Open questions
 
 - **Alchemy in core, or behind the target?** — *Resolved*: Alchemy is core's
-  provisioning substrate (`@makerkit/core/lower` imports it); the principle forbids
+  provisioning substrate (`@makerkit/core/deploy` imports it); the principle forbids
   knowledge of deployment *targets*, and Alchemy is the target-neutral engine
   `layering.md` already commits to. Target packs supply only data (providers +
   lowerings). See the decision note in

@@ -9,13 +9,16 @@ Resource inputs; Hex and Connections are named as extension points.
 
 ## Package and entry map
 
-Six entry points, split by dependency weight. The split is enforced, not aspirational
-(see § Invariants).
+Five entry points, split by dependency weight. The split is enforced, not
+aspirational (see § Invariants). Entry names say **when you import them**
+(`/deploy` at deploy time, `/runtime` in the running bundle); mechanism terms stay
+on the functions (`lower()`/`lowering()` — the glossary's Lowering — live in
+`/deploy`).
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
 | `@makerkit/core` | node factories (`service`, `resource`), `Load`, `configOf`, model types | nothing |
-| `@makerkit/core/lower` | `lower()`, `Target` types | `alchemy`, `effect` |
+| `@makerkit/core/deploy` | `lower()`, `Target` types | `alchemy`, `effect` |
 | `@makerkit/core/runtime` | `runHost()` | nothing |
 | `@makerkit/prisma-cloud` | `compute()`, `postgres({ client })` | `@makerkit/core` only |
 | `@makerkit/prisma-cloud/target` | `prismaCloud()` | `@makerkit/prisma-alchemy`, `alchemy`, `effect` |
@@ -32,7 +35,7 @@ Who imports what, end to end:
 - the **user's service module** imports `@makerkit/prisma-cloud` plus the app's own
   connection definitions (which hold the driver import);
 - the **deploy script** (`alchemy.run.ts`) imports the service module +
-  `@makerkit/core/lower` + `@makerkit/prisma-cloud/target` (heavy — deploy-time only);
+  `@makerkit/core/deploy` + `@makerkit/prisma-cloud/target` (heavy — deploy-time only);
 - the **runtime bundle entry** (`main.ts`, app-owned) imports the service module +
   `@makerkit/core/runtime` — nothing else.
 
@@ -43,7 +46,7 @@ with a lazy import inside the factory if it ever matters.
 
 ## Decision taken: Alchemy is core's provisioning substrate
 
-`@makerkit/core/lower` imports `alchemy`/`effect`. The architectural principle
+`@makerkit/core/deploy` imports `alchemy`/`effect`. The architectural principle
 forbids core knowledge of **deployment targets** (Prisma Cloud); Alchemy is not a
 target — it is the provisioning plane [`layering.md`](../03-domain-model/layering.md)
 already commits to (claim 3: MakerKit uses Alchemy's definition language *and*
@@ -195,7 +198,7 @@ nodes as `{ id, kind, type, config }` plus edges, handler dropped — is
 `JSON.stringify`-able by construction; the serialized-artifact emit step builds on
 this later.
 
-## Lowering (`@makerkit/core/lower`)
+## Lowering (`@makerkit/core/deploy`)
 
 The router. Core's only job at deploy: Load, then look up each node's `type` in the
 target's lowering table and run what it finds, deps before dependents.
@@ -374,7 +377,7 @@ Target entry — the lowering table (the only place `prisma-alchemy` is imported
 ```ts
 import * as Effect from "effect/Effect"
 import * as Prisma from "@makerkit/prisma-alchemy"
-import type { Target } from "@makerkit/core/lower"
+import type { Target } from "@makerkit/core/deploy"
 
 export interface PrismaCloudOptions {
   workspaceId: string
@@ -451,7 +454,7 @@ runHost(service)
 
 // alchemy.run.ts — deploy (heavy imports; never bundled)
 import service from "./src/service"
-import { lower } from "@makerkit/core/lower"
+import { lower } from "@makerkit/core/deploy"
 import { prismaCloud } from "@makerkit/prisma-cloud/target"
 export default lower(service, prismaCloud({ workspaceId: requiredEnv("PRISMA_WORKSPACE_ID") }), {
   name: "hello",
