@@ -19,4 +19,4 @@ const app = service({
 });
 
 export const graph = Load(app, { id: "probe" });
-export const manifest = configOf(app);
+export const declarations = configOf(app);

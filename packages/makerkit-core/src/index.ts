@@ -28,5 +28,5 @@ export type {
   Connection,
   ConfigAdapter,
   ConfigRequest,
-  ConfigManifestEntry,
+  ConfigDeclaration,
 } from "./config.ts";
