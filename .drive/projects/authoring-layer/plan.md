@@ -12,11 +12,14 @@ roadmap (typed interfaces, hexes, contracts, …) follows as later projects.
 
 ## Current position
 
-**Both build slices complete** (unattended run; decisions D1–D12 in
-`wip/unattended-decisions.md`). R1 → [PR #6](https://github.com/prisma/makerkit/pull/6);
-R2 → [PR #7](https://github.com/prisma/makerkit/pull/7) (stacked). The storefront-auth
-demo is live on the authoring layer. Next: merge #6, retarget + merge #7, then the
-Connection-primitive project (first capability-roadmap entry).
+**All three build slices complete.** R1 →
+[PR #6](https://github.com/prisma/makerkit/pull/6) (merged); R2 →
+[PR #7](https://github.com/prisma/makerkit/pull/7) (open → main, mergeable); R3 →
+[PR #8](https://github.com/prisma/makerkit/pull/8) (open → main). The
+storefront-auth demo is live on the authoring layer through the ConfigAdapter
+pipeline. Remaining: merge #7 then #8 (operator), project close-out (verify spec
+DoD, sync docs, delete this project dir), then the Connection-primitive project
+(first capability-roadmap entry — its target picture is the hand-wired AUTH_URL).
 
 ## Legend
 
@@ -48,7 +51,16 @@ client factory. Reworks PR #6 in place; retitle at DoD.
 **Dispatches:** (1) core+pack+example rework with gates green; (2) Opus review +
 fix round; (3) deploy/verify/destroy + PR retitle.
 
-### [~] Slice R3 — core-owned config pipeline (own PR, stacked on R2)
+### [x] Slice R3 — core-owned config pipeline (own PR)
+
+> **Done.** [PR #8](https://github.com/prisma/makerkit/pull/8) → `main`. Two design
+> iterations recorded with motivation (config pipeline → ConfigAdapter model);
+> `/deploy` entry rename under the four-plane taxonomy; loud-config validation
+> ("a default substitutes for absence, never for garbage"). 64 package tests;
+> five review rounds across the slice, all findings closed. Proofs: hello full
+> ephemeral cycle green through the new pipeline; storefront-auth updated
+> **in place** (dry-plan identity check: 3 update / 4 noop, zero creates), round
+> trip live, no env-var race (pre-existing variable — contrast PRO-211).
 
 **Outcome:** the runtime path matches the redesigned model (core-model.md §
 Runtime, commit `7862835`): `runtime()`/`TargetRuntime`/the hydrator registry are
