@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "types": ["bun"]
   },
-  "include": ["scripts"]
+  "include": ["scripts", "alchemy.run.ts"]
 }

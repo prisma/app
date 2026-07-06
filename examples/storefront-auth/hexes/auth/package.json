@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "build": "bun run ../../scripts/bundle.ts src/index.ts dist/auth.tar.gz",
+    "dev": "bun run src/main.ts",
+    "build": "bun run scripts/build.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@makerkit/core": "workspace:*",
+    "@makerkit/prisma-cloud": "workspace:*",
     "hono": "^4.11.4"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",
+    "tsdown": "^0.15.9",
     "typescript": "^6.0.3"
   }
 }

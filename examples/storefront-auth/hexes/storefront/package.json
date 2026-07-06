@@ -10,6 +10,8 @@
     "build:compute": "next build && bun run ../../scripts/bundle-next.ts . dist/storefront.tar.gz"
   },
   "dependencies": {
+    "@makerkit/core": "workspace:*",
+    "@makerkit/prisma-cloud": "workspace:*",
     "next": "^15.5.4",
     "react": "19.2.0",
     "react-dom": "19.2.0"

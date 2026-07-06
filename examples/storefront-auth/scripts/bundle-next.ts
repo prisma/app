@@ -2,19 +2,21 @@
  * Packages a Next.js `output: "standalone"` build into a Prisma Compute artifact.
  *
  * Run `next build` first (the `build:compute` script does). Next's standalone
- * tree omits the static assets and `public/`, so this copies them in, writes a
- * `compute.manifest.json` at the tree root pointing at the standalone
- * `server.js`, and tars it — the format our `Deployment` resource consumes.
+ * tree omits the static assets and `public/`, so this copies them in. The
+ * manifest entrypoint is NOT server.js directly: the app's MakerKit runtime
+ * entry (`src/main.ts` — runHost over the service, whose handler boots
+ * `./server.js`) is bundled to `main.mjs` next to server.js, so the relative
+ * import resolves inside the tar and the MakerKit host runs first.
  *
  * Requires a hoisted node_modules (see the repo `.npmrc`): pnpm's default
  * isolated layout hides Next's peers (e.g. styled-jsx) under `.pnpm`, and the
  * flattened standalone `next` copy can't resolve them at boot.
- *
- * Counterpart to `bundle.ts`, which does the same for a Bun entrypoint.
  */
 import { $ } from "bun";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
+import { build } from "tsdown";
 
 const MANIFEST_VERSION = "1";
 
@@ -56,7 +58,33 @@ export async function bundleNextComputeArtifact(
     await fs.promises.cp(publicDir, path.join(appOut, "public"), { recursive: true });
   }
 
-  const entrypoint = path.join(rel, "server.js");
+  // Bundle the MakerKit runtime entry to a temp dir, then place it next to
+  // server.js as main.mjs (unambiguously ESM — the standalone tree's
+  // package.json is CJS-default). Its handler's `import("./server.js")`
+  // resolves relative to this file inside the tar.
+  const bundleTmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "storefront-main-"));
+  try {
+    await build({
+      entry: [path.join(resolvedApp, "src", "main.ts")],
+      outDir: bundleTmp,
+      format: "esm",
+      platform: "node",
+      external: ["bun"],
+      // Workspace packages must be inlined; everything Next needs is already
+      // in the standalone tree and is NOT imported by the entry.
+      noExternal: [/^@makerkit\//],
+      dts: false,
+      sourcemap: false,
+      clean: false,
+    });
+    const built = fs.readdirSync(bundleTmp).find((f) => /^main\.m?js$/.test(f));
+    if (!built) throw new Error(`tsdown produced no main.js in ${bundleTmp}`);
+    await fs.promises.copyFile(path.join(bundleTmp, built), path.join(appOut, "main.mjs"));
+  } finally {
+    await fs.promises.rm(bundleTmp, { recursive: true, force: true });
+  }
+
+  const entrypoint = path.join(rel, "main.mjs");
   await fs.promises.writeFile(
     path.join(standalone, "compute.manifest.json"),
     JSON.stringify({ manifestVersion: MANIFEST_VERSION, entrypoint }, null, 2),

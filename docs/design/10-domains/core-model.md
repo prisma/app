@@ -313,7 +313,10 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
           artifactHash: opts.artifact.sha256,
           port: 3000,
         })
-        return { outputs: { url: deploy.deployedUrl } }
+        // outputs are the inter-node config-wiring hook: expose what hand-wired
+        // neighbors in a mixed stack need (the URL for consumers; the project id
+        // for e.g. an EnvironmentVariable scoped to this service's project).
+        return { outputs: { url: deploy.deployedUrl, projectId: project.id } }
       }),
   },
 })
@@ -328,19 +331,26 @@ import type { TargetRuntime } from "@makerkit/core/runtime"
 
 export interface PostgresConfig { readonly url: string }
 
+// Client factories are per-key OPTIONAL: a service with no postgres input needs no
+// factory (no phantom capabilities); a declared input with a missing factory is a
+// clear HydrateError at boot, before any traffic.
 export interface RuntimeOptions {
-  readonly clients: {
-    readonly postgres: (config: PostgresConfig) => unknown   // the app's driver choice
+  readonly clients?: {
+    readonly postgres?: (config: PostgresConfig) => unknown   // the app's driver choice
   }
 }
 
-export const runtime = (o: RuntimeOptions): TargetRuntime => ({
+export const runtime = (o: RuntimeOptions = {}): TargetRuntime => ({
   context: (env) => ({ port: intOr(env.PORT, 3000) }),
   hydrate: {
     "prisma-cloud/postgres": ({ env, input }) => {
+      const factory = o.clients?.postgres
+      if (!factory)
+        throw new HydrateError(
+          `input "${input}" requires a postgres client factory — pass runtime({ clients: { postgres } })`)
       const url = env.DATABASE_URL
       if (!url) throw new HydrateError(`input "${input}": DATABASE_URL is not set`)
-      return o.clients.postgres({ url })
+      return factory({ url })
     },
   },
 })
