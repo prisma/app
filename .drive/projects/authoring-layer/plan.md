@@ -106,7 +106,7 @@ decided at slice spec time.
 
 ## Capability roadmap (later projects, unchanged through-line)
 
-### [ ] Service → service dependency (HTTP, no interface) — the Connection primitive; replaces R2's hand-wired `AUTH_URL`
+### [~] Service → service dependency (HTTP, no interface) — the Connection primitive → **slice R4, in progress** (`slices/r4-connection-primitive/spec.md`); includes minimal hex(), application-level Project placement, and the DATABASE_URL poison
 ### [ ] Typed HTTP interface, enforced at Load
 ### [ ] Hex wiring (`hex`, `provision`, ownership, forwarding)
 ### [ ] Replace a dependency by interface (DIP swap)
