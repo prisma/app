@@ -727,7 +727,11 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
             const value = d.owner === "service" ? config.service[d.name] : config.inputs[d.owner.input]?.[d.name]
             records.push(yield* Prisma.EnvironmentVariable(`${configKey(address, d)}-var`, {
               projectId: provisioned.outputs.projectId,
-              key: configKey(address, d), value: value as never, class: "production",
+              key: configKey(address, d),
+              // encode typed→string: a concrete leaf stringifies; a provisioning
+              // ref (already string-typed) passes through and carries the edge.
+              value: typeof value === "number" ? String(value) : (value as never),
+              class: "production",
             }))
           }
           return { outputs: { environment: records } }   // → deploy's environment prop (the edge)
