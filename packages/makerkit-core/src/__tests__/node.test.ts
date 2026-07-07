@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { connectionEnd, hex, isNode, resource, service } from "../node.ts";
-import { conn, memoryAdapter } from "./helpers.ts";
-
-const adapter = memoryAdapter({});
+import { conn } from "./helpers.ts";
 
 describe('resource()', () => {
   test('returns a branded, frozen resource node carrying its connection', () => {
@@ -49,8 +47,7 @@ describe('service()', () => {
     const node = service({
       type: 'fake/app',
       inputs: { db },
-      params: { port: { type: 'number', default: 3000 } },
-      config: adapter,
+      params: { port: { type: "number", default: 3000 } },
       handler: () => null,
     });
 
@@ -58,21 +55,19 @@ describe('service()', () => {
     expect(node.kind).toBe('service');
     expect(node.type).toBe('fake/app');
     expect(node.inputs.db).toBe(db);
-    expect(node.params).toEqual({ port: { type: 'number', default: 3000 } });
-    expect(node.config).toBe(adapter);
+    expect(node.params).toEqual({ port: { type: "number", default: 3000 } });
     expect(Object.isFrozen(node)).toBe(true);
     expect(Object.isFrozen(node.inputs)).toBe(true);
     expect(Object.isFrozen(node.params)).toBe(true);
     expect(Object.isFrozen(node.params.port)).toBe(true);
   });
 
-  test('stores the handler as run; constructing calls nothing', () => {
+  test("stores the handler as invoke; constructing calls nothing", () => {
     let calls = 0;
     const node = service({
-      type: 'fake/app',
-      inputs: { db: resource({ type: 'fake/db', connection: conn({}, () => ({})) }) },
-      params: { port: { type: 'number', default: 3000 } },
-      config: adapter,
+      type: "fake/app",
+      inputs: { db: resource({ type: "fake/db", connection: conn({}, () => ({})) }) },
+      params: { port: { type: "number", default: 3000 } },
       handler: (deps, ctx) => {
         calls += 1;
         return { deps, ctx };
@@ -82,15 +77,15 @@ describe('service()', () => {
     expect(calls).toBe(0);
 
     const fakeDb = { q: 1 };
-    const result = node.run({ db: fakeDb }, { port: 4242 });
+    const result = node.invoke({ db: fakeDb }, { port: 4242 });
     expect(calls).toBe(1);
     expect(result).toEqual({ deps: { db: fakeDb }, ctx: { port: 4242 } });
   });
 
-  test('throws on an empty type', () => {
-    expect(() =>
-      service({ type: '', inputs: {}, params: {}, config: adapter, handler: () => null }),
-    ).toThrow(/non-empty node type/);
+  test("throws on an empty type", () => {
+    expect(() => service({ type: "", inputs: {}, params: {}, handler: () => null })).toThrow(
+      /non-empty node type/,
+    );
   });
 });
 

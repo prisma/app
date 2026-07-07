@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { configOf } from "../config.ts";
 import { connectionEnd, resource, service } from "../node.ts";
-import { conn, memoryAdapter } from "./helpers.ts";
-
-const adapter = memoryAdapter({});
+import { conn } from "./helpers.ts";
 
 describe('configOf', () => {
   test('enumerates input params then service params — semantic, no platform keys', () => {
@@ -18,8 +16,7 @@ describe('configOf', () => {
           ),
         }),
       },
-      params: { port: { type: 'number', default: 3000 } },
-      config: adapter,
+      params: { port: { type: "number", default: 3000 } },
       handler: () => null,
     });
 
@@ -46,8 +43,7 @@ describe('configOf', () => {
           connection: conn({ port: { type: 'number' } }, () => ({})),
         }),
       },
-      params: { port: { type: 'number', default: 3000 } },
-      config: adapter,
+      params: { port: { type: "number", default: 3000 } },
       handler: () => null,
     });
 
@@ -62,8 +58,7 @@ describe('configOf', () => {
     const root = service({
       type: 'fake/app',
       inputs: {},
-      params: { port: { type: 'number', default: 3000 } },
-      config: adapter,
+      params: { port: { type: "number", default: 3000 } },
       handler: () => null,
     });
 
@@ -79,7 +74,7 @@ describe('configOf', () => {
     ]);
   });
 
-  test('executes nothing — no handler, no hydrate, no adapter', () => {
+  test("executes nothing — no handler, no hydrate", () => {
     let handlerCalls = 0;
     let hydrateCalls = 0;
     const root = service({
@@ -94,7 +89,6 @@ describe('configOf', () => {
         }),
       },
       params: {},
-      config: adapter,
       handler: () => {
         handlerCalls += 1;
         return null;
@@ -105,7 +99,6 @@ describe('configOf', () => {
 
     expect(handlerCalls).toBe(0);
     expect(hydrateCalls).toBe(0);
-    expect(adapter.requested.length).toBe(0);
   });
 });
 
@@ -124,7 +117,6 @@ describe("configOf over connection-end inputs", () => {
         }),
       },
       params: { port: { type: "number", default: 3000 } },
-      config: adapter,
       handler: () => null,
     });
 

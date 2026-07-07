@@ -1,9 +1,11 @@
 /**
- * The configuration model (core-owned; the boot pipeline lives in
- * runtime.ts). Three components, each owned by exactly one party: nodes
- * DECLARE semantic params (pure data, no platform keys); the service's
- * ConfigAdapter answers GET/SET for its platform (the semantic↔physical
- * mapping is its private business); core does everything in between.
+ * The configuration model. Three components, each owned by exactly one
+ * party: nodes DECLARE semantic params (pure data, no platform keys); core
+ * builds the typed Config from the graph at deploy (buildConfig, in
+ * deploy.ts) and consumes it at boot (hydrate, in hydrate.ts); the target
+ * pack owns encoding — serializing that Config to the platform environment
+ * and reversing it (see core-model.md § Runtime). Core never stringifies and
+ * never touches an environment.
  */
 import { Load } from './graph.ts';
 import type { ResourceNode, ServiceNode } from './node.ts';
@@ -13,10 +15,11 @@ export type ParamType = 'string' | 'number';
 export type TypeOf<T extends ParamType> = T extends 'string' ? string : number;
 
 /**
- * A declared config param — pure data. The declaration does double duty: core
- * validates raw values against `type` at boot, and TypeScript derives the
- * hydrate/handler input types from it — the definition object ENFORCES the
- * final param input types.
+ * A declared config param — pure data. The declaration does double duty:
+ * TypeScript derives the hydrate/handler input types from it (the
+ * definition object ENFORCES the final param input types), and the target
+ * pack validates raw values against `type` when it reverses its own
+ * serialization at boot.
  */
 export interface ConfigParam<T extends ParamType = ParamType> {
   readonly type: T;
@@ -49,34 +52,10 @@ export interface Connection<P extends Params = Params, C = unknown> {
 }
 
 /**
- * The platform's config I/O, pack-provided and attached to the service node
- * by its constructor. The mapping between semantic params and physical
- * locations is the adapter's PRIVATE business — core never sees platform
- * keys. The adapter owns its source: the platform adapter is the one
- * sanctioned environment reader; an in-memory test adapter reads nothing.
- */
-export interface ConfigAdapter {
-  /** Raw values keyed by request id; core validates/coerces. */
-  get(requests: readonly ConfigRequest[]): Promise<Readonly<Record<string, string>>>;
-  /** Tests · deploy plane. */
-  set?(values: Readonly<Record<string, string>>): Promise<void>;
-  /** Ops introspection: "which physical location is this param?" */
-  describe?(request: ConfigRequest): Promise<{ location: string }>;
-}
-
-export interface ConfigRequest {
-  /** Core-assigned; keys the returned value map. */
-  readonly id: string;
-  readonly owner: 'service' | { readonly input: string };
-  readonly name: string;
-  readonly param: ConfigParam;
-}
-
-/**
  * The enumerable config surface of a service — derivable from the graph
  * alone, nothing booted, no platform keys. The introspection artifact
- * (secrets marked, values absent). Physical locations are the adapter's
- * business (describe()).
+ * (secrets marked, values absent). Physical locations are the target pack's
+ * business.
  */
 export interface ConfigDeclaration {
   readonly owner: 'service' | { readonly input: string };
@@ -85,6 +64,19 @@ export interface ConfigDeclaration {
   readonly secret: boolean;
   readonly optional: boolean;
   readonly default?: string | number;
+}
+
+/**
+ * The resolved, typed configuration of one service — what crosses the
+ * core→pack boundary. Core builds it at deploy (leaf values are provisioning
+ * refs, so the env writes depend on the resources/producer — the ordering
+ * edges); the pack serializes it, and at boot reconstructs the identical
+ * structure with concrete values. Both forms conform to the shape from
+ * configOf. Core never stringifies.
+ */
+export interface Config {
+  readonly service: Readonly<Record<string, unknown>>;
+  readonly inputs: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 
 /**

@@ -2,9 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Load, LoadError } from "../graph.ts";
 import { connectionEnd, hex, resource, service } from "../node.ts";
 import type { ProvisionedRef } from "../node.ts";
-import { conn, memoryAdapter } from "./helpers.ts";
-
-const adapter = memoryAdapter({});
+import { conn } from "./helpers.ts";
 
 const dbResource = () =>
   resource({
@@ -23,7 +21,6 @@ const makeAuthService = () =>
     type: "fake/compute",
     inputs: { db: dbResource() },
     params: {},
-    config: adapter,
     handler: () => "auth",
   });
 
@@ -32,7 +29,6 @@ const makeStorefrontService = () =>
     type: "fake/compute",
     inputs: { auth: httpEnd() },
     params: {},
-    config: adapter,
     handler: () => "storefront",
   });
 
@@ -79,7 +75,6 @@ describe("Load of a hex root", () => {
       type: "fake/compute",
       inputs: {},
       params: {},
-      config: adapter,
       handler: () => {
         handlerCalls += 1;
         return null;
@@ -158,14 +153,12 @@ describe("Load of a hex root", () => {
       type: "fake/compute",
       inputs: { peer: httpEnd() },
       params: {},
-      config: adapter,
       handler: () => null,
     });
     const b = service({
       type: "fake/compute",
       inputs: { peer: httpEnd() },
       params: {},
-      config: adapter,
       handler: () => null,
     });
     const root = hex("shop", (h) => {

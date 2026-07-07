@@ -9,7 +9,6 @@ const svc = service({
   type: "fixture/app",
   inputs: {},
   params: {},
-  config: { get: async () => ({}) },
   handler: () => {
     handlerCallCount += 1;
     return null;

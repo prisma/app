@@ -22,10 +22,10 @@ function shippedSources(): { file: string; text: string }[] {
   return out;
 }
 
-describe('entry map: core splits into authoring + deploy + runtime', () => {
-  test("package.json exports exactly '.', './deploy', and './runtime'", () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
-    expect(Object.keys(pkg.exports).sort()).toEqual(['.', './deploy', './runtime']);
+describe("entry map: core splits into authoring + deploy only — no runtime entry", () => {
+  test("package.json exports exactly '.' and './deploy'", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"));
+    expect(Object.keys(pkg.exports).sort()).toEqual([".", "./deploy"]);
   });
 });
 

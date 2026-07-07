@@ -1,113 +1,371 @@
-import { describe, expect, test } from 'bun:test';
-import * as Effect from 'effect/Effect';
-import type { LoweredNode } from '../deploy.ts';
-import { LowerError, type LowerOptions, lowering, type Target } from '../deploy.ts';
-import { resource, service } from '../node.ts';
-import { conn, memoryAdapter } from './helpers.ts';
+import { describe, expect, test } from "bun:test";
+import * as Effect from "effect/Effect";
+import type { Config } from "../config.ts";
+import {
+  buildConfig,
+  lower,
+  lowering,
+  LowerError,
+  type Artifact,
+  type Bundle,
+  type LoweredNode,
+  type LowerOptions,
+  type Target,
+} from "../deploy.ts";
+import { Load } from "../graph.ts";
+import { connectionEnd, hex, resource, service } from "../node.ts";
+import { conn } from "./helpers.ts";
 
-const opts: LowerOptions = {
-  name: 'hello',
-  artifact: { path: '/tmp/hello.tar.gz', sha256: 'abc123' },
-};
+const db = () => resource({ type: "fake/db", connection: conn({ url: { type: "string" } }, () => ({})) });
+const httpEnd = () =>
+  connectionEnd({ type: "fake/http", connection: conn({ url: { type: "string" } }, () => ({})) });
 
-const adapter = memoryAdapter({});
-const db = () => resource({ type: 'fake/db', connection: conn({}, () => ({})) });
 const app = (
   type: string,
-  inputs: Record<string, ReturnType<typeof db>>,
+  inputs: Record<string, ReturnType<typeof db> | ReturnType<typeof httpEnd>>,
+  params: Record<string, { type: "number" | "string"; default?: unknown }> = {},
   handler = () => null as unknown,
-) => service({ type, inputs, params: {}, config: adapter, handler });
+) => service({ type, inputs, params: params as never, handler });
 
-// The fake lowerings are pure, so the composable form runs synchronously.
-const run = (eff: ReturnType<typeof lowering>): LoweredNode =>
-  Effect.runSync(eff as Effect.Effect<LoweredNode, LowerError>);
+const opts = (extra: Partial<LowerOptions> = {}): LowerOptions => ({ name: "hello", ...extra });
 
-const runError = (eff: ReturnType<typeof lowering>): LowerError =>
-  Effect.runSync(Effect.flip(eff as Effect.Effect<LoweredNode, LowerError>));
+// ——— A fake target that records every call it receives, instead of driving
+// real Alchemy resources — the same recording strategy the old single-phase
+// suite used, extended to the phased SPI. Lets us assert the "environment
+// edge" (serialize's records reaching deploy) by inspecting what was
+// recorded, never by assuming call order.
+type Call =
+  | { readonly phase: "application"; readonly id: string }
+  | { readonly phase: "resource"; readonly id: string; readonly type: string }
+  | { readonly phase: "provision"; readonly id: string; readonly address: string }
+  | { readonly phase: "serialize"; readonly id: string; readonly address: string; readonly config: Config }
+  | { readonly phase: "package"; readonly id: string; readonly bundle: Bundle; readonly address: string }
+  | {
+      readonly phase: "deploy";
+      readonly id: string;
+      readonly artifact: Artifact;
+      readonly environment: unknown;
+    };
 
-function recordingTarget() {
-  const calls: { id: string; type: string; loweredSoFar: string[] }[] = [];
+function fakeTarget() {
+  const calls: Call[] = [];
   const target: Target = {
     name: 'fake',
     providers: () => {
       throw new Error('providers() must not be called by lowering()');
     },
-    lower: {
-      'fake/db': (ctx) => {
-        calls.push({ id: ctx.id, type: ctx.node.type, loweredSoFar: [...ctx.lowered.keys()] });
+    application: {
+      provision: (ctx) => {
+        calls.push({ phase: "application", id: ctx.id });
+        return Effect.succeed({ outputs: { projectId: `${ctx.id}#project` } });
+      },
+    },
+    resources: {
+      "fake/db": (ctx) => {
+        calls.push({ phase: "resource", id: ctx.id, type: ctx.node.type });
         return Effect.succeed({ outputs: { url: `db://${ctx.id}` } });
       },
-      'fake/app': (ctx) => {
-        calls.push({ id: ctx.id, type: ctx.node.type, loweredSoFar: [...ctx.lowered.keys()] });
-        return Effect.succeed({ outputs: { url: `app://${ctx.id}` } });
+    },
+    services: {
+      "fake/compute": {
+        provision: (ctx) => {
+          calls.push({ phase: "provision", id: ctx.id, address: ctx.address });
+          return Effect.succeed({
+            outputs: { serviceId: `${ctx.id}#svc`, projectId: ctx.application.outputs.projectId },
+          });
+        },
+        serialize: (ctx, _provisioned, config) => {
+          calls.push({ phase: "serialize", id: ctx.id, address: ctx.address, config });
+          // One "record" per Config leaf — mirrors the real pack's one
+          // EnvironmentVariable per leaf, keyed by input+name.
+          const records = Object.entries(config.inputs).flatMap(([input, values]) =>
+            Object.entries(values).map(([name, value]) => ({ input, name, value })),
+          );
+          return Effect.succeed({ outputs: { environment: records } });
+        },
+        package: (ctx, input) => {
+          calls.push({ phase: "package", id: ctx.id, bundle: input.bundle, address: input.address });
+          return Effect.succeed({ path: `/tmp/${ctx.id}.tar.gz`, sha256: `sha-${ctx.id}` });
+        },
+        deploy: (ctx, provisioned, artifact, serialized) => {
+          calls.push({
+            phase: "deploy",
+            id: ctx.id,
+            artifact,
+            environment: serialized.outputs.environment,
+          });
+          return Effect.succeed({
+            outputs: { url: `https://${ctx.id}.example`, projectId: provisioned.outputs.projectId },
+          });
+        },
       },
     },
   };
   return { target, calls };
 }
 
-describe('lowering', () => {
-  test("routes each node through the target's table, deps before dependents", () => {
-    const { target, calls } = recordingTarget();
-    const root = app('fake/app', { db: db() });
+const run = (eff: ReturnType<typeof lowering>): LoweredNode =>
+  Effect.runSync(eff as Effect.Effect<LoweredNode, LowerError>);
+const runError = (eff: ReturnType<typeof lowering>): LowerError =>
+  Effect.runSync(Effect.flip(eff as Effect.Effect<LoweredNode, LowerError>));
 
-    const result = run(lowering(root, target, opts));
+describe("buildConfig", () => {
+  test("matches each input's params by name to its lowered outputs, plus service-param defaults", () => {
+    const root = app("fake/compute", { db: db() }, { port: { type: "number", default: 3000 } });
+    const graph = Load(root, { id: "hello" });
+    const lowered = new Map<string, LoweredNode>([["hello.db", { outputs: { url: "db://hello.db" } }]]);
 
-    expect(calls.map((c) => c.id)).toEqual(['hello.db', 'hello']);
-    expect(calls[1]!.loweredSoFar).toEqual(['hello.db']);
-    expect(result).toEqual({ outputs: { url: 'app://hello' } });
+    expect(buildConfig(root, "hello", graph, lowered)).toEqual({
+      service: { port: 3000 },
+      inputs: { db: { url: "db://hello.db" } },
+    });
   });
 
-  test('uses opts.name as the root node id', () => {
-    const { target, calls } = recordingTarget();
+  test("a param the graph declares but the lowered outputs never produced resolves to undefined", () => {
+    const root = app("fake/compute", { db: db() });
+    const graph = Load(root, { id: "hello" });
 
-    run(lowering(app('fake/app', { db: db() }), target, { ...opts, name: 'acme' }));
+    expect(buildConfig(root, "hello", graph, new Map())).toEqual({
+      service: {},
+      inputs: { db: { url: undefined } },
+    });
+  });
+});
 
-    expect(calls.map((c) => c.id)).toEqual(['acme.db', 'acme']);
+describe("lowering a lone service root", () => {
+  test("sequences application once, then resources → provision → serialize → package → deploy", () => {
+    const { target, calls } = fakeTarget();
+    const root = app("fake/compute", { db: db() });
+
+    const result = run(lowering(root, target, opts({ bundle: { dir: "dist/bundle" } })));
+
+    expect(calls.map((c) => c.phase)).toEqual([
+      "application",
+      "resource",
+      "provision",
+      "serialize",
+      "package",
+      "deploy",
+    ]);
+    expect(result).toEqual({ outputs: { url: "https://hello.example", projectId: "hello#project" } });
   });
 
-  test('passes graph and opts through the LowerContext', () => {
-    let seen: { graphRootId?: string; artifactPath?: string } = {};
-    const target: Target = {
-      name: 'fake',
-      providers: () => {
-        throw new Error('unused');
-      },
-      lower: {
-        'fake/app': (ctx) => {
-          seen = { graphRootId: ctx.graph.root.id, artifactPath: ctx.opts.artifact.path };
-          return Effect.succeed({ outputs: {} });
-        },
-      },
-    };
+  test("a lone service's address is empty — the codec's unprefixed case", () => {
+    const { target, calls } = fakeTarget();
+    const root = app("fake/compute", { db: db() });
 
-    run(lowering(app('fake/app', {}), target, opts));
+    run(lowering(root, target, opts({ bundle: { dir: "dist/bundle" } })));
 
-    expect(seen).toEqual({ graphRootId: 'hello', artifactPath: '/tmp/hello.tar.gz' });
+    const provision = calls.find((c) => c.phase === "provision");
+    const pkg = calls.find((c) => c.phase === "package");
+    expect(provision).toMatchObject({ address: "" });
+    expect(pkg).toMatchObject({ address: "" });
   });
 
-  test('fails with LowerError naming the type and the known types on an unknown node type', () => {
-    const { target } = recordingTarget();
-    const root = app('fake/unknown-kind', { db: db() });
+  test("buildConfig is fed to serialize with the resource's real lowered output", () => {
+    const { target, calls } = fakeTarget();
+    const root = app("fake/compute", { db: db() }, { port: { type: "number", default: 3000 } });
 
-    const error = runError(lowering(root, target, opts));
+    run(lowering(root, target, opts({ bundle: { dir: "dist/bundle" } })));
 
-    expect(error).toBeInstanceOf(LowerError);
-    expect(error.message).toContain('fake/unknown-kind');
-    expect(error.message).toContain('fake/db');
-    expect(error.message).toContain('fake/app');
+    const serialize = calls.find((c) => c.phase === "serialize");
+    expect(serialize).toMatchObject({ config: { service: { port: 3000 }, inputs: { db: { url: "db://hello.db" } } } });
+  });
+
+  test("package receives the bundle and the same address serialize used", () => {
+    const { target, calls } = fakeTarget();
+    const root = app("fake/compute", {});
+    const bundle: Bundle = { dir: "dist/bundle", entry: "main.mjs" };
+
+    run(lowering(root, target, opts({ bundle })));
+
+    const pkg = calls.find((c) => c.phase === "package");
+    expect(pkg).toMatchObject({ bundle, address: "" });
+  });
+
+  test("the environment edge: deploy's `environment` IS serialize's returned records (by recording, not order)", () => {
+    const { target, calls } = fakeTarget();
+    const root = app("fake/compute", { db: db() });
+
+    run(lowering(root, target, opts({ bundle: { dir: "dist/bundle" } })));
+
+    const serialize = calls.find((c) => c.phase === "serialize");
+    const deploy = calls.find((c) => c.phase === "deploy");
+    expect(serialize).toBeDefined();
+    expect(deploy).toBeDefined();
+    if (serialize?.phase !== "serialize" || deploy?.phase !== "deploy") throw new Error("unreachable");
+    expect(deploy.environment).toEqual([{ input: "db", name: "url", value: "db://hello.db" }]);
+    // Same records the serialize call's own return produced (identity, not
+    // a coincidental re-derivation) — the fake target only ever returns them
+    // once, from serialize, and threads them through to deploy's argument.
   });
 
   test('runs no handler', () => {
     let calls = 0;
-    const { target } = recordingTarget();
-    const root = app('fake/app', { db: db() }, () => {
+    const { target } = fakeTarget();
+    const root = app("fake/compute", { db: db() }, {}, () => {
       calls += 1;
       return null;
     });
 
-    run(lowering(root, target, opts));
+    run(lowering(root, target, opts({ bundle: { dir: "dist/bundle" } })));
 
     expect(calls).toBe(0);
+  });
+
+  test("missing bundle for a lone service root is a LowerError", () => {
+    const { target } = fakeTarget();
+    const root = app("fake/compute", {});
+
+    const error = runError(lowering(root, target, opts()));
+
+    expect(error).toBeInstanceOf(LowerError);
+    expect(error.message).toContain("opts.bundle");
+  });
+
+  test("fails with LowerError naming the type and the known types on an unknown resource type", () => {
+    const { target } = fakeTarget();
+    const root = app("fake/compute", { cache: resource({ type: "fake/unknown", connection: conn({}, () => ({})) }) });
+
+    const error = runError(lowering(root, target, opts({ bundle: { dir: "dist/bundle" } })));
+
+    expect(error).toBeInstanceOf(LowerError);
+    expect(error.message).toContain("fake/unknown");
+    expect(error.message).toContain("fake/db");
+  });
+
+  test("fails with LowerError naming the type and the known types on an unknown service type", () => {
+    const { target } = fakeTarget();
+    const root = app("fake/other-compute", {});
+
+    const error = runError(lowering(root, target, opts({ bundle: { dir: "dist/bundle" } })));
+
+    expect(error).toBeInstanceOf(LowerError);
+    expect(error.message).toContain("fake/other-compute");
+    expect(error.message).toContain("fake/compute");
+  });
+});
+
+describe("lowering a hex root — two connected services", () => {
+  const authService = () => app("fake/compute", { db: db() });
+  const storefrontService = () => app("fake/compute", { auth: httpEnd() });
+
+  const twoServiceHex = () =>
+    hex("shop", (h) => {
+      const authRef = h.provision("auth", authService());
+      h.provision("storefront", storefrontService(), { auth: authRef });
+    });
+
+  test("application provisions once; auth is FULLY deployed before storefront's serialize", () => {
+    const { target, calls } = fakeTarget();
+
+    run(
+      lowering(twoServiceHex(), target, {
+        name: "shop",
+        bundles: { auth: { dir: "hexes/auth/dist/bundle" }, storefront: { dir: "hexes/storefront/dist/bundle" } },
+      }),
+    );
+
+    expect(calls.filter((c) => c.phase === "application")).toHaveLength(1);
+
+    const order = calls.map((c) => (c.phase === "application" ? c.phase : `${c.phase}:${c.id}`));
+    expect(order).toEqual([
+      "application",
+      "resource:auth.db",
+      "provision:auth",
+      "serialize:auth",
+      "package:auth",
+      "deploy:auth",
+      "provision:storefront",
+      "serialize:storefront",
+      "package:storefront",
+      "deploy:storefront",
+    ]);
+  });
+
+  test("each hex-provisioned service's address is its own provision id", () => {
+    const { target, calls } = fakeTarget();
+
+    run(
+      lowering(twoServiceHex(), target, {
+        name: "shop",
+        bundles: { auth: { dir: "hexes/auth/dist/bundle" }, storefront: { dir: "hexes/storefront/dist/bundle" } },
+      }),
+    );
+
+    const authProvision = calls.find((c) => c.phase === "provision" && c.id === "auth");
+    const storefrontProvision = calls.find((c) => c.phase === "provision" && c.id === "storefront");
+    expect(authProvision).toMatchObject({ address: "auth" });
+    expect(storefrontProvision).toMatchObject({ address: "storefront" });
+  });
+
+  test("storefront's Config.inputs.auth carries auth's REAL deploy-phase URL, not a placeholder", () => {
+    const { target, calls } = fakeTarget();
+
+    run(
+      lowering(twoServiceHex(), target, {
+        name: "shop",
+        bundles: { auth: { dir: "hexes/auth/dist/bundle" }, storefront: { dir: "hexes/storefront/dist/bundle" } },
+      }),
+    );
+
+    const storefrontSerialize = calls.find((c) => c.phase === "serialize" && c.id === "storefront");
+    expect(storefrontSerialize).toMatchObject({
+      config: { inputs: { auth: { url: "https://auth.example" } } },
+    });
+  });
+
+  test("the environment edge holds for the hex too: storefront's deploy environment IS its serialize records", () => {
+    const { target, calls } = fakeTarget();
+
+    run(
+      lowering(twoServiceHex(), target, {
+        name: "shop",
+        bundles: { auth: { dir: "hexes/auth/dist/bundle" }, storefront: { dir: "hexes/storefront/dist/bundle" } },
+      }),
+    );
+
+    const storefrontDeploy = calls.find((c) => c.phase === "deploy" && c.id === "storefront");
+    expect(storefrontDeploy).toMatchObject({
+      environment: [{ input: "auth", name: "url", value: "https://auth.example" }],
+    });
+  });
+
+  test("missing a bundle entry for one hex-provisioned service is a LowerError naming it", () => {
+    const { target } = fakeTarget();
+
+    const error = runError(
+      lowering(twoServiceHex(), target, { name: "shop", bundles: { auth: { dir: "hexes/auth/dist/bundle" } } }),
+    );
+
+    expect(error).toBeInstanceOf(LowerError);
+    expect(error.message).toContain('opts.bundles["storefront"]');
+  });
+
+  test("a hex root's own lowering has no outputs yet (boundary ports are future work)", () => {
+    const { target } = fakeTarget();
+
+    const result = run(
+      lowering(twoServiceHex(), target, {
+        name: "shop",
+        bundles: { auth: { dir: "hexes/auth/dist/bundle" }, storefront: { dir: "hexes/storefront/dist/bundle" } },
+      }),
+    );
+
+    expect(result).toEqual({ outputs: {} });
+  });
+});
+
+describe("lower()", () => {
+  test("builds an Alchemy Stack wrapping the same lowering", () => {
+    // Unlike lowering(), lower() DOES call target.providers() eagerly (to
+    // hand it to Alchemy.Stack) — a different fake target than the
+    // lowering()-only suite above, which asserts the opposite.
+    const target: Target = { ...fakeTarget().target, providers: () => ({}) as never };
+    const root = app("fake/compute", {});
+
+    const stack = lower(root, target, opts({ bundle: { dir: "dist/bundle" } }));
+
+    expect(stack).toBeDefined();
   });
 });

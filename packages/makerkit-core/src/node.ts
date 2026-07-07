@@ -1,13 +1,13 @@
 /**
  * Core model: node types and the factories that construct them. All nodes are
  * plain, frozen, serializable data — with exactly three sanctioned behavior
- * slots hanging off the graph: the Service node's handler (`run`), a
- * Connection's `hydrate` (validated values → client), and the Service's
- * ConfigAdapter (the platform's config I/O). Config declarations are pure
- * data; only the adapter touches a real environment. A node's `type` is its
- * routing key at deploy; core never interprets it beyond lookup.
+ * slots hanging off the graph: the Service node's handler (`invoke`), a
+ * Connection's `hydrate` (validated values → client), and — on the target
+ * pack's runnable service subclass — `run` (the boot loop). Config
+ * declarations are pure data; core reads no environment. A node's `type` is
+ * its routing key at deploy; core never interprets it beyond lookup.
  */
-import type { ConfigAdapter, ConfigParam, Connection, Params, Values } from './config.ts';
+import type { ConfigParam, Connection, Params, Values } from "./config.ts";
 
 // Brand — set by the factories below; how Load tells a node from junk.
 // Symbol.for so the check survives duplicated module instances in a workspace.
@@ -30,19 +30,31 @@ export interface ResourceNode<C = unknown> extends NodeBase {
 }
 
 /**
- * A Service: inputs + its own declared params + the platform's ConfigAdapter
- * + the opaque handler. This IS the user's default export — inspectable
- * (inputs/type/params) and runnable (run), inert until invoked. There is no
- * separate handle type: the node is the handle.
+ * A Service: inputs + its own declared params + the opaque handler
+ * (`invoke`). This IS the user's default export — inspectable
+ * (inputs/type/params), inert until invoked. The BASE node is not runnable:
+ * booting needs a target's environment knowledge, so the pack's factory
+ * returns a runnable subclass that adds `run(address)` (see RunnableServiceNode).
+ * There is no separate handle type: the node is the handle.
  */
 export interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends NodeBase {
   readonly kind: 'service';
   readonly inputs: D;
   /** Service-level config declarations (e.g. port). */
   readonly params: P;
-  /** How this service GETS its config on this platform. */
-  readonly config: ConfigAdapter;
-  run(deps: HydratedDeps<D>, ctx: Values<P>): unknown;
+  invoke(deps: HydratedDeps<D>, ctx: Values<P>): unknown;
+}
+
+/**
+ * The pack's runnable service node — what a pack's authoring factory (e.g.
+ * `compute()`) returns. `run` is the whole boot loop: deserialize the
+ * platform environment (keyed off `address`, the bootstrap's one parameter)
+ * into a typed Config, then core's `hydrate` + `invoke`. Core defines this
+ * shape; only a target pack instantiates it.
+ */
+export interface RunnableServiceNode<D extends Deps = Deps, P extends Params = Params>
+  extends ServiceNode<D, P> {
+  run(address: string, opts?: unknown): Promise<unknown>;
 }
 
 /**
@@ -139,13 +151,12 @@ export function resource<P extends Params, C>(def: {
 
 /**
  * Constructs a branded, frozen Service node; `handler` becomes the node's
- * `run`. Pure — the handler is never called here.
+ * `invoke`. Pure — the handler is never called here.
  */
 export function service<D extends Deps, P extends Params>(def: {
   type: string;
   inputs: D;
   params: P;
-  config: ConfigAdapter;
   handler: ServiceHandler<D, P>;
 }): ServiceNode<D, P> {
   requireType(def.type, 'service');
@@ -155,8 +166,7 @@ export function service<D extends Deps, P extends Params>(def: {
     type: def.type,
     inputs: Object.freeze({ ...def.inputs }) as D,
     params: freezeParams(def.params),
-    config: def.config,
-    run(deps, ctx) {
+    invoke(deps, ctx) {
       return def.handler(deps, ctx);
     },
   };
