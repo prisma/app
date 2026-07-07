@@ -39,11 +39,13 @@ Deployment provider auto-promotes; rollback is unexpressed), and non-default
 
 ## The lowering graphs
 
-Three graphs tell the whole story. Arrows read "depends on / consumes a value
-from"; Alchemy executes in dependency order and **runs unordered resources
-concurrently — declaration order is never consulted**.
+Lowering turns MakerKit's semantic graph into an Alchemy resource graph. Arrows
+read "depends on / consumes a value from"; Alchemy executes in dependency order
+and **runs unordered resources concurrently — declaration order is never
+consulted** — so every ordering MakerKit's semantics require must exist as an
+edge.
 
-**1. MakerKit's graph** (semantic; what the user means):
+**MakerKit's graph** (what the user means):
 
 ```mermaid
 flowchart LR
@@ -52,30 +54,7 @@ flowchart LR
   AU -- input --> ADB[(auth db)]
 ```
 
-**2. The Alchemy graph as first lowered — the flawed decomposition:**
-
-```mermaid
-flowchart TB
-  subgraph auth
-    Pa[Project_a] --> Sa[ComputeService_a] --> Da[Deployment_a]
-  end
-  subgraph storefront
-    Ps[Project_s] --> Ss[ComputeService_s] --> Ds[Deployment_s]
-    Ps --> EV["EnvironmentVariable(AUTH_URL)"]
-  end
-  Da -- deployedUrl --> EV
-  EV -.-x Ds
-  linkStyle 5 stroke:#d33,stroke-width:2px
-```
-
-`Deployment_s` consumes the service id; `EnvironmentVariable` consumes the
-project id and auth's URL; **nothing connects the two** (dashed red), so Alchemy
-may create the storefront's version while the variable is still being written —
-and per the [PDP timing model](pdp-data-model.md#the-config-lifecycle--what-is-resolved-when),
-a version created before the row exists **never** sees it. That is the
-PRO-211 race, precisely located.
-
-**3. The corrected graph — the environment is an input of the Deployment:**
+**The Alchemy graph it lowers to:**
 
 ```mermaid
 flowchart TB
@@ -90,23 +69,29 @@ flowchart TB
   Da -- deployedUrl --> EV
 ```
 
-This is not a workaround; it is **the platform's own dataflow restored**: PDP's
-version-create call literally *contains* the materialized env map, so the
-environment is genuinely an input to a version. Our first decomposition drew
-`EnvironmentVariable` as a sibling of `Deployment` and lost that edge; Alchemy
-faithfully executed the wrong graph we handed it.
+How the pieces map:
 
-Concretely: `Deployment` gains an `environment` prop carrying references to the
-`EnvironmentVariable` records the version is expected to boot with. Two effects,
-both by ordinary dependency-graph mechanics:
+- **Each service** lowers to its `Project → ComputeService → Deployment` chain
+  (the resource inputs — here each service's database — ride the Project's
+  default DB; see the inventory above).
+- **The connection** lowers to two edges: the producer's `deployedUrl` flows
+  into an `EnvironmentVariable` on the consumer's project, and that variable's
+  **record reference flows into the consumer's `Deployment`** via its
+  `environment` prop.
 
-1. **Ordering.** The variable write completes before version-create — the race
-   is impossible, for every deploy, on every target that follows this shape.
-2. **Propagation.** When a producer redeploys and its URL changes, the variable's
-   record changes → `Deployment_s`'s props diff → Alchemy creates a new
-   storefront version, which snapshots the new value. Under PDP's
-   snapshot-per-version semantics this is the *only* correct propagation
-   mechanism — the graph edge implements restart-on-config-change at our layer.
+The `environment` prop is load-bearing and mirrors PDP's own dataflow — the
+version-create call literally contains the materialized env map, so the
+environment is genuinely an input to a version (see the
+[config lifecycle](pdp-data-model.md#the-config-lifecycle--what-is-resolved-when)).
+The edge does two jobs by ordinary dependency-graph mechanics:
+
+1. **Ordering.** The variable write completes before version-create. Without
+   this edge the two race — that failure mode is documented as PRO-211 in
+   `gotchas.md`.
+2. **Propagation.** When the producer redeploys and its URL changes, the
+   variable's record changes → the consumer `Deployment`'s props diff → a new
+   consumer version snapshots the new value. Under snapshot-per-version
+   semantics this is the *only* correct propagation mechanism.
 
 MakerKit's core constructs these edges when lowering a connection (the
 `writeConfig` results thread into `deploy` through the service SPI); no pack
