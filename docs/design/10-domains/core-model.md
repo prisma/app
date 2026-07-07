@@ -119,9 +119,11 @@ const NODE: unique symbol = Symbol.for("makerkit:node") as never
 
 interface NodeBase {
   readonly [NODE]: true
-  readonly kind: "service" | "resource"        // "hex" later — see § Extension points
+  readonly kind: "service" | "resource" | "connection"
   readonly type: string                        // routing key, e.g. "prisma-cloud/postgres"
 }
+// HexNode is deliberately NOT a NodeBase: it has no routing `type` — it is
+// transparent wiring, not a routable thing (see § Nodes).
 
 // ——— Configuration model (core-owned pipeline; see § Runtime) ———
 //
