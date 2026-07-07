@@ -14,15 +14,19 @@ roadmap (typed interfaces, hexes, contracts, …) follows as later projects.
 
 **R1–R3 merged** (R1 → [#6](https://github.com/prisma/makerkit/pull/6),
 R2 → [#7](https://github.com/prisma/makerkit/pull/7), R3 →
-[#8](https://github.com/prisma/makerkit/pull/8)); storefront-auth demo live.
-**R4 (Connection primitive) in progress** on `claude/plan-state-store`: dispatch 1
-(core ConnectionEnd/hex/Load) landed (`0e736b7`); the deploy-path dispatch is
-**paused** pending nothing — the design settled through **decision 8** (identity =
-graph address via a printed bootstrap; config ownership split core=structure /
-pack=encoding with a serialize/deserialize round-trip; the node carries its own
-`run`). Docs rewritten to that contract (core-model.md, 03-domain-model/*,
-05-prisma-cloud/*, slice design-note.md). Build was paused on a Fable-5 rate limit;
-resume = dispatch R4-2 on Sonnet.
+[#8](https://github.com/prisma/makerkit/pull/8)). **R4 (Connection primitive)
+built and proven live** on `claude/plan-state-store` / [PR #10](https://github.com/prisma/makerkit/pull/10):
+the design settled through decisions 8–10, the code shipped (core reshape, pack,
+prisma-alchemy, both examples), Opus-reviewed, and the storefront→auth round trip
+runs on real Prisma Cloud. See the R4 roadmap entry for what shipped + the
+**Deferred** block.
+
+**Finishing R4:** the branch was **rebased onto main** (which merged Biome +
+strict TypeScript + CI workflows). Rebase clean (`-X theirs`; externals kept out
+of the commit); Biome format/lint applied; a Sonnet agent is finishing the
+mechanical **strict-TS compliance** (main's stricter tsconfig). Remaining: confirm
+the CI jobs green (lint/typecheck/test/build), deploy makerkit-hello to validate
+the e2e-deploy workflow + the idempotent-redeploy check, then the DoD close-out.
 
 ## Legend
 
@@ -109,7 +113,20 @@ decided at slice spec time.
 
 ## Capability roadmap (later projects, unchanged through-line)
 
-### [~] Service → service dependency (HTTP, no interface) — the Connection primitive → **slice R4, in progress** (`slices/r4-connection-primitive/spec.md`); includes minimal hex(), application-level Project placement, DATABASE_URL poison, and the decision-8 reshape (bootstrap identity, node-carried `run`, core=structure/pack=encoding config round-trip)
+### [x] Service → service dependency (HTTP, no interface) — the Connection primitive → **slice R4, done** (`slices/r4-connection-primitive/spec.md`). Shipped: `http()`/`connectionEnd`, minimal `hex()`, single-Project placement, `DATABASE_URL` poison, and the decision-8/9/10 reshape (bootstrap identity, node-carried `run`, core=structure/pack=encoding config round-trip). **Proven live on real Prisma Cloud** — storefront→auth round trip renders `Auth /verify says: 200 {"ok":true}` (config on the first version, PRO-211 race dead). Five real-cloud bugs found + fixed en route (Connection DSN, storefront artifact packaging, poison `"-"`, env-var upsert); PRO-212/PRO-213 filed. See its **Deferred** block below.
+
+**Deferred from R4 (decisions 8–10 + the deploy proof) — each is future work, not a regression:**
+
+### [ ] MakerKit-owned deploy entrypoint — `makerkit deploy` over a declarative `makerkit.config.ts` (decision 9)
+The standard deploy path: the user writes no stack file; the CLI reads `{ app, target, name, bundle(s) }` and calls `lower()` internally. `lower()`/`lowering()` stay as the mechanism + mixed-stack escape hatch. Documented as an extension point; examples use an interim `alchemy.run.ts` until it lands.
+### [ ] Environment-edge **propagation** (provenance-based) (decision 10 / Finding 2)
+The edge's ordering job is proven (fresh-deploy race dead); propagating a wire whose value *changes* after deploy is not yet wired — the env-var resource exposes only `{id,key}`, so a changed value doesn't diff the consumer. Fix is provenance-based (consumer depends on the **source node's** version/identity — never the value or a hash of it). Narrow in practice (promoted endpoints are stable); docs are scoped to ordering only.
+### [ ] Platform-sourced **secrets** wired to DI (decision 10)
+MakerKit *wires* a secret from the platform's secret store (user-set, or via a third-party manager like **Doppler**) into the consumer's DI — it never sources or persists it. R4 has no secrets (all wires); this is the mechanism for when an app needs one.
+### [ ] Provisioned credentials → transient platform secret (decision 10 hardening)
+A MakerKit-provisioned credential (the DB URL) should be written to the platform secret store transiently at provisioning and wired by reference, so its value never lands in (unencrypted, local) Alchemy state — where it does today.
+### [ ] Deterministic Next-standalone artifact / idempotent redeploy
+The storefront artifact bundles the standalone `node_modules` (self-contained fix); that copy is not yet byte-deterministic, so a Next-hex redeploy may re-version even when unchanged. The single-service (tsdown) artifact is deterministic; the Next case needs a stable copy (fixed mtimes/ordering) for a true no-op redeploy.
 ### [ ] Typed HTTP interface, enforced at Load
 ### [ ] Hex wiring (`hex`, `provision`, ownership, forwarding)
 ### [ ] Replace a dependency by interface (DIP swap)
@@ -151,6 +168,18 @@ deliverable (prisma-cloud pack + Management API surface).
 - **Client-factory typing** — tie the app factory's return type to the declared
   `postgres<C>()` phantom so a mismatch fails at compile (extension point in
   `core-model.md`).
+- **Filed platform gotchas (upstream, tracked in Linear "Compute Gotchas"):**
+  [PRO-212](https://linear.app/prisma-company/issue/PRO-212) (Connection response
+  buries the DSN under `endpoints.*`; `url` is a self-link),
+  [PRO-213](https://linear.app/prisma-company/issue/PRO-213) (Compute's bun runtime
+  auto-install masks incomplete artifacts + cross-platform native binaries as
+  ENOSPC), and the still-biting [FT-5219](https://linear.app/prisma-company/issue/FT-5219)
+  (Bun.SQL idle-connection close on scale-to-zero — auth 503s on idle, recovers on
+  wake). All have MakerKit-side workarounds in place; the asks are platform fixes.
+- **e2e-deploy CI reconciliation** — the workflow reads makerkit-hello's stack
+  `outputs.url`; confirm the R4 single-service `lower()` still surfaces it (or
+  update the example/CI). Validated by deploying makerkit-hello (also the
+  idempotence check).
 
 ## Close-out (required)
 
