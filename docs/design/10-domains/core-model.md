@@ -51,8 +51,12 @@ Who imports what, end to end:
   connection definitions (which hold the driver import);
 - the **deploy script** (`alchemy.run.ts`) imports the service module +
   `@makerkit/core/deploy` + `@makerkit/prisma-cloud/target` (heavy — deploy-time only);
-- the **runtime bundle entry** (`main.ts`, app-owned) imports the service module +
-  `@makerkit/core/runtime` — nothing else.
+- the **runtime bundle entry** (`main.ts`, app-owned) re-exports the service
+  module's node — nothing else, and nothing runs on import. The boot call lives
+  in the **bootstrap** the deploy path generates (§ Lowering): a zero-dependency
+  file with `runHost` inlined from core's prebuilt single-file `/runtime` build
+  (possible precisely because that entry imports nothing), which imports the
+  bundle and calls it with the service's deployment identity.
 
 The runtime bundle never contains Alchemy. One accepted consequence: because
 connections close over the app's client factory, the deploy script *loads* (never
@@ -176,6 +180,10 @@ interface ConfigAdapter {
 }
 interface ConfigRequest {
   readonly id: string                          // core-assigned; keys the returned value map
+  readonly service: string                     // deployment identity: the node's address in the
+                                               // app graph ("" for an unmounted local run). The
+                                               // adapter's key namespace inside the application's
+                                               // shared project environment.
   readonly owner: "service" | { readonly input: string }
   readonly name: string
   readonly param: ConfigParam
@@ -355,12 +363,32 @@ interface ServiceLowering {
   // the SAME name mapping the pack's ConfigAdapter reads with at boot.
   writeConfig(provisioned: LoweredNode, values: readonly ResolvedParam[]):
     Effect.Effect<void, unknown, unknown>
-  // deploy: ship a specific build into the provisioned thing and run it
+  // package: assemble the deployable artifact from the app-built bundle plus
+  // the core-generated bootstrap. The envelope is target vocabulary and the
+  // pack's business (Compute: bootstrap.mjs + compute.manifest.json + tar.gz).
+  // MUST be byte-deterministic (fixed tar mtimes/ordering): identical inputs
+  // yield an identical hash, so an unchanged service noops on redeploy.
+  package(ctx: LowerContext, input: PackageInput):
+    Effect.Effect<Artifact, unknown, unknown>
+  // deploy: ship the packaged artifact into the provisioned thing and run it
   // (version → upload → start → promote). Returns the trustworthy URL.
-  deploy(ctx: LowerContext, provisioned: LoweredNode):
+  deploy(ctx: LowerContext, provisioned: LoweredNode, artifact: Artifact):
     Effect.Effect<LoweredNode, unknown, unknown>
 }
 interface ResolvedParam { readonly request: ConfigRequest; readonly value: string }
+
+// Core generates the bootstrap source; the pack only places it. The bootstrap
+// is the ONLY runnable in the artifact and has zero imports beyond the bundle
+// entry: core's prebuilt /runtime build is inlined above two generated lines —
+//   import service from "./main.js"
+//   await runHost(service, { id: "<address>" })
+// The entrypoint takes its deployment identity as a parameter; deploy is the
+// caller. (A target with different constraints may lay dependencies on disk
+// inside its own envelope instead — its implementation detail.)
+interface PackageInput {
+  readonly bundle: Bundle          // app-built, from LowerOptions
+  readonly bootstrap: string       // complete generated source, identity baked in
+}
 
 // One node's realization. Runs inside the Alchemy stack effect; yields the
 // pack's Alchemy resources. Core never looks inside.
@@ -381,15 +409,18 @@ interface LoweredNode { readonly outputs: Readonly<Record<string, unknown>> }
 
 interface LowerOptions {
   readonly name: string                                  // stack name (+ root id for a service root)
-  // Artifacts are app-built (MakerKit does not bundle). Service root: one
-  // artifact. Hex root: one per provisioned service, keyed by provision id.
-  readonly artifact?: Artifact
-  readonly artifacts?: Record<string, Artifact>
+  // Bundles are app-built (MakerKit does not bundle app code). A bundle's entry
+  // is a pure module default-exporting the ServiceNode — nothing runs on import.
+  // Service root: one bundle. Hex root: one per provisioned service, keyed by
+  // provision id. Packaging bundle → artifact is the pack's job (see package).
+  readonly bundle?: Bundle
+  readonly bundles?: Record<string, Bundle>
   readonly stage?: string
   readonly state?: AlchemyStateLayer                     // default: localState(); the
                                                          // hosted-state store slots in here
 }
-interface Artifact { readonly path: string; readonly sha256: string }
+interface Bundle { readonly dir: string; readonly entry?: string }   // entry default: main.js|main.mjs
+interface Artifact { readonly path: string; readonly sha256: string } // package()'s product
 
 // Load → route each node through target.lower[node.type] → an Alchemy Stack
 // (the default export the alchemy CLI consumes). Unknown type → LowerError
@@ -435,7 +466,10 @@ connection edges (the DAG Load validated); for each service:
 4. `writeConfig` with all resolved params — every value the service boots with,
    database URLs included, lands as the service's own named variables. Never
    the platform default.
-5. `deploy` — the first version snapshots an environment that is already
+5. `package` — core generates the bootstrap (identity baked in, § below) and
+   hands it with the app-built bundle to the pack, which assembles the
+   deployable artifact.
+6. `deploy` — the first version snapshots an environment that is already
    complete. **How the ordering is actually enforced:** our walk only
 *assembles* Alchemy resource descriptions — Alchemy executes them in dependency
 order and runs unordered resources concurrently; declaration order is never
@@ -451,14 +485,42 @@ The same edge also propagates change: a producer's new URL diffs the consumer's
 PDP's snapshot-per-version semantics permit. This is what makes the fresh-deploy
 config race (PRO-211) structurally impossible on every target.
 
+**Deployment identity — address, bootstrap, and why.** A node's identity is its
+**address**: the path of provision ids from the app root, assigned by Load from
+graph position — never user-invented, so registry hexes with common internal
+names (`db`, `service`) cannot collide; the address qualifies them. Identity
+cannot travel through the environment: every App in a Project boots a
+byte-identical env (ConfigVariables are project+branch-scoped and snapshotted at
+version create — see the [PDP data model](../05-prisma-cloud/pdp-data-model.md)),
+so any "who am I" variable is one shared key, last write wins. The only
+per-service channel is the artifact itself. Hence the bootstrap: the artifact's
+entrypoint takes identity as a parameter, and deploy is the caller. The Compute
+artifact the pack assembles:
+
+```
+main.js                ← app-built bundle; default-exports the Service, runs nothing
+bootstrap.mjs          ← generated; zero-dep (runHost inlined); identity baked in
+compute.manifest.json  ← pack-written envelope; entrypoint = bootstrap.mjs
+```
+
+Every byte is deterministic — bundle from the app's build, runtime from core's
+version, bootstrap from the address — so unchanged services hash identically and
+noop. Because the same Load walk feeds both `writeConfig`'s env keys and the
+bootstrap's identity, the config writer and the boot-time reader cannot drift.
+An address changes only when the graph position changes (e.g. a rename), which
+correctly cascades: new keys, new bootstrap, new version.
+
 Notes:
 
 - **Target-specific identity** (workspace id, region) never appears in
   `LowerOptions` — it is captured by the pack's target constructor
   (`prismaCloud({ workspaceId })`). Core's options are target-neutral.
-- **The artifact is an input, not a product.** The app bundles (tsdown, Bun.build,
-  whatever) and passes path + sha256. Core has no build step; the hash in the
-  options is what makes a rebuild register as a change.
+- **The bundle is the input; the artifact is the pack's product.** The app
+  bundles (tsdown, Bun.build, whatever) and passes a directory; the pack's
+  `package` wraps it in the target envelope and its hash is what makes a
+  rebuild register as a change. Core still has no build step — generating a
+  three-line bootstrap and copying its own prebuilt runtime is assembly, not
+  bundling; app code is never compiled by MakerKit.
 
 ## Runtime: the config pipeline (`@makerkit/core/runtime` + `configOf` in core)
 
@@ -499,6 +561,9 @@ function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @make
 // (Load-before-Hydrate applied to config) → per input:
 // await connection.hydrate(typedValues) → root.run(deps, serviceParamValues).
 function runHost(root: ServiceNode, opts?: {
+  id?: string                                  // deployment identity (the node's address), passed by the
+                                               // generated bootstrap in a deployed artifact; omitted in
+                                               // local runs/tests. Threaded into every ConfigRequest.service.
   config?: ConfigAdapter                       // swap the platform adapter: in-memory tests, inspection harnesses
   overrides?: Record<string, string | number>  // per-param overrides, applied before the adapter is
                                                // consulted; keyed "input.param" (dotted) for input params,
@@ -589,8 +654,10 @@ export const compute = <D extends Deps>(
 // physical mapping lives HERE, private to the pack, and is SHARED with the
 // deploy path's writeConfig (one module, both directions). Keys are unique per
 // service within the application's shared project namespace: the mapping
-// prefixes them with the service's identity, which writeConfig records as a
-// reserved MakerKit variable so the boot side can reconstruct the same names.
+// prefixes them with the service's deployment identity (request.service — the
+// address the bootstrap passed to runHost; the segments after the app root,
+// which is project-constant). writeConfig computes keys through the same
+// module from the same Load walk, so writer and reader cannot drift.
 // The platform's DATABASE_URL is never among them — it is forbidden and
 // poisoned at project provision (see 05-prisma-cloud/alchemy-lowering.md).
 const computeAdapter: ConfigAdapter = {
@@ -687,15 +754,25 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
           }
         }),
 
+      // Assemble the deployable artifact: the app-built bundle beside the
+      // core-generated zero-dep bootstrap, wrapped in the Compute envelope
+      // (compute.manifest.json entrypoint = bootstrap.mjs; deterministic
+      // tar.gz — fixed mtimes/ordering so unchanged inputs hash identically).
+      package: ({ id }, { bundle, bootstrap }) =>
+        Effect.gen(function* () {
+          // write bootstrap.mjs + manifest beside bundle.dir, tar, sha256
+          return { path: `…/${id}.tar.gz`, sha256: "…" }
+        }),
+
       // A specific BUILD into the place: version → upload → start → promote.
       // deployedUrl is read post-promote — the create-time domain is a
       // placeholder (PRO-200).
-      deploy: ({ id, opts }, provisioned) =>
+      deploy: ({ id }, provisioned, artifact) =>
         Effect.gen(function* () {
           const deploy = yield* Prisma.Deployment(`${id}-deploy`, {
             computeServiceId: provisioned.outputs.serviceId,
-            artifactPath: artifactFor(opts, id).path,
-            artifactHash: artifactFor(opts, id).sha256,
+            artifactPath: artifact.path,
+            artifactHash: artifact.sha256,
             port: 3000,
           })
           return { outputs: { url: deploy.deployedUrl, projectId: provisioned.outputs.projectId } }
@@ -730,11 +807,10 @@ export default compute({ db }, ({ db }, { port }) =>
   Bun.serve({ port, hostname: "0.0.0.0",
     fetch: async () => Response.json(await db`select 1 as ok`) }))
 
-// src/main.ts — runtime bundle entry (app-owned); the whole thing
-import service from "./service"
-import { runHost } from "@makerkit/core/runtime"
-
-runHost(service)
+// src/main.ts — runtime bundle entry (app-owned): a pure re-export; nothing runs.
+// The boot call lives in the deploy-generated bootstrap, which imports this
+// bundle and calls the inlined runHost with the service's deployment identity.
+export { default } from "./service"
 
 // alchemy.run.ts — deploy (heavy imports; never bundled)
 import service from "./src/service"
@@ -742,12 +818,13 @@ import { lower } from "@makerkit/core/deploy"
 import { prismaCloud } from "@makerkit/prisma-cloud/target"
 export default lower(service, prismaCloud({ workspaceId: requiredEnv("PRISMA_WORKSPACE_ID") }), {
   name: "hello",
-  artifact: { path: "dist/hello.tar.gz", sha256: sha256File("dist/hello.tar.gz") },
+  bundle: { dir: "dist/bundle" },   // app-built; the pack packages it at deploy
 })
 ```
 
-The app's build script bundles `src/main.ts`, writes `compute.manifest.json`
-pointing at the bundle, and tars — ~10 lines the app owns, not MakerKit.
+The app's build script bundles `src/main.ts` — that is the whole build. The
+envelope (bootstrap + `compute.manifest.json` + tar) is the pack's `package`
+step at deploy; the app never writes target vocabulary.
 
 Note where Bun appears: only in these app files (`Bun.serve` in the handler, `new
 SQL` in `connections.ts`) — the app's choice, since it deploys to a platform whose
@@ -784,7 +861,10 @@ export default hex("storefront-auth", (h) => {
 // alchemy.run.ts — the whole deploy script
 export default lower(appHex, prismaCloud({ workspaceId }), {
   name: "StorefrontAuth",
-  artifacts: { auth: authArtifact, storefront: storefrontArtifact },
+  bundles: {
+    auth: { dir: "hexes/auth/dist/bundle" },
+    storefront: { dir: "hexes/storefront/dist/bundle" },
+  },
 })
 ```
 
@@ -803,7 +883,9 @@ exactly as it hydrates `db`; the handler cannot tell the two mechanisms apart.
    `alchemy`/`effect`/`prisma-alchemy`/`new SQL(` tokens — the existing import-split
    guard test, extended to the pack.
 3. **Importing runs nothing**: constructing nodes is pure; only `runHost`/the alchemy
-   CLI execute anything.
+   CLI execute anything. This now reaches the artifact: the app bundle is a pure
+   module (`main.ts` re-exports the Service), and the deploy-generated bootstrap
+   is the only runnable a deployed artifact contains.
 4. **Core and user code contain zero environment reads.** The platform adapter is
    the single sanctioned reader for its platform — `process.env` appears exactly
    once per pack, inside its `ConfigAdapter`; an in-memory test adapter reads

@@ -63,3 +63,22 @@ guard, side-effect-free-import test) carry forward into the rebuild.
    rationalized). Target SPI gains application.provision (once, before services);
    postgres resource lowering creates a real Database + Connection. Recorded in
    05-prisma-cloud/* and core-model.md.
+
+8. **Deployment identity = graph address, injected via a deploy-generated
+   bootstrap** (operator discussion, R4). The R4 spec's reserved-identity-variable
+   mechanism was proven impossible from PDP source (every App in a Project boots a
+   byte-identical env — a shared "who am I" key is last-write-wins), and
+   user-supplied ids were rejected (registry hexes collide). A node's identity is
+   its **address** (path of provision ids from the app root, assigned by Load).
+   It reaches the VM through the only per-service channel — the artifact: `main.ts`
+   becomes a pure re-export of the Service; core generates a zero-dependency
+   bootstrap (its prebuilt single-file `/runtime` inlined) that imports the bundle
+   and calls `runHost(service, { id: address })`; the pack's new `package` SPI
+   (core is the actor) wraps bundle + bootstrap in the target envelope
+   (compute.manifest.json + deterministic tar). Amends decision 2: the app owns
+   source → bundle only; the artifact envelope was target vocabulary and moves to
+   the pack. `LowerOptions` carries bundles, not tars. Alternatives rejected on the
+   way: push mechanisms (codegen/define/virtual module — makerkit feeding the app
+   build), and bundle-imports-the-hex pull (forced an interface/implementation
+   file split and an inverted grammar the operator judged unintuitive; services
+   stay one-file and self-describing).
