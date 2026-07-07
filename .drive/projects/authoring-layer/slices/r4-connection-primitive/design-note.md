@@ -69,7 +69,7 @@ it to env strings at deploy and reconstructs the identical typed Config at boot.
 The pack owns *both ends* of the deploy→boot channel — serialize/deserialize and
 printer/`.run` — so it can pass whatever it needs through, and core never sees a
 platform key or a wire format. serialize and deserialize share one internal
-pack codec module (env-free), so the writer and reader cannot drift — the same
+pack serializer module (env-free), so the writer and reader cannot drift — the same
 guarantee the old shared `envKey` module gave, now over a typed Config.
 
 ## Interfaces (the shapes the build targets; core-model.md is authoritative)
@@ -116,7 +116,7 @@ interface ServiceLowering {
 // The pack's runnable node — compute() returns THIS, not a bare core ServiceNode.
 class ComputeServiceNode extends ServiceNode {
   async run(address: string, opts?): Promise<unknown> {
-    const config = deserialize(configOf(this), readEnv(), address)  // pack codec; the one env read
+    const config = deserialize(configOf(this), readEnv(), address)  // pack serializer; the one env read
     return this.invoke(await hydrate(this, config), config.service)
   }
 }

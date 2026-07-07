@@ -68,14 +68,14 @@ The full design is [`design-note.md`](design-note.md); contract is core-model.md
   in `lowering()`/`lower()`. Address = node's graph position (decision 8).
 - **pack authoring**: `http()` + default fetch client (app-factory override);
   `compute()` returns the **runnable subclass** — `run(address)` = deserialize
-  (the pack's ONE env read, via the shared codec) → core `hydrate` → `invoke`;
-  the config codec (`configKey`/serialize-keys/deserialize) is env-free and
+  (the pack's ONE env read, via the shared serializer) → core `hydrate` → `invoke`;
+  the config serializer (`configKey`/serialize-keys/deserialize) is env-free and
   shared with `/target`.
 - **pack `/target`**: `prismaCloud()` reshaped per the worked instance —
   `application.provision` (Project + **poison `DATABASE_URL`/`DATABASE_URL_POOLED`**,
   empty-string value with `"-"` fallback), `resources.postgres` → real `Database`
   + `Connection`, `services.compute` → provision (App) / **serialize** (env var
-  per Config leaf via the shared codec, keyed by address; returns the records) /
+  per Config leaf via the shared serializer, keyed by address; returns the records) /
   **package** (print bootstrap `main.run(address)` + `compute.manifest.json` →
   deterministic tar) / deploy (Deployment `environment` prop = serialize's records).
 - **prisma-alchemy**: `Deployment` gains the `environment` prop (env-var record
@@ -110,7 +110,7 @@ deterministic and documented for exactly this interim).
   (every App in a Project boots a byte-identical env — proven from PDP source;
   a reserved identity variable is one shared key, last write wins). It rides
   the artifact: the pack-printed bootstrap calls `main.run(address)`, and the
-  pack's codec derives keys from that address on both sides (decision 8).
+  pack's serializer derives keys from that address on both sides (decision 8).
   `package` must be byte-deterministic (fixed tar mtimes/ordering) or every
   redeploy churns a new version.
 - The migration destroy must use the *existing* code + local state before the

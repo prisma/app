@@ -87,7 +87,7 @@ guard, side-effect-free-import test) carry forward into the rebuild.
    - **Config: core=structure, pack=encoding.** Core owns the shape (`configOf`),
      builds a fully-typed `Config` from the graph at deploy, and hydrates at boot;
      the pack **serializes** that typed Config to env strings (deploy) and
-     **deserializes** it back (boot) through one codec — so the pack owns validation
+     **deserializes** it back (boot) through one serializer — so the pack owns validation
      (it reverses its own encoding) and core never touches a string or a platform
      key. Replaces R3's `ConfigAdapter`(get→strings)+core-coercion; visibility/
      interception survive via `configOf` + the typed-Config boundary.

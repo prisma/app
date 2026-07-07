@@ -75,7 +75,7 @@ and types, no platform keys in the graph, enumerable without booting), building
 the typed `Config` from the graph at deploy, and `hydrate` (typed Config →
 clients → handler). **The pack owns encoding:** it *serializes* that typed Config
 into the platform environment at deploy and *deserializes* the identical Config
-back at boot, through one codec, so writer and reader cannot drift. The boot loop
+back at boot, through one serializer, so writer and reader cannot drift. The boot loop
 is the node's own `run` — deserialize, then core's hydrate, then the handler.
 
 Splitting this way keeps config **visible and interceptable** without core

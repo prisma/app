@@ -110,7 +110,7 @@ the VM, but they **terminate at hydration** — user code never reads them.
 
 At boot, the node's **`run`** loop executes: core enumerates the config shape
 (semantic names + types — target-independent), the pack **deserializes** the
-platform environment into a typed `Config` by its own codec (privately knowing
+platform environment into a typed `Config` by its own serializer (privately knowing
 that a `url` param lives at, say, `AUTH_DB_URL`), and core's **`hydrate`** hands
 each connection its typed values so it can build its client — with the driver
 factory the app supplied at authoring time, since MakerKit ships none (the

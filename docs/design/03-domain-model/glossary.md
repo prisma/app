@@ -278,7 +278,7 @@ The boot method the platform runs, carried on the pack's runnable service node
 structure, the pack owns encoding.** Core enumerates the config shape (semantic
 names + type tags — no platform keys in the graph) via `configOf`; the pack's
 `run` **deserializes** the platform environment into a typed `Config` by its own
-codec (keyed from the address), the single sanctioned environment read; then
+serializer (keyed from the address), the single sanctioned environment read; then
 core's `hydrate` turns each Input's typed values into a client — with the
 app-supplied driver factory — and calls the handler. Config validation is the
 pack reversing its own serialization (present, right type), failing loudly. A

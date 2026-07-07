@@ -107,7 +107,7 @@ The paths map onto the entry taxonomy: provision + deploy are reached through
 `@makerkit/core/deploy` (one import moment, several SPI phases, different cadence);
 run is the node's own `run`, inlined into the app bundle — a separate process. The
 deploy path's `serialize` and the run path's `deserialize` use the pack's **one
-shared codec**, so writer and reader cannot drift.
+shared serializer**, so writer and reader cannot drift.
 
 ## Core model types (`@makerkit/core`)
 
@@ -141,7 +141,7 @@ interface NodeBase {
 //     builds from the graph at deploy and consumes (hydrate) at boot.
 //   · PACK — encoding: serialize the typed Config into env strings at deploy,
 //     deserialize the identical typed Config back at boot. The pack owns both
-//     ends through one codec, so writer and reader cannot drift; core never
+//     ends through one serializer, so writer and reader cannot drift; core never
 //     sees a platform key or a string.
 
 // Runtime-validatable param types. Curated; extended consciously.
@@ -354,7 +354,7 @@ interface ServiceLowering {
   // serialize: encode the typed Config core built into the service's runtime
   // environment (on Prisma Cloud: EnvironmentVariables on the project). The pack
   // owns the encoding; its boot-side deserialize (run) reverses it through the
-  // same codec, so writer and reader cannot drift. Leaf values are provisioning
+  // same serializer, so writer and reader cannot drift. Leaf values are provisioning
   // refs → the env writes depend on the resources/producer (the ordering edges).
   // Returns the env-var records so `deploy` can reference them (the environment
   // edge — see § sequencing and alchemy-lowering.md).
@@ -635,10 +635,10 @@ export const compute = <D extends Deps>(
   }) as RunnableServiceNode<D, typeof computeParams>
 }
 
-// The pack's config codec — the semantic↔physical mapping, private to the pack,
+// The pack's config serializer — the semantic↔physical mapping, private to the pack,
 // SHARED by run() (boot) and the /target serialize (deploy) so writer and reader
 // cannot drift. Keys are unique per service within the shared project namespace:
-// the codec prefixes them with the deployment address (its segments after the
+// the serializer prefixes them with the deployment address (its segments after the
 // app root, which is project-constant), so auth's db.url ↔ AUTH_DB_URL. The
 // platform's DATABASE_URL is never among them — it is forbidden and poisoned at
 // project provision (see 05-prisma-cloud/alchemy-lowering.md).
@@ -716,8 +716,8 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
         }),
 
       // Encode the typed Config into the runtime environment — one env var per
-      // leaf, keyed by the SAME codec run() reads with at boot (config.ts,
-      // env-free, both directions). Values are the provisioning refs core built
+      // leaf, keyed by the SAME serializer run() reads with at boot (the pack's
+      // serializer module, env-free, both directions). Values are the provisioning refs core built
       // the Config from, so each env var depends on its resource/producer — the
       // ordering edges. class production; the platform default is never written.
       serialize: ({ address, node }, provisioned, config) =>
@@ -879,7 +879,7 @@ into a client exactly as it does `db`; the handler cannot tell the two apart.
    the only runnable a deployed artifact contains.
 4. **Core and user code contain zero environment reads.** The pack's `run`
    (deserialize) is the single sanctioned reader for its platform — `process.env`
-   appears exactly once per pack, inside its config codec; a local test injects
+   appears exactly once per pack, inside its config serializer; a local test injects
    fakes via `invoke` and reads nothing. Core's shape, Config-building, and
    `hydrate` never touch an environment.
 5. **No runtime coupling**: neither core nor a target pack imports Bun or Node APIs
@@ -911,7 +911,7 @@ into a client exactly as it does `db`; the handler cannot tell the two apart.
   stringly-typed by design at deploy (it routes); the runtime side has no registry
   at all — behavior rides the nodes.
 - **Config introspection** — `configOf` already enumerates the shape without
-  booting; a "which physical key is this param" projection is a pack codec
+  booting; a "which physical key is this param" projection is a pack serializer
   addition (it owns the encoding), and a running host can report its typed
   `Config` with secrets redacted by the `secret` flag.
 - **`ParamType` growth** — the tag set is `"string" | "number"`, curated; new tags
