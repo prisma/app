@@ -271,20 +271,20 @@ Resource** (`provision(postgres())`) or instantiates and wires an owned node
 Service only *requires*. Forwarding is just passing a Hex's Inputs down and
 returning owned nodes' Outputs up.
 
-### runHost — the boot entrypoint
+### run — the boot loop
 
-The boot [entrypoint](#entrypoint) the platform runs, over the code the app bundled
-(MakerKit does not bundle). **Core owns config management**: it enumerates the
-params the service and its Inputs declare (semantic names + type tags — no
-platform keys in the graph), requests raw values from the pack's **ConfigAdapter**
-(whose semantic↔physical mapping, e.g. `url` ↔ `DATABASE_URL`, is its private
-business), validates them against the declared types before hydrating, applies
-overrides (the interception point for tests and introspection), then lets each
-connection hydrate its client from the typed values — with the app-supplied driver
-factory. A framework server (Next.js) is
-wired in as an HTTP Output, its deps reached via a DI accessor (`use(…)`), never the
-environment. Env vars carry config into the VM but **terminate at hydration** — user
-code is dependency-injection only.
+The boot method the platform runs, carried on the pack's runnable service node
+(`main.run(address)`, called by the deploy-printed bootstrap). **Core owns
+structure, the pack owns encoding.** Core enumerates the config shape (semantic
+names + type tags — no platform keys in the graph) via `configOf`; the pack's
+`run` **deserializes** the platform environment into a typed `Config` by its own
+codec (keyed from the address), the single sanctioned environment read; then
+core's `hydrate` turns each Input's typed values into a client — with the
+app-supplied driver factory — and calls the handler. Config validation is the
+pack reversing its own serialization (present, right type), failing loudly. A
+framework server (Next.js) is wired in as an HTTP Output, its deps reached via a
+DI accessor (`use(…)`), never the environment. Env vars carry config into the VM
+but **terminate at hydration** — user code is dependency-injection only.
 
 ### Load / Hydrate
 

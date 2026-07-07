@@ -12,14 +12,17 @@ roadmap (typed interfaces, hexes, contracts, …) follows as later projects.
 
 ## Current position
 
-**All three build slices merged** (R1 → [#6](https://github.com/prisma/makerkit/pull/6),
+**R1–R3 merged** (R1 → [#6](https://github.com/prisma/makerkit/pull/6),
 R2 → [#7](https://github.com/prisma/makerkit/pull/7), R3 →
-[#8](https://github.com/prisma/makerkit/pull/8)). The storefront-auth demo is live
-on the authoring layer through the ConfigAdapter pipeline. CI setup is running in a
-separate session (check + e2e over storefront-auth; committed-state-branch stopgap).
-Remaining: project close-out (verify spec DoD, sync docs, delete this project dir),
-then the Connection-primitive project (first capability-roadmap entry — its target
-picture is the hand-wired AUTH_URL).
+[#8](https://github.com/prisma/makerkit/pull/8)); storefront-auth demo live.
+**R4 (Connection primitive) in progress** on `claude/plan-state-store`: dispatch 1
+(core ConnectionEnd/hex/Load) landed (`0e736b7`); the deploy-path dispatch is
+**paused** pending nothing — the design settled through **decision 8** (identity =
+graph address via a printed bootstrap; config ownership split core=structure /
+pack=encoding with a serialize/deserialize round-trip; the node carries its own
+`run`). Docs rewritten to that contract (core-model.md, 03-domain-model/*,
+05-prisma-cloud/*, slice design-note.md). Build was paused on a Fable-5 rate limit;
+resume = dispatch R4-2 on Sonnet.
 
 ## Legend
 
@@ -106,7 +109,7 @@ decided at slice spec time.
 
 ## Capability roadmap (later projects, unchanged through-line)
 
-### [~] Service → service dependency (HTTP, no interface) — the Connection primitive → **slice R4, in progress** (`slices/r4-connection-primitive/spec.md`); includes minimal hex(), application-level Project placement, and the DATABASE_URL poison
+### [~] Service → service dependency (HTTP, no interface) — the Connection primitive → **slice R4, in progress** (`slices/r4-connection-primitive/spec.md`); includes minimal hex(), application-level Project placement, DATABASE_URL poison, and the decision-8 reshape (bootstrap identity, node-carried `run`, core=structure/pack=encoding config round-trip)
 ### [ ] Typed HTTP interface, enforced at Load
 ### [ ] Hex wiring (`hex`, `provision`, ownership, forwarding)
 ### [ ] Replace a dependency by interface (DIP swap)

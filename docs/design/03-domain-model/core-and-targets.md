@@ -67,37 +67,37 @@ That is the whole of lowering. There is no per-target branch and no provisioning
 logic in core; the router only ever follows references it was handed. Swap
 `@makerkit/prisma-cloud` for another target pack and the router is unchanged.
 
-## Runtime: core owns the config pipeline
+## Runtime: core owns structure, the pack owns encoding
 
-Inside the deployed bundle, boot is a config pipeline that **core owns end to end**.
-The pieces divide by knowledge, not by plumbing: *declarations* (each connection's
-params, the service's own) say what is needed — semantic names and types, with no
-platform key names anywhere in the graph; the pack's **ConfigAdapter** (attached to
-the service node) answers get and set for its platform, and the semantic↔physical
-mapping — `url` ↔ `DATABASE_URL` — is its private business; *core* enumerates the
-declared surface, requests values from the adapter, validates them against the
-declared types before anything hydrates, applies any test/production overrides,
-hands each connection its typed values, and calls the handler.
+Inside the deployed bundle, boot divides by knowledge. **Core owns structure:**
+the config *shape* (each connection's params, the service's own — semantic names
+and types, no platform keys in the graph, enumerable without booting), building
+the typed `Config` from the graph at deploy, and `hydrate` (typed Config →
+clients → handler). **The pack owns encoding:** it *serializes* that typed Config
+into the platform environment at deploy and *deserializes* the identical Config
+back at boot, through one codec, so writer and reader cannot drift. The boot loop
+is the node's own `run` — deserialize, then core's hydrate, then the handler.
 
-Owning the pipeline is what makes config **visible and interceptable**: the full
-config surface of a service is enumerable without booting it (keys, secret-ness,
-defaults — the introspection artifact), tests override individual fields through
-core instead of faking environments, and a running host can report its resolved
-config with secrets redacted by construction. Environment variables still carry the
-values in, but exactly one line of core reads them; user code and packs never do.
+Splitting this way keeps config **visible and interceptable** without core
+knowing any platform key: the shape is enumerable via `configOf`, the typed
+`Config` is the interception point (a harness inspects it; secrets redact by the
+`secret` flag), and a local test injects fakes through `invoke` with no
+environment at all. Environment variables still carry the values in, but exactly
+one line of the *pack* reads them; core and user code never do.
 
-Because everything a node needs at boot rides on the node itself, a target pack has
-no runtime entry at all — just authoring (lean) and provisioning (heavy, deploy
+Because the boot loop rides on the node itself, a target pack has no runtime
+entry — just authoring (lean, carries `run`) and provisioning (heavy, deploy
 only). No pack entry imports a runtime API or driver.
 
-## Bundling is the app's
+## Bundling is the app's; the envelope is the pack's
 
-MakerKit does not bundle. Turning the service module into a runnable bundle is the
-app's job, with the app's tool (tsdown, esbuild, whatever). MakerKit's responsibility
-ends at the code *inside* the bundle: the service data and the entry that calls
-`runHost` over it. The platform's artifact envelope — for Compute, a tar with
-`compute.manifest.json` — is likewise assembled by the app's build script. Core ships
-no build step.
+MakerKit does not bundle app code. Turning the service module into a runnable
+bundle is the app's job, with the app's tool (tsdown, esbuild, whatever) — and
+the entry is a pure re-export of the Service node, nothing runs on import. The
+platform artifact *envelope* is the pack's: at deploy the pack prints a two-line
+bootstrap (`main.run(address)`) and assembles the target's package — for Compute,
+a tar with `compute.manifest.json`. Core ships no build step; printing a
+bootstrap and assembling a tar is deploy-time assembly, not bundling.
 
 ## Why this is the correct boundary
 

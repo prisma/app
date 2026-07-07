@@ -64,21 +64,39 @@ guard, side-effect-free-import test) carry forward into the rebuild.
    postgres resource lowering creates a real Database + Connection. Recorded in
    05-prisma-cloud/* and core-model.md.
 
-8. **Deployment identity = graph address, injected via a deploy-generated
-   bootstrap** (operator discussion, R4). The R4 spec's reserved-identity-variable
-   mechanism was proven impossible from PDP source (every App in a Project boots a
-   byte-identical env — a shared "who am I" key is last-write-wins), and
-   user-supplied ids were rejected (registry hexes collide). A node's identity is
-   its **address** (path of provision ids from the app root, assigned by Load).
-   It reaches the VM through the only per-service channel — the artifact: `main.ts`
-   becomes a pure re-export of the Service; core generates a zero-dependency
-   bootstrap (its prebuilt single-file `/runtime` inlined) that imports the bundle
-   and calls `runHost(service, { id: address })`; the pack's new `package` SPI
-   (core is the actor) wraps bundle + bootstrap in the target envelope
-   (compute.manifest.json + deterministic tar). Amends decision 2: the app owns
-   source → bundle only; the artifact envelope was target vocabulary and moves to
-   the pack. `LowerOptions` carries bundles, not tars. Alternatives rejected on the
-   way: push mechanisms (codegen/define/virtual module — makerkit feeding the app
-   build), and bundle-imports-the-hex pull (forced an interface/implementation
-   file split and an inverted grammar the operator judged unintuitive; services
-   stay one-file and self-describing).
+8. **Deployment identity = graph address (via a printed bootstrap); config
+   ownership splits core=structure / pack=encoding; the node carries its own
+   runner** (operator discussion, R4). Exhaustively recorded in
+   [`slices/r4-connection-primitive/design-note.md`](slices/r4-connection-primitive/design-note.md);
+   contract in core-model.md. In brief:
+
+   - **Identity = address.** The R4 spec's reserved-identity-variable mechanism was
+     proven impossible from PDP source (every App in a Project boots a
+     byte-identical env — a shared "who am I" key is last-write-wins); user-supplied
+     ids were rejected (registry hexes collide). A node's identity is its **address**
+     (path of provision ids from the app root, assigned by Load from graph position).
+     It reaches the VM through the only per-service channel — the artifact.
+   - **The node carries its runner.** `main.ts` is a pure re-export of the Service;
+     `compute()` returns a runnable subclass whose `run(address)` is the boot loop,
+     so the app bundle already holds the runtime (ONE copy of core). The pack's
+     `package` SPI (core is the actor) prints a two-line, zero-dep bootstrap
+     (`import main from "./main.js"; main.run(address)`) and wraps the bundle in
+     the target envelope (compute.manifest.json + deterministic tar). `runHost` and
+     the public `/runtime` entry are deleted; `ServiceNode.run(deps,ctx)` renamed
+     `invoke`.
+   - **Config: core=structure, pack=encoding.** Core owns the shape (`configOf`),
+     builds a fully-typed `Config` from the graph at deploy, and hydrates at boot;
+     the pack **serializes** that typed Config to env strings (deploy) and
+     **deserializes** it back (boot) through one codec — so the pack owns validation
+     (it reverses its own encoding) and core never touches a string or a platform
+     key. Replaces R3's `ConfigAdapter`(get→strings)+core-coercion; visibility/
+     interception survive via `configOf` + the typed-Config boundary.
+   - **Amends decision 2:** the app owns source → bundle only; the artifact envelope
+     was target vocabulary and moves to the pack. `LowerOptions` carries bundles,
+     not tars.
+   - **Rejected on the way:** push mechanisms (codegen/define/virtual module —
+     makerkit feeding the app build); bundle-imports-the-hex pull (forced an
+     interface/implementation file split and an inverted grammar the operator judged
+     unintuitive — services stay one-file, self-describing); runHost inlined into the
+     bootstrap (a second copy of core in the artifact — collapsed by moving `run`
+     onto the node).

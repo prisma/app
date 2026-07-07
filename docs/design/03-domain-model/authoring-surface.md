@@ -108,16 +108,16 @@ the VM, but they **terminate at hydration** — user code never reads them.
 
 ## The runtime is a dumb loop; a framework is an Output adapter
 
-At boot, core runs the **config pipeline**: it enumerates every param the service
-and its Inputs declare (semantic names + types — target-independent), requests the
-raw values from the platform's ConfigAdapter (which privately knows that `url`
-lives at `DATABASE_URL` on Compute), validates the lot against the declared types
-before anything hydrates, then hands each connection its typed values so it can
-build its client — with the driver factory the app supplied at authoring time,
-since MakerKit ships none (the [runtime-agnostic
-principle](../01-principles/architectural-principles.md)). Config is thereby
-enumerable without booting, overridable field-by-field in tests, and reportable
-(secrets redacted) in production. When the "handler" is a framework that owns
+At boot, the node's **`run`** loop executes: core enumerates the config shape
+(semantic names + types — target-independent), the pack **deserializes** the
+platform environment into a typed `Config` by its own codec (privately knowing
+that a `url` param lives at, say, `AUTH_DB_URL`), and core's **`hydrate`** hands
+each connection its typed values so it can build its client — with the driver
+factory the app supplied at authoring time, since MakerKit ships none (the
+[runtime-agnostic principle](../01-principles/architectural-principles.md)).
+Validating the values is the pack reversing its own serialization. Config is
+thereby enumerable without booting (`configOf`), injectable with fakes in tests
+(`invoke`), and reportable (secrets redacted) in production. When the "handler" is a framework that owns
 its own server — Next.js — MakerKit does not wrap the handler signature; it wires the
 framework in as the implementation of an HTTP Output, and framework code reaches its
 dependencies through a DI accessor (`use(…)`), never through the environment. This is

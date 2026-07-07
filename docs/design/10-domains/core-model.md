@@ -22,7 +22,7 @@ glossary's Lowering — live in `/deploy`):
 | **authoring** | write the model — node factories, model types | `.` (usually reached through a pack's vocabulary) |
 | **control** | load / interrogate / mutate the model at build time — `Load`, `configOf`, the topology view | also `.` — see below |
 | **deploy** | convert the model to Alchemy for deployment — `lower()`, `lowering()`, `Target` | `/deploy` |
-| **execution** | run it — `runHost`, the config pipeline | `/runtime` |
+| **execution** | run it — the pack node's `run`, core's `hydrate` | rides on the node (pack authoring entry) |
 
 **`/control` is reserved as the settled design direction**: today the control
 surface is two pure, lean functions, too little to justify its own entry — but
@@ -32,18 +32,18 @@ The boundary is decided; only the carve is deferred.
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
-| `@makerkit/core` | node factories (`service`, `resource`), `Load`, `configOf`, model types | nothing |
+| `@makerkit/core` | node factories (`service`, `resource`, `connectionEnd`, `hex`), `Load`, `configOf`, `hydrate`, model types (incl. `Config`) | nothing |
 | `@makerkit/core/deploy` | `lower()`, `Target` types | `alchemy`, `effect` |
-| `@makerkit/core/runtime` | `runHost()` | nothing |
-| `@makerkit/prisma-cloud` | `compute()`, `postgres({ client })` | `@makerkit/core` only |
+| `@makerkit/prisma-cloud` | `compute()` (runnable node — carries `run`), `postgres({ client })`, `http()` | `@makerkit/core` only |
 | `@makerkit/prisma-cloud/target` | `prismaCloud()` | `@makerkit/prisma-alchemy`, `alchemy`, `effect` |
 
-Per the [runtime-agnostic
+There is no `@makerkit/core/runtime` entry: the boot loop rides on the node (the
+pack's runnable subclass carries `run`), so it is inlined into the app bundle
+once by the app's own bundler. Per the [runtime-agnostic
 principle](../01-principles/architectural-principles.md), no entry imports Bun or
 Node APIs — not even type-only. Runtime-specific code (the DB driver, the server
-API) appears only in **app files**. The pack has no runtime entry at all: everything
-a node needs at boot rides on the node itself (see § Runtime), so the pack splits
-into just authoring (lean) and target (heavy, deploy-only).
+API) appears only in **app files**. The pack splits into just authoring (lean —
+carries `run`) and target (heavy, deploy-only).
 
 Who imports what, end to end:
 
@@ -53,10 +53,10 @@ Who imports what, end to end:
   `@makerkit/core/deploy` + `@makerkit/prisma-cloud/target` (heavy — deploy-time only);
 - the **runtime bundle entry** (`main.ts`, app-owned) re-exports the service
   module's node — nothing else, and nothing runs on import. The boot call lives
-  in the **bootstrap** the deploy path generates (§ Lowering): a zero-dependency
-  file with `runHost` inlined from core's prebuilt single-file `/runtime` build
-  (possible precisely because that entry imports nothing), which imports the
-  bundle and calls it with the service's deployment identity.
+  in the **bootstrap** the pack prints at deploy (§ Lowering): a two-line,
+  zero-dependency file that imports only `./main.js` and calls `main.run(address)`.
+  The node carries its own `run`, so the runtime is already in the bundle (one
+  copy of core); the bootstrap adds no code.
 
 The runtime bundle never contains Alchemy. One accepted consequence: because
 connections close over the app's client factory, the deploy script *loads* (never
@@ -82,8 +82,8 @@ graph, never sequences anything, never calls another tool.
 | Path | Where it executes | Core does (the actor) | Pack tools used |
 | --- | --- | --- | --- |
 | **provision** | deploy machine, via Alchemy | provision the application once (Project + poison vars), then walk the DAG realizing each service's host | `Target.application.provision`, then `ServiceLowering.provision` → identity (App) |
-| **deploy** | deploy machine, via Alchemy | ensure every config value the service reads at boot exists *first*, then ship the build | `ServiceLowering.writeConfig` in the seam, then `ServiceLowering.deploy` (version → upload → start → promote) |
-| **run** | inside the bundle, in the VM | Load the graph, resolve → validate → hydrate every binding, call the handler | `ConfigAdapter.get`, each connection's `hydrate` |
+| **deploy** | deploy machine, via Alchemy | build each service's typed `Config`, have the pack encode it *first*, then ship the build | `ServiceLowering.serialize` in the seam, then `package` + `deploy` (version → upload → start → promote) |
+| **run** | inside the bundle, in the VM | provide `hydrate` (typed `Config` → clients) and the handler; the pack's `run` drives it | the node's `run` (deserialize env), each connection's `hydrate` |
 
 **provision vs deploy** is the line between "the service exists" and "its code is
 running": provision creates identity-bearing infrastructure that changes only when
@@ -91,9 +91,9 @@ the topology changes; deploy ships a specific build (keyed by artifact hash) and
 changes on every push. The seam between them is the only window where connection
 config can land — an environment variable needs the consumer's projectId (exists
 after provision) and is read at version start, never after (PRO-211: so it must
-exist before deploy). Core sequences `provision → writeConfig → deploy` for every
-service, which **eliminates the fresh-deploy config race by construction**, for
-every target pack ever written. One producer-side asymmetry: a producer's real URL
+exist before deploy). Core sequences `provision → serialize → package → deploy`
+for every service, which **eliminates the fresh-deploy config race by
+construction**, for every target pack ever written. One producer-side asymmetry: a producer's real URL
 is trustworthy only after its *deploy* completes (the create-time endpoint domain
 is a placeholder — PRO-200), so core runs a producer through both phases before
 touching its consumers' config. (The phase boundary is a claim about platforms —
@@ -101,20 +101,21 @@ touching its consumers' config. (The phase boundary is a claim about platforms �
 assumes it.)
 
 The paths map onto the entry taxonomy: provision + deploy are reached through
-`@makerkit/core/deploy` (one import moment, two SPI phases, different cadence);
-run is `@makerkit/core/runtime` — a separate bundle in a separate process. The
-deploy path's `writeConfig` and the run path's `ConfigAdapter.get` use the pack's
-**one shared name mapping**, so writer and reader cannot drift.
+`@makerkit/core/deploy` (one import moment, several SPI phases, different cadence);
+run is the node's own `run`, inlined into the app bundle — a separate process. The
+deploy path's `serialize` and the run path's `deserialize` use the pack's **one
+shared codec**, so writer and reader cannot drift.
 
 ## Core model types (`@makerkit/core`)
 
 All nodes are **plain, frozen, serializable data** — with exactly **three
 sanctioned behavior slots** hanging off the graph: the Service node's handler
-(`run`), a Connection's `hydrate` (validated values → client), and the Service's
-`ConfigAdapter` (the platform's config I/O). Config *declarations* are pure data;
-only the adapter touches a real environment. The topology view simply drops the
-function slots. A node's `type` is its routing key at deploy; core never
-interprets it beyond lookup.
+(`invoke`), a Connection's `hydrate` (typed values → client), and — on the target
+pack's runnable service subclass — `run` (the boot loop). Config *declarations*
+are pure data; core builds a **typed `Config`** from the graph and the pack
+encodes it to/from the environment (§ Runtime). Core reads no environment. The
+topology view simply drops the function slots. A node's `type` is its routing key
+at deploy; core never interprets it beyond lookup.
 
 ```ts
 // Brand — set by the factories below; how Load tells a node from junk.
@@ -129,16 +130,16 @@ interface NodeBase {
 // HexNode is deliberately NOT a NodeBase: it has no routing `type` — it is
 // transparent wiring, not a routable thing (see § Nodes).
 
-// ——— Configuration model (core-owned pipeline; see § Runtime) ———
+// ——— Configuration model (core owns structure; the pack owns encoding) ———
 //
-// Three components, each owned by exactly one party:
-//   1. DECLARE — nodes carry semantic param declarations (names + runtime type
-//      tags). Target-independent: no platform key names anywhere in the graph.
-//   2. GET — core collects declarations and asks the service's ConfigAdapter
-//      (pack-provided) for raw values, then validates them against the tags.
-//   3. SET — the same adapter concept writes config: in-memory for tests, the
-//      deploy plane for real environments (the two-readers idea applied to
-//      config — get and set share one mapping, so they cannot drift).
+// Split by ownership (see § Runtime):
+//   · CORE — the config SHAPE (declarations: names + runtime type tags,
+//     target-independent, no platform keys) and the typed `Config` VALUE it
+//     builds from the graph at deploy and consumes (hydrate) at boot.
+//   · PACK — encoding: serialize the typed Config into env strings at deploy,
+//     deserialize the identical typed Config back at boot. The pack owns both
+//     ends through one codec, so writer and reader cannot drift; core never
+//     sees a platform key or a string.
 
 // Runtime-validatable param types. Curated; extended consciously.
 type ParamType = "string" | "number"
@@ -167,26 +168,14 @@ interface Connection<P extends Params = Params, C = unknown> {
   hydrate(values: Values<P>): C | Promise<C>
 }
 
-// The platform's config I/O, pack-provided and attached to the service node by
-// its constructor. The mapping between semantic params and physical locations
-// (e.g. auth's db.url ↔ AUTH_DB_URL) is the adapter's PRIVATE business — core never sees
-// platform keys. The adapter owns its source: the platform adapter is the one
-// sanctioned environment reader; an in-memory test adapter reads nothing.
-interface ConfigAdapter {
-  get(requests: readonly ConfigRequest[]): Promise<Readonly<Record<string, string>>>
-                                               // raw values keyed by request id; core validates/coerces
-  set?(values: Readonly<Record<string, string>>): Promise<void>   // tests · deploy plane
-  describe?(request: ConfigRequest): Promise<{ location: string }> // ops: "which env var is this?"
-}
-interface ConfigRequest {
-  readonly id: string                          // core-assigned; keys the returned value map
-  readonly service: string                     // deployment identity: the node's address in the
-                                               // app graph ("" for an unmounted local run). The
-                                               // adapter's key namespace inside the application's
-                                               // shared project environment.
-  readonly owner: "service" | { readonly input: string }
-  readonly name: string
-  readonly param: ConfigParam
+// The resolved, typed configuration of one service — what crosses the core→pack
+// boundary. Core builds it at deploy (leaf values are provisioning refs, so the
+// env writes depend on the resources/producer — the ordering edges); the pack
+// serializes it, and at boot reconstructs the identical structure with concrete
+// values. Both forms conform to the shape from configOf. Core never stringifies.
+interface Config {
+  readonly service: Readonly<Record<string, unknown>>                        // service-param values
+  readonly inputs: Readonly<Record<string, Readonly<Record<string, unknown>>>> // input → its connection-param values
 }
 
 // ——— Nodes ———
@@ -198,16 +187,17 @@ interface ResourceNode<C = unknown> extends NodeBase {
   readonly connection: Connection<Params, C>
 }
 
-// A Service: inputs + its own declared params + the platform's ConfigAdapter +
-// the opaque handler. This IS the user's default export — inspectable
-// (inputs/type/params) and runnable (run), inert until invoked. There is no
-// separate handle type: the node is the handle.
+// A Service: inputs + its own declared params + the opaque handler (`invoke`).
+// This IS the user's default export — inspectable (inputs/type/params), inert
+// until invoked. The BASE node is not runnable: booting needs a target's
+// environment knowledge, so the pack's factory returns a runnable subclass that
+// adds `run(address)` (§ Runtime). There is no separate handle type: the node is
+// the handle.
 interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends NodeBase {
   readonly kind: "service"
   readonly inputs: D
   readonly params: P                           // service-level config (e.g. port) — no special "context" concept
-  readonly config: ConfigAdapter               // how this service GETS its config on this platform
-  run(deps: HydratedDeps<D>, ctx: Values<P>): unknown
+  invoke(deps: HydratedDeps<D>, ctx: Values<P>): unknown   // the handler; core's boot path calls this last
 }
 
 // A service-to-service dependency end. Sits in a Deps slot like a ResourceNode,
@@ -270,9 +260,8 @@ function service<D extends Deps, P extends Params>(def: {
   type: string
   inputs: D
   params: P
-  config: ConfigAdapter
   handler: ServiceHandler<D, P>
-}): ServiceNode<D, P>
+}): ServiceNode<D, P>   // the pack wraps this and returns its runnable subclass
 
 function connectionEnd<P extends Params, C>(def: {
   type: string
@@ -282,9 +271,10 @@ function connectionEnd<P extends Params, C>(def: {
 function hex(name: string, body: (h: HexBuilder) => void): HexNode   // body runs at Load, not here
 ```
 
-`service()` stores `handler` as the node's `run` and freezes `inputs`/`params`;
+`service()` stores `handler` as the node's `invoke` and freezes `inputs`/`params`;
 `resource()` freezes the connection's declared params. Both throw on an empty
-`type`. Nothing executes: constructing nodes is pure.
+`type`. Nothing executes: constructing nodes is pure. The pack's authoring
+factory (`compute()`) calls `service()` and returns a subclass carrying `run`.
 
 ## Graph and Load (`@makerkit/core`)
 
@@ -319,7 +309,7 @@ B needs A's, neither can go first). A lone service Loaded outside any hex may ha
 unwired ConnectionEnds — connectedness is a topology-level check; booting it
 unwired still fails loudly through the ordinary missing-config path. Load
 executes nothing of the user's — the graph
-is data in memory to inspect or hand to `lower`/`runHost`. A **topology view** —
+is data in memory to inspect or hand to `lower` (or the node's `run`). A **topology view** —
 nodes as `{ id, kind, type }` plus edges, function slots dropped — is
 `JSON.stringify`-able by construction; the serialized-artifact emit step builds on
 this later.
@@ -358,36 +348,40 @@ interface ServiceLowering {
   // identity-bearing infrastructure only (the App), inside the application's
   // Project (ctx.application); no code runs.
   provision(ctx: LowerContext): Effect.Effect<LoweredNode, unknown, unknown>
-  // writeConfig: make these param values exist in the service's runtime
-  // environment (on Prisma Cloud: EnvironmentVariables on the project). Uses
-  // the SAME name mapping the pack's ConfigAdapter reads with at boot.
-  writeConfig(provisioned: LoweredNode, values: readonly ResolvedParam[]):
-    Effect.Effect<void, unknown, unknown>
-  // package: assemble the deployable artifact from the app-built bundle plus
-  // the core-generated bootstrap. The envelope is target vocabulary and the
-  // pack's business (Compute: bootstrap.mjs + compute.manifest.json + tar.gz).
-  // MUST be byte-deterministic (fixed tar mtimes/ordering): identical inputs
-  // yield an identical hash, so an unchanged service noops on redeploy.
+  // serialize: encode the typed Config core built into the service's runtime
+  // environment (on Prisma Cloud: EnvironmentVariables on the project). The pack
+  // owns the encoding; its boot-side deserialize (run) reverses it through the
+  // same codec, so writer and reader cannot drift. Leaf values are provisioning
+  // refs → the env writes depend on the resources/producer (the ordering edges).
+  // Returns the env-var records so `deploy` can reference them (the environment
+  // edge — see § sequencing and alchemy-lowering.md).
+  serialize(ctx: LowerContext, provisioned: LoweredNode, config: Config):
+    Effect.Effect<LoweredNode, unknown, unknown>
+  // package: print the bootstrap (address baked in — the whole per-instance
+  // deployment parameter) and assemble the deployable artifact from the
+  // app-built bundle. The envelope is target vocabulary and the pack's business
+  // (Compute: bootstrap.js + compute.manifest.json + tar.gz). MUST be
+  // byte-deterministic (fixed tar mtimes/ordering): identical inputs yield an
+  // identical hash, so an unchanged service noops on redeploy.
   package(ctx: LowerContext, input: PackageInput):
     Effect.Effect<Artifact, unknown, unknown>
   // deploy: ship the packaged artifact into the provisioned thing and run it
-  // (version → upload → start → promote). Returns the trustworthy URL.
-  deploy(ctx: LowerContext, provisioned: LoweredNode, artifact: Artifact):
-    Effect.Effect<LoweredNode, unknown, unknown>
+  // (version → upload → start → promote). Consumes `serialized`'s env records
+  // via the Deployment's environment prop (the edge). Returns the trustworthy URL.
+  deploy(ctx: LowerContext, provisioned: LoweredNode, artifact: Artifact,
+         serialized: LoweredNode): Effect.Effect<LoweredNode, unknown, unknown>
 }
-interface ResolvedParam { readonly request: ConfigRequest; readonly value: string }
 
-// Core generates the bootstrap source; the pack only places it. The bootstrap
-// is the ONLY runnable in the artifact and has zero imports beyond the bundle
-// entry: core's prebuilt /runtime build is inlined above two generated lines —
-//   import service from "./main.js"
-//   await runHost(service, { id: "<address>" })
+// The bootstrap the pack prints is the ONLY runnable in the artifact and has
+// zero imports beyond the bundle entry — the node carries its own run():
+//   import main from "./main.js"
+//   await main.run("<address>")
 // The entrypoint takes its deployment identity as a parameter; deploy is the
-// caller. (A target with different constraints may lay dependencies on disk
-// inside its own envelope instead — its implementation detail.)
+// caller. The pack owns both the printer and run(), so it can pass any
+// environment-specific data through this closed channel.
 interface PackageInput {
   readonly bundle: Bundle          // app-built, from LowerOptions
-  readonly bootstrap: string       // complete generated source, identity baked in
+  readonly address: string         // the node's graph address — baked into the bootstrap
 }
 
 // One node's realization. Runs inside the Alchemy stack effect; yields the
@@ -396,6 +390,8 @@ type Lowering = (ctx: LowerContext) => Effect.Effect<LoweredNode, unknown, unkno
 
 interface LowerContext {
   readonly id: NodeId
+  readonly address: string                              // the node's deployment address (graph position);
+                                                        // the config-key namespace and the bootstrap parameter
   readonly node: ServiceNode | ResourceNode
   readonly graph: Graph
   readonly opts: LowerOptions
@@ -458,24 +454,24 @@ connection edges (the DAG Load validated); for each service:
 1. Lower its resource inputs via `Target.resources` (e.g. the service's own
    Database + Connection — outputs carry the url).
 2. `provision` — the service now has identity (its App).
-3. Resolve every declared param that comes from the graph: resource-backed
-   params from the resource lowerings' outputs (the database url), wired
-   ConnectionEnd params from the **producer's deploy outputs** (the producer,
-   earlier in topo order, is already fully deployed — its URL is real, not the
-   create-time placeholder).
-4. `writeConfig` with all resolved params — every value the service boots with,
-   database URLs included, lands as the service's own named variables. Never
-   the platform default.
-5. `package` — core generates the bootstrap (identity baked in, § below) and
-   hands it with the app-built bundle to the pack, which assembles the
-   deployable artifact.
-6. `deploy` — the first version snapshots an environment that is already
+3. core **builds the typed `Config`** — each input's declared params matched by
+   name to the lowered outputs: resource params from the resource lowering, and
+   wired ConnectionEnd params from the **producer's deploy outputs** (the
+   producer, earlier in topo order, is already fully deployed — its URL is real,
+   not the create-time placeholder) — plus service-param defaults. Leaf values
+   are provisioning refs, not strings.
+4. `serialize(config)` — the pack encodes that typed Config into the service's
+   runtime environment (Prisma Cloud: one env write per leaf, keyed by the
+   pack's own naming, value = the ref). Never the platform default.
+5. `package({ bundle, address })` — the pack prints the bootstrap (address baked
+   in, § below) and assembles the deployable artifact from the app-built bundle.
+6. `deploy(artifact)` — the first version snapshots an environment that is already
    complete. **How the ordering is actually enforced:** our walk only
 *assembles* Alchemy resource descriptions — Alchemy executes them in dependency
 order and runs unordered resources concurrently; declaration order is never
 consulted. So core realizes the sequence as **dependency edges**: most arise
 naturally from value flow (the env var consumes the project id and the
-producer's URL), and the one that doesn't — deploy-after-writeConfig — exists
+producer's URL), and the one that doesn't — deploy-after-serialize — exists
 because the `Deployment` resource declares the environment records it boots
 with as a prop, which is PDP's own dataflow restored (the version-create call
 literally contains the materialized env map). See the lowering graphs in
@@ -498,17 +494,21 @@ entrypoint takes identity as a parameter, and deploy is the caller. The Compute
 artifact the pack assembles:
 
 ```
-main.js                ← app-built bundle; default-exports the Service, runs nothing
-bootstrap.mjs          ← generated; zero-dep (runHost inlined); identity baked in
-compute.manifest.json  ← pack-written envelope; entrypoint = bootstrap.mjs
+main.js                ← app-built bundle: exports the Service node, core inlined ONCE, inert on import
+bootstrap.js           ← pack-printed: `import main from "./main.js"; await main.run("<address>")`
+compute.manifest.json  ← pack-written envelope; entrypoint = bootstrap.js
 ```
 
-Every byte is deterministic — bundle from the app's build, runtime from core's
-version, bootstrap from the address — so unchanged services hash identically and
-noop. Because the same Load walk feeds both `writeConfig`'s env keys and the
-bootstrap's identity, the config writer and the boot-time reader cannot drift.
-An address changes only when the graph position changes (e.g. a rename), which
-correctly cascades: new keys, new bootstrap, new version.
+The node carries its own runner: the pack's service node has a `run(address)`
+method (§ Runtime), so the app bundle already contains the boot loop — the
+bootstrap is a two-line sliver with one import and zero core, and the artifact
+holds a single copy of core. Every byte is deterministic — bundle from the app's
+build, bootstrap from the address — so unchanged services hash identically and
+noop. Because the same Load walk feeds both `serialize`'s env keys and the
+bootstrap's address (and the pack derives config keys from that address on both
+sides), the config writer and the boot-time reader cannot drift. An address
+changes only when the graph position changes (e.g. a rename), which correctly
+cascades: new keys, new bootstrap, new version.
 
 Notes:
 
@@ -517,28 +517,32 @@ Notes:
   (`prismaCloud({ workspaceId })`). Core's options are target-neutral.
 - **The bundle is the input; the artifact is the pack's product.** The app
   bundles (tsdown, Bun.build, whatever) and passes a directory; the pack's
-  `package` wraps it in the target envelope and its hash is what makes a
-  rebuild register as a change. Core still has no build step — generating a
-  three-line bootstrap and copying its own prebuilt runtime is assembly, not
-  bundling; app code is never compiled by MakerKit.
+  `package` prints the bootstrap and wraps the bundle in the target envelope,
+  and its hash is what makes a rebuild register as a change. Core still has no
+  build step — printing a two-line bootstrap is assembly, not bundling; app code
+  is never compiled by MakerKit.
 
-## Runtime: the config pipeline (`@makerkit/core/runtime` + `configOf` in core)
+## Runtime: booting a service (the pack's `run`, core's shape and hydrate)
 
-At boot, three things have to happen: obtain this platform's config values, turn
-them into clients, and call the handler. The responsibilities are split so that
-**core owns config management end to end** while caring nothing about the mapping:
+At boot, three things have to happen: reconstruct this service's config, turn it
+into clients, and call the handler. The split is **core owns structure, the pack
+owns encoding**:
 
-- **declarations** (connections' `params`, the service's own `params`) say *what*
-  is needed — semantic names + runtime type tags. Target-independent data.
-- the **`ConfigAdapter`** (pack-provided, on the service node) answers *get* and
-  *set* for its platform; the semantic↔physical mapping is its private business.
-- **core** does everything in between: enumerate, request, validate, coerce,
-  intercept, distribute, call.
+- **the shape** — `configOf(root)` enumerates what config the service needs
+  (semantic names + type tags, no platform keys). Pure, derivable from the graph
+  without booting; this is the enumeration/visibility surface.
+- **the pack's `run`** — the boot loop, on the pack's runnable service subclass.
+  It **deserializes** the platform environment into a typed `Config` (its own
+  encoding, keyed from the address the bootstrap passed) and hands it to core.
+  This is the pack's single sanctioned environment read.
+- **core's `hydrate`** — given the typed `Config`, call each input's
+  `connection.hydrate` with its typed slice, then the handler (`invoke`). A
+  resource dep and a connection dep hydrate through identical machinery.
 
 ```ts
 // The enumerable config surface of a service — derivable from the graph alone,
 // nothing booted, no platform keys. The introspection artifact (secrets marked,
-// values absent). Physical locations are the adapter's business (describe()).
+// values absent). Physical locations are the pack's business.
 interface ConfigDeclaration {
   readonly owner: "service" | { readonly input: string }
   readonly name: string              // "url" · "port"
@@ -549,58 +553,30 @@ interface ConfigDeclaration {
 }
 function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @makerkit/core (pure)
 
-// Boot: Load → configOf → adapter.get(requests) → per-param: override ?? raw ??
-// default → validate + coerce against the declared type. Validation rules:
-//   · "" is UNRESOLVED, not a value — it falls to the default or, if required,
-//     joins the missing set;
-//   · a NON-EMPTY value that fails its declared type is an ERROR regardless of
-//     any default — a default substitutes for absence, never for garbage;
-//   · unknown override keys are errors (a typoed override must not silently
-//     fall through to the platform value).
-// ALL problems reported in one ConfigError, before any hydrate
-// (Load-before-Hydrate applied to config) → per input:
-// await connection.hydrate(typedValues) → root.run(deps, serviceParamValues).
-function runHost(root: ServiceNode, opts?: {
-  id?: string                                  // deployment identity (the node's address), passed by the
-                                               // generated bootstrap in a deployed artifact; omitted in
-                                               // local runs/tests. Threaded into every ConfigRequest.service.
-  config?: ConfigAdapter                       // swap the platform adapter: in-memory tests, inspection harnesses
-  overrides?: Record<string, string | number>  // per-param overrides, applied before the adapter is
-                                               // consulted; keyed "input.param" (dotted) for input params,
-                                               // bare "param" for service-level params
-}): Promise<unknown>
-class ConfigError extends Error {}             // names every missing/invalid/unknown param at once
+// Core's boot-side helper: given a service and a concrete typed Config, hydrate
+// every input (connection.hydrate with its value slice) and call the handler.
+// The pack's run() = deserialize(env) → hydrate → invoke. No environment read,
+// no strings — the pack already reversed its own encoding into a typed Config.
+function hydrate(root: ServiceNode, config: Config): Promise<HydratedDeps<Deps>>
+
+// The pack's runnable service node (what compute() returns). run() is the whole
+// boot loop; address is what the bootstrap baked in.
+interface RunnableServiceNode<D extends Deps, P extends Params> extends ServiceNode<D, P> {
+  run(address: string, opts?: unknown): Promise<unknown>
+}
 ```
 
-Core and user code contain **zero** environment reads: the platform's adapter is
-the single sanctioned reader for its platform (an in-memory test adapter reads
-nothing). Because core is the single resolver, there is one choke point for
-interception: tests override per-param or swap the adapter entirely; a production
-host can report its resolved config with secrets redacted by construction
-(`secret` is declared on the param).
+Core and user code contain **zero** environment reads: the pack's `run` is the
+single sanctioned reader for its platform, and a local test injects fakes and
+never touches an environment (below). The typed `Config` is core's interception
+point — a harness can inspect it or redact by the `secret` flag on the shape —
+and `configOf` keeps the config surface enumerable without booting.
 
-**Motivation (why this shape, recorded).** Two discarded iterations:
-
-*First*, a pack-exported `runtime()` carrying a type-id–keyed hydrator table plus
-app-supplied client factories. Discarded because: (1) an opaque `env → config`
-provider loses the config surface — no enumeration, no interception point, no
-introspection of a running service; (2) it made the pack a second environment
-reader; (3) composition across packs required merging registries, where the
-node-carried design composes structurally; (4) the app-declared phantom client
-type (`postgres<SQL>()`) created a declared-vs-actual trust boundary that factory
-inference eliminates; (5) it contradicted the settled decision that *MakerKit
-manages the config-to-input mapping*.
-
-*Second*, a `HostConvention` on the service node — addressing as data (channel
-enum + a `key(input, field)` naming rule + context fields). Discarded because:
-(1) it baked **platform key names into the graph**, coupling every service's
-config surface to its target — declarations should be target-independent; (2)
-the `channel` discriminator was an enum-switch waiting to grow inside core,
-against "compose, don't special-case"; (3) it had no *write* side — tests,
-deploy-plane config creation, and inspection all need `set`, which an addressing
-rule can't express. The adapter model keeps declarations semantic, makes the
-mapping the adapter's private business, and gives get/set/describe one home per
-platform.
+**Config validation is the pack's, because it is the pack reversing its own
+serialization.** "Is this value present and the right type" is exactly the check
+`deserialize` must pass to reconstruct the typed `Config` it once wrote; core
+defines the shape that check is against. A missing or unparseable value is the
+pack failing loudly at boot.
 
 ## The Prisma Cloud pack (`@makerkit/prisma-cloud`) — worked instance
 
@@ -608,7 +584,9 @@ Authoring entry — nodes carrying their connection/host knowledge; the driver i
 **parameter**, so the pack ships none and the client type is inferred:
 
 ```ts
-import { resource, service, type Connection, type Deps, type ServiceHandler, type ServiceNode } from "@makerkit/core"
+import { resource, service, connectionEnd, configOf, hydrate,
+  type Config, type ConfigDeclaration, type Connection, type Deps,
+  type ServiceHandler, type ResourceNode, type ConnectionEnd, type RunnableServiceNode } from "@makerkit/core"
 
 export interface PostgresConfig { readonly url: string }
 
@@ -638,41 +616,35 @@ export const http = <C = HttpClient>(opts?: { client?: (cfg: { url: string }) =>
 
 const computeParams = { port: { type: "number", default: 3000 } } as const
 
+// compute() returns the pack's RUNNABLE subclass — the base node plus run(),
+// the boot loop. run() is the only environment reader in the pack.
 export const compute = <D extends Deps>(
   deps: D,
   handler: ServiceHandler<D, typeof computeParams>,   // ctx: { port: number }
-): ServiceNode<D, typeof computeParams> =>
-  service({
-    type: "prisma-cloud/compute",
-    inputs: deps,
-    params: computeParams,
-    config: computeAdapter,
-    handler,
-  })
-
-// The platform adapter — the pack's single environment reader. The semantic↔
-// physical mapping lives HERE, private to the pack, and is SHARED with the
-// deploy path's writeConfig (one module, both directions). Keys are unique per
-// service within the application's shared project namespace: the mapping
-// prefixes them with the service's deployment identity (request.service — the
-// address the bootstrap passed to runHost; the segments after the app root,
-// which is project-constant). writeConfig computes keys through the same
-// module from the same Load walk, so writer and reader cannot drift.
-// The platform's DATABASE_URL is never among them — it is forbidden and
-// poisoned at project provision (see 05-prisma-cloud/alchemy-lowering.md).
-const computeAdapter: ConfigAdapter = {
-  async get(requests) {
-    const values: Record<string, string> = {}
-    for (const r of requests) {
-      const raw = process.env[envKey(r)]          // envKey: the shared mapping module
-      if (raw !== undefined) values[r.id] = raw
-    }
-    return values
-  },
-  async describe(r) {
-    return { location: `env:${envKey(r)}` }
-  },
+): RunnableServiceNode<D, typeof computeParams> => {
+  const node = service({ type: "prisma-cloud/compute", inputs: deps, params: computeParams, handler })
+  return Object.freeze({
+    ...node,
+    async run(address: string) {
+      const config = deserialize(configOf(node), address)   // the pack's ONE env read + coercion
+      return node.invoke(await hydrate(node, config) as never, config.service as never)
+    },
+  }) as RunnableServiceNode<D, typeof computeParams>
 }
+
+// The pack's config codec — the semantic↔physical mapping, private to the pack,
+// SHARED by run() (boot) and the /target serialize (deploy) so writer and reader
+// cannot drift. Keys are unique per service within the shared project namespace:
+// the codec prefixes them with the deployment address (its segments after the
+// app root, which is project-constant), so auth's db.url ↔ AUTH_DB_URL. The
+// platform's DATABASE_URL is never among them — it is forbidden and poisoned at
+// project provision (see 05-prisma-cloud/alchemy-lowering.md).
+export const configKey = (address: string, d: ConfigDeclaration): string => /* UPPER_SNAKE(address ▸ owner ▸ name) */
+
+// Boot: read each declared param from env by its key, coerce to its type (the
+// pack reversing its own serialization — missing/unparseable fails loudly),
+// assemble the typed Config. process.env is touched ONLY here in the pack.
+const deserialize = (shape: readonly ConfigDeclaration[], address: string): Config => { /* … */ }
 ```
 
 Target entry — the lowering table (the only place `prisma-alchemy` is imported):
@@ -715,9 +687,8 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
 
   resources: {
     // Each postgres input gets its own Database in the application's project.
-    // The url output is resolved into the service's db.url param and written
-    // through writeConfig under the service's own named key — never the
-    // platform default.
+    // The url output fills the service's db.url Config leaf and is encoded by
+    // serialize under the service's own named key — never the platform default.
     "prisma-cloud/postgres": ({ id, application }) =>
       Effect.gen(function* () {
         const db = yield* Prisma.Database(`${id}-db`, {
@@ -741,38 +712,47 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
           return { outputs: { serviceId: svc.id, projectId: application.outputs.projectId } }
         }),
 
-      // Make these values exist in the service's runtime environment — via the
-      // SAME envKey mapping the ConfigAdapter reads with at boot (one module,
-      // both directions; writer and reader cannot drift).
-      writeConfig: (provisioned, values) =>
+      // Encode the typed Config into the runtime environment — one env var per
+      // leaf, keyed by the SAME codec run() reads with at boot (config.ts,
+      // env-free, both directions). Values are the provisioning refs core built
+      // the Config from, so each env var depends on its resource/producer — the
+      // ordering edges. class production; the platform default is never written.
+      serialize: ({ address, node }, provisioned, config) =>
         Effect.gen(function* () {
-          for (const { request, value } of values) {
-            yield* Prisma.EnvironmentVariable(`${envKey(request)}-var`, {
+          const records = []
+          for (const d of configOf(node)) {
+            const value = d.owner === "service" ? config.service[d.name] : config.inputs[d.owner.input]?.[d.name]
+            records.push(yield* Prisma.EnvironmentVariable(`${configKey(address, d)}-var`, {
               projectId: provisioned.outputs.projectId,
-              key: envKey(request), value, class: "production",
-            })
+              key: configKey(address, d), value: value as never, class: "production",
+            }))
           }
+          return { outputs: { environment: records } }   // → deploy's environment prop (the edge)
         }),
 
-      // Assemble the deployable artifact: the app-built bundle beside the
-      // core-generated zero-dep bootstrap, wrapped in the Compute envelope
-      // (compute.manifest.json entrypoint = bootstrap.mjs; deterministic
-      // tar.gz — fixed mtimes/ordering so unchanged inputs hash identically).
-      package: ({ id }, { bundle, bootstrap }) =>
+      // Print the bootstrap (address baked in) and assemble the deployable
+      // artifact: bootstrap.js + compute.manifest.json beside the app bundle,
+      // deterministic tar.gz (fixed mtimes/ordering so unchanged inputs hash
+      // identically). The whole envelope is the pack's — target vocabulary.
+      package: ({ id }, { bundle, address }) =>
         Effect.gen(function* () {
-          // write bootstrap.mjs + manifest beside bundle.dir, tar, sha256
+          // bootstrap.js: `import main from "./main.js"; await main.run(${JSON.stringify(address)})`
+          // write it + manifest beside bundle.dir, tar deterministically, sha256
           return { path: `…/${id}.tar.gz`, sha256: "…" }
         }),
 
       // A specific BUILD into the place: version → upload → start → promote.
-      // deployedUrl is read post-promote — the create-time domain is a
+      // The environment prop references serialize's env-var records, so the
+      // version depends on them (the edge that kills PRO-211 + propagates
+      // change). deployedUrl is read post-promote — the create-time domain is a
       // placeholder (PRO-200).
-      deploy: ({ id }, provisioned, artifact) =>
+      deploy: ({ id }, provisioned, artifact, serialized) =>
         Effect.gen(function* () {
           const deploy = yield* Prisma.Deployment(`${id}-deploy`, {
             computeServiceId: provisioned.outputs.serviceId,
             artifactPath: artifact.path,
             artifactHash: artifact.sha256,
+            environment: serialized.outputs.environment,
             port: 3000,
           })
           return { outputs: { url: deploy.deployedUrl, projectId: provisioned.outputs.projectId } }
@@ -782,10 +762,12 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
 })
 ```
 
-There is **no runtime entry**: the connection and host knowledge above already
-rides on the nodes, so `runHost(service)` needs nothing else. (A missing client
-factory is now impossible by construction — `postgres({ client })` requires it at
-authoring, at compile time.)
+There is **no public runtime entry**: the boot loop rides on the node itself
+(`compute()` returns the runnable subclass; `.run(address)` is the whole thing),
+so the app bundle carries the runtime with a single copy of core and the
+bootstrap needs nothing but `./main.js`. (A missing client factory is impossible
+by construction — `postgres({ client })` requires it at authoring, at compile
+time.)
 
 ## The app, end to end
 
@@ -808,8 +790,8 @@ export default compute({ db }, ({ db }, { port }) =>
     fetch: async () => Response.json(await db`select 1 as ok`) }))
 
 // src/main.ts — runtime bundle entry (app-owned): a pure re-export; nothing runs.
-// The boot call lives in the deploy-generated bootstrap, which imports this
-// bundle and calls the inlined runHost with the service's deployment identity.
+// The Service node carries its own run(); the pack-printed bootstrap imports this
+// bundle and calls main.run(address) with the service's deployment identity.
 export { default } from "./service"
 
 // alchemy.run.ts — deploy (heavy imports; never bundled)
@@ -831,10 +813,10 @@ SQL` in `connections.ts`) — the app's choice, since it deploys to a platform w
 runtime is Bun. Switching the client to node-postgres, or the app to a Node
 platform, changes these app lines and nothing in MakerKit.
 
-And note what a test needs: `runHost(service, { overrides: { "db.url": testUrl } })`
-— a per-param override through core's resolver, no environment faked, no cloud.
-Or skip `runHost` entirely and call `service.run(fakes, { port: 0 })` with fakes at
-the inputs — the same dependency inversion the model promises.
+And note what a test needs: `service.invoke(fakes, { port: 0 })` — inject typed
+fakes at the inputs and call the handler directly, no environment, no cloud, no
+pack. That is the dependency inversion the model promises. The config round-trip
+is proven separately at the pack level (serialize → deserialize identity).
 
 ### Two services, connected — the hex
 
@@ -869,10 +851,11 @@ export default lower(appHex, prismaCloud({ workspaceId }), {
 ```
 
 At deploy, core sequences: auth provision → auth deploy (URL now real) → storefront
-provision → `writeConfig` (auth's URL lands as the storefront's `auth.url` param,
-under the pack's env-key mapping) → storefront deploy — first VM boots with its
-config present. At run, the storefront's pipeline hydrates `auth` into a client
-exactly as it hydrates `db`; the handler cannot tell the two mechanisms apart.
+provision → build the storefront's `Config` (auth's deploy URL fills the
+`auth.url` leaf) → `serialize` (the pack encodes it under its address-prefixed
+keys) → package → storefront deploy — first VM boots with its config present. At
+boot, `main.run(address)` deserializes and core's `hydrate` turns the `auth` leaf
+into a client exactly as it does `db`; the handler cannot tell the two apart.
 
 ## Invariants (enforced, not aspirational)
 
@@ -882,15 +865,15 @@ exactly as it hydrates `db`; the handler cannot tell the two mechanisms apart.
    and `@makerkit/prisma-cloud` (authoring entries only) contains no
    `alchemy`/`effect`/`prisma-alchemy`/`new SQL(` tokens — the existing import-split
    guard test, extended to the pack.
-3. **Importing runs nothing**: constructing nodes is pure; only `runHost`/the alchemy
-   CLI execute anything. This now reaches the artifact: the app bundle is a pure
-   module (`main.ts` re-exports the Service), and the deploy-generated bootstrap
-   is the only runnable a deployed artifact contains.
-4. **Core and user code contain zero environment reads.** The platform adapter is
-   the single sanctioned reader for its platform — `process.env` appears exactly
-   once per pack, inside its `ConfigAdapter`; an in-memory test adapter reads
-   nothing. Declarations, resolution, validation, and distribution never touch an
-   environment.
+3. **Importing runs nothing**: constructing nodes is pure; only the node's `run`/the
+   alchemy CLI execute anything. This now reaches the artifact: the app bundle is a
+   pure module (`main.ts` re-exports the Service), and the pack-printed bootstrap is
+   the only runnable a deployed artifact contains.
+4. **Core and user code contain zero environment reads.** The pack's `run`
+   (deserialize) is the single sanctioned reader for its platform — `process.env`
+   appears exactly once per pack, inside its config codec; a local test injects
+   fakes via `invoke` and reads nothing. Core's shape, Config-building, and
+   `hydrate` never touch an environment.
 5. **No runtime coupling**: neither core nor a target pack imports Bun or Node APIs
    — even type-only — in its shipped surface (the [runtime-agnostic
    principle](../01-principles/architectural-principles.md)). Drivers and server APIs
@@ -907,17 +890,16 @@ exactly as it hydrates `db`; the handler cannot tell the two mechanisms apart.
   (a hex's own Inputs/Outputs), nesting, and forwarding per the authoring-surface
   design come next. Services stay opaque leaves.
 - **Runtime name lookup** — if the platform gains service-name resolution, the
-  pack's `writeConfig` becomes a no-op and its connection hydrate resolves by name;
+  pack's `serialize` becomes a no-op and its connection hydrate resolves by name;
   consumers are unchanged (they never learned how the address arrived).
 - **Registry exhaustiveness** — `Target.lower` is a string-keyed record; a pack can
   tighten it to its own type-id union for compile-time exhaustiveness. Core stays
   stringly-typed by design at deploy (it routes); the runtime side has no registry
   at all — behavior rides the nodes.
-- **Deploy-side `set`** — when the Connection primitive wires a producer's URL
-  into a consumer (today's hand-wired `AUTH_URL`), the deploy plane writes it
-  through the same adapter mapping the runtime reads through — the two readers,
-  applied to config, so get and set cannot drift. Per-input key naming (multiple
-  databases) also lands privately in the pack adapter when it arrives.
+- **Config introspection** — `configOf` already enumerates the shape without
+  booting; a "which physical key is this param" projection is a pack codec
+  addition (it owns the encoding), and a running host can report its typed
+  `Config` with secrets redacted by the `secret` flag.
 - **`ParamType` growth** — the tag set is `"string" | "number"`, curated; new tags
   (`"boolean"`, `"url"`, …) are added consciously with their validation, never as
   an open plugin surface.

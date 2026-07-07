@@ -34,7 +34,7 @@ reader fails at connect; `"-"` if the API rejects empty values). User-set values
 permanently override the platform templates (`wireDefaultDatabaseUrl` leaves
 them untouched), so nothing deployed by MakerKit can ever quietly work off the
 default again. Every database URL a service consumes is an explicit, per-service
-variable written through `writeConfig` under the pack's named key.
+variable the pack's `serialize` writes under its own named key.
 
 ## The resource inventory
 
@@ -45,7 +45,7 @@ it manages whatever a provider package registers).
 | --- | --- | --- | --- | --- |
 | `Project` | Project | workspaceId, name | id | **one per MakerKit application**; the poison `DATABASE_URL` variables are written at provision (see above) |
 | `Database` | Database | projectId, name | id, connection info | one per service that declares a postgres input; never the project default |
-| `Connection` | database connection info | databaseId | url | direct/pooled endpoints; the url is written as the service's own named variable via `writeConfig` |
+| `Connection` | database connection info | databaseId | url | direct/pooled endpoints; the url is written as the service's own named variable via the pack's `serialize` |
 | `ComputeService` | App | projectId, name, region | id | PDP attaches it to the production branch implicitly |
 | `EnvironmentVariable` | ConfigVariable | projectId, class, key, value, branchId? | id | we write production-class templates only |
 | `Deployment` | Deployment (ComputeVersion) + Promotion | computeServiceId, artifactPath, artifactHash, port, **environment** (the env-var records the version boots with — see the graphs below) | versionId, deployedUrl | provider reconcile: create version → upload tar.gz → start → poll until running → promote; `deployedUrl` read **post-promote** (create-time domain is a placeholder — PRO-200) |
@@ -109,7 +109,7 @@ How the pieces map:
   depend on the default).
 - **Each service** lowers to a `ComputeService → Deployment` chain plus its own
   `Database → Connection`, whose url is written as that service's **explicitly
-  named** variable — the same `writeConfig` path as any other config value.
+  named** variable — the same `serialize` path as any other config value.
 - **The connection** lowers to two edges: the producer's `deployedUrl` flows
   into a named `EnvironmentVariable`, and that variable's **record reference
   flows into the consumer's `Deployment`** via its `environment` prop.
@@ -117,7 +117,7 @@ How the pieces map:
   `environment` prop — database URLs and connection URLs alike — so ordering
   and change propagation hold uniformly.
 
-The `environment` prop is load-bearing and mirrors PDP's own dataflow — the
+The `environment` prop is essential and mirrors PDP's own dataflow — the
 version-create call literally contains the materialized env map, so the
 environment is genuinely an input to a version (see the
 [config lifecycle](pdp-data-model.md#the-config-lifecycle--what-is-resolved-when)).
@@ -132,7 +132,7 @@ The edge does two jobs by ordinary dependency-graph mechanics:
    semantics this is the *only* correct propagation mechanism.
 
 MakerKit's core constructs these edges when lowering a connection (the
-`writeConfig` results thread into `deploy` through the service SPI); no pack
+`serialize` env-var records thread into `deploy` through the service SPI); no pack
 author and no app author ever hand-wires them.
 
 ## Related
