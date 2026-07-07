@@ -54,8 +54,8 @@ describe('invariant 2: authoring imports stay lean (core + pack)', () => {
   });
 });
 
-describe('invariant 4: exactly one environment read — inside the ConfigAdapter', () => {
-  test("the process-env token appears exactly once in the pack's src, in the adapter", () => {
+describe("invariant 4: exactly one environment read — inside the config codec's deserialize", () => {
+  test("the process-env token appears exactly once in the pack's src, in codec.ts", () => {
     const sources = shippedSources();
     expect(sources.length).toBeGreaterThan(0);
 
@@ -65,7 +65,7 @@ describe('invariant 4: exactly one environment read — inside the ConfigAdapter
       return count > 0 ? [{ file, count }] : [];
     });
 
-    expect(hits).toEqual([{ file: 'compute.ts', count: 1 }]);
+    expect(hits).toEqual([{ file: "codec.ts", count: 1 }]);
   });
 });
 

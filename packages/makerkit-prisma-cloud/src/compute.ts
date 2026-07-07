@@ -1,44 +1,25 @@
-import type { ConfigAdapter, Deps, ServiceHandler, ServiceNode } from '@makerkit/core';
-import { service } from '@makerkit/core';
+import { configOf, hydrate, service } from "@makerkit/core";
+import type { Deps, RunnableServiceNode, ServiceHandler } from "@makerkit/core";
+import { deserialize } from "./codec.ts";
 
 const computeParams = { port: { type: 'number', default: 3000 } } as const;
 
 /**
- * A Prisma Compute service: inputs + handler, inert until run by the host.
- * Declares its own params (port) — handlers receive ({ ...deps }, { port }).
+ * A Prisma Compute service: inputs + handler, inert until run. Returns the
+ * pack's RUNNABLE subclass — `run(address)` is the whole boot loop:
+ * deserialize the platform environment (keyed off `address`, the pack's ONE
+ * env read) into a typed Config, then core's hydrate + invoke.
  */
 export const compute = <D extends Deps>(
   deps: D,
   handler: ServiceHandler<D, typeof computeParams>,
-): ServiceNode<D, typeof computeParams> =>
-  service({
-    type: 'prisma-cloud/compute',
-    inputs: deps,
-    params: computeParams,
-    config: computeAdapter,
-    handler,
-  });
-
-// The platform adapter — the pack's single environment reader. The semantic↔
-// physical mapping (url ↔ DATABASE_URL, port ↔ PORT; per-input naming when
-// multiple databases arrive) lives HERE, private to the pack.
-const physicalKey = (name: string): string =>
-  name === 'url' ? 'DATABASE_URL' : name.toUpperCase();
-
-// The ambient environment of whatever runtime hosts the bundle. Declared
-// structurally so this entry imports no runtime's types.
-declare const process: { readonly env: Record<string, string | undefined> };
-
-const computeAdapter: ConfigAdapter = {
-  async get(requests) {
-    const values: Record<string, string> = {};
-    for (const request of requests) {
-      const raw = process.env[physicalKey(request.name)];
-      if (raw !== undefined) values[request.id] = raw;
-    }
-    return values;
-  },
-  async describe(request) {
-    return { location: `env:${physicalKey(request.name)}` };
-  },
+): RunnableServiceNode<D, typeof computeParams> => {
+  const node = service({ type: "prisma-cloud/compute", inputs: deps, params: computeParams, handler });
+  return Object.freeze({
+    ...node,
+    async run(address: string) {
+      const config = deserialize(configOf(node), address);
+      return node.invoke(await hydrate(node, config) as never, config.service as never);
+    },
+  }) as RunnableServiceNode<D, typeof computeParams>;
 };

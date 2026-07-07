@@ -1,0 +1,68 @@
+/**
+ * The pack's config codec — the semantic↔physical mapping, private to the
+ * pack, SHARED by run() (boot) and /target's serialize (deploy) so writer and
+ * reader cannot drift.
+ *
+ * Keys are unique per service within the shared project namespace: the codec
+ * prefixes them with the deployment address (its segments after the app
+ * root — empty for a lone-service deploy, the "unprefixed" case), then the
+ * owner (the input name, dropped for the service's own params), then the
+ * param name. auth's db.url ↔ AUTH_DB_URL; a lone service's db.url ↔ DB_URL.
+ * The platform's DATABASE_URL is never among them — forbidden and poisoned
+ * at project provision (see docs/design/05-prisma-cloud/alchemy-lowering.md).
+ */
+import type { Config, ConfigDeclaration } from "@makerkit/core";
+
+// The ambient environment of whatever runtime hosts the bundle. Declared
+// structurally so this entry imports no runtime's types.
+declare const process: { readonly env: Record<string, string | undefined> };
+
+export const configKey = (address: string, d: ConfigDeclaration): string => {
+  const segments = address.split(".").filter((s) => s.length > 0);
+  const owner = d.owner === "service" ? [] : [d.owner.input];
+  return [...segments, ...owner, d.name].join("_").toUpperCase();
+};
+
+function coerce(raw: string | undefined, d: ConfigDeclaration, key: string): unknown {
+  // "" is UNRESOLVED, not a value — falls to the default or, if required, is
+  // a loud boot failure; a NON-EMPTY value that fails its declared type is
+  // an error regardless of any default (a default substitutes for absence,
+  // never for garbage).
+  const present = raw !== undefined && raw !== "";
+  if (!present) {
+    if (d.default !== undefined) return d.default;
+    if (d.optional) return undefined;
+    throw new Error(`missing required config param "${d.name}" (env ${key})`);
+  }
+  if (d.type === "number") {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(`invalid number for config param "${d.name}" (env ${key}): ${JSON.stringify(raw)}`);
+    }
+    return parsed;
+  }
+  return raw;
+}
+
+/**
+ * Boot: read each declared param from env by its key, coerce to its type
+ * (the pack reversing its own serialization — missing/unparseable fails
+ * loudly), assemble the typed Config. The one place in the pack that reads
+ * the platform environment.
+ */
+export const deserialize = (shape: readonly ConfigDeclaration[], address: string): Config => {
+  const service: Record<string, unknown> = {};
+  const inputs: Record<string, Record<string, unknown>> = {};
+
+  for (const d of shape) {
+    const key = configKey(address, d);
+    const value = coerce(process.env[key], d, key);
+    if (d.owner === "service") {
+      service[d.name] = value;
+    } else {
+      (inputs[d.owner.input] ??= {})[d.name] = value;
+    }
+  }
+
+  return { service, inputs };
+};

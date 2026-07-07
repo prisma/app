@@ -2,11 +2,15 @@
  * The lowering table — the only place @makerkit/prisma-alchemy is imported.
  * Deploy-time only; never lands in a runtime bundle.
  */
-
-import type { Target } from '@makerkit/core/deploy';
-import * as Prisma from '@makerkit/prisma-alchemy';
-import * as Effect from 'effect/Effect';
-import type * as Layer from 'effect/Layer';
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
+import type * as Layer from "effect/Layer";
+import * as Output from "alchemy/Output";
+import * as Prisma from "@makerkit/prisma-alchemy";
+import { configOf } from "@makerkit/core";
+import type { ServiceNode } from "@makerkit/core";
+import type { Target } from "@makerkit/core/deploy";
+import { configKey } from "./codec.ts";
 
 export interface PrismaCloudOptions {
   workspaceId: string;
@@ -23,34 +27,115 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   // this is the one commented cast, and it lives in the pack, not core.
   providers: () => Prisma.providers() as unknown as Layer.Layer<never>,
 
-  lower: {
-    // For now the postgres input is served by the project's default database
-    // (Compute auto-injects DATABASE_URL), so it provisions nothing itself.
-    // It becomes a real Database resource when contracts/multiple DBs arrive.
-    'prisma-cloud/postgres': () => Effect.succeed({ outputs: {} }),
-
-    // The service is the deployment unit: Project + ComputeService + Deployment.
-    'prisma-cloud/compute': ({ id, opts }) =>
+  // Runs ONCE per lowering, before any service: the application's Project,
+  // with the poison DATABASE_URL/DATABASE_URL_POOLED variables written
+  // immediately so nothing can ever rely on the platform default.
+  application: {
+    provision: ({ opts }) =>
       Effect.gen(function* () {
-        const project = yield* Prisma.Project(`${id}-project`, {
+        const project = yield* Prisma.Project(`${opts.name}-project`, {
           workspaceId: o.workspaceId,
-          name: id,
+          name: opts.name,
         });
-        const svc = yield* Prisma.ComputeService(`${id}-svc`, {
-          projectId: project.id,
+        for (const key of ["DATABASE_URL", "DATABASE_URL_POOLED"]) {
+          yield* Prisma.EnvironmentVariable(`${key}-poison`, {
+            projectId: project.id,
+            key,
+            value: "", // "" preferred; "-" if the API rejects empty values.
+            class: "production",
+          });
+        }
+        return { outputs: { projectId: project.id } };
+      }),
+  },
+
+  resources: {
+    // Each postgres input gets its own Database in the application's project.
+    // The url output fills the service's db.url Config leaf and is encoded by
+    // serialize under the service's own named key — never the platform default.
+    "prisma-cloud/postgres": ({ id, application }) =>
+      Effect.gen(function* () {
+        const db = yield* Prisma.Database(`${id}-db`, {
+          projectId: application.outputs.projectId as string,
           name: id,
           region: o.region ?? 'us-east-1',
         });
-        const deploy = yield* Prisma.Deployment(`${id}-deploy`, {
-          computeServiceId: svc.id,
-          artifactPath: opts.artifact.path,
-          artifactHash: opts.artifact.sha256,
-          port: 3000,
-        });
-        // outputs are the inter-node config-wiring hook: expose what hand-wired
-        // neighbors in a mixed stack need (the URL for consumers; the project id
-        // for e.g. an EnvironmentVariable scoped to this service's project).
-        return { outputs: { url: deploy.deployedUrl, projectId: project.id } };
+        const conn = yield* Prisma.Connection(`${id}-conn`, { databaseId: db.id, name: id });
+        const url = Output.map(conn.connectionString, (value) => Redacted.value(value));
+        return { outputs: { url } };
       }),
+  },
+
+  services: {
+    "prisma-cloud/compute": {
+      // The service as a PLACE inside the application's Project: the App,
+      // identity-bearing only, no code runs.
+      provision: ({ id, application }) =>
+        Effect.gen(function* () {
+          const svc = yield* Prisma.ComputeService(`${id}-svc`, {
+            projectId: application.outputs.projectId as string,
+            name: id,
+            region: o.region ?? "us-east-1",
+          });
+          return { outputs: { serviceId: svc.id, projectId: application.outputs.projectId } };
+        }),
+
+      // Encode the typed Config into the runtime environment — one env var
+      // per leaf, keyed by the SAME codec run() reads at boot (codec.ts,
+      // env-free, shared both directions). Values are the provisioning refs
+      // core built the Config from, so each env var depends on its
+      // resource/producer — the ordering edges. class production; the
+      // platform default is never written.
+      serialize: ({ address, node }, provisioned, config) =>
+        Effect.gen(function* () {
+          const records = [];
+          for (const d of configOf(node as ServiceNode)) {
+            const value =
+              d.owner === "service" ? config.service[d.name] : config.inputs[d.owner.input]?.[d.name];
+            const key = configKey(address, d);
+            records.push(
+              yield* Prisma.EnvironmentVariable(`${key}-var`, {
+                projectId: provisioned.outputs.projectId as string,
+                key,
+                value: value as never,
+                class: "production",
+              }),
+            );
+          }
+          return { outputs: { environment: records } };
+        }),
+
+      // Print the bootstrap (address baked in) and assemble the deployable
+      // artifact: bootstrap.js + compute.manifest.json beside the app bundle,
+      // deterministic tar.gz (fixed mtimes/ordering so unchanged inputs hash
+      // identically). The actual fs/tar work lives in prisma-alchemy — this
+      // pack's shipped src imports no node:/bun API (invariant 5).
+      package: ({ id }, { bundle, address }) =>
+        Effect.try(() =>
+          Prisma.packageComputeArtifact({
+            id,
+            bundleDir: bundle.dir,
+            bundleEntry: bundle.entry,
+            address,
+          }),
+        ),
+
+      // A specific BUILD into the place: version → upload → start → promote.
+      // The environment prop references serialize's env-var records, so the
+      // version depends on them (the edge that kills PRO-211 + propagates
+      // change). deployedUrl is read post-promote — the create-time domain is
+      // a placeholder (PRO-200).
+      deploy: ({ id }, provisioned, artifact, serialized) =>
+        Effect.gen(function* () {
+          const deployment = yield* Prisma.Deployment(`${id}-deploy`, {
+            computeServiceId: provisioned.outputs.serviceId as string,
+            artifactPath: artifact.path,
+            artifactHash: artifact.sha256,
+            environment: serialized.outputs.environment as readonly Prisma.EnvironmentVariable[],
+            port: 3000,
+          });
+          return { outputs: { url: deployment.deployedUrl, projectId: provisioned.outputs.projectId } };
+        }),
+    },
   },
 });
