@@ -47,31 +47,47 @@ export const EnvironmentVariableProvider = () =>
         stables: ['id'],
         list: () => Effect.succeed([] as EnvironmentVariableAttributes[]),
         reconcile: Effect.fn(function* ({ news, output }) {
-          // The value is write-only (stored encrypted), so it can't be diffed.
-          // If we already created this variable, PATCH the value to match `news`;
-          // otherwise create it.
-          if (output?.id) {
-            const existing = yield* callOptional(() =>
-              client.GET('/v1/environment-variables/{envVarId}', {
-                params: { path: { envVarId: output.id } },
+          const cls = news.class ?? "production";
+          // The value is write-only (encrypted), so we never diff it — we PATCH.
+          // Find the row to write, adopting in order: our own prior row
+          // (output.id), then a pre-existing row at the same (project, class,
+          // key). The platform seeds DATABASE_URL/_POOLED at project creation,
+          // which MakerKit poisons — a duplicate POST 409s and the API directs
+          // callers to PATCH. Adopting also makes create idempotent.
+          let id = output?.id;
+          if (id !== undefined) {
+            const priorId = id;
+            const mine = yield* callOptional(() =>
+              client.GET("/v1/environment-variables/{envVarId}", {
+                params: { path: { envVarId: priorId } },
               }),
             );
-            if (existing) {
-              yield* call(() =>
-                client.PATCH('/v1/environment-variables/{envVarId}', {
-                  params: { path: { envVarId: output.id } },
-                  body: { value: news.value },
-                }),
-              );
-              return { id: existing.data.id, key: existing.data.key };
-            }
+            if (!mine) id = undefined;
+          }
+          if (id === undefined) {
+            const match = yield* call(() =>
+              client.GET("/v1/environment-variables", {
+                params: { query: { projectId: news.projectId, class: cls, key: news.key } as never },
+              }),
+            );
+            id = (match as { data?: Array<{ id: string }> }).data?.[0]?.id;
+          }
+          if (id !== undefined) {
+            const targetId = id;
+            yield* call(() =>
+              client.PATCH("/v1/environment-variables/{envVarId}", {
+                params: { path: { envVarId: targetId } },
+                body: { value: news.value },
+              }),
+            );
+            return { id, key: news.key };
           }
 
           const created = yield* call(() =>
             client.POST('/v1/environment-variables', {
               body: {
                 projectId: news.projectId,
-                class: news.class ?? 'production',
+                class: cls,
                 key: news.key,
                 value: news.value,
                 ...(news.branchId ? { branchId: news.branchId } : {}),

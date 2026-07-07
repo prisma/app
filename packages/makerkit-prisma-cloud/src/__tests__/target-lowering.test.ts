@@ -61,21 +61,22 @@ const { postgres } = await import("../index.ts");
 const run = <A>(eff: Effect.Effect<A, unknown, unknown>): A => Effect.runSync(eff as Effect.Effect<A>);
 
 describe("prismaCloud().application.provision", () => {
-  test('provisions one Project and poisons DATABASE_URL + DATABASE_URL_POOLED with ""', () => {
+  test('provisions one Project and poisons DATABASE_URL + DATABASE_URL_POOLED with "-"', () => {
     const target = prismaCloud({ workspaceId: "ws_1" });
 
     const result = run<LoweredNode>(target.application.provision({ opts: { name: "shop" } } as unknown as LowerContext));
 
     expect(result.outputs).toEqual({ projectId: "shop-project#cloud-id" });
     expect(recorded.project).toEqual([["shop-project", { workspaceId: "ws_1", name: "shop" }]]);
+    // "-", not "": the API rejects empty env-var values (verified at the R4 deploy proof).
     expect(recorded.envVar).toEqual([
       [
         "DATABASE_URL-poison",
-        { projectId: "shop-project#cloud-id", key: "DATABASE_URL", value: "", class: "production" },
+        { projectId: "shop-project#cloud-id", key: "DATABASE_URL", value: "-", class: "production" },
       ],
       [
         "DATABASE_URL_POOLED-poison",
-        { projectId: "shop-project#cloud-id", key: "DATABASE_URL_POOLED", value: "", class: "production" },
+        { projectId: "shop-project#cloud-id", key: "DATABASE_URL_POOLED", value: "-", class: "production" },
       ],
     ]);
   });

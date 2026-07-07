@@ -41,7 +41,10 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
           yield* Prisma.EnvironmentVariable(`${key}-poison`, {
             projectId: project.id,
             key,
-            value: "", // "" preferred; "-" if the API rejects empty values.
+            // "-", not "": the API rejects empty env-var values with
+            // "String must contain at least 1 character" (verified at the R4
+            // deploy proof). Any garbage value fails a real connect loudly.
+            value: "-",
             class: "production",
           });
         }

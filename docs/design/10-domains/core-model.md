@@ -686,7 +686,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
         })
         for (const key of ["DATABASE_URL", "DATABASE_URL_POOLED"]) {
           yield* Prisma.EnvironmentVariable(`${key}-poison`, {
-            projectId: project.id, key, value: "", class: "production",  // "" preferred; "-" if the API rejects empty
+            projectId: project.id, key, value: "-", class: "production",  // "-": the API rejects "" (verified at the deploy proof)
           })
         }
         return { outputs: { projectId: project.id } }

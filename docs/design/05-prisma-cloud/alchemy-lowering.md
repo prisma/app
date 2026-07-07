@@ -28,9 +28,10 @@ a project's default database — a convenience for hand-provisioned single
 services, and precisely the kind of **implicit ambient config MakerKit exists to
 eliminate**. MakerKit never reads it, never depends on it, and makes reliance on
 it impossible: when MakerKit provisions a Project, it **writes user-level
-`DATABASE_URL` and `DATABASE_URL_POOLED` variables with a poison value** (empty
-string preferred — our own pipeline treats `""` as unresolved, and any direct
-reader fails at connect; `"-"` if the API rejects empty values). User-set values
+`DATABASE_URL` and `DATABASE_URL_POOLED` variables with a poison value** (`"-"` —
+a garbage value any direct reader fails to connect with; the API rejects an empty
+string, `"String must contain at least 1 character"`, verified at the R4 deploy
+proof). User-set values
 permanently override the platform templates (`wireDefaultDatabaseUrl` leaves
 them untouched), so nothing deployed by MakerKit can ever quietly work off the
 default again. Every database URL a service consumes is an explicit, per-service
