@@ -1,6 +1,4 @@
-// Runtime bundle entry (app-owned). This service declares no inputs, so the
-// pipeline resolves only its own params — no connections to define.
-import { runHost } from '@makerkit/core/runtime';
-import service from './service';
-
-await runHost(service);
+// Runtime bundle entry (app-owned): a pure re-export; nothing runs on
+// import. The Service node carries its own run(); the pack-printed
+// bootstrap imports this bundle and calls main.run(address).
+export { default } from "./service.ts";

@@ -1,14 +1,19 @@
 // The Storefront calls the Auth service while serving the request — the
-// ingress -> Auth path the MVP exercises. AUTH_URL is injected per environment
-// (wired to the Auth hex in alchemy.run.ts); if unset the page says so.
+// ingress -> Auth path the MVP exercises. STOREFRONT_AUTH_URL is the auth
+// connection's PHYSICAL key: address "storefront" ▸ owner (input) "auth" ▸
+// name "url" → STOREFRONT_AUTH_URL (see @makerkit/prisma-cloud's configKey).
+// Reading it directly here — rather than through the hydrated `auth` client
+// service.ts declares — is the documented framework-DI gap: there is no
+// `use()` yet to pull a hydrated connection into a Next Server Component: R4
+// scope is the address/config plumbing, not that DI primitive.
 
-// Render on every request so the runtime-injected AUTH_URL is used — otherwise
-// Next prerenders this page at build time, when AUTH_URL is unset.
-export const dynamic = 'force-dynamic';
+// Render on every request so the runtime-injected value is used — otherwise
+// Next prerenders this page at build time, before it exists.
+export const dynamic = "force-dynamic";
 
 async function getAuthStatus(): Promise<string> {
-  const base = process.env.AUTH_URL;
-  if (!base) return 'AUTH_URL not set';
+  const base = process.env.STOREFRONT_AUTH_URL;
+  if (!base) return "STOREFRONT_AUTH_URL not set";
   try {
     const res = await fetch(new URL('/verify', base), { cache: 'no-store' });
     return `${res.status} ${(await res.text()).trim()}`;

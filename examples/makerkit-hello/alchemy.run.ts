@@ -1,35 +1,25 @@
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { lower } from '@makerkit/core/deploy';
-import { prismaCloud } from '@makerkit/prisma-cloud/target';
-import service from './src/service.ts';
+import { fileURLToPath } from "node:url";
+import { lower } from "@makerkit/core/deploy";
+import { prismaCloud } from "@makerkit/prisma-cloud/target";
+import service from "./src/service.ts";
 
 /**
- * Deploy script (heavy imports — never bundled): lowers the authored service
- * onto Prisma Cloud. One project (its default Postgres, auto-injected as
- * DATABASE_URL) + one Compute service + one Deployment.
+ * Deploy script (heavy imports; never bundled): lowers the authored service
+ * onto Prisma Cloud — one Project (poisoned DATABASE_URL/_POOLED, a real
+ * named Database for `db`), one Compute service, one Deployment. Interim
+ * hand-written stack until `makerkit deploy` (a declarative
+ * makerkit.config.ts) lands — see core-model.md's Extension points.
  *
- *   pnpm build     # bundles src/main.ts + manifest → dist/hello.tar.gz
+ *   pnpm build     # bundles src/main.ts to dist/bundle — bundling only
  *   pnpm deploy    # builds, sources ../../.env, runs `alchemy deploy`
  *
  * Requires env (repo-root .env, see `pnpm setup:env`):
  * PRISMA_SERVICE_TOKEN, PRISMA_WORKSPACE_ID, ALCHEMY_PASSWORD.
  */
-const artifact = fileURLToPath(new URL('./dist/hello.tar.gz', import.meta.url));
-
-const workspaceId = process.env['PRISMA_WORKSPACE_ID'];
-if (!workspaceId) throw new Error('PRISMA_WORKSPACE_ID is required');
-
-// `alchemy destroy` never uploads the artifact, so it must not require a
-// prior build; deploy always builds first (see the `deploy` script).
-const sha256 = existsSync(artifact)
-  ? createHash('sha256').update(readFileSync(artifact)).digest('hex')
-  : 'absent';
+const workspaceId = process.env.PRISMA_WORKSPACE_ID;
+if (!workspaceId) throw new Error("PRISMA_WORKSPACE_ID is required");
 
 export default lower(service, prismaCloud({ workspaceId }), {
-  // Overridable so CI can give each run a unique stack name — cloud resource
-  // ids are derived from it, and a fixed name collides across concurrent runs.
-  name: process.env['HELLO_STACK_NAME'] ?? 'makerkit-hello',
-  artifact: { path: artifact, sha256 },
+  name: "makerkit-hello",
+  bundle: { dir: fileURLToPath(new URL("./dist/bundle", import.meta.url)) },
 });

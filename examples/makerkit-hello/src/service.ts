@@ -1,12 +1,16 @@
-import { compute } from '@makerkit/prisma-cloud';
-import { database } from './connections.ts';
+import { compute, postgres } from "@makerkit/prisma-cloud";
+import { SQL } from "bun";
+
+// The connection + its driver live here — the app's choice of client.
+// max/idleTimeout keep the pool resilient to Compute's scale-to-zero.
+const db = postgres({ client: ({ url }) => new SQL({ url, max: 1, idleTimeout: 10 }) });
 
 /**
  * The authored service: a Compute service with a Postgres dependency. The
  * handler reads nothing from the environment — core's pipeline hydrates `db`
- * (through the connection defined in connections.ts) and resolves `port`.
+ * and resolves `port`.
  */
-export default compute({ db: database }, ({ db }, { port }) =>
+export default compute({ db }, ({ db }, { port }) =>
   Bun.serve({
     port,
     hostname: '0.0.0.0',
