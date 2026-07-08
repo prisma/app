@@ -40,8 +40,12 @@ re-prove live is the headline proof. See the R5 slice below.
 
 ### [~] Slice R6 — typed RPC connection contracts
 
-> **Active** on `claude/rpc-contracts` (off `main`). Design settled + **compiled
-> proof** (`contract-satisfaction.poc.ts`); slice spec written; dispatch in progress.
+> **Built + proven live**, in review — [PR #13](https://github.com/prisma/makerkit/pull/13)
+> on `claude/rpc-contracts` (off `main`). Design + two compiled proofs
+> (`contract-satisfaction.poc.ts`, `typed-hex-wiring.poc.ts`); four dispatched units
+> (types → runtime → example → hex enforcement), Opus-reviewed (finding closed), green,
+> and the storefront renders `auth.verify() -> { ok: true }` over real RPC. Awaiting
+> operator merge decision.
 
 **Outcome:** service-to-service Connections become typed. A framework-owned
 `Contract<Kind, Cmp>` (opaque `Cmp` + `kind` brand + runtime `satisfies()`); the
