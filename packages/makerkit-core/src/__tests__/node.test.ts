@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
+import type { Contract } from '../contract.ts';
 import { connectionEnd, hex, isNode, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
+
+const fakeContract = <Cmp>(cmp: Cmp): Contract<'rpc', Cmp> => ({
+  kind: 'rpc',
+  __cmp: cmp,
+  satisfies: (required) => required.__cmp === cmp,
+});
 
 describe('resource()', () => {
   test('returns a branded, frozen resource node carrying its connection', () => {
@@ -82,6 +89,27 @@ describe('service()', () => {
     expect(() => service({ type: '', inputs: {}, params: {}, build })).toThrow(
       /non-empty node type/,
     );
+  });
+
+  test('expose is absent by default', () => {
+    const node = service({ type: 'fake/app', inputs: {}, params: {}, build });
+
+    expect(node.expose).toBeUndefined();
+  });
+
+  test('carries a frozen expose map of named output-port Contracts when declared', () => {
+    const authContract = fakeContract({ verify: async () => ({ ok: true }) });
+    const node = service({
+      type: 'fake/app',
+      inputs: {},
+      params: {},
+      build,
+      expose: { rpc: authContract },
+    });
+
+    expect(node.expose).toEqual({ rpc: authContract });
+    expect(node.expose?.rpc).toBe(authContract);
+    expect(Object.isFrozen(node.expose)).toBe(true);
   });
 });
 

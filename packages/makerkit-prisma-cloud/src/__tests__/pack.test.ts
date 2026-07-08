@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import type { Contract } from '@makerkit/core';
 import { configOf, hydrateSync, isNode } from '@makerkit/core';
 import { compute, postgres } from '../index.ts';
 import { configKey, deserialize } from '../serializer.ts';
@@ -80,6 +81,30 @@ describe('compute()', () => {
     });
 
     expect(deps).toEqual({ db: { url: 'postgres://fake' } });
+  });
+});
+
+describe('compute({ expose })', () => {
+  const fakeContract = <Cmp>(cmp: Cmp): Contract<'rpc', Cmp> => ({
+    kind: 'rpc',
+    __cmp: cmp,
+    satisfies: (required) => required.__cmp === cmp,
+  });
+
+  test('threads the exposed contract map onto the node, frozen', () => {
+    const authContract = fakeContract({ verify: async () => ({ ok: true }) });
+
+    const node = compute({ deps: {}, build, expose: { rpc: authContract } });
+
+    expect(node.expose).toEqual({ rpc: authContract });
+    expect(node.expose?.rpc).toBe(authContract);
+    expect(Object.isFrozen(node.expose)).toBe(true);
+  });
+
+  test('expose is absent when not declared — services without it keep working unchanged', () => {
+    const node = compute({ deps: {}, build });
+
+    expect(node.expose).toBeUndefined();
   });
 });
 

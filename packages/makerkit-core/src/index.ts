@@ -25,6 +25,7 @@ export type {
   BuildAdapter,
   ConnectionEnd,
   Deps,
+  Expose,
   HexBuilder,
   HexNode,
   Hydrated,

@@ -9,6 +9,7 @@
  * core never interprets it beyond lookup.
  */
 import type { ConfigParam, Connection, Params, Values } from './config.ts';
+import type { Contract } from './contract.ts';
 
 // Brand — set by the factories below; how Load tells a node from junk.
 // Symbol.for so the check survives duplicated module instances in a workspace.
@@ -52,13 +53,19 @@ export interface BuildAdapter {
  * knowledge, so the pack's factory returns a runnable/loadable subclass that
  * adds `run`/`load` (see RunnableServiceNode). The node is the handle.
  */
-export interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends NodeBase {
+export interface ServiceNode<
+  D extends Deps = Deps,
+  P extends Params = Params,
+  E extends Expose = Expose,
+> extends NodeBase {
   readonly kind: 'service';
   readonly inputs: D;
   /** Service-level config declarations (e.g. port). */
   readonly params: P;
   /** How the app's entry is built + assembled. */
   readonly build: BuildAdapter;
+  /** Named output ports this service exposes — the Contracts a consumer's `rpc(contract)` can require. */
+  readonly expose?: E;
 }
 
 /**
@@ -70,8 +77,11 @@ export interface ServiceNode<D extends Deps = Deps, P extends Params = Params> e
  * reads the stash, hydrates + memoizes the deps, and returns them typed. Core
  * defines this shape; only a target pack instantiates it.
  */
-export interface RunnableServiceNode<D extends Deps = Deps, P extends Params = Params>
-  extends ServiceNode<D, P> {
+export interface RunnableServiceNode<
+  D extends Deps = Deps,
+  P extends Params = Params,
+  E extends Expose = Expose,
+> extends ServiceNode<D, P, E> {
   run(address: string, boot: () => Promise<unknown>): Promise<unknown>;
   load(): Loaded<D, P>;
 }
@@ -121,6 +131,10 @@ export type ProvisionedRef = { readonly id: string };
 // biome-ignore lint/suspicious/noExplicitAny: `any` (not `unknown`) preserves loaded-dep inference from each entry's hydrate return.
 export type Deps = Record<string, ResourceNode<any> | ConnectionEnd<any>>;
 
+/** Output-port map: name → the Contract a service exposes for others to depend on. */
+// biome-ignore lint/suspicious/noExplicitAny: opaque per-port Cmp — core never inspects it (see Contract).
+export type Expose = Readonly<Record<string, Contract<any, any>>>;
+
 export type Hydrated<N> =
   N extends ResourceNode<infer C> ? C : N extends ConnectionEnd<infer C> ? C : never;
 export type HydratedDeps<D extends Deps> = { readonly [K in keyof D]: Hydrated<D[K]> };
@@ -167,22 +181,28 @@ export function resource<P extends Params, C>(def: {
 
 /**
  * Constructs a branded, frozen Service node — declarations only (inputs, params,
- * build adapter). Pure; carries no handler.
+ * build adapter, and the ports it exposes). Pure; carries no handler.
  */
-export function service<D extends Deps, P extends Params>(def: {
+export function service<
+  D extends Deps,
+  P extends Params,
+  E extends Expose = Record<never, never>,
+>(def: {
   type: string;
   inputs: D;
   params: P;
   build: BuildAdapter;
-}): ServiceNode<D, P> {
+  expose?: E;
+}): ServiceNode<D, P, E> {
   requireType(def.type, 'service');
-  const node: ServiceNode<D, P> = {
+  const node: ServiceNode<D, P, E> = {
     [NODE]: true,
     kind: 'service',
     type: def.type,
     inputs: Object.freeze({ ...def.inputs }) as D,
     params: freezeParams(def.params),
     build: Object.freeze({ ...def.build }),
+    ...(def.expose !== undefined ? { expose: Object.freeze({ ...def.expose }) as E } : {}),
   };
   return Object.freeze(node);
 }
