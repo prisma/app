@@ -190,3 +190,37 @@ guard, side-effect-free-import test) carry forward into the rebuild.
       build→deploy pipeline (it runs each assembler and drops the interim per-service
       bundle map); the deterministic Next-standalone artifact still gates a true
       no-op redeploy.
+
+12. **Typed connection contracts; framework-owned, protocol-parametric; the compat
+    check is plain assignability the kind makes correct** (operator discussion, R6).
+    Design + a **compiled proof** in
+    [`docs/design/10-domains/connection-contracts.md`](../../../docs/design/10-domains/connection-contracts.md)
+    and `contract-satisfaction.poc.ts`; slice in
+    [`slices/r6-typed-rpc-contracts/spec.md`](slices/r6-typed-rpc-contracts/spec.md).
+    In brief:
+
+    - **Contract = the interface at a dependency boundary**, the same idea as a Prisma
+      Data Contract pointed at data instead of HTTP. A `Contract<Kind, Cmp>` carries a
+      `kind` brand, an opaque comparison type `Cmp`, and a runtime `satisfies()`. The
+      core is parametric over it — it holds values, does assignability on `Cmp`, calls
+      `satisfies()`; it never inspects protocol or mechanics.
+    - **Compat is enforced at compile time by TypeScript** (the primary check),
+      confirmed at Load by `satisfies()` (nominal — identity/version — today, structural
+      later, back-compat), and validated per call at runtime. The compile check is one
+      generic line — `provision`'s `wiring: { [K]: NoInfer<Deps[K]> }` — plain
+      assignability; the RPC **kind** makes it correct by building `Cmp` as a **concrete
+      function map** (`rpc()` returns a concrete `(input) => Promise<output>`), so TS
+      applies contravariant-input / covariant-output. **The trap the proof caught:**
+      deriving `Client<M>` as a mapped type relates the `M`s covariantly and silently
+      accepts incompatible providers — so `Cmp` must be a concrete function map.
+    - **Neutral contract, adapter on each end:** the provider `serve()`s (the framework
+      generates the RPC server, forces handlers to satisfy the exposed contracts); the
+      consumer's `load()` returns the client adapter. The binding (network / in-memory /
+      mock) is chosen by the **hex wiring**, so a Connection is a real port. RPC-first
+      (removes HTTP semantics); the wire is pack-private; the untyped `http()` stays as
+      the escape hatch and the raw view of a service's full surface.
+    - **Rejected/parked:** blind `extends` on the contract type (disproven — the mapped-
+      type variance trap); a separate `provides`/`Satisfies` relation passed to the core
+      (unnecessary — the kind bakes correctness into `Cmp`); Effect HttpApi in the
+      contract (keeps it framework-neutral); structural runtime comparison, gRPC/WS
+      kinds, PDL authoring, distributed published-spec compare (all later).

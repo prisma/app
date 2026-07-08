@@ -38,10 +38,29 @@ re-prove live is the headline proof. See the R5 slice below.
 
 ## Build slices (this project)
 
-### [~] Slice R5 — authoring-surface redesign (`compute({deps,build})`, `run`/`load`, build adapters)
+### [~] Slice R6 — typed RPC connection contracts
 
-> **Active** on `claude/plan-state-store` / PR #10 (retrofits R4). Design settled
-> (decision 11); docs rewritten; implementation dispatched; re-prove live pending.
+> **Active** on `claude/rpc-contracts` (off `main`). Design settled + **compiled
+> proof** (`contract-satisfaction.poc.ts`); slice spec written; dispatch in progress.
+
+**Outcome:** service-to-service Connections become typed. A framework-owned
+`Contract<Kind, Cmp>` (opaque `Cmp` + `kind` brand + runtime `satisfies()`); the
+core's compat check is plain assignability with `NoInfer` on the brand; the RPC kind
+(`@makerkit/rpc`) makes it correct by building `Cmp` as a concrete function map, so TS
+enforces contravariant-input / covariant-output at the hex wiring. `serve(service,
+handlers)` generates the RPC server + forces handler↔contract satisfaction; `load()`
+returns the typed client (RPC over HTTP). `http()` stays as the untyped escape hatch.
+Proof: storefront-auth live, storefront renders `auth.verify()` typed.
+**Contract:** `docs/design/10-domains/connection-contracts.md` + the compiled POC.
+**Builds on:** R5 (`main`). **Out:** in-memory/mock bindings, structural satisfies,
+gRPC/WS, PDL, contract errors, distributed spec compare, hex boundary ports.
+**Dispatches:** (1) core + `@makerkit/rpc` types + compat + type tests; (2) RPC
+runtime (serve + client binding); (3) examples retrofit; (4) deploy/verify + Opus.
+
+### [x] Slice R5 — authoring-surface redesign (`compute({deps,build})`, `run`/`load`, build adapters) — **merged** (PR #10, squashed to `main` `23ed278`)
+
+> Retrofitted R4: service = declarations, `run`/`load`, build adapters; proven live;
+> Opus-reviewed; PR-review round addressed + resolved. See decision 11.
 
 **Outcome:** the service is declarations only (`compute({ deps, build })`, no
 handler); the node carries `run(address, boot)` (resolve → stash → boot) and
