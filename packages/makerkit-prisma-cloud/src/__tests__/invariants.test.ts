@@ -54,8 +54,8 @@ describe('invariant 2: authoring imports stay lean (core + pack)', () => {
   });
 });
 
-describe("invariant 4: exactly one environment read — inside the config serializer's deserialize", () => {
-  test("the process-env token appears exactly once in the pack's src, in serializer.ts", () => {
+describe('invariant 4: the only environment touches are inside the config serializer', () => {
+  test("the process-env token appears exactly twice in the pack's src, both in serializer.ts (deserialize's one read, stash's one write)", () => {
     const sources = shippedSources();
     expect(sources.length).toBeGreaterThan(0);
 
@@ -65,7 +65,7 @@ describe("invariant 4: exactly one environment read — inside the config serial
       return count > 0 ? [{ file, count }] : [];
     });
 
-    expect(hits).toEqual([{ file: 'serializer.ts', count: 1 }]);
+    expect(hits).toEqual([{ file: 'serializer.ts', count: 2 }]);
   });
 });
 

@@ -1,7 +1,5 @@
-// Local dev convenience (not part of the deploy artifact — main.ts stays a
-// pure re-export). Boots the service directly via its own run(); this
-// service's address depends on the hex it's provisioned into at deploy —
-// for standalone local dev it's run unaddressed ("" — unprefixed keys).
-import service from '../src/service.ts';
-
-await service.run('');
+// Local dev convenience (not part of the deploy artifact). The app's own
+// entry calls service.load() directly, unaddressed — for standalone local
+// dev that reads plain DB_URL/PORT from the local environment (the
+// serializer's unprefixed case).
+import '../src/server.ts';

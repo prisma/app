@@ -22,6 +22,16 @@ function shippedSources(): { file: string; text: string }[] {
   return out;
 }
 
+const leanTokens = [
+  'alchemy',
+  'effect',
+  'prisma-alchemy',
+  'new SQL(',
+  'ProviderCollection',
+  'from "bun"',
+  '"node:', // a node:-scheme import always appears quoted in a bundle
+];
+
 describe('entry map: core splits into authoring + deploy only — no runtime entry', () => {
   test("package.json exports exactly '.' and './deploy'", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
@@ -62,16 +72,27 @@ describe("invariant 2: the '.' authoring entry bundles lean", () => {
     const js = await out.outputs[0]!.text();
     // Positive marker: the probe genuinely bundled core's factories.
     expect(js).toContain('makerkit:node');
-    for (const token of [
-      'alchemy',
-      'effect',
-      'prisma-alchemy',
-      'new SQL(',
-      'ProviderCollection',
-      'from "bun"',
-      '"node:', // a node:-scheme import always appears quoted in a bundle
-    ]) {
+    for (const token of leanTokens) {
       expect(js).not.toContain(token);
+    }
+  });
+
+  test('the ecosystem-seam adapters (@makerkit/node, @makerkit/nextjs) are equally lean', async () => {
+    const out = await Bun.build({
+      entrypoints: [
+        path.join(pkgDir, '..', 'makerkit-node', 'src', 'index.ts'),
+        path.join(pkgDir, '..', 'makerkit-nextjs', 'src', 'index.ts'),
+      ],
+      target: 'bun',
+    });
+    expect(out.success).toBe(true);
+    expect(out.outputs.length).toBe(2);
+
+    for (const output of out.outputs) {
+      const js = await output.text();
+      for (const token of leanTokens) {
+        expect(js).not.toContain(token);
+      }
     }
   });
 });

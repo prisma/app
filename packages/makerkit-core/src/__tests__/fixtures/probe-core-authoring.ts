@@ -14,7 +14,7 @@ const app = service({
   type: 'probe/app',
   inputs: { db },
   params: { port: { type: 'number', default: 3000 } },
-  handler: ({ db: client }) => client,
+  build: { kind: 'node', entry: 'server.js' },
 });
 
 const peer = connectionEnd({
@@ -26,7 +26,7 @@ const caller = service({
   type: 'probe/app',
   inputs: { peer },
   params: {},
-  handler: ({ peer: client }) => client,
+  build: { kind: 'node', entry: 'server.js' },
 });
 
 export const wired = Load(

@@ -113,17 +113,18 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
           return { outputs: { environment: records } };
         }),
 
-      // Print the bootstrap (address baked in) and assemble the deployable
-      // artifact: bootstrap.js + compute.manifest.json beside the app bundle,
+      // Print the bootstrap (address + boot import baked in) and assemble the
+      // deployable artifact from the build adapter's normalized dir: bootstrap.js
+      // + compute.manifest.json beside the wrapper + the app's entry,
       // deterministic tar.gz (fixed mtimes/ordering so unchanged inputs hash
       // identically). The actual fs/tar work lives in prisma-alchemy — this
       // pack's shipped src imports no node:/bun API (invariant 5).
-      package: ({ id }, { bundle, address }) =>
+      package: ({ id }, { assembled, address }) =>
         Effect.try(() =>
           Prisma.packageComputeArtifact({
             id,
-            bundleDir: bundle.dir,
-            ...(bundle.entry !== undefined ? { bundleEntry: bundle.entry } : {}),
+            bundleDir: assembled.dir,
+            appEntry: assembled.entry,
             address,
           }),
         ),

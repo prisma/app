@@ -3,9 +3,11 @@ import { Load, LoadError } from '../graph.ts';
 import { resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
+const build = { kind: 'node', entry: 'server.js' };
+
 const db = () => resource({ type: 'fake/db', connection: conn({}, () => ({})) });
 const app = (inputs: Record<string, ReturnType<typeof db>>) =>
-  service({ type: 'fake/app', inputs, params: {}, handler: () => null });
+  service({ type: 'fake/app', inputs, params: {}, build });
 
 describe('Load', () => {
   test('builds path-derived ids, edges, and topo-ordered nodes (deps first)', () => {
@@ -36,16 +38,21 @@ describe('Load', () => {
     ]);
   });
 
-  test('executes nothing', () => {
+  test('executes nothing — Load never calls a connection hydrate', () => {
     let calls = 0;
     const root = service({
       type: 'fake/app',
-      inputs: { db: db() },
-      params: {},
-      handler: () => {
-        calls += 1;
-        return null;
+      inputs: {
+        db: resource({
+          type: 'fake/db',
+          connection: conn({}, () => {
+            calls += 1;
+            return {};
+          }),
+        }),
       },
+      params: {},
+      build,
     });
 
     Load(root);

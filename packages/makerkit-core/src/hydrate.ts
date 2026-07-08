@@ -24,3 +24,24 @@ export async function hydrate(root: ServiceNode, config: Config): Promise<Hydrat
   }
   return deps as HydratedDeps<Deps>;
 }
+
+/**
+ * Synchronous hydrate — what the node's `load()` uses so
+ * `const { db } = service.load()` reads without `await`. Requires every
+ * connection.hydrate to return synchronously; a Promise return is a loud error
+ * naming the input (an async client factory must use the async `hydrate` path).
+ */
+export function hydrateSync(root: ServiceNode, config: Config): HydratedDeps<Deps> {
+  const deps: Record<string, unknown> = {};
+  for (const [name, inputNode] of Object.entries(root.inputs)) {
+    const values = config.inputs[name] ?? {};
+    const client = inputNode.connection.hydrate(values as never);
+    if (client instanceof Promise) {
+      throw new Error(
+        `Connection hydrate for input "${name}" returned a Promise; load() requires a synchronous client factory.`,
+      );
+    }
+    deps[name] = client;
+  }
+  return deps as HydratedDeps<Deps>;
+}

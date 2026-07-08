@@ -13,6 +13,7 @@
   "dependencies": {
     "@effect/platform-bun": "4.0.0-beta.92",
     "@makerkit/core": "workspace:*",
+    "@makerkit/node": "workspace:*",
     "@makerkit/prisma-cloud": "workspace:*",
     "alchemy": "2.0.0-beta.59"
   },

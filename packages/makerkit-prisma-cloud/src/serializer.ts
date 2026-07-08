@@ -14,8 +14,9 @@
 import type { Config, ConfigDeclaration } from '@makerkit/core';
 
 // The ambient environment of whatever runtime hosts the bundle. Declared
-// structurally so this entry imports no runtime's types.
-declare const process: { readonly env: Record<string, string | undefined> };
+// structurally so this entry imports no runtime's types. Writable: stash()
+// re-emits the resolved config here under address-free keys.
+declare const process: { env: Record<string, string | undefined> };
 
 export const configKey = (address: string, d: ConfigDeclaration): string => {
   const segments = address.split('.').filter((s) => s.length > 0);
@@ -72,4 +73,20 @@ export const deserialize = (shape: readonly ConfigDeclaration[], address: string
   }
 
   return { service, inputs };
+};
+
+/**
+ * run()'s controller step: re-emit the resolved Config under ADDRESS-FREE keys
+ * (`configKey("", d)`) — the process-local stash `load()` reads with no address.
+ * Env is the medium because a framework worker/child fork inherits it; a global
+ * would not. Writes only the MakerKit surface; the runtime's own keys are
+ * untouched.
+ */
+export const stash = (shape: readonly ConfigDeclaration[], config: Config): void => {
+  for (const d of shape) {
+    const value =
+      d.owner === 'service' ? config.service[d.name] : config.inputs[d.owner.input]?.[d.name];
+    if (value === undefined) continue;
+    process.env[configKey('', d)] = String(value);
+  }
 };

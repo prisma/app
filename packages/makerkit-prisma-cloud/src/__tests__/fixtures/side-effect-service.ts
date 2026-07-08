@@ -1,10 +1,17 @@
 import { compute, postgres } from '../../index.ts';
 
-// Importing this module must not increment this counter — only calling
-// `.run(...)` on the exported node should.
-export let handlerCallCount = 0;
+// Importing this module must not increment this counter — only load()
+// hydrating the db input should.
+export let clientCalls = 0;
 
-export default compute({ db: postgres({ client: ({ url }) => ({ url }) }) }, ({ db }) => {
-  handlerCallCount += 1;
-  return { db };
+export default compute({
+  deps: {
+    db: postgres({
+      client: ({ url }) => {
+        clientCalls += 1;
+        return { url };
+      },
+    }),
+  },
+  build: { kind: 'node', entry: 'server.js' },
 });

@@ -139,7 +139,10 @@ describe("prismaCloud().services['prisma-cloud/compute']", () => {
 
   test('serialize writes one env var per Config leaf, keyed by configKey(address, decl)', () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
-    const node = compute({ db: postgres({ client: ({ url }) => ({ url }) }) }, () => null);
+    const node = compute({
+      deps: { db: postgres({ client: ({ url }) => ({ url }) }) },
+      build: { kind: 'node', entry: 'server.js' },
+    });
     const ctx = { address: 'auth', node } as unknown as LowerContext;
     const provisioned: LoweredNode = {
       outputs: { serviceId: 'auth-svc#cloud-id', projectId: 'shop-project#cloud-id' },
@@ -185,7 +188,7 @@ describe("prismaCloud().services['prisma-cloud/compute']", () => {
 
     const result = run(
       target.services['prisma-cloud/compute']!.package(ctx, {
-        bundle: { dir: 'hexes/auth/dist/bundle' },
+        assembled: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
         address: 'auth',
       }),
     );
@@ -195,7 +198,7 @@ describe("prismaCloud().services['prisma-cloud/compute']", () => {
         {
           id: 'auth',
           bundleDir: 'hexes/auth/dist/bundle',
-          bundleEntry: undefined,
+          appEntry: 'server.js',
           address: 'auth',
         },
       ],

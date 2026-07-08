@@ -40,22 +40,32 @@ function readTar(gz: Buffer): { names: string[]; read: (name: string) => string 
 }
 
 describe('packageComputeArtifact', () => {
-  test('prints a bootstrap with zero import statements beyond the bundle entry', () => {
+  test('prints a bootstrap that statically imports only the wrapper, then dynamically imports the app entry', () => {
     const bundleDir = makeBundle({ 'main.js': 'export default { run: async () => {} };' });
 
-    const artifact = packageComputeArtifact({ id: 'auth', bundleDir, address: 'auth' });
+    const artifact = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'auth',
+    });
     const { read } = readTar(fs.readFileSync(artifact.path));
     const bootstrap = read('bootstrap.js');
 
     const importLines = bootstrap.split('\n').filter((line) => /^\s*import\b/.test(line));
     expect(importLines).toEqual(['import main from "./main.js";']);
-    expect(bootstrap).toContain('await main.run("auth");');
+    expect(bootstrap).toContain('await main.run("auth", () => import("./server.js"));');
   });
 
   test('writes compute.manifest.json with entrypoint bootstrap.js', () => {
     const bundleDir = makeBundle({ 'main.js': 'export default {};' });
 
-    const artifact = packageComputeArtifact({ id: 'hello', bundleDir, address: '' });
+    const artifact = packageComputeArtifact({
+      id: 'hello',
+      bundleDir,
+      appEntry: 'server.js',
+      address: '',
+    });
     const { read } = readTar(fs.readFileSync(artifact.path));
 
     expect(JSON.parse(read('compute.manifest.json'))).toEqual({
@@ -67,7 +77,12 @@ describe('packageComputeArtifact', () => {
   test('auto-detects main.mjs when main.js is absent', () => {
     const bundleDir = makeBundle({ 'main.mjs': 'export default {};' });
 
-    const artifact = packageComputeArtifact({ id: 'storefront', bundleDir, address: 'storefront' });
+    const artifact = packageComputeArtifact({
+      id: 'storefront',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'storefront',
+    });
     const { read } = readTar(fs.readFileSync(artifact.path));
 
     expect(read('bootstrap.js')).toContain('import main from "./main.mjs";');
@@ -79,8 +94,18 @@ describe('packageComputeArtifact', () => {
       'nested/asset.txt': 'hello',
     });
 
-    const first = packageComputeArtifact({ id: 'auth', bundleDir, address: 'auth' });
-    const second = packageComputeArtifact({ id: 'auth', bundleDir, address: 'auth' });
+    const first = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'auth',
+    });
+    const second = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'auth',
+    });
 
     expect(first.sha256).toBe(second.sha256);
     expect(fs.readFileSync(first.path).equals(fs.readFileSync(second.path))).toBe(true);
@@ -89,8 +114,37 @@ describe('packageComputeArtifact', () => {
   test('a different address changes the hash (the bootstrap is address-specific)', () => {
     const bundleDir = makeBundle({ 'main.js': 'export default {};' });
 
-    const a = packageComputeArtifact({ id: 'auth', bundleDir, address: 'auth' });
-    const b = packageComputeArtifact({ id: 'auth', bundleDir, address: 'storefront' });
+    const a = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'auth',
+    });
+    const b = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'storefront',
+    });
+
+    expect(a.sha256).not.toBe(b.sha256);
+  });
+
+  test('a different appEntry changes the hash (the bootstrap bakes in the boot import)', () => {
+    const bundleDir = makeBundle({ 'main.js': 'export default {};' });
+
+    const a = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'auth',
+    });
+    const b = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'other-server.js',
+      address: 'auth',
+    });
 
     expect(a.sha256).not.toBe(b.sha256);
   });
@@ -98,7 +152,12 @@ describe('packageComputeArtifact', () => {
   test('packages every bundle file, sorted, alongside the bootstrap and manifest', () => {
     const bundleDir = makeBundle({ 'main.js': 'export default {};', 'b.txt': 'b', 'a.txt': 'a' });
 
-    const artifact = packageComputeArtifact({ id: 'auth', bundleDir, address: 'auth' });
+    const artifact = packageComputeArtifact({
+      id: 'auth',
+      bundleDir,
+      appEntry: 'server.js',
+      address: 'auth',
+    });
     const { names } = readTar(fs.readFileSync(artifact.path));
 
     expect(names).toEqual(['a.txt', 'b.txt', 'bootstrap.js', 'compute.manifest.json', 'main.js']);
@@ -108,6 +167,7 @@ describe('packageComputeArtifact', () => {
     const artifact = packageComputeArtifact({
       id: 'auth',
       bundleDir: path.join(os.tmpdir(), 'makerkit-artifact-test-does-not-exist'),
+      appEntry: 'server.js',
       address: 'auth',
     });
 

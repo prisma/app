@@ -18,19 +18,20 @@ export type {
 export { configOf } from './config.ts';
 export type { Edge, Graph, GraphNode, NodeId } from './graph.ts';
 export { Load, LoadError } from './graph.ts';
-export { hydrate } from './hydrate.ts';
+export { hydrate, hydrateSync } from './hydrate.ts';
 export type {
+  BuildAdapter,
   ConnectionEnd,
   Deps,
   HexBuilder,
   HexNode,
   Hydrated,
   HydratedDeps,
+  Loaded,
   NodeBase,
   ProvisionedRef,
   ResourceNode,
   RunnableServiceNode,
-  ServiceHandler,
   ServiceNode,
 } from './node.ts';
 export { connectionEnd, hex, isNode, resource, service } from './node.ts';

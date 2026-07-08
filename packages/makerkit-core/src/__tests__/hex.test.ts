@@ -4,6 +4,8 @@ import type { ProvisionedRef } from '../node.ts';
 import { connectionEnd, hex, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
+const build = { kind: 'node', entry: 'server.js' };
+
 const dbResource = () =>
   resource({
     type: 'fake/db',
@@ -21,7 +23,7 @@ const makeAuthService = () =>
     type: 'fake/compute',
     inputs: { db: dbResource() },
     params: {},
-    handler: () => 'auth',
+    build,
   });
 
 const makeStorefrontService = () =>
@@ -29,7 +31,7 @@ const makeStorefrontService = () =>
     type: 'fake/compute',
     inputs: { auth: httpEnd() },
     params: {},
-    handler: () => 'storefront',
+    build,
   });
 
 const twoServiceHex = () =>
@@ -68,17 +70,13 @@ describe('Load of a hex root', () => {
     expect(graph.nodes.map((n) => n.id)).toContain('auth');
   });
 
-  test('the body runs at Load, not at construction — and Load runs no handler', () => {
+  test('the body runs at Load, not at construction', () => {
     let bodyCalls = 0;
-    let handlerCalls = 0;
     const svc = service({
       type: 'fake/compute',
       inputs: {},
       params: {},
-      handler: () => {
-        handlerCalls += 1;
-        return null;
-      },
+      build,
     });
     const root = hex('shop', (h) => {
       bodyCalls += 1;
@@ -88,7 +86,6 @@ describe('Load of a hex root', () => {
     expect(bodyCalls).toBe(0);
     Load(root);
     expect(bodyCalls).toBe(1);
-    expect(handlerCalls).toBe(0);
   });
 
   test('duplicate provision ids are a LoadError', () => {
@@ -153,13 +150,13 @@ describe('Load of a hex root', () => {
       type: 'fake/compute',
       inputs: { peer: httpEnd() },
       params: {},
-      handler: () => null,
+      build,
     });
     const b = service({
       type: 'fake/compute',
       inputs: { peer: httpEnd() },
       params: {},
-      handler: () => null,
+      build,
     });
     const root = hex('shop', (h) => {
       // Forged ref: the builder API cannot produce this — the DAG check can.
@@ -191,14 +188,12 @@ describe('Load of a hex root', () => {
 });
 
 describe('importing a hex module', () => {
-  test('runs nothing — neither the body nor any handler (invariant 3)', async () => {
+  test('runs nothing — only Loading may run the body (invariant 3)', async () => {
     const fixture = await import('./fixtures/side-effect-hex.ts');
 
     expect(fixture.bodyCallCount).toBe(0);
-    expect(fixture.handlerCallCount).toBe(0);
 
     Load(fixture.default);
     expect(fixture.bodyCallCount).toBe(1);
-    expect(fixture.handlerCallCount).toBe(0);
   });
 });

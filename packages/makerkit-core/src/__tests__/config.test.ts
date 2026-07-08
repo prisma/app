@@ -3,6 +3,8 @@ import { configOf } from '../config.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
+const build = { kind: 'node', entry: 'server.js' };
+
 describe('configOf', () => {
   test('enumerates input params then service params — semantic, no platform keys', () => {
     const root = service({
@@ -17,7 +19,7 @@ describe('configOf', () => {
         }),
       },
       params: { port: { type: 'number', default: 3000 } },
-      handler: () => null,
+      build,
     });
 
     expect(configOf(root)).toEqual([
@@ -44,7 +46,7 @@ describe('configOf', () => {
         }),
       },
       params: { port: { type: 'number', default: 3000 } },
-      handler: () => null,
+      build,
     });
 
     const owners = configOf(root).map((e) => ({ owner: e.owner, name: e.name }));
@@ -59,7 +61,7 @@ describe('configOf', () => {
       type: 'fake/app',
       inputs: {},
       params: { port: { type: 'number', default: 3000 } },
-      handler: () => null,
+      build,
     });
 
     expect(configOf(root)).toEqual([
@@ -74,8 +76,7 @@ describe('configOf', () => {
     ]);
   });
 
-  test('executes nothing — no handler, no hydrate', () => {
-    let handlerCalls = 0;
+  test('executes nothing — configOf never calls a connection hydrate', () => {
     let hydrateCalls = 0;
     const root = service({
       type: 'fake/app',
@@ -89,15 +90,11 @@ describe('configOf', () => {
         }),
       },
       params: {},
-      handler: () => {
-        handlerCalls += 1;
-        return null;
-      },
+      build,
     });
 
     configOf(root);
 
-    expect(handlerCalls).toBe(0);
     expect(hydrateCalls).toBe(0);
   });
 });
@@ -117,7 +114,7 @@ describe('configOf over connection-end inputs', () => {
         }),
       },
       params: { port: { type: 'number', default: 3000 } },
-      handler: () => null,
+      build,
     });
 
     expect(configOf(root)).toEqual([

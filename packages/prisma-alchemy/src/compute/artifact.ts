@@ -15,10 +15,15 @@ import * as zlib from 'node:zlib';
 export interface PackageComputeArtifactOptions {
   /** The service's provision id — namespaces the temp output path. */
   readonly id: string;
-  /** The app-built bundle directory (LowerOptions.bundle(s)). */
+  /** The assembled bundle directory (wrapper + app entry + fixups). */
   readonly bundleDir: string;
-  /** Entry file name inside bundleDir. Defaults to main.js|main.mjs. */
+  /** The MakerKit wrapper file inside bundleDir. Defaults to main.js|main.mjs. */
   readonly bundleEntry?: string;
+  /**
+   * The app's own runnable inside bundleDir (e.g. "server.js") — baked into the
+   * bootstrap's boot import: `main.run(address, () => import("./<appEntry>"))`.
+   */
+  readonly appEntry: string;
   /** The node's deployment address — baked into the printed bootstrap. */
   readonly address: string;
 }
@@ -130,7 +135,7 @@ export function packageComputeArtifact(opts: PackageComputeArtifactOptions): Com
   }
 
   const entryFile = resolveEntry(opts.bundleDir, opts.bundleEntry);
-  const bootstrap = `import main from "./${entryFile}";\nawait main.run(${JSON.stringify(opts.address)});\n`;
+  const bootstrap = `import main from "./${entryFile}";\nawait main.run(${JSON.stringify(opts.address)}, () => import(${JSON.stringify(`./${opts.appEntry}`)}));\n`;
   const manifest = `${JSON.stringify({ manifestVersion: MANIFEST_VERSION, entrypoint: 'bootstrap.js' }, null, 2)}\n`;
 
   const files = walkFiles(opts.bundleDir).map((relPath) => ({

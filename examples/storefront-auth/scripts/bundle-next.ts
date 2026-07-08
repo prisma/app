@@ -3,10 +3,11 @@
  * pack packages at deploy. Run `next build` first (the `build:compute`
  * script does). Next's standalone tree omits the static assets and
  * `public/`, so this copies them in. The bundle entry is NOT server.js
- * directly: the app's MakerKit runtime entry (`src/main.ts` — a pure
- * re-export of the Service, whose node carries its own run()) is bundled to
- * `main.mjs` next to server.js, so the relative import resolves inside the
- * artifact and the MakerKit boot loop runs first (see service.ts).
+ * directly: the app's MakerKit wrapper (`src/service.ts` — declarations
+ * only, whose node carries its own run()) is bundled to `main.mjs` next to
+ * server.js, so the relative import resolves inside the artifact and the
+ * MakerKit boot loop runs first (bootstrap.js imports main.mjs, then
+ * dynamically imports server.js — see @makerkit/core/deploy's PackageInput).
  *
  * MakerKit ships no build step, but it does own the artifact envelope —
  * bootstrap.js + compute.manifest.json + the deterministic tar are printed
@@ -69,14 +70,14 @@ export async function bundleNextComputeArtifact(appDir: string): Promise<BundleN
     await fs.promises.cp(publicDir, path.join(appOut, 'public'), { recursive: true });
   }
 
-  // Bundle the MakerKit runtime entry to a temp dir, then place it next to
+  // Bundle the MakerKit wrapper to a temp dir, then place it next to
   // server.js as main.mjs (unambiguously ESM — the standalone tree's
-  // package.json is CJS-default). Its handler's `import("./server.js")`
+  // package.json is CJS-default). Its run()'s `import("./server.js")`
   // resolves relative to this file inside the artifact.
   const bundleTmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'storefront-main-'));
   try {
     await build({
-      entry: [path.join(resolvedApp, 'src', 'main.ts')],
+      entry: [path.join(resolvedApp, 'src', 'service.ts')],
       outDir: bundleTmp,
       format: 'esm',
       platform: 'node',
@@ -88,8 +89,8 @@ export async function bundleNextComputeArtifact(appDir: string): Promise<BundleN
       sourcemap: false,
       clean: false,
     });
-    const built = fs.readdirSync(bundleTmp).find((f) => /^main\.m?js$/.test(f));
-    if (!built) throw new Error(`tsdown produced no main.js in ${bundleTmp}`);
+    const built = fs.readdirSync(bundleTmp).find((f) => /^service\.m?js$/.test(f));
+    if (!built) throw new Error(`tsdown produced no service.js in ${bundleTmp}`);
     await fs.promises.copyFile(path.join(bundleTmp, built), path.join(appOut, 'main.mjs'));
   } finally {
     await fs.promises.rm(bundleTmp, { recursive: true, force: true });

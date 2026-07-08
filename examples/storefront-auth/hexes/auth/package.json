@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@makerkit/core": "workspace:*",
+    "@makerkit/node": "workspace:*",
     "@makerkit/prisma-cloud": "workspace:*",
     "hono": "^4.11.4"
   },

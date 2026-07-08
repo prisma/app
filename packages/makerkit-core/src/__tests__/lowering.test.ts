@@ -13,7 +13,7 @@ import {
   type Target,
 } from '../deploy.ts';
 import { Load } from '../graph.ts';
-import { connectionEnd, hex, resource, service } from '../node.ts';
+import { type BuildAdapter, connectionEnd, hex, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
 const db = () =>
@@ -21,12 +21,14 @@ const db = () =>
 const httpEnd = () =>
   connectionEnd({ type: 'fake/http', connection: conn({ url: { type: 'string' } }, () => ({})) });
 
+const defaultBuild: BuildAdapter = { kind: 'node', entry: 'server.js' };
+
 const app = (
   type: string,
   inputs: Record<string, ReturnType<typeof db> | ReturnType<typeof httpEnd>>,
   params: Record<string, { type: 'number' | 'string'; default?: unknown }> = {},
-  handler = () => null as unknown,
-) => service({ type, inputs, params: params as never, handler });
+  build: BuildAdapter = defaultBuild,
+) => service({ type, inputs, params: params as never, build });
 
 const opts = (extra: Partial<LowerOptions> = {}): LowerOptions => ({ name: 'hello', ...extra });
 
@@ -48,7 +50,7 @@ type Call =
   | {
       readonly phase: 'package';
       readonly id: string;
-      readonly bundle: Bundle;
+      readonly assembled: Bundle;
       readonly address: string;
     }
   | {
@@ -101,7 +103,7 @@ function fakeTarget() {
           calls.push({
             phase: 'package',
             id: ctx.id,
-            bundle: input.bundle,
+            assembled: input.assembled,
             address: input.address,
           });
           return Effect.succeed({ path: `/tmp/${ctx.id}.tar.gz`, sha256: `sha-${ctx.id}` });
@@ -161,7 +163,9 @@ describe('lowering a lone service root', () => {
     const { target, calls } = fakeTarget();
     const root = app('fake/compute', { db: db() });
 
-    const result = run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle' } })));
+    const result = run(
+      lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })),
+    );
 
     expect(calls.map((c) => c.phase)).toEqual([
       'application',
@@ -180,7 +184,7 @@ describe('lowering a lone service root', () => {
     const { target, calls } = fakeTarget();
     const root = app('fake/compute', { db: db() });
 
-    run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle' } })));
+    run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })));
 
     const provision = calls.find((c) => c.phase === 'provision');
     const pkg = calls.find((c) => c.phase === 'package');
@@ -192,7 +196,7 @@ describe('lowering a lone service root', () => {
     const { target, calls } = fakeTarget();
     const root = app('fake/compute', { db: db() }, { port: { type: 'number', default: 3000 } });
 
-    run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle' } })));
+    run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })));
 
     const serialize = calls.find((c) => c.phase === 'serialize');
     expect(serialize).toMatchObject({
@@ -200,7 +204,7 @@ describe('lowering a lone service root', () => {
     });
   });
 
-  test('package receives the bundle and the same address serialize used', () => {
+  test('package receives the build adapter output dir/entry and the same address serialize used', () => {
     const { target, calls } = fakeTarget();
     const root = app('fake/compute', {});
     const bundle: Bundle = { dir: 'dist/bundle', entry: 'main.mjs' };
@@ -208,14 +212,14 @@ describe('lowering a lone service root', () => {
     run(lowering(root, target, opts({ bundle })));
 
     const pkg = calls.find((c) => c.phase === 'package');
-    expect(pkg).toMatchObject({ bundle, address: '' });
+    expect(pkg).toMatchObject({ assembled: bundle, address: '' });
   });
 
   test("the environment edge: deploy's `environment` IS serialize's returned records (by recording, not order)", () => {
     const { target, calls } = fakeTarget();
     const root = app('fake/compute', { db: db() });
 
-    run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle' } })));
+    run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })));
 
     const serialize = calls.find((c) => c.phase === 'serialize');
     const deploy = calls.find((c) => c.phase === 'deploy');
@@ -229,17 +233,17 @@ describe('lowering a lone service root', () => {
     // once, from serialize, and threads them through to deploy's argument.
   });
 
-  test('runs no handler', () => {
-    let calls = 0;
+  test('the build descriptor is inert to lowering — any kind/entry lowers identically', () => {
     const { target } = fakeTarget();
-    const root = app('fake/compute', { db: db() }, {}, () => {
-      calls += 1;
-      return null;
+    const root = app('fake/compute', { db: db() }, {}, { kind: 'nonsense', entry: 'whatever.js' });
+
+    const result = run(
+      lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })),
+    );
+
+    expect(result).toEqual({
+      outputs: { url: 'https://hello.example', projectId: 'hello#project' },
     });
-
-    run(lowering(root, target, opts({ bundle: { dir: 'dist/bundle' } })));
-
-    expect(calls).toBe(0);
   });
 
   test('missing bundle for a lone service root is a LowerError', () => {
@@ -258,7 +262,9 @@ describe('lowering a lone service root', () => {
       cache: resource({ type: 'fake/unknown', connection: conn({}, () => ({})) }),
     });
 
-    const error = runError(lowering(root, target, opts({ bundle: { dir: 'dist/bundle' } })));
+    const error = runError(
+      lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })),
+    );
 
     expect(error).toBeInstanceOf(LowerError);
     expect(error.message).toContain('fake/unknown');
@@ -269,7 +275,9 @@ describe('lowering a lone service root', () => {
     const { target } = fakeTarget();
     const root = app('fake/other-compute', {});
 
-    const error = runError(lowering(root, target, opts({ bundle: { dir: 'dist/bundle' } })));
+    const error = runError(
+      lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })),
+    );
 
     expect(error).toBeInstanceOf(LowerError);
     expect(error.message).toContain('fake/other-compute');
@@ -294,8 +302,8 @@ describe('lowering a hex root — two connected services', () => {
       lowering(twoServiceHex(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle' },
-          storefront: { dir: 'hexes/storefront/dist/bundle' },
+          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -324,8 +332,8 @@ describe('lowering a hex root — two connected services', () => {
       lowering(twoServiceHex(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle' },
-          storefront: { dir: 'hexes/storefront/dist/bundle' },
+          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -343,8 +351,8 @@ describe('lowering a hex root — two connected services', () => {
       lowering(twoServiceHex(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle' },
-          storefront: { dir: 'hexes/storefront/dist/bundle' },
+          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -362,8 +370,8 @@ describe('lowering a hex root — two connected services', () => {
       lowering(twoServiceHex(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle' },
-          storefront: { dir: 'hexes/storefront/dist/bundle' },
+          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -380,7 +388,7 @@ describe('lowering a hex root — two connected services', () => {
     const error = runError(
       lowering(twoServiceHex(), target, {
         name: 'shop',
-        bundles: { auth: { dir: 'hexes/auth/dist/bundle' } },
+        bundles: { auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' } },
       }),
     );
 
@@ -395,8 +403,8 @@ describe('lowering a hex root — two connected services', () => {
       lowering(twoServiceHex(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle' },
-          storefront: { dir: 'hexes/storefront/dist/bundle' },
+          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -413,7 +421,7 @@ describe('lower()', () => {
     const target: Target = { ...fakeTarget().target, providers: () => ({}) as never };
     const root = app('fake/compute', {});
 
-    const stack = lower(root, target, opts({ bundle: { dir: 'dist/bundle' } }));
+    const stack = lower(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } }));
 
     expect(stack).toBeDefined();
   });

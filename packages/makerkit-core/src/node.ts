@@ -1,11 +1,12 @@
 /**
  * Core model: node types and the factories that construct them. All nodes are
- * plain, frozen, serializable data — with exactly three sanctioned behavior
- * slots hanging off the graph: the Service node's handler (`invoke`), a
- * Connection's `hydrate` (validated values → client), and — on the target
- * pack's runnable service subclass — `run` (the boot loop). Config
- * declarations are pure data; core reads no environment. A node's `type` is
- * its routing key at deploy; core never interprets it beyond lookup.
+ * plain, frozen, serializable data — with two sanctioned behavior slots: a
+ * Connection's `hydrate` (validated values → client) and, on the target pack's
+ * runnable service subclass, `run`/`load` (the process controller and its
+ * pull-DI). The Service node carries NO handler — it is a description; the code
+ * that serves is the app's own entrypoint. Config declarations are pure data;
+ * core reads no environment. A node's `type` is its routing key at deploy;
+ * core never interprets it beyond lookup.
  */
 import type { ConfigParam, Connection, Params, Values } from './config.ts';
 
@@ -22,7 +23,7 @@ export interface NodeBase {
 
 /**
  * A Resource a service depends on, carrying its connection face. C flows from
- * the connection's hydrate return type into the handler's parameter.
+ * the connection's hydrate return type into the loaded dependency.
  */
 export interface ResourceNode<C = unknown> extends NodeBase {
   readonly kind: 'resource';
@@ -30,31 +31,49 @@ export interface ResourceNode<C = unknown> extends NodeBase {
 }
 
 /**
- * A Service: inputs + its own declared params + the opaque handler
- * (`invoke`). This IS the user's default export — inspectable
- * (inputs/type/params), inert until invoked. The BASE node is not runnable:
- * booting needs a target's environment knowledge, so the pack's factory
- * returns a runnable subclass that adds `run(address)` (see RunnableServiceNode).
- * There is no separate handle type: the node is the handle.
+ * How a service's app becomes a runnable artifact. The DESCRIPTOR is pure data
+ * the service node carries (rides in service.ts, into every bundle); it names
+ * the adapter and the built-entry location, RELATIVE to the service dir — never
+ * an absolute or machine path. The heavy assembler is looked up by `kind` at
+ * deploy and never ships in a bundle.
+ */
+export interface BuildAdapter {
+  /** Assembler routing key, e.g. "node" · "nextjs". */
+  readonly kind: string;
+  /** Built runnable, service-dir-relative (e.g. "dist/server.js"). */
+  readonly entry: string;
+}
+
+/**
+ * A Service: inputs + its own declared params + how it is built. This IS the
+ * user's default export — inspectable (inputs/type/params/build), inert until
+ * run. It carries NO handler; the app's own entrypoint is the code that serves.
+ * The BASE node is not runnable: booting needs a target's environment
+ * knowledge, so the pack's factory returns a runnable/loadable subclass that
+ * adds `run`/`load` (see RunnableServiceNode). The node is the handle.
  */
 export interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends NodeBase {
   readonly kind: 'service';
   readonly inputs: D;
   /** Service-level config declarations (e.g. port). */
   readonly params: P;
-  invoke(deps: HydratedDeps<D>, ctx: Values<P>): unknown;
+  /** How the app's entry is built + assembled. */
+  readonly build: BuildAdapter;
 }
 
 /**
- * The pack's runnable service node — what a pack's authoring factory (e.g.
- * `compute()`) returns. `run` is the whole boot loop: deserialize the
- * platform environment (keyed off `address`, the bootstrap's one parameter)
- * into a typed Config, then core's `hydrate` + `invoke`. Core defines this
- * shape; only a target pack instantiates it.
+ * The pack's runnable/loadable service node — what a pack's authoring factory
+ * (e.g. `compute()`) returns. `run(address, boot)` is the process controller:
+ * deserialize the platform environment (keyed off `address`, the bootstrap's
+ * parameter) into a typed Config, stash it under process-local keys, then call
+ * `boot()` to start the app's entry. `load()` — called from inside that entry —
+ * reads the stash, hydrates + memoizes the deps, and returns them typed. Core
+ * defines this shape; only a target pack instantiates it.
  */
 export interface RunnableServiceNode<D extends Deps = Deps, P extends Params = Params>
   extends ServiceNode<D, P> {
-  run(address: string, opts?: unknown): Promise<unknown>;
+  run(address: string, boot: () => Promise<unknown>): Promise<unknown>;
+  load(): Loaded<D, P>;
 }
 
 /**
@@ -107,13 +126,11 @@ export type Hydrated<N> =
 export type HydratedDeps<D extends Deps> = { readonly [K in keyof D]: Hydrated<D[K]> };
 
 /**
- * ctx is nothing special: the service's own resolved params, typed by its
- * declaration.
+ * What load() returns: the hydrated deps and the service's resolved params,
+ * merged for ergonomics (`const { db, port } = service.load()`). Dep and param
+ * names are expected distinct; the merge is the surface the app entry consumes.
  */
-export type ServiceHandler<D extends Deps, P extends Params> = (
-  deps: HydratedDeps<D>,
-  ctx: Values<P>,
-) => unknown;
+export type Loaded<D extends Deps, P extends Params> = HydratedDeps<D> & Values<P>;
 
 function requireType(type: string, factory: string): void {
   if (typeof type !== 'string' || type.length === 0) {
@@ -149,14 +166,14 @@ export function resource<P extends Params, C>(def: {
 }
 
 /**
- * Constructs a branded, frozen Service node; `handler` becomes the node's
- * `invoke`. Pure — the handler is never called here.
+ * Constructs a branded, frozen Service node — declarations only (inputs, params,
+ * build adapter). Pure; carries no handler.
  */
 export function service<D extends Deps, P extends Params>(def: {
   type: string;
   inputs: D;
   params: P;
-  handler: ServiceHandler<D, P>;
+  build: BuildAdapter;
 }): ServiceNode<D, P> {
   requireType(def.type, 'service');
   const node: ServiceNode<D, P> = {
@@ -165,9 +182,7 @@ export function service<D extends Deps, P extends Params>(def: {
     type: def.type,
     inputs: Object.freeze({ ...def.inputs }) as D,
     params: freezeParams(def.params),
-    invoke(deps, ctx) {
-      return def.handler(deps, ctx);
-    },
+    build: Object.freeze({ ...def.build }),
   };
   return Object.freeze(node);
 }

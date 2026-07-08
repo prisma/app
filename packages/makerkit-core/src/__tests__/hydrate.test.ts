@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { hydrate } from '../hydrate.ts';
+import { hydrate, hydrateSync } from '../hydrate.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
+
+const build = { kind: 'node', entry: 'server.js' };
 
 const dbNode = (record?: (values: { url: string }) => void) =>
   resource({
@@ -21,7 +23,7 @@ describe('hydrate', () => {
       type: 'fake/app',
       inputs: { db: dbNode((v) => made.push(v)) },
       params: portParams,
-      handler: () => null,
+      build,
     });
 
     const deps = await hydrate(root, {
@@ -33,7 +35,7 @@ describe('hydrate', () => {
     expect(deps).toEqual({ db: { client: 'postgres://x' } });
   });
 
-  test('a ConnectionEnd hydrates through identical machinery — the handler cannot tell it apart', async () => {
+  test('a ConnectionEnd hydrates through identical machinery — the app cannot tell it apart', async () => {
     const root = service({
       type: 'fake/app',
       inputs: {
@@ -43,7 +45,7 @@ describe('hydrate', () => {
         }),
       },
       params: {},
-      handler: () => null,
+      build,
     });
 
     const deps = await hydrate(root, {
@@ -67,7 +69,7 @@ describe('hydrate', () => {
         }),
       },
       params: {},
-      handler: () => null,
+      build,
     });
 
     const deps = await hydrate(root, { service: {}, inputs: { db: { url: 'postgres://x' } } });
@@ -76,49 +78,46 @@ describe('hydrate', () => {
   });
 
   test('a dep-less service hydrates to an empty deps object', async () => {
-    const root = service({ type: 'fake/app', inputs: {}, params: portParams, handler: () => null });
+    const root = service({ type: 'fake/app', inputs: {}, params: portParams, build });
 
     expect(await hydrate(root, { service: { port: 3000 }, inputs: {} })).toEqual({});
   });
-
-  test("does not call the handler — that's the caller's separate step", async () => {
-    let handlerCalls = 0;
-    const root = service({
-      type: 'fake/app',
-      inputs: { db: dbNode() },
-      params: {},
-      handler: () => {
-        handlerCalls += 1;
-        return null;
-      },
-    });
-
-    await hydrate(root, { service: {}, inputs: { db: { url: 'postgres://x' } } });
-
-    expect(handlerCalls).toBe(0);
-  });
 });
 
-describe('node.invoke as the DI test path', () => {
-  test('injecting typed fakes and calling invoke directly needs no environment, no hydrate', () => {
-    let received: unknown;
-    let ctx: unknown;
+describe('hydrateSync', () => {
+  test('hydrates every input synchronously — no await required', () => {
+    const made: unknown[] = [];
     const root = service({
       type: 'fake/app',
-      inputs: { db: dbNode() },
+      inputs: { db: dbNode((v) => made.push(v)) },
       params: portParams,
-      handler: (deps, c) => {
-        received = deps;
-        ctx = c;
-        return 'served';
-      },
+      build,
     });
 
-    const fakeDb = { client: 'fake' };
-    const result = root.invoke({ db: fakeDb }, { port: 0 });
+    const deps = hydrateSync(root, {
+      service: { port: 8080 },
+      inputs: { db: { url: 'postgres://x' } },
+    });
 
-    expect(result).toBe('served');
-    expect(received).toEqual({ db: fakeDb });
-    expect(ctx).toEqual({ port: 0 });
+    expect(made).toEqual([{ url: 'postgres://x' }]);
+    expect(deps).toEqual({ db: { client: 'postgres://x' } });
+  });
+
+  test('throws, naming the input, when a connection hydrate returns a Promise', () => {
+    const root = service({
+      type: 'fake/app',
+      inputs: {
+        db: resource({
+          type: 'fake/db',
+          connection: conn({ url: { type: 'string' } }, async (v) => ({ asyncClient: v.url })),
+        }),
+      },
+      params: {},
+      build,
+    });
+
+    expect(() =>
+      hydrateSync(root, { service: {}, inputs: { db: { url: 'postgres://x' } } }),
+    ).toThrow(/db/);
   });
 });

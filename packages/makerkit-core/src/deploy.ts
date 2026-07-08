@@ -87,12 +87,14 @@ export interface ServiceLowering {
 }
 
 /**
- * The bootstrap the pack prints is the ONLY runnable in the artifact and has
- * zero imports beyond the bundle entry — the node carries its own run().
+ * The bootstrap the pack prints is the ONLY runnable MakerKit adds. It imports
+ * the wrapper and calls run with the address AND a boot thunk that imports the
+ * app's built entry (`assembled.entry`) — a printed, literal dynamic import, so
+ * no bundler ever follows it.
  */
 export interface PackageInput {
-  /** App-built, from LowerOptions. */
-  readonly bundle: Bundle;
+  /** The build adapter's normalized output: the bundle dir + the app's runnable. */
+  readonly assembled: AssembledBundle;
   /** The node's graph address — baked into the printed bootstrap. */
   readonly address: string;
 }
@@ -129,7 +131,8 @@ export interface LoweredNode {
 export interface LowerOptions {
   /** Stack + root node id. */
   readonly name: string;
-  // Bundles are app-built (MakerKit does not bundle app code). Service root:
+  // The interim carrier of assembled bundle dirs (the makerkit-deploy CLI runs
+  // each service's build-adapter assembler and drops this map). Service root:
   // one bundle. Hex root: one per provisioned service, keyed by provision id.
   readonly bundle?: Bundle;
   readonly bundles?: Record<string, Bundle>;
@@ -138,10 +141,20 @@ export interface LowerOptions {
   readonly state?: Layer.Layer<State, never, StackServices>;
 }
 
-/** entry default: main.js|main.mjs. */
+/**
+ * The interim assembled-bundle carrier: the dir the adapter's assembler
+ * produced (wrapper + app entry + fixups) and the app's runnable relative to
+ * it (for the bootstrap's boot import). Identical shape to AssembledBundle.
+ */
 export interface Bundle {
   readonly dir: string;
-  readonly entry?: string;
+  readonly entry: string;
+}
+
+/** A build adapter's normalized product: the bundle dir + the app's runnable entry. */
+export interface AssembledBundle {
+  readonly dir: string;
+  readonly entry: string;
 }
 
 /** package()'s product. */
@@ -297,7 +310,10 @@ export function lowering(
       if (bundle === undefined) {
         return yield* Effect.fail(missingBundleError(id, isHexRoot));
       }
-      const artifact = yield* serviceLowering.package(ctx, { bundle, address });
+      const artifact = yield* serviceLowering.package(ctx, {
+        assembled: { dir: bundle.dir, entry: bundle.entry },
+        address,
+      });
       lowered.set(id, yield* serviceLowering.deploy(ctx, provisioned, artifact, serialized));
     }
 

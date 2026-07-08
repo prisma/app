@@ -39,9 +39,13 @@ export default lower(app, prismaCloud({ workspaceId }), {
   // standing demo in the shared workspace; local dev uses the default.
   name: process.env['STOREFRONT_STACK_NAME'] ?? 'storefront-auth',
   bundles: {
-    auth: { dir: fileURLToPath(new URL('./hexes/auth/dist/bundle', import.meta.url)) },
+    auth: {
+      dir: fileURLToPath(new URL('./hexes/auth/dist/bundle', import.meta.url)),
+      entry: 'server.js',
+    },
     storefront: {
       dir: nextStandaloneDir(fileURLToPath(new URL('./hexes/storefront', import.meta.url))),
+      entry: 'server.js',
     },
   },
 });

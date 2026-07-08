@@ -42,13 +42,15 @@ describe('resource()', () => {
 });
 
 describe('service()', () => {
-  test('returns a branded, frozen service node with frozen inputs and params', () => {
+  const build = { kind: 'node', entry: 'dist/server.js' };
+
+  test('returns a branded, frozen service node with frozen inputs, params, and build', () => {
     const db = resource({ type: 'fake/db', connection: conn({}, () => ({})) });
     const node = service({
       type: 'fake/app',
       inputs: { db },
       params: { port: { type: 'number', default: 3000 } },
-      handler: () => null,
+      build,
     });
 
     expect(isNode(node)).toBe(true);
@@ -56,34 +58,28 @@ describe('service()', () => {
     expect(node.type).toBe('fake/app');
     expect(node.inputs.db).toBe(db);
     expect(node.params).toEqual({ port: { type: 'number', default: 3000 } });
+    expect(node.build).toEqual({ kind: 'node', entry: 'dist/server.js' });
     expect(Object.isFrozen(node)).toBe(true);
     expect(Object.isFrozen(node.inputs)).toBe(true);
     expect(Object.isFrozen(node.params)).toBe(true);
     expect(Object.isFrozen(node.params.port)).toBe(true);
+    expect(Object.isFrozen(node.build)).toBe(true);
   });
 
-  test('stores the handler as invoke; constructing calls nothing', () => {
-    let calls = 0;
+  test('carries no handler — the node is a pure description', () => {
     const node = service({
       type: 'fake/app',
       inputs: { db: resource({ type: 'fake/db', connection: conn({}, () => ({})) }) },
       params: { port: { type: 'number', default: 3000 } },
-      handler: (deps, ctx) => {
-        calls += 1;
-        return { deps, ctx };
-      },
+      build,
     });
 
-    expect(calls).toBe(0);
-
-    const fakeDb = { q: 1 };
-    const result = node.invoke({ db: fakeDb }, { port: 4242 });
-    expect(calls).toBe(1);
-    expect(result).toEqual({ deps: { db: fakeDb }, ctx: { port: 4242 } });
+    expect('invoke' in node).toBe(false);
+    expect(node.build.kind).toBe('node');
   });
 
   test('throws on an empty type', () => {
-    expect(() => service({ type: '', inputs: {}, params: {}, handler: () => null })).toThrow(
+    expect(() => service({ type: '', inputs: {}, params: {}, build })).toThrow(
       /non-empty node type/,
     );
   });

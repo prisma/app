@@ -10,7 +10,7 @@ import service from './src/service.ts';
  * hand-written stack until `makerkit deploy` (a declarative
  * makerkit.config.ts) lands — see core-model.md's Extension points.
  *
- *   pnpm build     # bundles src/main.ts to dist/bundle — bundling only
+ *   pnpm build     # bundles src/server.ts + src/service.ts to dist/bundle
  *   pnpm deploy    # builds, sources ../../.env, runs `alchemy deploy`
  *
  * Requires env (repo-root .env, see `pnpm setup:env`):
@@ -21,5 +21,8 @@ if (!workspaceId) throw new Error('PRISMA_WORKSPACE_ID is required');
 
 export default lower(service, prismaCloud({ workspaceId }), {
   name: 'makerkit-hello',
-  bundle: { dir: fileURLToPath(new URL('./dist/bundle', import.meta.url)) },
+  bundle: {
+    dir: fileURLToPath(new URL('./dist/bundle', import.meta.url)),
+    entry: 'server.js',
+  },
 });
