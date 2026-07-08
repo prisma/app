@@ -1,7 +1,7 @@
 import nextjs from '@makerkit/nextjs';
 import { compute } from '@makerkit/prisma-cloud';
 import { rpc } from '@makerkit/rpc';
-import { authContract } from '../../../auth.contract.ts';
+import { authContract } from '../../auth/src/contract.ts';
 
 export default compute({
   deps: { auth: rpc(authContract) },

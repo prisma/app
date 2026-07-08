@@ -1,7 +1,7 @@
 import node from '@makerkit/node';
 import { compute, postgres } from '@makerkit/prisma-cloud';
 import { SQL } from 'bun';
-import { authContract } from '../../../auth.contract.ts';
+import { authContract } from './contract.ts';
 
 // idleTimeout closes the pooled connection before Compute's scale-to-zero drops
 // it, so the next request reconnects instead of erroring (FT-5219).
