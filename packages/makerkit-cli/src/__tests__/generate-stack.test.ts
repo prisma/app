@@ -13,7 +13,6 @@ describe('renderStackFile() — a service root', () => {
       entryPkgDir: '/repo/examples/makerkit-hello',
       pack: '@makerkit/prisma-cloud',
       name: 'hello',
-      stage: undefined,
       assembled: {
         bundle: { dir: '/repo/examples/makerkit-hello/dist/bundle', entry: 'server.js' },
       },
@@ -27,20 +26,9 @@ describe('renderStackFile() — a service root', () => {
       'bundle: { dir: "/repo/examples/makerkit-hello/dist/bundle", entry: "server.js" }',
     );
     expect(content).not.toContain('bundles:');
+    // No `stage:` in the generated LowerOptions — core's lower() never reads
+    // it; the stage rides on the `alchemy --stage` flag instead.
     expect(content).not.toContain('stage:');
-  });
-
-  test('includes the stage literal when a stage is given', () => {
-    const content = renderStackFile({
-      entryPath: '/repo/app/src/service.ts',
-      entryPkgDir: '/repo/app',
-      pack: '@makerkit/prisma-cloud',
-      name: 'app',
-      stage: 'ci-42',
-      assembled: { bundle: { dir: '/repo/app/dist/bundle', entry: 'server.js' } },
-    });
-
-    expect(content).toContain('stage: "ci-42"');
   });
 
   test('renders `bundles` (keyed by provision id) for a hex root, not `bundle`', () => {
@@ -49,7 +37,6 @@ describe('renderStackFile() — a service root', () => {
       entryPkgDir: '/repo/app',
       pack: '@makerkit/prisma-cloud',
       name: 'app',
-      stage: undefined,
       assembled: {
         bundles: {
           auth: { dir: '/repo/app/hexes/auth/dist/bundle', entry: 'server.js' },
@@ -97,7 +84,6 @@ describe('the generated stack file for examples/makerkit-hello (no alchemy run)'
       entryPkgDir,
       pack,
       name: entry.root.name,
-      stage: undefined,
       assembled: { bundle: { dir: path.join(helloDir, 'dist', 'bundle'), entry: 'server.js' } },
     });
 

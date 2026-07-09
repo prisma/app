@@ -2,13 +2,13 @@
  * Argument parsing + orchestration of deploy-cli.md § The pipeline.
  */
 import { Load } from '@makerkit/core';
-import { assembleServices } from './assemble-services.ts';
+import { assembleServices, type RunAssembler } from './assemble-services.ts';
 import { CliError } from './cli-error.ts';
 import { GENERATED_STACK_RELATIVE_PATH, writeStackFile } from './generate-stack.ts';
 import { inferTarget } from './infer-target.ts';
 import { loadEntry } from './load-entry.ts';
 import { findPackageDir } from './package-anchor.ts';
-import { runAlchemy } from './run-alchemy.ts';
+import { type RunAlchemyInput, runAlchemy } from './run-alchemy.ts';
 
 export const USAGE = `Usage: makerkit <deploy|destroy> <entry> [--name <name>] [--stage <stage>]
 
@@ -59,8 +59,15 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   return { command, entry, name, stage };
 }
 
+/** Injectable seams so tests can drive run() without a real wrapper build or alchemy process. */
+export interface RunDeps {
+  /** Substituted into assembleServices — see RunAssembler. */
+  readonly runAssembler?: RunAssembler;
+  readonly alchemy?: (input: RunAlchemyInput) => number;
+}
+
 /** Runs the full pipeline; returns the process exit code. */
-export async function run(argv: readonly string[]): Promise<number> {
+export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<number> {
   const args = parseArgs(argv);
   const cwd = process.cwd();
 
@@ -80,8 +87,21 @@ export async function run(argv: readonly string[]): Promise<number> {
     throw new CliError('The root node has no name — name it at authoring, or pass --name.');
   }
 
-  // 5. Assemble each service.
-  const assembled = await assembleServices(graph, isHexRoot);
+  // 5. Assemble each service. A destroy evaluates the same stack program as a
+  // deploy (the generated file's lower() packages the artifacts), so missing
+  // built output blocks destroy too — say so instead of just "run your build".
+  let assembled: Awaited<ReturnType<typeof assembleServices>>;
+  try {
+    assembled = await assembleServices(graph, isHexRoot, deps.runAssembler);
+  } catch (error) {
+    if (args.command === 'destroy' && error instanceof Error) {
+      throw new CliError(
+        `${error.message}\n\ndestroy evaluates the same stack program as deploy, which packages ` +
+          'the built artifacts — so the app must be built first. Run the build, then retry the destroy.',
+      );
+    }
+    throw error;
+  }
 
   // 6. Generate .makerkit/alchemy.run.ts inside the entry module's package dir.
   const entryPkgDir = findPackageDir(entryModule.path, 'the entry module');
@@ -90,13 +110,12 @@ export async function run(argv: readonly string[]): Promise<number> {
     entryPkgDir,
     pack,
     name,
-    stage: args.stage,
     assembled,
   });
 
   // 7. Shell out to alchemy against the generated file.
   try {
-    const status = runAlchemy({
+    const status = (deps.alchemy ?? runAlchemy)({
       command: args.command,
       stackFileRelativePath: GENERATED_STACK_RELATIVE_PATH,
       cwd: entryPkgDir,

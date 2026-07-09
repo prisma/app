@@ -18,7 +18,9 @@ export interface StackFileInput {
   /** The pack package name whose `/target` supplies `fromEnv()`. */
   readonly pack: string;
   readonly name: string;
-  readonly stage: string | undefined;
+  // No `stage` field: core's lower() never reads LowerOptions.stage — the
+  // effective stage is Alchemy's own, passed as `--stage` on the alchemy
+  // invocation (run-alchemy.ts).
   readonly assembled: AssembledServices;
 }
 
@@ -42,7 +44,6 @@ function renderBundle(bundle: { dir: string; entry: string }): string {
 function renderOptions(input: StackFileInput): string {
   const lines: string[] = [];
   lines.push(`  name: ${quote(input.name)},`);
-  if (input.stage !== undefined) lines.push(`  stage: ${quote(input.stage)},`);
 
   if (input.assembled.bundle !== undefined) {
     lines.push(`  bundle: ${renderBundle(input.assembled.bundle)},`);
