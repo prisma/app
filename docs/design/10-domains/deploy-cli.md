@@ -1,34 +1,39 @@
 # The deploy CLI (`makerkit`)
 
 The MakerKit-owned deploy entrypoint: what the `makerkit` command does, the
-contracts it introduces, and what stays out of its scope. This is the design
-for the CLI MVP; the decisions it rests on are recorded in
+contracts it introduces, and what stays out of its scope. The decisions it
+rests on are recorded in
 [ADR-0003](../90-decisions/ADR-0003-deploy-derives-everything-from-the-root-node.md)
 (no config file, everything derived from the root node),
 [ADR-0004](../90-decisions/ADR-0004-paths-resolve-relative-to-the-authoring-file.md)
-(every path is relative to the file that writes it; the build adapter carries
-the authoring module),
+(every path is relative to the file that writes it),
 [ADR-0005](../90-decisions/ADR-0005-users-build-makerkit-assembles.md) (users
-build, MakerKit assembles), and
+build, MakerKit assembles),
 [ADR-0006](../90-decisions/ADR-0006-every-node-is-named.md) (node names; the
-root's name names the application).
+root's name names the application),
+[ADR-0007](../90-decisions/ADR-0007-deploy-drives-alchemy-through-a-generated-stack-file.md)
+(the generated stack file), and
+[ADR-0008](../90-decisions/ADR-0008-wrapper-inlines-everything-except-runtime-builtins.md)
+(wrapper inlining).
 
 ## Scope
 
-The MVP is two commands:
+Two commands:
 
-- **`makerkit deploy [entry]`** — deploy the application whose root node is
+- **`makerkit deploy <entry>`** — deploy the application whose root node is
   `entry`'s default export.
-- **`makerkit destroy [entry]`** — tear it down (same derivation, Alchemy
+- **`makerkit destroy <entry>`** — tear it down (same derivation, Alchemy
   destroy).
 
-Flags: `--name` (override the root's name — CI's per-run ephemeral deploys),
-`--stage`. Nothing else. `makerkit build`, `makerkit dev`, and topology
-emission are explicitly out of scope (see § Deferred).
+Flags: `--name` (override the root's name — per-run ephemeral deploys in
+shared workspaces), `--stage`. Nothing else. `makerkit build`, `makerkit dev`,
+and topology emission are out of scope (see § Out of scope).
 
-Acceptance for the MVP (met): both examples lost their `alchemy.run.ts` and
-hand-rolled deploy scripts, replaced by `makerkit deploy` / `makerkit destroy`,
-with the CI e2e green.
+**Runtime.** The bin is runtime-agnostic — no bun-only APIs anywhere in the
+CLI or assembly code — so it runs under both bun and node (≥ 22.18, where
+type stripping imports the user's `.ts` entry natively). One inherent caveat:
+an app whose service module imports bun APIs can only deploy under bun, since
+loading the graph imports that module — the app's choice, not a CLI limit.
 
 ## The pipeline
 
@@ -58,15 +63,16 @@ with the CI e2e green.
    any kind. Assembly validates the user's built output exists (missing →
    "run your build" error; staleness is not detected) and produces a
    normalized bundle `{ dir, entry }`.
-6. **Lower and drive.** Hand the root, the target, and the per-service
-   assembled bundles to `lower()`; execute the resulting Alchemy stack
-   (deploy or destroy) with state and stage options. `.makerkit/` and any
-   Alchemy state are written in the process's own working directory — tool
-   state lives where you run the tool, like any other CLI.
+6. **Lower and drive.** Write the pipeline's results as a runnable stack
+   module at `.makerkit/alchemy.run.ts` and drive the `alchemy` CLI against
+   it (ADR-0007). The generated file and Alchemy's state live in the
+   process's working directory — tool state lives where you run the tool,
+   like any other CLI (ADR-0004).
 
-Step 5 is what made the interim `alchemy.run.ts` unnecessary: the pass that
-runs assembly for a service is the same pass that lowers it, so the
-hand-maintained `bundle`/`bundles` correlation map has nothing left to say.
+The pass that assembles a service is the same pass that lowers it, so the
+correlation between services and their built bundles never exists as
+user-facing configuration — it is computed, written into the generated stack
+file, and consumed in one motion.
 
 ## Build ownership
 
@@ -132,64 +138,30 @@ The CLI's quality lives in its errors; each failure names its fix:
 | Built output missing | the expected path, and "run your build" |
 | Unresolvable pack/adapter subpath | the pack, the subpath, and to add/check the dependency (same resolver, pack or assembler seam) |
 
-## Deferred (designed around, not built)
+## Out of scope (designed around)
 
 - **`makerkit build`** — and with it any build-command convention or override.
 - **`makerkit dev`** — the local loop.
 - **Topology emission** — the serialized-topology artifact for agents/tooling;
   when it lands it must strip the machine-specific `build.module` (ADR-0004).
-- **Config-file escape hatch** — a `makerkit.config.ts` may return as the
-  *optional* override for multi-target or heavily parameterized setups; never
-  the standard path.
+- **Config-file escape hatch** — a `makerkit.config.ts` may exist one day as
+  the *optional* override for multi-target or heavily parameterized setups;
+  never the standard path.
 - **Freshness checks** — detecting stale (not just missing) built output.
+- **Entry discovery** — the entry path is required; bare invocation errors
+  with usage. A discovery convention (e.g. a `package.json` field) would be
+  additive.
 
-## Implementation decisions
+## CLI behavior notes
 
-- **Runtime of the CLI binary: node + bun.** The bin is runtime-agnostic —
-  no bun-only APIs in CLI or assembly code — so `npx makerkit` and
-  `bunx makerkit` both work. Importing the user's `.ts` entry requires
-  Node ≥ 22.18 (type stripping on by default); older Node users run under
-  bun. An app whose *service module* imports bun APIs can only deploy under
-  bun (Load imports that module) — the app's choice, not a CLI limit.
-- **Driving Alchemy: generate a runnable stack file.** The CLI writes its
-  computed correlation (assembled bundle dirs, name, stage) as a small,
-  human-readable stack module at `.makerkit/alchemy.run.ts` (gitignored,
-  regenerated every run), then shells to `alchemy deploy` / `alchemy destroy`
-  against it. The file is the CLI's work product made inspectable: if a
-  deploy misbehaves, running `alchemy deploy` on it directly bisects whose
-  bug it is. Error output prints the file's path. This also avoids depending
-  on the engine's programmatic entry at the pinned beta.
-- **No default `entry`.** The path is required; bare invocation errors with
-  usage. A discovery convention (e.g. a `package.json` field) can be added
-  later without breaking anyone.
-- **Argument parsing: clipanion.** Replaces a handrolled `parseArgs` — the
-  same CLI framework prisma-next's own tooling CLI uses (see
-  `migration-cli.ts`). `deploy`/`destroy` are clipanion `Command` classes with
-  a required `<entry>` positional and `--name`/`--stage` options; clipanion's
-  own arity checking rejects a trailing `--name`/`--stage` with no value and
-  unknown flags as usage errors (closing a bug where the handrolled parser
-  silently accepted them). `run()` still drives the pipeline itself against
-  the parsed args — rather than clipanion's own `cli.run()` — so thrown errors
-  reach `bin.ts` (and the `RunDeps` test seams) unchanged.
-- **`destroy` warns on no local deploy state.** If `<cwd>/.alchemy` is missing
-  or empty, `destroy` prints a warning before assembling or invoking alchemy —
-  it does not fail, since the likely causes (wrong directory, nothing ever
-  deployed) both mean "there is nothing to do here," not an error. CI's
-  destroy-guard script already skips the CLI entirely when `.alchemy` is
-  absent; this covers direct invocation and the "exists but empty" case the
-  script doesn't check.
-- **Wrapper inlining: everything except runtime built-ins.** The CLI has no
-  config file, so per-app bundling knobs can't exist. The wrapper build
-  inlines every import of the service module except `bun`, `bun:*`, and
-  `node:*` (which the hosting runtime provides). Verified empirically: the
-  assembler's explicit `external` wins over the catch-all `noExternal`, so
-  runtime built-ins stay external even under the match-all rule; pure-JS deps
-  (workspace packages, contract libraries like arktype) inline cleanly.
-- **The `--stage` flag is alchemy's.** The generated stack file carries no
-  stage; the CLI passes `--stage` through to the `alchemy` invocation, which
-  owns stage semantics.
+- `destroy` warns when `<cwd>/.alchemy` is missing or empty before invoking
+  alchemy — the likely causes (wrong directory, nothing ever deployed) mean
+  "nothing to do here", not an error; the warning makes the wrong-directory
+  case visible instead of silently succeeding (see ADR-0004's state rule).
+- `--stage` passes through to the `alchemy` invocation, which owns stage
+  semantics; the generated stack file carries no stage (ADR-0007).
 
-## Known limitations (MVP)
+## Known limitations
 
 - **`destroy` requires built artifacts.** `makerkit destroy` evaluates the
   same stack program as deploy, and the pack's `package()` reads the
