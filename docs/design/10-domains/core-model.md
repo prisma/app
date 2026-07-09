@@ -58,6 +58,7 @@ The boundary is decided; only the carve is deferred.
 | `@makerkit/core` | node factories (`service`, `resource`, `connectionEnd`, `hex`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
 | `@makerkit/core/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
 | `@makerkit/prisma-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres({ client })`, `http()` | `@makerkit/core` only |
+| `@makerkit/rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@makerkit/core` + a Standard Schema validator |
 | `@makerkit/prisma-cloud/target` | `prismaCloud()` | `@makerkit/prisma-alchemy`, `alchemy`, `effect` |
 | `@makerkit/node` · `@makerkit/nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@makerkit/core` only |
 | `@makerkit/node/assemble` · `@makerkit/nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
@@ -343,9 +344,14 @@ function hex(name: string, body: (h: HexBuilder) => void): HexNode   // body run
 ```
 
 `service()` freezes `inputs`/`params`/`build`; `resource()` freezes the
-connection's declared params. Both throw on an empty `type`. Nothing executes:
-constructing nodes is pure. The pack's authoring factory (`compute()`) calls
-`service()` and returns a subclass carrying `run` and `load`.
+connection's declared params. Both throw on an empty `type`; `service()`,
+`resource()`, and `connectionEnd()` also reject an input or param name containing
+`_`, and a hex's `provision()` rejects an id containing `_` or `.` — the pack's
+config-key serializer joins address segments and names with `_` (node ids join path
+segments with `.`), so either character inside a name would collide with that
+separator. Nothing executes: constructing nodes is pure. The pack's authoring
+factory (`compute()`) calls `service()` and returns a subclass carrying `run` and
+`load`.
 
 ## Graph and Load (`@makerkit/core`)
 
@@ -402,8 +408,8 @@ interface Target {
   readonly application: ApplicationLowering             // once per lowering, before anything else
   readonly resources: Record<string, Lowering>          // resource type id → one-shot lowering
   readonly services: Record<string, ServiceLowering>    // service type id → phased SPI
-  readonly state?: () => AlchemyStateLayer              // the target's default state backend, if any;
-                                                        // explicit opts.state always wins; default localState()
+  readonly state: () => AlchemyStateLayer               // the target's default state backend — every target
+                                                        // supplies one; explicit opts.state always wins
 }
 
 // The application's shared infrastructure: on Prisma Cloud, the one Project
@@ -489,7 +495,7 @@ interface LowerOptions {
   readonly bundles?: Record<string, Bundle>
   readonly stage?: string
   readonly state?: AlchemyStateLayer                     // explicit override — wins over the target's own
-                                                         // default (Target.state) and the localState() fallback
+                                                         // default (Target.state)
 }
 interface Bundle { readonly dir: string; readonly entry: string }          // the ONE assembled-bundle shape (assembler product; defined once, here)
 interface Artifact { readonly path: string; readonly sha256: string }       // package()'s product
@@ -512,13 +518,13 @@ function lowering(root: ServiceNode, target: Target, opts: LowerOptions):
 ```
 
 `lower()` is nothing but the whole-stack wrapper:
-`Alchemy.Stack(opts.name, { providers: target.providers(), state: opts.state ?? target.state?.() ?? localState() }, lowering(root, target, opts))`
-— Alchemy requires a state layer; a target may supply its own default (prisma-cloud
-defaults to a Prisma-hosted store), an explicit `opts.state` always wins, and local
-state is the ultimate fallback. Two type-level notes the wrapper carries (both commented
-at the single site): a `LowerError` is fatal at deploy (`Effect.orDie`), and the
-effect's requirements channel is narrowed to what `Alchemy.Stack` accepts —
-`lowering()` itself stays `unknown`-requirements for composability.
+`Alchemy.Stack(opts.name, { providers: target.providers(), state: opts.state ?? target.state() }, lowering(root, target, opts))`
+— Alchemy requires a state layer; every target supplies its own default (prisma-cloud
+defaults to a Prisma-hosted store), and an explicit `opts.state` always wins. Two
+type-level notes the wrapper carries (both commented at the single site): a
+`LowerError` is fatal at deploy (`Effect.orDie`), and the effect's requirements
+channel is narrowed to what `Alchemy.Stack` accepts — `lowering()` itself stays
+`unknown`-requirements for composability.
 In the mixed case the hand-written stack supplies providers itself (including the
 target's, via `target.providers()`), yields a `lowering(…)` per MakerKit-authored
 service, and wires its own resources around the returned `outputs`.
@@ -645,7 +651,7 @@ interface ConfigDeclaration {
   readonly type: ParamType
   readonly secret: boolean
   readonly optional: boolean
-  readonly default?: string | number
+  readonly default: string | number | undefined
 }
 function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @makerkit/core (pure)
 
@@ -734,7 +740,8 @@ export const compute = <D extends Deps>(def: {
     // Controller: resolve config from the address-keyed env, re-emit it under
     // address-free keys (the stash), then boot the app's entry.
     async run(address: string, boot: () => Promise<unknown>) {
-      stash(deserialize(configOf(node), address))   // the pack's ONE env read + coercion → address-free env
+      const shape = configOf(node)
+      stash(shape, deserialize(shape, address))   // the pack's ONE env read + coercion → address-free env
       return boot()
     },
     // Hydrate on demand from the stash; memoize per process.
@@ -759,7 +766,7 @@ export const configKey = (address: string, d: ConfigDeclaration): string => /* U
 
 // Boot readers/writers — process.env is touched ONLY here in the pack.
 const deserialize = (shape: readonly ConfigDeclaration[], address: string): Config => { /* read + coerce */ }
-const stash = (config: Config): void => { /* re-emit under address-free keys, the medium the framework's forks inherit */ }
+const stash = (shape: readonly ConfigDeclaration[], config: Config): void => { /* re-emit under address-free keys, the medium the framework's forks inherit */ }
 ```
 
 Target entry — the lowering table (the only place `prisma-alchemy` is imported):
@@ -844,7 +851,11 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
               class: "production",
             }))
           }
-          return { outputs: { environment: records } }   // → deploy's environment prop (the edge)
+          // The listen port the app binds is the service's own `port` param
+          // (already encoded above); carry it to deploy() through serialize's
+          // outputs, the phase that already holds the typed Config.
+          const port = typeof config.service.port === "number" ? config.service.port : 3000
+          return { outputs: { environment: records, port } }   // → deploy's environment prop and Deployment.port (the edges)
         }),
 
       // Print the bootstrap (address + boot import baked in) and assemble the
@@ -868,7 +879,9 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
             artifactPath: artifact.path,
             artifactHash: artifact.sha256,
             environment: serialized.outputs.environment,
-            port: 3000,
+            // Route to the port the app actually binds (resolved by serialize),
+            // not a hardcoded constant.
+            port: typeof serialized.outputs.port === "number" ? serialized.outputs.port : 3000,
           })
           return { outputs: { url: deploy.deployedUrl, projectId: provisioned.outputs.projectId } }
         }),
@@ -1072,10 +1085,15 @@ entry hydrates `db`. Neither entry can tell a connection from a resource.
 - **Framework-hosted DI is `load()`** — the Next page pulls its typed deps via
   `service.load()`, the same mechanism the Hono entry uses. No separate `use()`
   accessor is needed; the earlier framework-DI gap is closed by `load()`.
-- **Typed connection interfaces + generated clients** — today `http()` hydrates to
-  a plain URL-anchored client; the next step is declaring the interface of a
-  connection (routes, request/response bodies), enforcing compatibility at Load,
-  and hydrating a generated, strongly-typed client.
+- **Typed connection interfaces — shipped as Contracts.** A service-to-service
+  dependency is declared against a Contract (`@makerkit/rpc`'s `contract()` +
+  `rpc()`), compatibility is checked at the wiring site, at Load
+  (`satisfies()`), and per call, and the consumer's `load()` returns a typed
+  client. `http()` remains the untyped escape hatch. The mechanism — including
+  `expose` on the service node, ref-ports on `provision()`'s return, and
+  `serve()` — is documented in
+  [`connection-contracts.md`](connection-contracts.md); this document's type
+  sketches predate it and show the pre-contract shapes.
 - **Full Hex composition** — the minimal hex wires services; boundary ports
   (a hex's own Inputs/Outputs), nesting, and forwarding per the authoring-surface
   design come next. Services stay opaque leaves.

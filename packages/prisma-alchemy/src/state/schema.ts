@@ -1,4 +1,4 @@
-// TODO: replace with Prisma Next (deferred — see .drive/projects/authoring-layer/slices/r8-hosted-state-store/pn-adoption-design-note.md)
+// TODO: replace with Prisma Next (deferred — see docs/design/90-decisions/ADR-0012-the-state-store-speaks-sql-directly.md)
 
 import type { StateStoreError } from 'alchemy/State';
 import * as Effect from 'effect/Effect';

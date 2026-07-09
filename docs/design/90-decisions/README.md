@@ -24,4 +24,8 @@ _Earlier drafts (ADR-0001, ADR-0002) were retired as the high-level design settl
 - [ADR-0006](ADR-0006-every-node-is-named.md) — Every node is named; the root's name names the application.
 - [ADR-0007](ADR-0007-deploy-drives-alchemy-through-a-generated-stack-file.md) — Deploy drives Alchemy through a generated, inspectable stack file.
 - [ADR-0008](ADR-0008-wrapper-inlines-everything-except-runtime-builtins.md) — The boot wrapper inlines everything except runtime built-ins.
+- [ADR-0009](ADR-0009-deploy-state-is-hosted-in-the-workspace.md) — Deploy state is hosted in the workspace, not in local files.
+- [ADR-0010](ADR-0010-deploys-hold-a-session-advisory-lock.md) — Deploys hold a session advisory lock per stack and stage.
+- [ADR-0011](ADR-0011-targets-supply-the-deploy-state-layer.md) — Targets supply the deploy state layer; core owns no default.
+- [ADR-0012](ADR-0012-the-state-store-speaks-sql-directly.md) — The state store speaks SQL directly; Prisma Next adoption is deferred.
 
