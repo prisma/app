@@ -34,8 +34,10 @@ export type {
   PackAuthoredNode,
   ProvisionedRef,
   RefPort,
+  ResourceEnd,
   ResourceNode,
+  ResourceRef,
   RunnableServiceNode,
   ServiceNode,
 } from './node.ts';
-export { connectionEnd, hex, isNode, resource, service } from './node.ts';
+export { connectionEnd, hex, isNode, resource, resourceEnd, service } from './node.ts';
