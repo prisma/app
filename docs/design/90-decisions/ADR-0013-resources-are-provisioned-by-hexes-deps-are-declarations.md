@@ -1,4 +1,4 @@
-# ADR-0009: Resources are provisioned by hexes; a service's deps are declarations
+# ADR-0013: Resources are provisioned by hexes; a service's deps are declarations
 
 ## Status
 

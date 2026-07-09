@@ -38,7 +38,7 @@ export default compute({
   build: node({ module: import.meta.url, entry: "../dist/server.js" }),
 });
 
-// src/hex.ts — the root: the hex provisions the database and wires it in (ADR-0009).
+// src/hex.ts — the root: the hex provisions the database and wires it in (ADR-0013).
 import { hex } from "@makerkit/core";
 import { postgres } from "@makerkit/prisma-cloud";
 import service from "./service.ts";
@@ -116,7 +116,7 @@ follow:
   composed application because it carries its own name and therefore its own
   project.
 - A service with **unwired dependency slots** (resource or connection ends an
-  enclosing hex normally wires at `provision` — ADR-0009) fails at Load, with
+  enclosing hex normally wires at `provision` — ADR-0013) fails at Load, with
   an error naming the unwired input and pointing at deploying the composing
   hex instead.
 
@@ -166,7 +166,7 @@ follow:
   build/assembly ownership split the CLI drives.
 - [`ADR-0006`](ADR-0006-every-node-is-named.md) — where the application name
   comes from.
-- [`ADR-0009`](ADR-0009-resources-are-provisioned-by-hexes-deps-are-declarations.md)
+- [`ADR-0013`](ADR-0013-resources-are-provisioned-by-hexes-deps-are-declarations.md)
   — why the database lives in the hex, not the service's deps.
 - [`../10-domains/deploy-cli.md`](../10-domains/deploy-cli.md) — the full
   pipeline this decision anchors.
