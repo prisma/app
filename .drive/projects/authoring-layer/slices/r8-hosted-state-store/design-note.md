@@ -1,6 +1,8 @@
 # Design note — Prisma-hosted Alchemy state store (slice R8)
 
-Status: **draft — awaiting operator review.** Settles the design for the hosted
+Status: **settled — operator-reviewed 2026-07-09** (Target.state seam approved;
+`makerkit-state` project shape explained and accepted; proof on storefront-auth).
+The contract is [`spec.md`](spec.md). Settles the design for the hosted
 state store (Step 1 of the provisioning-state spectrum in
 [`layering.md`](../../../../docs/design/03-domain-model/layering.md)). Scope
 decisions already confirmed by the operator (2026-07-09):
@@ -148,12 +150,13 @@ Two options:
   (CI's ephemeral runs can keep `localState()` or unique stack names — both
   work).
 
-**Recommendation: (b).** One optional field on the SPI, one line in `lower()`,
-and the smooth-onramp goal is met for every deployer without per-app wiring.
-Core stays target-neutral (the field is generic, the pack supplies the value).
-Coordination note: `deploy.ts` is also grazed by the CLI track (its bundle
-handling); this edit is 2 lines in a different function — trivial rebase either
-direction.
+**Decision: (b), operator-approved.** One optional field on the SPI, one line
+in `lower()`, and the smooth-onramp goal is met for every deployer without
+per-app wiring. Core stays target-neutral (the field is generic, the pack
+supplies the value). No migration machinery: this is a PoC — the standing demo
+is destroyed and redeployed once onto hosted state. Coordination note:
+`deploy.ts` is also grazed by the CLI track (its bundle handling); this edit
+is 2 lines in a different function — trivial rebase either direction.
 
 ### D6 — Secrets in state: plaintext JSONB now, by explicit decision
 
@@ -215,10 +218,9 @@ Residual overlap: `deploy.ts` (different functions) and
 `examples/storefront-auth` deploy wiring (the proof target — operator accepted
 the conflict risk; rebase over the CLI track if needed).
 
-## Open items for operator review
+## Review outcome (2026-07-09)
 
-1. D5(b) — the optional `Target.state` default. Approve the core SPI addition?
-   (Cost acknowledged: flipping the default requires a one-time
-   `syncState(local → hosted)` or destroy/redeploy per existing stack.)
-2. Reserved state-project name: `makerkit-state` per workspace — naming OK?
-3. ~~Proof example~~ — settled: `storefront-auth`, conflict risk accepted.
+1. `Target.state` SPI default — **approved**.
+2. `makerkit-state` dedicated workspace project — **accepted** (PDP has no
+   workspace-level database; the app project is circular — see D3).
+3. Proof example — **storefront-auth**, CLI-track conflict risk accepted.
