@@ -40,7 +40,7 @@ export const compute = <D extends Deps, E extends Expose = Record<never, never>>
 
   let loaded: Loaded<D, typeof computeParams> | undefined;
 
-  return Object.freeze({
+  const runnable: RunnableServiceNode<D, typeof computeParams, E> = {
     ...node,
     async run(address: string, boot: () => Promise<unknown>) {
       const shape = configOf(node);
@@ -58,5 +58,6 @@ export const compute = <D extends Deps, E extends Expose = Record<never, never>>
       }
       return loaded;
     },
-  }) as RunnableServiceNode<D, typeof computeParams, E>;
+  };
+  return Object.freeze(runnable);
 };

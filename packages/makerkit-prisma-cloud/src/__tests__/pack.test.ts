@@ -136,6 +136,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
       type: 'string' as const,
       secret: false,
       optional: false,
+      default: undefined,
     };
 
     expect(configKey('storefront', decl)).toBe('STOREFRONT_AUTH_URL');
@@ -274,7 +275,14 @@ describe('the config pipeline over pack nodes', () => {
     const app = compute({ deps: { db: postgres({ client: ({ url }) => ({ url }) }) }, build });
 
     expect(configOf(app)).toEqual([
-      { owner: { input: 'db' }, name: 'url', type: 'string', secret: true, optional: false },
+      {
+        owner: { input: 'db' },
+        name: 'url',
+        type: 'string',
+        secret: true,
+        optional: false,
+        default: undefined,
+      },
       {
         owner: 'service',
         name: 'port',

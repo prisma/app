@@ -23,8 +23,22 @@ describe('configOf', () => {
     });
 
     expect(configOf(root)).toEqual([
-      { owner: { input: 'db' }, name: 'url', type: 'string', secret: true, optional: false },
-      { owner: { input: 'db' }, name: 'schema', type: 'string', secret: false, optional: true },
+      {
+        owner: { input: 'db' },
+        name: 'url',
+        type: 'string',
+        secret: true,
+        optional: false,
+        default: undefined,
+      },
+      {
+        owner: { input: 'db' },
+        name: 'schema',
+        type: 'string',
+        secret: false,
+        optional: true,
+        default: undefined,
+      },
       {
         owner: 'service',
         name: 'port',
@@ -118,8 +132,22 @@ describe('configOf over connection-end inputs', () => {
     });
 
     expect(configOf(root)).toEqual([
-      { owner: { input: 'db' }, name: 'url', type: 'string', secret: true, optional: false },
-      { owner: { input: 'auth' }, name: 'url', type: 'string', secret: false, optional: false },
+      {
+        owner: { input: 'db' },
+        name: 'url',
+        type: 'string',
+        secret: true,
+        optional: false,
+        default: undefined,
+      },
+      {
+        owner: { input: 'auth' },
+        name: 'url',
+        type: 'string',
+        secret: false,
+        optional: false,
+        default: undefined,
+      },
       {
         owner: 'service',
         name: 'port',

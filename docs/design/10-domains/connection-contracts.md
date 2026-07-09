@@ -95,7 +95,8 @@ The core is **parametric over the Contract**: it holds contract *values*, carrie
 their *types* (TypeScript does the compile-time compatibility), and calls their
 `satisfies()` method (runtime compatibility). It never inspects the kind or the
 comparison mechanics. So the kind (RPC first; gRPC, WebSocket, or GraphQL as
-later ecosystem packages), the comparison mechanics (nominal now, structural later),
+later ecosystem packages), the comparison mechanics (RPC compares by identity now,
+structural later),
 and the number of outputs are all open without the core changing.
 
 ## A Connection is a port
@@ -125,9 +126,11 @@ Enforcement happens in three places:
 1. **Authoring (TypeScript) — the primary check.** Assignability at the wiring site
    rejects an incompatible provider before anything runs.
 2. **Load — the contract's own `satisfies()`.** The framework calls
-   `providerPort.satisfies(consumerSlot)` and does not know the mechanism. The first
-   implementation is **nominal**: same contract value (identity), like Java-style
-   name comparison — a structurally-equivalent-but-distinct contract does not match.
+   `providerPort.satisfies(consumerSlot)` and does not know the mechanism — each kind's
+   contract implements its own. Today the RPC contract compares by **identity** (same
+   contract value), so a structurally-equivalent-but-distinct contract does not match.
+   That is the RPC contract's current implementation, not a rule the framework or the
+   Contract abstraction imposes.
 3. **Run (per call) — validate input and output against the contract's schemas.**
    Catches a provider that is typed-compatible but lies at runtime: a bug, drift, or
    a legacy server wrapped in a Service that TypeScript never saw.
@@ -188,10 +191,11 @@ published spec; the *type* the core compares is the function map.
 
 ### Growing the runtime check
 
-Growing nominal into **structural** later is backward-compatible: runtime accepts
-"same value **or** structurally compatible," which is purely additive — everything
-that passes today still passes. Because the mechanism is encapsulated behind
-`satisfies()`, the change never touches the framework.
+Growing the RPC contract's `satisfies()` from identity to **structural** later is
+backward-compatible: it would accept "same value **or** structurally compatible,"
+which is purely additive — everything that passes today still passes. Because the
+mechanism is encapsulated behind `satisfies()`, the change stays inside the RPC
+contract and never touches the framework.
 
 Structural comparison earns its keep in the distributed case: when the provider is a
 *separately deployed* service whose TypeScript the local build cannot see,
@@ -236,19 +240,20 @@ framework owns the builder and the type, never the location:
 - a dependency-inverted app puts the Contract with the consumer or in a central
   package, and implementer hexes depend on it.
 
-All three are "both sides import one Contract value," which is also why
-identity-based Load compatibility is enough today.
+All three are "both sides import one Contract value," which is also why the RPC
+contract's identity-based `satisfies()` is enough today.
 
 ## Alternatives considered
 
-- **RPC first, not HTTP.** RPC removes the HTTP semantic surface (methods, paths,
-  status codes); a contract collapses to `method → { input, output }`, which is
-  trivial to compare and to generate. Legacy HTTP is not modelled directly — wrap it
+- **RPC first, not REST.** HTTP is still the transport; the choice is the interface
+  style on top of it. RPC drops REST's semantic surface (resources, verbs, status
+  codes) so a contract collapses to `method → { input, output }`, which is trivial to
+  compare and to generate. A legacy REST endpoint is not modelled directly — wrap it
   in a Service that satisfies an RPC contract.
-- **Nominal compatibility first, not structural.** Identity comparison is enough
-  while both sides import one value, and it is the simplest thing that is correct.
-  Structural comparison is additive (above) and only *required* for the distributed
-  case, so it is deferred.
+- **Identity comparison first, not structural** — in the RPC contract's `satisfies()`.
+  Comparing by value identity is enough while both sides import one contract, and it is
+  the simplest thing that is correct. Structural comparison is additive (above) and only
+  *required* for the distributed case, so the RPC contract defers it.
 - **Errors deferred** from the first contract shape (`{ input, output }` only).
   Adding an `error` schema later is backward-compatible (an optional field).
 - **Wire format private to the target pack**, which owns both adapters — rather than

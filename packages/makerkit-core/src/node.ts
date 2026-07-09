@@ -64,8 +64,8 @@ export interface ServiceNode<
   readonly params: P;
   /** How the app's entry is built + assembled. */
   readonly build: BuildAdapter;
-  /** Named output ports this service exposes — the Contracts a consumer's `rpc(contract)` can require. */
-  readonly expose?: E;
+  /** Named output ports this service exposes — the Contracts a consumer's `rpc(contract)` can require. `undefined` when the service exposes nothing. */
+  readonly expose: E | undefined;
 }
 
 /**
@@ -102,7 +102,8 @@ export interface RunnableServiceNode<
 export interface ConnectionEnd<C = unknown, Req = unknown> extends NodeBase {
   readonly kind: 'connection';
   readonly connection: Connection<Params, C>;
-  readonly required?: Req;
+  /** The required contract, or `undefined` for an untyped end (e.g. `http()`). */
+  readonly required: Req | undefined;
 }
 
 /**
@@ -264,7 +265,7 @@ export function service<
     inputs: Object.freeze({ ...def.inputs }) as D,
     params: freezeParams(def.params),
     build: Object.freeze({ ...def.build }),
-    ...(def.expose !== undefined ? { expose: Object.freeze({ ...def.expose }) as E } : {}),
+    expose: def.expose !== undefined ? (Object.freeze({ ...def.expose }) as E) : undefined,
   };
   return Object.freeze(node);
 }
@@ -290,7 +291,7 @@ export function connectionEnd<P extends Params, C, Req = unknown>(def: {
     kind: 'connection',
     type: def.type,
     connection: connection as Connection<Params, C>,
-    ...(def.required !== undefined ? { required: def.required } : {}),
+    required: def.required,
   };
   return Object.freeze(node);
 }
