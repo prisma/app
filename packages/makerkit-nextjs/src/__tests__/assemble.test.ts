@@ -51,7 +51,13 @@ describe('assemble()', () => {
     const appDir = makeAppDir();
     await expect(
       assemble({
-        build: { kind: 'nextjs', module: moduleUrl(appDir), appDir: '..', entry: 'server.js' },
+        build: {
+          kind: 'nextjs',
+          pack: '@makerkit/nextjs',
+          module: moduleUrl(appDir),
+          appDir: '..',
+          entry: 'server.js',
+        },
       }),
     ).rejects.toThrow(/no standalone server\.js at .* run `next build`/);
   });
@@ -78,7 +84,13 @@ describe('assemble()', () => {
     );
 
     const result = await assemble({
-      build: { kind: 'nextjs', module: moduleUrl(appDir), appDir: '..', entry: 'server.js' },
+      build: {
+        kind: 'nextjs',
+        pack: '@makerkit/nextjs',
+        module: moduleUrl(appDir),
+        appDir: '..',
+        entry: 'server.js',
+      },
     });
 
     expect(result.dir).toBe(standaloneDir);

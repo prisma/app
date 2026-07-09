@@ -28,6 +28,7 @@ const httpEnd = () =>
 
 const defaultBuild: BuildAdapter = {
   kind: 'node',
+  pack: '@makerkit/node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -256,7 +257,12 @@ describe('lowering a lone service root', () => {
       'fake/compute',
       { db: db() },
       {},
-      { kind: 'nonsense', module: 'file:///test/service.ts', entry: 'whatever.js' },
+      {
+        kind: 'nonsense',
+        pack: '@fake/adapter',
+        module: 'file:///test/service.ts',
+        entry: 'whatever.js',
+      },
     );
 
     const result = run(

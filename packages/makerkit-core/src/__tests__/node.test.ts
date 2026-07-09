@@ -67,7 +67,12 @@ describe('resource()', () => {
 });
 
 describe('service()', () => {
-  const build = { kind: 'node', module: 'file:///app/src/service.ts', entry: 'dist/server.js' };
+  const build = {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///app/src/service.ts',
+    entry: 'dist/server.js',
+  };
 
   test('returns a branded, frozen service node with frozen name, pack, inputs, params, and build', () => {
     const db = resource({
@@ -94,6 +99,7 @@ describe('service()', () => {
     expect(node.params).toEqual({ port: { type: 'number', default: 3000 } });
     expect(node.build).toEqual({
       kind: 'node',
+      pack: '@makerkit/node',
       module: 'file:///app/src/service.ts',
       entry: 'dist/server.js',
     });

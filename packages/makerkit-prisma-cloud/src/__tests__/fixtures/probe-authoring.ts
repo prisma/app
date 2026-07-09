@@ -12,7 +12,12 @@ const app = compute({
       client: ({ url }) => ({ url }),
     }),
   },
-  build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
+  build: {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  },
 });
 
 export const graph = Load(app, { id: 'probe' });

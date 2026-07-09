@@ -25,9 +25,18 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { Bundle } from '@makerkit/core/deploy';
 import { build } from 'tsdown';
 import type { NextjsBuildAdapter } from './index.ts';
 
+export type { Bundle } from '@makerkit/core/deploy';
+
+/**
+ * Same seam-contract name as every build adapter's `/assemble` entry
+ * (@makerkit/core/deploy's AssembleInput) -- narrowed here to this kind's own
+ * NextjsBuildAdapter (its extra appDir field), the same way the runtime
+ * `kind` check below narrows at the value level.
+ */
 export interface AssembleInput {
   readonly build: NextjsBuildAdapter;
   /**
@@ -39,11 +48,6 @@ export interface AssembleInput {
   readonly wrapperNoExternal?: readonly RegExp[];
 }
 
-export interface AssembledBundle {
-  readonly dir: string;
-  readonly entry: string;
-}
-
 /** Where Next's standalone build places this app, given `outputFileTracingRoot` pins the monorepo root. */
 export function nextStandaloneDir(appDir: string): string {
   const resolvedApp = path.resolve(appDir);
@@ -52,7 +56,7 @@ export function nextStandaloneDir(appDir: string): string {
   return path.join(resolvedApp, '.next', 'standalone', rel);
 }
 
-export async function assemble(input: AssembleInput): Promise<AssembledBundle> {
+export async function assemble(input: AssembleInput): Promise<Bundle> {
   if (input.build.kind !== 'nextjs') {
     throw new Error(
       `@makerkit/nextjs/assemble: expected a "nextjs" build adapter, got "${input.build.kind}".`,

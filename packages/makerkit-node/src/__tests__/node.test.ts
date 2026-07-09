@@ -2,9 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import node from '../index.ts';
 
 describe('node({ module, entry })', () => {
-  test('returns a plain { kind, module, entry } build adapter descriptor', () => {
+  test('returns a plain { kind, pack, module, entry } build adapter descriptor', () => {
     expect(node({ module: 'file:///app/src/service.ts', entry: 'server.js' })).toEqual({
       kind: 'node',
+      pack: '@makerkit/node',
       module: 'file:///app/src/service.ts',
       entry: 'server.js',
     });

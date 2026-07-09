@@ -147,7 +147,12 @@ describe("prismaCloud().services['compute']", () => {
           client: ({ url }) => ({ url }),
         }),
       },
-      build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
+      build: {
+        kind: 'node',
+        pack: '@makerkit/node',
+        module: 'file:///test/service.ts',
+        entry: 'server.js',
+      },
     });
     const ctx = { address: 'auth', node } as unknown as LowerContext;
     const provisioned: LoweredNode = {

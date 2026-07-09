@@ -18,25 +18,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BuildAdapter } from '@makerkit/core';
+import type { AssembleInput, Bundle } from '@makerkit/core/deploy';
 import { build } from 'tsdown';
 
-export interface AssembleInput {
-  readonly build: BuildAdapter;
-  /**
-   * Extra patterns to inline into the wrapper besides `@makerkit/*` — the
-   * service module's own imports that are neither shipped in the bundle dir
-   * nor runtime built-ins (e.g. the app's workspace packages).
-   */
-  readonly wrapperNoExternal?: readonly RegExp[];
-}
+export type { AssembleInput, Bundle } from '@makerkit/core/deploy';
 
-export interface AssembledBundle {
-  readonly dir: string;
-  readonly entry: string;
-}
-
-export async function assemble(input: AssembleInput): Promise<AssembledBundle> {
+export async function assemble(input: AssembleInput): Promise<Bundle> {
   if (input.build.kind !== 'node') {
     throw new Error(
       `@makerkit/node/assemble: expected a "node" build adapter, got "${input.build.kind}".`,
@@ -64,6 +51,16 @@ export async function assemble(input: AssembleInput): Promise<AssembledBundle> {
   // Beside the built entry — file-relative to the resolved entry, not a
   // discovered package dir (ADR-0004).
   const bundleDir = path.join(path.dirname(entryPath), 'bundle');
+  // The entry must survive the `rm` below to reach the `copyFile` after it —
+  // if it resolved inside the reserved output dir, the rm would delete it
+  // first and the copy would fail with a bare ENOENT instead of a named error.
+  if (entryPath === bundleDir || entryPath.startsWith(bundleDir + path.sep)) {
+    throw new Error(
+      `the build adapter's entry ("${entryPath}") resolves inside its own output dir ` +
+        `("${bundleDir}") — MakerKit reserves that directory for the assembled bundle and ` +
+        'clears it before every assemble; point entry at your build output elsewhere.',
+    );
+  }
   await fs.promises.rm(bundleDir, { recursive: true, force: true });
   await fs.promises.mkdir(bundleDir, { recursive: true });
 

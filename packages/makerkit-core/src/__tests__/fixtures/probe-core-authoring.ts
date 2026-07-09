@@ -18,7 +18,12 @@ const app = service({
   type: 'probe/app',
   inputs: { db },
   params: { port: { type: 'number', default: 3000 } },
-  build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
+  build: {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  },
 });
 
 const peer = connectionEnd({
@@ -32,7 +37,12 @@ const caller = service({
   type: 'probe/app',
   inputs: { peer },
   params: {},
-  build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
+  build: {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  },
 });
 
 export const wired = Load(

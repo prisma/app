@@ -15,5 +15,10 @@ export default compute({
       },
     }),
   },
-  build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
+  build: {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  },
 });

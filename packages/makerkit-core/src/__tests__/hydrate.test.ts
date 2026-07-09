@@ -3,7 +3,12 @@ import { hydrate, hydrateSync } from '../hydrate.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' };
+const build = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
 const dbNode = (record?: (values: { url: string }) => void) =>
   resource({

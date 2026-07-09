@@ -16,6 +16,7 @@ export interface NextjsBuildAdapter extends BuildAdapter {
 
 export default (opts: { module: string; appDir: string; entry: string }): NextjsBuildAdapter => ({
   kind: 'nextjs',
+  pack: '@makerkit/nextjs',
   module: opts.module,
   appDir: opts.appDir,
   entry: opts.entry,

@@ -16,6 +16,7 @@ import { type Client, rpc } from '../rpc.ts';
 
 const build: BuildAdapter = {
   kind: 'node',
+  pack: '@makerkit/node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };

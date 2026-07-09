@@ -4,7 +4,12 @@ import { configOf, hydrateSync, isNode } from '@makerkit/core';
 import { compute, postgres } from '../index.ts';
 import { configKey, deserialize } from '../serializer.ts';
 
-const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' };
+const build = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
 /** Sets env vars for the duration of `fn`, restoring whatever was there before. */
 async function withEnv<T>(values: Record<string, string>, fn: () => Promise<T> | T): Promise<T> {

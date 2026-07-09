@@ -2,11 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import nextjs from '../index.ts';
 
 describe('nextjs({ module, appDir, entry })', () => {
-  test('returns a plain { kind, module, appDir, entry } build adapter descriptor', () => {
+  test('returns a plain { kind, pack, module, appDir, entry } build adapter descriptor', () => {
     expect(
       nextjs({ module: 'file:///app/src/service.ts', appDir: '..', entry: 'server.js' }),
     ).toEqual({
       kind: 'nextjs',
+      pack: '@makerkit/nextjs',
       module: 'file:///app/src/service.ts',
       appDir: '..',
       entry: 'server.js',

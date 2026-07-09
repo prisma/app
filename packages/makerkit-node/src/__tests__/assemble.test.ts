@@ -32,7 +32,12 @@ describe('assemble()', () => {
     const serviceDir = makeServiceDir();
     await expect(
       assemble({
-        build: { kind: 'nextjs', module: moduleUrl(serviceDir), entry: 'server.js' },
+        build: {
+          kind: 'nextjs',
+          pack: '@makerkit/nextjs',
+          module: moduleUrl(serviceDir),
+          entry: 'server.js',
+        },
       }),
     ).rejects.toThrow(/expected a "node" build adapter/);
   });
@@ -41,7 +46,12 @@ describe('assemble()', () => {
     const serviceDir = makeServiceDir();
     await expect(
       assemble({
-        build: { kind: 'node', module: moduleUrl(serviceDir), entry: '../dist/server.js' },
+        build: {
+          kind: 'node',
+          pack: '@makerkit/node',
+          module: moduleUrl(serviceDir),
+          entry: '../dist/server.js',
+        },
       }),
     ).rejects.toThrow(/no built entry at .*dist\/server\.js/);
   });
@@ -52,9 +62,35 @@ describe('assemble()', () => {
     fs.writeFileSync(path.join(serviceDir, 'dist', 'main.js'), 'export {};\n');
     await expect(
       assemble({
-        build: { kind: 'node', module: moduleUrl(serviceDir), entry: '../dist/main.js' },
+        build: {
+          kind: 'node',
+          pack: '@makerkit/node',
+          module: moduleUrl(serviceDir),
+          entry: '../dist/main.js',
+        },
       }),
     ).rejects.toThrow(/reserved for the MakerKit wrapper/);
+  });
+
+  test('rejects an entry that resolves to the reserved bundle output dir itself (F04)', async () => {
+    // `bundleDir` is computed as `dirname(entryPath)/bundle` — an entry whose
+    // own resolved basename is "bundle" makes bundleDir fold back onto
+    // entryPath exactly (e.g. a build tool that names its output file/dir
+    // "bundle"), so the guard must catch entryPath === bundleDir before the
+    // rm-then-copy sequence would delete the entry out from under itself.
+    const serviceDir = makeServiceDir();
+    fs.mkdirSync(path.join(serviceDir, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(serviceDir, 'dist', 'bundle'), 'export {};\n');
+    await expect(
+      assemble({
+        build: {
+          kind: 'node',
+          pack: '@makerkit/node',
+          module: moduleUrl(serviceDir),
+          entry: '../dist/bundle',
+        },
+      }),
+    ).rejects.toThrow(/resolves inside its own output dir/);
   });
 
   test('produces a bundle dir (beside the built entry) containing the wrapper and a copy of the built entry', async () => {
@@ -67,7 +103,12 @@ describe('assemble()', () => {
     );
 
     const result = await assemble({
-      build: { kind: 'node', module: moduleUrl(serviceDir), entry: '../dist/server.js' },
+      build: {
+        kind: 'node',
+        pack: '@makerkit/node',
+        module: moduleUrl(serviceDir),
+        entry: '../dist/server.js',
+      },
     });
 
     expect(result.dir).toBe(path.join(serviceDir, 'dist', 'bundle'));

@@ -63,12 +63,22 @@ export interface ResourceNode<C = unknown> extends PackAuthoredNode {
  * `import.meta.url`) is the one sanctioned exception to that rule (ADR-0004):
  * deploy-time metadata only, and bundlers preserve it as an expression rather
  * than a literal, so it re-evaluates inside the deploy artifact instead of
- * baking in a dev-machine path. The heavy assembler is looked up by `kind` at
- * deploy and never ships in a bundle.
+ * baking in a dev-machine path. The heavy assembler is resolved from `pack` at
+ * deploy (`${pack}/assemble`, entry-anchored — same mechanism as a target
+ * pack's `${pack}/target`) and never ships in a bundle.
  */
 export interface BuildAdapter {
-  /** Assembler routing key, e.g. "node" · "nextjs". */
+  /** Assembler routing key, e.g. "node" · "nextjs" — the resolved module's own discriminant, checked against this. */
   readonly kind: string;
+  /**
+   * The package name of the adapter that authored this descriptor, e.g.
+   * "@makerkit/node" — baked in by the adapter's own factory (`node()`,
+   * `nextjs()`), the same uniform rule `PackAuthoredNode.pack` follows: a
+   * thing's `pack` names the package that gives it meaning. Deploy tooling
+   * resolves `${pack}/assemble` from it — never a hardcoded kind→package map —
+   * so a community build adapter works with zero changes to core or the CLI.
+   */
+  readonly pack: string;
   /**
    * The authoring module's `import.meta.url` — every other path on this
    * descriptor resolves relative to `dirname(module)`. Nothing reads it at

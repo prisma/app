@@ -9,6 +9,7 @@ import type { BuildAdapter } from '@makerkit/core';
 
 export default (opts: { module: string; entry: string }): BuildAdapter => ({
   kind: 'node',
+  pack: '@makerkit/node',
   module: opts.module,
   entry: opts.entry,
 });

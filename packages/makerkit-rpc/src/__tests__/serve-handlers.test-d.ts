@@ -32,7 +32,7 @@ const node = service({
   type: 'fake/rpc-test',
   inputs: { db },
   params: {},
-  build: { kind: 'fake', module: 'file:///test/service.ts', entry: 'x' },
+  build: { kind: 'fake', pack: '@fake/adapter', module: 'file:///test/service.ts', entry: 'x' },
   expose: { rpc: authContract },
 });
 

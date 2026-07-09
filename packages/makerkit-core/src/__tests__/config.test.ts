@@ -3,7 +3,12 @@ import { configOf } from '../config.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' };
+const build = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
 describe('configOf', () => {
   test('enumerates input params then service params — semantic, no platform keys', () => {
