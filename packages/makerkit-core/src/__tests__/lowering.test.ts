@@ -421,6 +421,42 @@ describe('lowering a hex root — two connected services', () => {
     });
   });
 
+  test('topo sort: a hex authored consumer-before-producer (forged ref) still resolves real producer outputs at deploy', () => {
+    // Mirrors the hex.test.ts graph-layer topo-sort test, but exercises the
+    // consequence: before the sort, buildConfig read `lowered.get(edge.from)`
+    // positionally, so a consumer walked before its producer saw undefined
+    // outputs. With the sort, the producer is fully deployed first.
+    const { target, calls } = fakeTarget();
+    const root = hex('shop', (h) => {
+      h.provision('storefront', storefrontService(), {
+        auth: { id: 'auth' } as never,
+      });
+      h.provision('auth', authService());
+    });
+
+    run(
+      lowering(root, target, {
+        name: 'shop',
+        bundles: {
+          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+        },
+      }),
+    );
+
+    const authDeploy = calls.findIndex((c) => c.phase === 'deploy' && c.id === 'auth');
+    const storefrontSerializeIndex = calls.findIndex(
+      (c) => c.phase === 'serialize' && c.id === 'storefront',
+    );
+    expect(authDeploy).toBeGreaterThanOrEqual(0);
+    expect(authDeploy).toBeLessThan(storefrontSerializeIndex);
+
+    const storefrontSerialize = calls.find((c) => c.phase === 'serialize' && c.id === 'storefront');
+    expect(storefrontSerialize).toMatchObject({
+      config: { inputs: { auth: { url: 'https://auth.example' } } },
+    });
+  });
+
   test('missing a bundle entry for one hex-provisioned service is a LowerError naming it', () => {
     const { target } = fakeTarget();
 

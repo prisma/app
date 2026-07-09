@@ -194,6 +194,32 @@ describe('Load of a hex root', () => {
     }
   });
 
+  test('topo sort: a hex authored consumer-before-producer (forged ref) places the producer before the consumer in graph.nodes', () => {
+    // Forged ref: normal authoring cannot reference a producer before
+    // provisioning it (provision() is the only source of a ref) — this
+    // hand-builds one pointing at "auth", which the body provisions AFTER
+    // storefront, so authored order and dependency order disagree.
+    const root = hex('shop', (h) => {
+      h.provision('storefront', makeStorefrontService(), {
+        auth: { id: 'auth' } as ProvisionedRef,
+      });
+      h.provision('auth', makeAuthService());
+    });
+
+    const graph = Load(root);
+
+    expect(graph.nodes.map((n) => n.id)).toEqual([
+      'storefront.auth',
+      'auth.db',
+      'auth',
+      'storefront',
+      'shop',
+    ]);
+    const authIndex = graph.nodes.findIndex((n) => n.id === 'auth');
+    const storefrontIndex = graph.nodes.findIndex((n) => n.id === 'storefront');
+    expect(authIndex).toBeLessThan(storefrontIndex);
+  });
+
   test('a lone service Loaded directly with an unwired ConnectionEnd input is a LoadError naming the input and pointing at the composing hex', () => {
     const lone = makeStorefrontService();
 
