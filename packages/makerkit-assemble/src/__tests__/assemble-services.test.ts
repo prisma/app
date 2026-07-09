@@ -7,7 +7,7 @@ import { assembleServices } from '../assemble-services.ts';
 
 const moduleUrl = (dir: string) => pathToFileURL(path.join(dir, 'service.ts')).href;
 
-const fakeRun = async (_specifier: string, input: { build: { module: string } }) => ({
+const fakeRun = async (_pack: string, input: { build: { module: string } }) => ({
   dir: path.join(path.dirname(input.build.module.replace('file://', '')), 'dist', 'bundle'),
   entry: 'server.js',
 });
@@ -21,7 +21,12 @@ describe('assembleServices()', () => {
       type: 'fixture/service',
       inputs: {},
       params: {},
-      build: { kind: 'node', module: moduleUrl(dir), entry: 'server.js' },
+      build: {
+        kind: 'node',
+        pack: '@fixture/node-adapter',
+        module: moduleUrl(dir),
+        entry: 'server.js',
+      },
     });
     const graph = Load(root);
 
@@ -41,7 +46,12 @@ describe('assembleServices()', () => {
         type: 'fixture/service',
         inputs: {},
         params: {},
-        build: { kind: 'node', module: moduleUrl(dir), entry: 'server.js' },
+        build: {
+          kind: 'node',
+          pack: '@fixture/node-adapter',
+          module: moduleUrl(dir),
+          entry: 'server.js',
+        },
       });
     const root = hex('fixture-hex', (h) => {
       h.provision('auth', makeService('auth', dirOne));
@@ -58,19 +68,26 @@ describe('assembleServices()', () => {
     expect(assembled.bundle).toBeUndefined();
   });
 
-  test('an unknown build adapter kind names the kind and the known kinds', async () => {
+  test('routes by the build adapter’s own `pack` field — not a hardcoded kind map (W05/A1)', async () => {
+    const dir = '/fixtures/svc';
     const root = service({
       name: 'svc',
       pack: 'test/pack',
       type: 'fixture/service',
       inputs: {},
       params: {},
-      build: { kind: 'deno', module: moduleUrl('/fixtures/svc'), entry: 'server.js' },
+      // A made-up kind a community adapter could use — nothing in this
+      // package recognizes "cron" specially; the pack field alone routes it.
+      build: { kind: 'cron', pack: '@community/cron-adapter', module: moduleUrl(dir), entry: 'x' },
     });
     const graph = Load(root);
+    const seenPacks: string[] = [];
 
-    await expect(assembleServices(graph, false, '/fixtures/entry.ts', fakeRun)).rejects.toThrow(
-      /declares build kind "deno".*known kinds: nextjs, node/,
-    );
+    await assembleServices(graph, false, '/fixtures/entry.ts', async (pack, input) => {
+      seenPacks.push(pack);
+      return fakeRun(pack, input);
+    });
+
+    expect(seenPacks).toEqual(['@community/cron-adapter']);
   });
 });

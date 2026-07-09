@@ -2,14 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { CliError } from '../cli-error.ts';
+import { AssembleError } from '../assemble-error.ts';
 import { importFromEntry } from '../resolve-from-entry.ts';
 
 const tmpDirs: string[] = [];
 
 /** A throwaway app package dir with an entry FILE (need not exist on disk — createRequire only needs its dirname). */
 function makeEntryPath(): string {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-cli-resolve-')));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-assemble-resolve-')));
   tmpDirs.push(dir);
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'fixture-app' }));
   return path.join(dir, 'service.ts');
@@ -89,12 +89,12 @@ describe('importFromEntry() — entry-anchored resolution', () => {
     ).toBe('assembled');
   });
 
-  test('a missing pack throws a CliError naming the pack, the entry dir, and the fix', async () => {
+  test('a missing pack throws an AssembleError naming the pack, the entry dir, and the fix', async () => {
     const entryPath = makeEntryPath();
     const entryDir = path.dirname(entryPath);
 
     await expect(importFromEntry(entryPath, '@makerkit/does-not-exist', 'target')).rejects.toThrow(
-      CliError,
+      AssembleError,
     );
     await expect(importFromEntry(entryPath, '@makerkit/does-not-exist', 'target')).rejects.toThrow(
       new RegExp(
@@ -104,9 +104,9 @@ describe('importFromEntry() — entry-anchored resolution', () => {
   });
 
   // The runtimes report this differently (node: ERR_PACKAGE_PATH_NOT_EXPORTED,
-  // bun: MODULE_NOT_FOUND), so the assertion is runtime-agnostic: a CliError
-  // naming the pack, whichever branch produced it.
-  test('a pack present but missing the requested subpath export throws a CliError naming the pack', async () => {
+  // bun: MODULE_NOT_FOUND), so the assertion is runtime-agnostic: an
+  // AssembleError naming the pack, whichever branch produced it.
+  test('a pack present but missing the requested subpath export throws an AssembleError naming the pack', async () => {
     const entryPath = makeEntryPath();
     const packDir = path.join(path.dirname(entryPath), 'node_modules', 'fixture-pack');
     fs.mkdirSync(packDir, { recursive: true });
@@ -116,7 +116,9 @@ describe('importFromEntry() — entry-anchored resolution', () => {
     );
     fs.writeFileSync(path.join(packDir, 'index.ts'), 'export {};\n');
 
-    await expect(importFromEntry(entryPath, 'fixture-pack', 'target')).rejects.toThrow(CliError);
+    await expect(importFromEntry(entryPath, 'fixture-pack', 'target')).rejects.toThrow(
+      AssembleError,
+    );
     await expect(importFromEntry(entryPath, 'fixture-pack', 'target')).rejects.toThrow(
       /"?fixture-pack"?/,
     );

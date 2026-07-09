@@ -4,11 +4,17 @@
  * location. This is what lets the CLI ship with no dependency on any specific
  * pack: the pack only needs to appear in the APP's own dependency tree.
  *
+ * Lives here (not in @makerkit/cli) because the assembler seam is this
+ * package's own resolution need (`${build.pack}/assemble`); the CLI's target
+ * seam (`${pack}/target`, in infer-target.ts) reuses this same export rather
+ * than duplicating it, since the CLI already depends on this package for
+ * assembly orchestration.
+ *
  * Anchoring uses `createRequire(entryPath).resolve(...)`, seeded with the
  * entry module's own FILE path — no package.json discovery (ADR-0004's
  * rewrite: paths are relative to the file that writes them). Node's resolver
  * already walks node_modules upward from `dirname(entryPath)` on its own;
- * that walk is the platform's, not the CLI's to reimplement. Node's CJS
+ * that walk is the platform's, not this package's to reimplement. Node's CJS
  * resolver still honors a package's `exports` map for require() (not just
  * import()), and bun's `createRequire` follows the same contract — both
  * verified against fixture packages under both runtimes. `import.meta.resolve()`
@@ -18,7 +24,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CliError } from './cli-error.ts';
+import { AssembleError } from './assemble-error.ts';
 
 /**
  * The runtimes disagree on resolution-failure codes. A fully absent pack is
@@ -56,14 +62,14 @@ export async function importFromEntry(
   } catch (error) {
     const code = resolutionFailureCode(error);
     if (code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
-      throw new CliError(
+      throw new AssembleError(
         `"${pack}" is installed but does not export "./${subpath}" ` +
           `(resolved from ${entryDir}) — the installed version may be too old or not a ` +
           'MakerKit pack.',
       );
     }
     if (code !== undefined) {
-      throw new CliError(
+      throw new AssembleError(
         `Cannot resolve "${specifier}" from ${entryDir} — the app's package (the one ` +
           `containing the entry module) must depend on "${pack}".`,
       );
