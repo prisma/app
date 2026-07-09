@@ -7,7 +7,6 @@
  * and reversing it (see core-model.md § Runtime). Core never stringifies and
  * never touches an environment.
  */
-import { Load } from './graph.ts';
 import type { ResourceNode, ServiceNode } from './node.ts';
 
 /** Runtime-validatable param types. Curated; extended consciously. */
@@ -79,28 +78,24 @@ export interface Config {
 }
 
 /**
- * Enumerates every config param the service's graph declares: each input's
- * connection params, then the service's own params. Pure — Loads the graph,
- * executes nothing.
+ * Enumerates every config param the service declares: each input's connection
+ * params, then the service's own params. Pure — reads `root.inputs`/`params`
+ * directly, executes nothing. Deliberately does not go through `Load`: a
+ * service's connection-end inputs are legitimately unwired from its own
+ * point of view (wiring is an enclosing hex's concern), and this introspects
+ * one service's declared shape regardless of how — or whether — it composes
+ * into a larger graph.
  */
 export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
-  const graph = Load(root);
   const entries: ConfigDeclaration[] = [];
 
-  for (const edge of graph.edges) {
-    if (edge.kind !== 'input') continue;
-    const entry = graph.nodes.find((n) => n.id === edge.from);
-    if (
-      entry === undefined ||
-      (entry.node.kind !== 'resource' && entry.node.kind !== 'connection')
-    ) {
-      continue;
-    }
+  for (const [input, value] of Object.entries(root.inputs)) {
+    if (typeof value !== 'object' || value === null) continue;
     // Resource and connection-end inputs declare params identically.
-    const node = entry.node as ResourceNode;
+    const node = value as ResourceNode;
     for (const [name, param] of Object.entries(node.connection.params)) {
       entries.push({
-        owner: { input: edge.input },
+        owner: { input },
         name,
         type: param.type,
         secret: param.secret === true,
