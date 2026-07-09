@@ -14,7 +14,7 @@ import * as Effect from 'effect/Effect';
  *   alchemy deploy   # create project -> database -> connection
  *   alchemy destroy  # tear it all down
  *
- * Requires env: PRISMA_SERVICE_TOKEN, PRISMA_WORKSPACE_ID, ALCHEMY_PASSWORD.
+ * Requires env: PRISMA_SERVICE_TOKEN, PRISMA_WORKSPACE_ID.
  */
 export default Alchemy.Stack(
   'PrismaSmoke',

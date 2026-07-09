@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -18,8 +17,6 @@ import { fileURLToPath } from 'node:url';
  *   4. Prompts for a service token -> PRISMA_SERVICE_TOKEN. Service tokens can only
  *      be minted in the Prisma Console (there is no CLI/API to create one — verified:
  *      `/v1/service-tokens` 404s), so the script links you there and reads the paste.
- *   5. Generates a stable ALCHEMY_PASSWORD if one isn't set (never overwrites it —
- *      it must stay constant or Alchemy can't decrypt existing local state).
  *
  * Re-runnable: existing values are kept unless you choose to replace them.
  */
@@ -202,14 +199,6 @@ async function main() {
     p.log.success('PRISMA_SERVICE_TOKEN set');
   } else {
     p.log.info('Keeping existing PRISMA_SERVICE_TOKEN');
-  }
-
-  // 5. ALCHEMY_PASSWORD -------------------------------------------------------
-  if (await getEnv('ALCHEMY_PASSWORD')) {
-    p.log.info('ALCHEMY_PASSWORD already set — leaving it (must stay constant)');
-  } else {
-    await setEnv('ALCHEMY_PASSWORD', randomBytes(24).toString('hex'));
-    p.log.success('Generated ALCHEMY_PASSWORD');
   }
 
   p.outro(

@@ -31,9 +31,9 @@ function isComputeRegion(value: string): value is Prisma.ComputeRegion {
 /**
  * The pack's CLI seam (ADR-0003): builds a Target from the process
  * environment. `makerkit deploy` calls this once it has inferred this pack
- * from the loaded graph — never reads `PRISMA_SERVICE_TOKEN`/`ALCHEMY_PASSWORD`
- * here; those are consumed by prisma-alchemy's providers and Alchemy itself
- * at run time, not by target construction.
+ * from the loaded graph — never reads `PRISMA_SERVICE_TOKEN` here; that is
+ * consumed by prisma-alchemy's providers at run time, not by target
+ * construction.
  */
 export function fromEnv(): Target {
   const workspaceId = process.env['PRISMA_WORKSPACE_ID'];

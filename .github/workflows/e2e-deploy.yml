@@ -51,9 +51,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate ALCHEMY_PASSWORD
-        run: bash examples/scripts/generate-alchemy-password.sh
-
       # storefront-auth's own `build` script is a no-op — turbo's ^build
       # (from the workspace deps in its package.json) builds the two hexes.
       # `pnpm build` alone wouldn't trigger that, so run it through turbo.
