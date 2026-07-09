@@ -117,33 +117,35 @@ interface, no cloud. This is what satisfies the reproduce-in-the-emulator goal
 ## Provisioning & state
 
 Provisioning runs through **Alchemy's engine**, invoked from the client or a
-privileged CD environment (see claim 3). The engine keeps a **state store** — the
-source of truth for what's provisioned. The intended path is a spectrum:
+privileged CD environment (see claim 3). The engine keeps a **state store** —
+the source of truth for what's provisioned. State sits on a spectrum from
+local, to workspace-hosted, to eventually platform-run:
 
-- **Step 0:** Alchemy's local or Cloudflare-backed state. Fine for a solo
-  developer.
-- **Step 1 (shipped, client-side interim):** a **Prisma-hosted, workspace-scoped
-  state store** — Pulumi/Terraform-Cloud-style hosted state, but native to the
-  Workspace → Project → Environment hierarchy. It implements Alchemy's
-  `StateService`, is backed by Prisma Postgres, and removes the BYO-state
-  bootstrap. Shipped as `@makerkit/prisma-alchemy/state`: a client-side store
-  speaking Postgres to a reserved `makerkit-state` project's default database,
-  bootstrapped automatically through the Management API (service token is the
-  only credential), with session-advisory-lock concurrency per `(stack, stage)`;
-  `prismaCloud()` supplies it as the default deploy state. The final form is
-  platform-side — the Management API implements Alchemy's HTTP `StateApi`
-  (bearer → workspace RBAC), the visible project disappears, and the platform
-  can answer "what's provisioned in this project" (the platform side of the
-  inspectable-topology goal). That surface is a filed platform ask.
-- **Step 2 (deferred):** **server-side runs** — the platform executes the apply
-  loop itself (git-push-style deploys). Not needed now; once state is hosted
-  (Step 1), moving the engine server-side is incremental — the same evolution
-  Pulumi/Terraform Cloud followed.
-
-The hosted state store is **control-plane infrastructure, not a user-topology
-Resource** — ambient per project, never declared by a Hex (which also sidesteps
-the chicken-and-egg of provisioning the store itself). Like hosted-state backends
-generally, it also holds state for the user's BYO resources in other clouds.
+- **Local** — Alchemy's local or Cloudflare-backed state. Fine for a solo
+  developer; nothing else needs to see it.
+- **Workspace-hosted** — a `StateService` implementation
+  (`@makerkit/prisma-alchemy/state`) backed by a Prisma Postgres database in a
+  workspace-scoped project, native to the Workspace → Project → Environment
+  hierarchy (Pulumi/Terraform-Cloud-style hosted state, without the
+  BYO-state bootstrap). Bootstrap is automatic: the Management API finds or
+  creates the store's project and its default database on first use, so a
+  deployer needs nothing beyond the service token and workspace id it already
+  has. Concurrency is a per-`(stack, stage)` advisory lock, so two deployers
+  can never race the same stack. `prismaCloud()` supplies this as the default
+  deploy state for every service and Hex; an explicit state layer always
+  overrides it. This is framework-owned operational infrastructure, not a
+  user-topology Resource — ambient per project, never declared by a Hex
+  (which also sidesteps the chicken-and-egg of provisioning the store
+  itself). Like hosted-state backends generally, it also holds state for the
+  user's BYO resources in other clouds.
+- **Server-side runs** — the platform executes the apply loop itself
+  (git-push-style deploys). Once state is workspace-hosted, moving the engine
+  server-side is incremental — the same evolution Pulumi/Terraform Cloud
+  followed. This step's platform surface is implementing Alchemy's own HTTP
+  `StateApi` (bearer auth → workspace RBAC) as a Management API endpoint; once
+  it exists, the workspace-hosted store's visible project disappears and the
+  platform can answer "what's provisioned in this project" natively (the
+  platform side of the inspectable-topology goal).
 
 ## Open questions
 
