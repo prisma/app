@@ -183,6 +183,13 @@ export const makePrismaStateService = (sql: postgres.Sql): StateService => ({
  * re-verifies the state lock's lease via `checkLive`. Used to enforce "a
  * dropped lock connection fails loudly" — see {@link ../lock.ts}.
  *
+ * Reads are gated too, not just writes: a lost lease means a concurrent
+ * deploy may already be mutating this stack's rows, so a read could return
+ * stale or conflicting data — untrustworthy either way, not just the writes.
+ * The check is best-effort and not atomic with the operation it guards (the
+ * lease could theoretically be lost in the gap between `checkLive` passing
+ * and the wrapped call executing); that residual race is accepted.
+ *
  * `getVersion` is excluded: it returns a compile-time constant
  * (`STATE_STORE_VERSION`), so guarding it would only add a pointless
  * reserved-connection round-trip.
