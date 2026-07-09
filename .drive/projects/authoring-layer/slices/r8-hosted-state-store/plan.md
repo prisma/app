@@ -129,6 +129,19 @@ results:
 
 ## Dispatch 5 — Opus review + fix round
 
+**Status: complete (2026-07-09).** Opus verdict: **ship**. Fix round landed
+(`173beb5`, `34b1a52`, `9d7392c`): `getVersion` unguarded (pure constant);
+`guardStateService` unit-tested; and the review's top unverified assumption
+probed for real — postgres.js does NOT reconnect a killed reserved connection,
+but querying it after a server-side `pg_terminate_backend` throws an
+unhandled `TypeError` in postgres.js's deferred write path that would crash
+the deploy process. `checkLive` was rebuilt: it captures the lock backend's
+pid at acquire and asks a *pool* connection whether that pid still holds the
+advisory lock in `pg_locks` — never touching the possibly-dead reserved
+connection. Tested with a real `pg_terminate_backend` (the FT-5219 shape).
+Accepted-as-is per review: first-deploy split-brain residual, bootstrap
+pagination test gap, connection-resource accumulation (follow-up).
+
 **Outcome:** Opus (mid) reviews the full slice diff against spec + design
 note; findings triaged; fixes landed with negative-probe verification where
 applicable; PR opened (bot remote, DCO dual sign-off) with the slice spec as
