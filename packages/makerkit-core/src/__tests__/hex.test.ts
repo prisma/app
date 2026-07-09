@@ -5,10 +5,17 @@ import type { ProvisionedRef } from '../node.ts';
 import { connectionEnd, hex, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', entry: 'server.js' };
+const build = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
 const dbResource = () =>
   resource({
+    name: 'test-resource',
+    pack: 'test/pack',
     type: 'fake/db',
     connection: conn({ url: { type: 'string', secret: true } }, (v) => ({ url: v.url })),
   });
@@ -21,6 +28,8 @@ const httpEnd = () =>
 
 const makeAuthService = () =>
   service({
+    name: 'test-service',
+    pack: 'test/pack',
     type: 'fake/compute',
     inputs: { db: dbResource() },
     params: {},
@@ -29,6 +38,8 @@ const makeAuthService = () =>
 
 const makeStorefrontService = () =>
   service({
+    name: 'test-service',
+    pack: 'test/pack',
     type: 'fake/compute',
     inputs: { auth: httpEnd() },
     params: {},
@@ -74,6 +85,8 @@ describe('Load of a hex root', () => {
   test('the body runs at Load, not at construction', () => {
     let bodyCalls = 0;
     const svc = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -148,12 +161,16 @@ describe('Load of a hex root', () => {
 
   test('graph layer: a 2-cycle (forged refs) is a LoadError naming both nodes', () => {
     const a = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/compute',
       inputs: { peer: httpEnd() },
       params: {},
       build,
     });
     const b = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/compute',
       inputs: { peer: httpEnd() },
       params: {},
@@ -177,14 +194,13 @@ describe('Load of a hex root', () => {
     }
   });
 
-  test('a lone service Loaded directly may have unwired ConnectionEnds', () => {
+  test('a lone service Loaded directly with an unwired ConnectionEnd input is a LoadError naming the input and pointing at the composing hex', () => {
     const lone = makeStorefrontService();
 
-    const graph = Load(lone, { id: 'storefront' });
-
-    expect(graph.edges).toEqual([
-      { from: 'storefront.auth', to: 'storefront', input: 'auth', kind: 'input' },
-    ]);
+    expect(() => Load(lone, { id: 'storefront' })).toThrow(LoadError);
+    expect(() => Load(lone, { id: 'storefront' })).toThrow(
+      /"storefront" has an unwired connection input "auth".*composed by a hex.*deploy the hex/s,
+    );
   });
 });
 
@@ -225,10 +241,20 @@ describe('Load of a hex root — typed ConnectionEnd wiring (the satisfies() bac
     });
 
   const makeContractProvider = <C extends Contract<'rpc', unknown>>(exposed: C) =>
-    service({ type: 'fake/compute', inputs: {}, params: {}, build, expose: { rpc: exposed } });
+    service({
+      name: 'test-service',
+      pack: 'test/pack',
+      type: 'fake/compute',
+      inputs: {},
+      params: {},
+      build,
+      expose: { rpc: exposed },
+    });
 
   const makeTypedStorefrontService = () =>
     service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/compute',
       inputs: { auth: typedAuthEnd() },
       params: {},

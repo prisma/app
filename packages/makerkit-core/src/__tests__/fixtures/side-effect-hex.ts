@@ -5,10 +5,17 @@ import { hex, service } from '../../index.ts';
 export let bodyCallCount = 0;
 
 const svc = service({
+  name: 'test-service',
+  pack: 'test/pack',
   type: 'fixture/app',
   inputs: {},
   params: {},
-  build: { kind: 'node', entry: 'server.js' },
+  build: {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  },
 });
 
 export default hex('fixture-hex', (h) => {

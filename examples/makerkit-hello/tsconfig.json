@@ -4,5 +4,5 @@
     "lib": ["ES2022", "DOM"],
     "types": ["bun", "node"]
   },
-  "include": ["src", "scripts", "alchemy.run.ts"]
+  "include": ["src", "scripts"]
 }

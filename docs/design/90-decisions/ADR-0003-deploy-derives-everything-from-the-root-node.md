@@ -1,0 +1,138 @@
+# ADR-0003: `makerkit deploy` derives everything from the root node — there is no deploy config file
+
+## Status
+
+Accepted
+
+## Decision
+
+The deploy entrypoint is `makerkit deploy <entry>`, where `entry` is a module
+whose default export is a node (a service or a hex). Everything else is
+derived: the application is the graph reachable from that node, the deployment
+target is inferred from the nodes themselves and constructed from the
+environment, and the application's name comes from the root node (overridable
+with `--name`). There is no `makerkit.config.ts` and no stack file.
+
+## Reasoning
+
+Start with what an app author actually writes. A service module declares a
+service and its dependencies, in vocabulary imported from a target pack:
+
+```ts
+// src/service.ts
+import { compute, postgres } from "@makerkit/prisma-cloud";
+import node from "@makerkit/node";
+import { SQL } from "bun";
+
+const db = postgres({ name: "db", client: ({ url }) => new SQL({ url }) });
+
+export default compute({
+  name: "hello",
+  deps: { db },
+  build: node({ module: import.meta.url, entry: "../dist/server.js" }),
+});
+```
+
+Deploying it is one command:
+
+```sh
+makerkit deploy src/service.ts
+```
+
+For that command to work, something has to construct a **Target** — the object
+carrying the lowering tables and provisioning glue for one host, e.g.
+`prismaCloud({ workspaceId })`. Constructing it is code, and that code lives in
+a heavy, deploy-only module (`@makerkit/prisma-cloud/target` pulls in the
+provisioning engine). The service module above can never import it: service
+modules are bundled into the deployed artifact, so they must stay lean. Some
+deploy-side code therefore has to pick the target and construct it — and the
+only question is where that code lives.
+
+It can live in the CLI itself, because the graph already knows its target.
+Every node above was created by a factory from `@makerkit/prisma-cloud` — the
+knowledge exists at authoring time. It doesn't survive into the value on its
+own (a JavaScript object carries no record of which package's factory made
+it), so the factories stamp it: every pack-authored node carries `pack`, its
+pack's **package name** (`"@makerkit/prisma-cloud"`), on one shared base type.
+At deploy, the CLI collects the distinct `pack` values across the loaded graph,
+requires exactly one (mixed packs are an error naming them), and imports
+`${pack}/target`. Because the field holds a real package name rather than a
+nickname, a community pack resolves by exactly the same mechanism as a
+first-party one, with no registry and no naming convention.
+
+Constructing the target then needs its options — and those are
+environment-shaped in practice (a workspace id, a region). So each pack's
+`/target` entry exposes one conventional export, `fromEnv(): Target`, which
+reads its own environment variables and fails with an error naming any missing
+one. That export is the entire contract between the CLI and a pack.
+
+`pack` and `type` are deliberately separate axes. `pack` selects the target;
+`type` is each node's own discriminant (`"compute"`, `"postgres"`), which the
+selected target's lowering tables key on. A target is already scoped to its
+pack, so its table keys carry no pack prefix. And inference cannot silently
+pick a wrong target: lowering routes every node's `type` through the target's
+tables, so a mismatch fails immediately with an error naming the target, the
+type, and the types the target knows.
+
+Deriving everything from the entry module also settles what "the root" means:
+**nothing marks a root in the model**. Whatever module you point the CLI at
+*is* the application, and the graph reachable from its default export is what
+deploys. Two cases fall out:
+
+- A **self-contained service** (all inputs satisfied by its own resources)
+  deploys as a complete standalone application — its own project, its own
+  state. That is a feature: any slice of a larger system can be deployed in
+  isolation, and it cannot collide with the composed application because it
+  carries its own name and therefore its own project.
+- A service with **unwired connection inputs** (inputs an enclosing hex
+  normally wires at `provision`) fails at Load, with an error naming the
+  unwired input and pointing at deploying the composing hex instead.
+
+## Consequences
+
+- The standard deploy is zero-config: `makerkit deploy src/service.ts` plus
+  environment variables.
+- Target packs have a small, fixed CLI-facing contract: nodes carry the pack's
+  package name, and the `/target` entry exports `fromEnv()`. This is the seam
+  a community pack plugs into with zero CLI changes.
+- One target per application. Multi-target or heavily parameterized setups
+  have no home in this design; if one is ever needed, a config file or flags
+  can be introduced as an *optional override* — never the standard path.
+- `lower()` in `@makerkit/core/deploy` remains the underlying mechanism and
+  the escape hatch for hand-composed or mixed Alchemy stacks; the CLI wraps
+  it and never replaces it.
+- The Load error for unwired inputs is user-facing surface: it is the message
+  a user sees when they point the CLI at a component instead of the
+  application, and it must keep telling them what to do instead.
+
+## Alternatives considered
+
+- **A declarative `makerkit.config.ts`** exporting `{ app, target, name }` —
+  rejected: every field is derivable. `app` is an import of the entry module;
+  `name` belongs on the root node (see ADR-0006); `target` is constructible by
+  the CLI as above. The file would drift toward being a second place that
+  names the app, against "your code is the source of truth".
+- **Naming the target with a CLI flag** (`--target @makerkit/prisma-cloud`) —
+  workable but redundant: the nodes already know their pack, and a flag can
+  disagree with them.
+- **Inferring the pack from a type-id prefix** (a convention mapping a slug
+  like `prisma-cloud` to a package name) — breaks for any pack whose package
+  name doesn't follow the convention; carrying the real package name costs
+  one field and removes the convention entirely.
+- **Folding pack identity into the type id** (`type:
+  "@makerkit/prisma-cloud/compute"`, one field instead of two) — rejected:
+  the two strings have unrelated responsibilities. `pack` selects the target;
+  `type` routes within it. Fusing them would make every lowering-table key
+  carry resolution information it never uses, and make parsing a string the
+  way to answer a question a field answers directly.
+
+## Related
+
+- [`ADR-0004`](ADR-0004-paths-resolve-relative-to-the-authoring-file.md) — how
+  paths written in the app resolve at deploy.
+- [`ADR-0005`](ADR-0005-users-build-makerkit-assembles.md) — the
+  build/assembly ownership split the CLI drives.
+- [`ADR-0006`](ADR-0006-every-node-is-named.md) — where the application name
+  comes from.
+- [`../10-domains/deploy-cli.md`](../10-domains/deploy-cli.md) — the full
+  pipeline this decision anchors.

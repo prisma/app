@@ -58,10 +58,10 @@ export class LoadError extends Error {
  * contract must satisfy() it (LoadError on mismatch — TypeScript already
  * rejects this at the wiring site, so reaching here means a cast bypassed
  * it); the connection edges form a DAG (a cycle is a LoadError with the cycle
- * named). A lone service Loaded outside any hex may have unwired
- * ConnectionEnds — connectedness is a topology-level check; booting it
- * unwired still fails loudly through the ordinary missing-config path.
- * Executes nothing of the user's.
+ * named). A service Loaded directly as the root (not via a hex) may not carry
+ * any ConnectionEnd input — nothing at the root wires it — so that is a
+ * LoadError naming the input and pointing at the composing hex instead
+ * (ADR-0003). Executes nothing of the user's.
  */
 export function Load(root: ServiceNode | HexNode, opts?: { id?: NodeId }): Graph {
   // Brand-check the untrusted root once (a user default-export could be junk
@@ -103,6 +103,14 @@ function serviceInputs(
 }
 
 function loadService(root: ServiceNode, rootId: NodeId): Graph {
+  for (const [input, value] of Object.entries(root.inputs)) {
+    if (isNode(value) && value.kind === 'connection') {
+      throw new LoadError(
+        `Service "${rootId}" has an unwired connection input "${input}" — this service is composed ` +
+          `by a hex; deploy the hex instead of loading "${rootId}" directly.`,
+      );
+    }
+  }
   const rootGraphNode: GraphNode = { id: rootId, node: root };
   const { nodes, edges } = serviceInputs(root, rootId);
   return {

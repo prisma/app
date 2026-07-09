@@ -17,18 +17,36 @@ import { type BuildAdapter, connectionEnd, hex, resource, service } from '../nod
 import { conn } from './helpers.ts';
 
 const db = () =>
-  resource({ type: 'fake/db', connection: conn({ url: { type: 'string' } }, () => ({})) });
+  resource({
+    name: 'test-resource',
+    pack: 'test/pack',
+    type: 'fake/db',
+    connection: conn({ url: { type: 'string' } }, () => ({})),
+  });
 const httpEnd = () =>
   connectionEnd({ type: 'fake/http', connection: conn({ url: { type: 'string' } }, () => ({})) });
 
-const defaultBuild: BuildAdapter = { kind: 'node', entry: 'server.js' };
+const defaultBuild: BuildAdapter = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
 const app = (
   type: string,
   inputs: Record<string, ReturnType<typeof db> | ReturnType<typeof httpEnd>>,
   params: Record<string, { type: 'number' | 'string'; default?: unknown }> = {},
   build: BuildAdapter = defaultBuild,
-) => service({ type, inputs, params: params as never, build });
+) =>
+  service({
+    name: 'test-service',
+    pack: 'test/pack',
+    type,
+    inputs,
+    params: params as never,
+    build,
+  });
 
 const opts = (extra: Partial<LowerOptions> = {}): LowerOptions => ({ name: 'hello', ...extra });
 
@@ -235,7 +253,17 @@ describe('lowering a lone service root', () => {
 
   test('the build descriptor is inert to lowering — any kind/entry lowers identically', () => {
     const { target } = fakeTarget();
-    const root = app('fake/compute', { db: db() }, {}, { kind: 'nonsense', entry: 'whatever.js' });
+    const root = app(
+      'fake/compute',
+      { db: db() },
+      {},
+      {
+        kind: 'nonsense',
+        pack: '@fake/adapter',
+        module: 'file:///test/service.ts',
+        entry: 'whatever.js',
+      },
+    );
 
     const result = run(
       lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })),
@@ -259,7 +287,12 @@ describe('lowering a lone service root', () => {
   test('fails with LowerError naming the type and the known types on an unknown resource type', () => {
     const { target } = fakeTarget();
     const root = app('fake/compute', {
-      cache: resource({ type: 'fake/unknown', connection: conn({}, () => ({})) }),
+      cache: resource({
+        name: 'test-resource',
+        pack: 'test/pack',
+        type: 'fake/unknown',
+        connection: conn({}, () => ({})),
+      }),
     });
 
     const error = runError(

@@ -5,13 +5,20 @@ import { compute, postgres } from '../../index.ts';
 export let clientCalls = 0;
 
 export default compute({
+  name: 'test-service',
   deps: {
     db: postgres({
+      name: 'test-resource',
       client: ({ url }) => {
         clientCalls += 1;
         return { url };
       },
     }),
   },
-  build: { kind: 'node', entry: 'server.js' },
+  build: {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  },
 });

@@ -6,6 +6,10 @@ architecture/design phase that comes *after* the high-level model is settled.
 - [`core-model.md`](core-model.md) — the complete class/data-structure design of
   `@makerkit/core` and the target-pack contract, with `@makerkit/prisma-cloud` as
   the worked instance.
+- [`deploy-cli.md`](deploy-cli.md) — the MakerKit-owned deploy entrypoint
+  (`makerkit deploy` / `makerkit destroy`): the pipeline, the pack CLI seam and
+  per-kind assembly contracts, and the error surface. Rests on ADR-0003 …
+  ADR-0006.
 
 The settled high-level model is recorded in:
 

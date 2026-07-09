@@ -1,13 +1,13 @@
 /**
- * Assembles a Next.js `output: "standalone"` build into the bundle dir the
- * pack packages at deploy. Run `next build` first (the `build:compute`
- * script does). Next's standalone tree omits the static assets and
- * `public/`, so this copies them in. The bundle entry is NOT server.js
- * directly: the app's MakerKit wrapper (`src/service.ts` — declarations
- * only, whose node carries its own run()) is bundled to `main.mjs` next to
- * server.js, so the relative import resolves inside the artifact and the
- * MakerKit boot loop runs first (bootstrap.js imports main.mjs, then
- * dynamically imports server.js — see @makerkit/core/deploy's PackageInput).
+ * Deploy-only (ADR-0005): assembles a Next.js `output: "standalone"` build
+ * into the bundle dir the pack packages at deploy. Run `next build` first.
+ * Next's standalone tree omits the static assets and `public/`, so this
+ * copies them in. The bundle entry is NOT server.js directly: the app's
+ * MakerKit wrapper (the service module — declarations only, whose node
+ * carries its own run()) is bundled to `main.mjs` next to server.js, so the
+ * relative import resolves inside the artifact and the MakerKit boot loop
+ * runs first (bootstrap.js imports main.mjs, then dynamically imports
+ * server.js — see @makerkit/core/deploy's PackageInput).
  *
  * MakerKit ships no build step, but it does own the artifact envelope —
  * bootstrap.js + compute.manifest.json + the deterministic tar are printed
@@ -16,12 +16,37 @@
  * Requires a hoisted node_modules (see the repo `.npmrc`): pnpm's default
  * isolated layout hides Next's peers (e.g. styled-jsx) under `.pnpm`, and the
  * flattened standalone `next` copy can't resolve them at boot.
+ *
+ * All paths are file-relative (ADR-0004): the build adapter's `appDir`
+ * resolves against `dirname(build.module)`, never against a discovered
+ * package directory.
  */
-
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { Bundle } from '@makerkit/core/deploy';
 import { build } from 'tsdown';
+import type { NextjsBuildAdapter } from './index.ts';
+
+export type { Bundle } from '@makerkit/core/deploy';
+
+/**
+ * Same seam-contract name as every build adapter's `/assemble` entry
+ * (@makerkit/core/deploy's AssembleInput) -- narrowed here to this kind's own
+ * NextjsBuildAdapter (its extra appDir field), the same way the runtime
+ * `kind` check below narrows at the value level.
+ */
+export interface AssembleInput {
+  readonly build: NextjsBuildAdapter;
+  /**
+   * Extra patterns to inline into the wrapper besides `@makerkit/*` — the
+   * service module's own imports that are neither in the assembled artifact's
+   * node_modules nor runtime built-ins (e.g. the app's workspace packages and
+   * the libraries its contracts evaluate at import time).
+   */
+  readonly wrapperNoExternal?: readonly RegExp[];
+}
 
 /** Where Next's standalone build places this app, given `outputFileTracingRoot` pins the monorepo root. */
 export function nextStandaloneDir(appDir: string): string {
@@ -31,16 +56,21 @@ export function nextStandaloneDir(appDir: string): string {
   return path.join(resolvedApp, '.next', 'standalone', rel);
 }
 
-export interface BundleNextResult {
-  readonly bundleDir: string;
-}
-
-export async function bundleNextComputeArtifact(appDir: string): Promise<BundleNextResult> {
-  const resolvedApp = path.resolve(appDir);
-  const appOut = nextStandaloneDir(appDir);
-  if (!fs.existsSync(path.join(appOut, 'server.js'))) {
+export async function assemble(input: AssembleInput): Promise<Bundle> {
+  if (input.build.kind !== 'nextjs') {
     throw new Error(
-      `no standalone server.js at ${appOut} — run \`next build\` with output: "standalone" first`,
+      `@makerkit/nextjs/assemble: expected a "nextjs" build adapter, got "${input.build.kind}".`,
+    );
+  }
+
+  const serviceModule = fileURLToPath(input.build.module);
+  const moduleDir = path.dirname(serviceModule);
+  const resolvedApp = path.resolve(moduleDir, input.build.appDir);
+  const appOut = nextStandaloneDir(resolvedApp);
+  const entryPath = path.join(appOut, input.build.entry);
+  if (!fs.existsSync(entryPath)) {
+    throw new Error(
+      `no standalone ${input.build.entry} at ${appOut} — run \`next build\` with output: "standalone" first`,
     );
   }
 
@@ -74,28 +104,28 @@ export async function bundleNextComputeArtifact(appDir: string): Promise<BundleN
   // server.js as main.mjs (unambiguously ESM — the standalone tree's
   // package.json is CJS-default). Its run()'s `import("./server.js")`
   // resolves relative to this file inside the artifact.
-  const bundleTmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'storefront-main-'));
+  const bundleTmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'makerkit-nextjs-main-'));
   try {
     await build({
-      entry: [path.join(resolvedApp, 'src', 'service.ts')],
+      entry: [serviceModule],
       outDir: bundleTmp,
       format: 'esm',
       platform: 'node',
       external: ['bun'],
       // Workspace packages must be inlined (this is .ts source, not requireable
-      // JS): both the framework (`@makerkit/*`) and this app's own sibling hex
-      // packages (`@storefront-auth/*` — service.ts imports `@storefront-auth/auth/contract`).
-      // arktype must be too: service.ts's `rpc(authContract)` dep evaluates the
-      // shared auth contract at import time, which calls arktype's `type()` —
-      // this build is separate from Next's own, so it can't rely on Next's
-      // standalone node_modules trace to have arktype in place.
-      noExternal: [/^@makerkit\//, /^@storefront-auth\//, /^arktype/],
+      // JS); everything Next needs is already in the standalone tree and is NOT
+      // imported by the entry. The caller adds the app's own import-time deps
+      // via wrapperNoExternal — this build is separate from Next's, so it can't
+      // rely on the standalone node_modules trace to cover them.
+      noExternal: [/^@makerkit\//, ...(input.wrapperNoExternal ?? [])],
       dts: false,
       sourcemap: false,
       clean: false,
     });
     const built = fs.readdirSync(bundleTmp).find((f) => /^service\.m?js$/.test(f));
-    if (!built) throw new Error(`tsdown produced no service.js in ${bundleTmp}`);
+    if (built === undefined) {
+      throw new Error(`tsdown produced no service.js in ${bundleTmp}`);
+    }
     await fs.promises.copyFile(path.join(bundleTmp, built), path.join(appOut, 'main.mjs'));
   } finally {
     await fs.promises.rm(bundleTmp, { recursive: true, force: true });
@@ -109,15 +139,5 @@ export async function bundleNextComputeArtifact(appDir: string): Promise<BundleN
   // from the process CWD, which is the artifact root at boot.
   await fs.promises.writeFile(path.join(appOut, 'bunfig.toml'), '[install]\nauto = "disable"\n');
 
-  return { bundleDir: appOut };
-}
-
-if (import.meta.main) {
-  const appDir = process.argv[2];
-  if (!appDir) {
-    console.error('Usage: bun scripts/bundle-next.ts <appDir>');
-    process.exit(1);
-  }
-  const result = await bundleNextComputeArtifact(appDir);
-  console.log(`Bundled ${result.bundleDir}`);
+  return { dir: appOut, entry: input.build.entry };
 }

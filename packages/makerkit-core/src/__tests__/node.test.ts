@@ -10,14 +10,18 @@ const fakeContract = <Cmp>(cmp: Cmp): Contract<'rpc', Cmp> => ({
 });
 
 describe('resource()', () => {
-  test('returns a branded, frozen resource node carrying its connection', () => {
+  test('returns a branded, frozen resource node carrying its name, pack, and connection', () => {
     const node = resource({
+      name: 'db',
+      pack: '@makerkit/prisma-cloud',
       type: 'fake/db',
       connection: conn({ url: { type: 'string', secret: true } }, (v) => ({ url: v.url })),
     });
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
+    expect(node.name).toBe('db');
+    expect(node.pack).toBe('@makerkit/prisma-cloud');
     expect(node.type).toBe('fake/db');
     expect(node.connection.params).toEqual({ url: { type: 'string', secret: true } });
     expect(Object.isFrozen(node)).toBe(true);
@@ -29,6 +33,8 @@ describe('resource()', () => {
   test("hydrate is the app's factory — called only when invoked", () => {
     let calls = 0;
     const node = resource({
+      name: 'db',
+      pack: 'test/pack',
       type: 'fake/db',
       connection: conn({ url: { type: 'string' } }, (v) => {
         calls += 1;
@@ -42,18 +48,42 @@ describe('resource()', () => {
   });
 
   test('throws on an empty type', () => {
-    expect(() => resource({ type: '', connection: conn({}, () => ({})) })).toThrow(
-      /non-empty node type/,
-    );
+    expect(() =>
+      resource({ name: 'db', pack: 'test/pack', type: '', connection: conn({}, () => ({})) }),
+    ).toThrow(/non-empty node type/);
+  });
+
+  test('throws on an empty name', () => {
+    expect(() =>
+      resource({ name: '', pack: 'test/pack', type: 'fake/db', connection: conn({}, () => ({})) }),
+    ).toThrow(/non-empty name/);
+  });
+
+  test('throws on an empty pack', () => {
+    expect(() =>
+      resource({ name: 'db', pack: '', type: 'fake/db', connection: conn({}, () => ({})) }),
+    ).toThrow(/non-empty pack/);
   });
 });
 
 describe('service()', () => {
-  const build = { kind: 'node', entry: 'dist/server.js' };
+  const build = {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///app/src/service.ts',
+    entry: 'dist/server.js',
+  };
 
-  test('returns a branded, frozen service node with frozen inputs, params, and build', () => {
-    const db = resource({ type: 'fake/db', connection: conn({}, () => ({})) });
+  test('returns a branded, frozen service node with frozen name, pack, inputs, params, and build', () => {
+    const db = resource({
+      name: 'db',
+      pack: 'test/pack',
+      type: 'fake/db',
+      connection: conn({}, () => ({})),
+    });
     const node = service({
+      name: 'hello',
+      pack: '@makerkit/prisma-cloud',
       type: 'fake/app',
       inputs: { db },
       params: { port: { type: 'number', default: 3000 } },
@@ -62,10 +92,17 @@ describe('service()', () => {
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('service');
+    expect(node.name).toBe('hello');
+    expect(node.pack).toBe('@makerkit/prisma-cloud');
     expect(node.type).toBe('fake/app');
     expect(node.inputs.db).toBe(db);
     expect(node.params).toEqual({ port: { type: 'number', default: 3000 } });
-    expect(node.build).toEqual({ kind: 'node', entry: 'dist/server.js' });
+    expect(node.build).toEqual({
+      kind: 'node',
+      pack: '@makerkit/node',
+      module: 'file:///app/src/service.ts',
+      entry: 'dist/server.js',
+    });
     expect(Object.isFrozen(node)).toBe(true);
     expect(Object.isFrozen(node.inputs)).toBe(true);
     expect(Object.isFrozen(node.params)).toBe(true);
@@ -75,8 +112,17 @@ describe('service()', () => {
 
   test('carries no handler — the node is a pure description', () => {
     const node = service({
+      name: 'hello',
+      pack: 'test/pack',
       type: 'fake/app',
-      inputs: { db: resource({ type: 'fake/db', connection: conn({}, () => ({})) }) },
+      inputs: {
+        db: resource({
+          name: 'db',
+          pack: 'test/pack',
+          type: 'fake/db',
+          connection: conn({}, () => ({})),
+        }),
+      },
       params: { port: { type: 'number', default: 3000 } },
       build,
     });
@@ -86,13 +132,40 @@ describe('service()', () => {
   });
 
   test('throws on an empty type', () => {
-    expect(() => service({ type: '', inputs: {}, params: {}, build })).toThrow(
-      /non-empty node type/,
-    );
+    expect(() =>
+      service({
+        name: 'hello',
+        pack: 'test/pack',
+        type: '',
+        inputs: {},
+        params: {},
+        build,
+      }),
+    ).toThrow(/non-empty node type/);
+  });
+
+  test('throws on an empty name', () => {
+    expect(() =>
+      service({
+        name: '',
+        pack: 'test/pack',
+        type: 'fake/app',
+        inputs: {},
+        params: {},
+        build,
+      }),
+    ).toThrow(/non-empty name/);
   });
 
   test('expose is absent by default', () => {
-    const node = service({ type: 'fake/app', inputs: {}, params: {}, build });
+    const node = service({
+      name: 'hello',
+      pack: 'test/pack',
+      type: 'fake/app',
+      inputs: {},
+      params: {},
+      build,
+    });
 
     expect(node.expose).toBeUndefined();
   });
@@ -100,6 +173,8 @@ describe('service()', () => {
   test('carries a frozen expose map of named output-port Contracts when declared', () => {
     const authContract = fakeContract({ verify: async () => ({ ok: true }) });
     const node = service({
+      name: 'hello',
+      pack: 'test/pack',
       type: 'fake/app',
       inputs: {},
       params: {},
@@ -114,19 +189,30 @@ describe('service()', () => {
 });
 
 describe('connectionEnd()', () => {
-  test('returns a branded, frozen connection end carrying its connection', () => {
+  test('returns a branded, frozen connection end carrying its given name and connection', () => {
     const end = connectionEnd({
+      name: 'auth',
       type: 'fake/http',
       connection: conn({ url: { type: 'string' } }, (v) => ({ url: v.url })),
     });
 
     expect(isNode(end)).toBe(true);
     expect(end.kind).toBe('connection');
+    expect(end.name).toBe('auth');
     expect(end.type).toBe('fake/http');
     expect(end.connection.params).toEqual({ url: { type: 'string' } });
     expect(Object.isFrozen(end)).toBe(true);
     expect(Object.isFrozen(end.connection)).toBe(true);
     expect(Object.isFrozen(end.connection.params)).toBe(true);
+  });
+
+  test('name is optional — an unnamed end falls back to its type', () => {
+    const end = connectionEnd({
+      type: 'fake/http',
+      connection: conn({}, () => ({})),
+    });
+
+    expect(end.name).toBe('fake/http');
   });
 
   test('hydrate is the supplied factory — called only when invoked', () => {

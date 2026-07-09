@@ -17,6 +17,7 @@ const computeParams = { port: { type: 'number', default: 3000 } } as const;
  *     resolved service params (typed).
  */
 export const compute = <D extends Deps, E extends Expose = Record<never, never>>(def: {
+  name: string;
   deps: D;
   build: BuildAdapter;
   expose?: E;
@@ -32,7 +33,9 @@ export const compute = <D extends Deps, E extends Expose = Record<never, never>>
     }
   }
   const node = service<D, typeof computeParams, E>({
-    type: 'prisma-cloud/compute',
+    name: def.name,
+    pack: '@makerkit/prisma-cloud',
+    type: 'compute',
     inputs: def.deps,
     params: computeParams,
     build: def.build,

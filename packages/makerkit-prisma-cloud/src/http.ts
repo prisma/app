@@ -18,13 +18,15 @@ const defaultHttpClient = (cfg: { url: string }): HttpClient => ({
  * coupling); an app factory can replace it. The typed generated client
  * arrives with the interface primitive (a later extension point).
  */
-export const http = <C = HttpClient>(opts?: {
+export const http = <C = HttpClient>(opts: {
+  name: string;
   client?: (cfg: { url: string }) => C;
 }): ConnectionEnd<C> =>
   connectionEnd({
-    type: 'prisma-cloud/http',
+    name: opts.name,
+    type: 'http',
     connection: {
       params: { url: { type: 'string' } },
-      hydrate: (v) => (opts?.client ?? defaultHttpClient)({ url: v.url }) as C,
+      hydrate: (v) => (opts.client ?? defaultHttpClient)({ url: v.url }) as C,
     },
   });

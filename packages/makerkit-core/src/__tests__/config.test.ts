@@ -3,14 +3,23 @@ import { configOf } from '../config.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', entry: 'server.js' };
+const build = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
 describe('configOf', () => {
   test('enumerates input params then service params — semantic, no platform keys', () => {
     const root = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: resource({
+          name: 'test-resource',
+          pack: 'test/pack',
           type: 'fake/db',
           connection: conn(
             { url: { type: 'string', secret: true }, schema: { type: 'string', optional: true } },
@@ -52,9 +61,13 @@ describe('configOf', () => {
 
   test('owner discriminates service vs input params — same name cannot collide', () => {
     const root = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/app',
       inputs: {
         cache: resource({
+          name: 'test-resource',
+          pack: 'test/pack',
           type: 'fake/cache',
           connection: conn({ port: { type: 'number' } }, () => ({})),
         }),
@@ -72,6 +85,8 @@ describe('configOf', () => {
 
   test('a dep-less service enumerates only its own params', () => {
     const root = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/app',
       inputs: {},
       params: { port: { type: 'number', default: 3000 } },
@@ -93,9 +108,13 @@ describe('configOf', () => {
   test('executes nothing — configOf never calls a connection hydrate', () => {
     let hydrateCalls = 0;
     const root = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: resource({
+          name: 'test-resource',
+          pack: 'test/pack',
           type: 'fake/db',
           connection: conn({ url: { type: 'string' } }, () => {
             hydrateCalls += 1;
@@ -116,9 +135,13 @@ describe('configOf', () => {
 describe('configOf over connection-end inputs', () => {
   test('connection-end params appear with owner { input } exactly like resource params', () => {
     const root = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: resource({
+          name: 'test-resource',
+          pack: 'test/pack',
           type: 'fake/db',
           connection: conn({ url: { type: 'string', secret: true } }, () => ({})),
         }),

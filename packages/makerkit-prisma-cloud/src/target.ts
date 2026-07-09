@@ -18,6 +18,41 @@ export interface PrismaCloudOptions {
   region?: Prisma.ComputeRegion;
 }
 
+// Prisma.COMPUTE_REGIONS is the runtime source of truth ComputeRegion is
+// derived from, so this can never fall behind — no hand-maintained list, no
+// exhaustiveness gymnastics to keep it honest.
+const KNOWN_REGION_SET: ReadonlySet<string> = new Set(Prisma.COMPUTE_REGIONS);
+
+function isComputeRegion(value: string): value is Prisma.ComputeRegion {
+  return KNOWN_REGION_SET.has(value);
+}
+
+/**
+ * The pack's CLI seam (ADR-0003): builds a Target from the process
+ * environment. `makerkit deploy` calls this once it has inferred this pack
+ * from the loaded graph — never reads `PRISMA_SERVICE_TOKEN`/`ALCHEMY_PASSWORD`
+ * here; those are consumed by prisma-alchemy's providers and Alchemy itself
+ * at run time, not by target construction.
+ */
+export function fromEnv(): Target {
+  const workspaceId = process.env['PRISMA_WORKSPACE_ID'];
+  if (workspaceId === undefined || workspaceId.length === 0) {
+    throw new Error('fromEnv(): environment variable PRISMA_WORKSPACE_ID is required.');
+  }
+
+  const region = process.env['PRISMA_REGION'];
+  if (region === undefined || region.length === 0) {
+    return prismaCloud({ workspaceId });
+  }
+  if (!isComputeRegion(region)) {
+    throw new Error(
+      `fromEnv(): environment variable PRISMA_REGION="${region}" is not a known region ` +
+        `(expected one of: ${Prisma.COMPUTE_REGIONS.join(', ')}).`,
+    );
+  }
+  return prismaCloud({ workspaceId, region });
+}
+
 export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   name: 'prisma-cloud',
 
@@ -57,7 +92,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
     // Each postgres input gets its own Database in the application's project.
     // The url output fills the service's db.url Config leaf and is encoded by
     // serialize under the service's own named key — never the platform default.
-    'prisma-cloud/postgres': ({ id, application }) =>
+    postgres: ({ id, application }) =>
       Effect.gen(function* () {
         const db = yield* Prisma.Database(`${id}-db`, {
           projectId: application.outputs['projectId'] as string,
@@ -71,7 +106,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   },
 
   services: {
-    'prisma-cloud/compute': {
+    compute: {
       // The service as a PLACE inside the application's Project: the App,
       // identity-bearing only, no code runs.
       provision: ({ id, application }) =>

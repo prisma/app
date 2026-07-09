@@ -1,13 +1,31 @@
 import { describe, expect, test } from 'bun:test';
 import { Load, LoadError } from '../graph.ts';
-import { resource, service } from '../node.ts';
+import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', entry: 'server.js' };
+const build = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
-const db = () => resource({ type: 'fake/db', connection: conn({}, () => ({})) });
+const db = () =>
+  resource({
+    name: 'test-resource',
+    pack: 'test/pack',
+    type: 'fake/db',
+    connection: conn({}, () => ({})),
+  });
 const app = (inputs: Record<string, ReturnType<typeof db>>) =>
-  service({ type: 'fake/app', inputs, params: {}, build });
+  service({
+    name: 'test-service',
+    pack: 'test/pack',
+    type: 'fake/app',
+    inputs,
+    params: {},
+    build,
+  });
 
 describe('Load', () => {
   test('builds path-derived ids, edges, and topo-ordered nodes (deps first)', () => {
@@ -41,9 +59,13 @@ describe('Load', () => {
   test('executes nothing — Load never calls a connection hydrate', () => {
     let calls = 0;
     const root = service({
+      name: 'test-service',
+      pack: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: resource({
+          name: 'test-resource',
+          pack: 'test/pack',
           type: 'fake/db',
           connection: conn({}, () => {
             calls += 1;
@@ -79,5 +101,26 @@ describe('Load', () => {
 
     expect(() => Load(root)).toThrow(LoadError);
     expect(() => Load(root)).toThrow(/empty node type/);
+  });
+
+  test('rejects a root service with an unwired ConnectionEnd input, naming the input and pointing at the composing hex (ADR-0003)', () => {
+    const auth = connectionEnd({
+      name: 'auth',
+      type: 'fake/http',
+      connection: conn({ url: { type: 'string' } }, (v) => ({ url: v.url })),
+    });
+    const root = service({
+      name: 'storefront',
+      pack: 'test/pack',
+      type: 'fake/app',
+      inputs: { auth },
+      params: {},
+      build,
+    });
+
+    expect(() => Load(root, { id: 'storefront' })).toThrow(LoadError);
+    expect(() => Load(root, { id: 'storefront' })).toThrow(
+      /Service "storefront" has an unwired connection input "auth" — this service is composed by a hex; deploy the hex instead of loading "storefront" directly\./,
+    );
   });
 });

@@ -10,10 +10,13 @@ export interface PostgresConfig {
  * The app supplies the client factory; C is inferred from its return type.
  */
 export const postgres = <C>(opts: {
+  name: string;
   client: (config: PostgresConfig) => C | Promise<C>;
 }): ResourceNode<C> =>
   resource({
-    type: 'prisma-cloud/postgres',
+    name: opts.name,
+    pack: '@makerkit/prisma-cloud',
+    type: 'postgres',
     connection: {
       params: { url: { type: 'string', secret: true } },
       // v: { url: string } — enforced by the declaration.

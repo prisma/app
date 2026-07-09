@@ -1,5 +1,13 @@
 # Task brief — the `makerkit deploy` CLI
 
+> **SUPERSEDED (2026-07-09).** The design questions this brief left open are
+> settled by ADR-0003…0006 (`docs/design/90-decisions/`) and
+> `docs/design/10-domains/deploy-cli.md` — notably: there is **no**
+> `makerkit.config.ts` (§1 here is obsolete); value→location (§3) is
+> `url: import.meta.url`; build orchestration (§4) is user-owned builds. The
+> work SHIPPED as the deploy-cli-mvp project (PR #16; design in
+> docs/design/10-domains/deploy-cli.md). Kept for its absorbed constraints.
+
 A brief for the agent taking the CLI track. Runs **in parallel** with the typed-HTTP-connection track (a strict file boundary keeps them from colliding — see § Boundary). Forks off the R5 tip once R5 lands.
 
 ## 1. What we want (the outcome)

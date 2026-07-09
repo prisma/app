@@ -19,15 +19,36 @@ const NODE: unique symbol = Symbol.for('makerkit:node') as never;
 export interface NodeBase {
   readonly [NODE]: true;
   readonly kind: 'service' | 'resource' | 'connection';
-  /** Routing key, e.g. "prisma-cloud/postgres". */
+  /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
+  readonly name: string;
+  /**
+   * The node's OWN routing key, unqualified (e.g. "postgres", "compute") —
+   * never carries a pack prefix. Deploy tooling routes on the (pack, type)
+   * pair: `pack` (PackAuthoredNode) selects the target; `type` selects that
+   * target's lowering table entry within it.
+   */
   readonly type: string;
+}
+
+/**
+ * Shared base for pack-authored nodes — a service or resource constructed by
+ * a target pack's own factory, stamped with that pack's package name. Deploy
+ * tooling reads `pack` off the loaded graph to resolve `${pack}/target`
+ * (ADR-0003). ConnectionEnd stays pack-less: `rpc(contract)` builds one from a
+ * contract alone, with no pack in scope to supply one, and nothing is
+ * provisioned for a connection end — only provisioned nodes route through a
+ * target.
+ */
+export interface PackAuthoredNode extends NodeBase {
+  /** The pack package name that authored this node, e.g. "@makerkit/prisma-cloud". */
+  readonly pack: string;
 }
 
 /**
  * A Resource a service depends on, carrying its connection face. C flows from
  * the connection's hydrate return type into the loaded dependency.
  */
-export interface ResourceNode<C = unknown> extends NodeBase {
+export interface ResourceNode<C = unknown> extends PackAuthoredNode {
   readonly kind: 'resource';
   readonly connection: Connection<Params, C>;
 }
@@ -35,14 +56,42 @@ export interface ResourceNode<C = unknown> extends NodeBase {
 /**
  * How a service's app becomes a runnable artifact. The DESCRIPTOR is pure data
  * the service node carries (rides in service.ts, into every bundle); it names
- * the adapter and the built-entry location, RELATIVE to the service dir — never
- * an absolute or machine path. The heavy assembler is looked up by `kind` at
- * deploy and never ships in a bundle.
+ * the adapter, the authoring module, and the built-entry location. `entry`
+ * (and any other kind-specific path field, e.g. nextjs's `appDir`) resolves
+ * RELATIVE TO `dirname(module)` — exactly like an import specifier — never an
+ * absolute or machine path. `module` (the authoring module's
+ * `import.meta.url`) is the one sanctioned exception to that rule (ADR-0004):
+ * deploy-time metadata only, and bundlers preserve it as an expression rather
+ * than a literal, so it re-evaluates inside the deploy artifact instead of
+ * baking in a dev-machine path. The heavy assembler is resolved from `pack` at
+ * deploy (`${pack}/assemble`, entry-anchored — same mechanism as a target
+ * pack's `${pack}/target`) and never ships in a bundle.
  */
 export interface BuildAdapter {
-  /** Assembler routing key, e.g. "node" · "nextjs". */
+  /** Assembler routing key, e.g. "node" · "nextjs" — the resolved module's own discriminant, checked against this. */
   readonly kind: string;
-  /** Built runnable, service-dir-relative (e.g. "dist/server.js"). */
+  /**
+   * The package name of the adapter that authored this descriptor, e.g.
+   * "@makerkit/node" — baked in by the adapter's own factory (`node()`,
+   * `nextjs()`), the same uniform rule `PackAuthoredNode.pack` follows: a
+   * thing's `pack` names the package that gives it meaning. Deploy tooling
+   * resolves `${pack}/assemble` from it — never a hardcoded kind→package map —
+   * so a community build adapter works with zero changes to core or the CLI.
+   */
+  readonly pack: string;
+  /**
+   * The authoring module's `import.meta.url` — every other path on this
+   * descriptor resolves relative to `dirname(module)`. Nothing reads it at
+   * runtime.
+   */
+  readonly module: string;
+  /**
+   * The app's built runnable, resolved relative to `dirname(module)`. The
+   * kind's assembler interprets it. "node": a path to the built server file
+   * (e.g. "../dist/server.js"). "nextjs": a bare filename inside the
+   * standalone output dir (e.g. "server.js") — see the nextjs adapter's
+   * `appDir` for where that output dir itself is anchored.
+   */
   readonly entry: string;
 }
 
@@ -58,7 +107,7 @@ export interface ServiceNode<
   D extends Deps = Deps,
   P extends Params = Params,
   E extends Expose = Expose,
-> extends NodeBase {
+> extends PackAuthoredNode {
   readonly kind: 'service';
   readonly inputs: D;
   /** Service-level config declarations (e.g. port). */
@@ -216,6 +265,18 @@ function requireType(type: string, factory: string): void {
   }
 }
 
+function requireName(name: string, factory: string): void {
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new Error(`${factory}() requires a non-empty name.`);
+  }
+}
+
+function requirePack(pack: string, factory: string): void {
+  if (typeof pack !== 'string' || pack.length === 0) {
+    throw new Error(`${factory}() requires a non-empty pack (the authoring pack's package name).`);
+  }
+}
+
 function freezeParams<P extends Params>(params: P): P {
   const frozen: Record<string, ConfigParam> = {};
   for (const [name, param] of Object.entries(params)) {
@@ -234,9 +295,13 @@ function frozenShallowCopy<T extends object>(obj: T): T {
 
 /** Constructs a branded, frozen Resource node. Pure — nothing executes. */
 export function resource<P extends Params, C>(def: {
+  name: string;
+  pack: string;
   type: string;
   connection: Connection<P, C>;
 }): ResourceNode<C> {
+  requireName(def.name, 'resource');
+  requirePack(def.pack, 'resource');
   requireType(def.type, 'resource');
   const connection: Connection<P, C> = Object.freeze({
     params: freezeParams(def.connection.params),
@@ -245,6 +310,8 @@ export function resource<P extends Params, C>(def: {
   const node: ResourceNode<C> = {
     [NODE]: true,
     kind: 'resource',
+    name: def.name,
+    pack: def.pack,
     type: def.type,
     connection: connection as Connection<Params, C>,
   };
@@ -260,16 +327,22 @@ export function service<
   P extends Params,
   E extends Expose = Record<never, never>,
 >(def: {
+  name: string;
+  pack: string;
   type: string;
   inputs: D;
   params: P;
   build: BuildAdapter;
   expose?: E;
 }): ServiceNode<D, P, E> {
+  requireName(def.name, 'service');
+  requirePack(def.pack, 'service');
   requireType(def.type, 'service');
   const node: ServiceNode<D, P, E> = {
     [NODE]: true,
     kind: 'service',
+    name: def.name,
+    pack: def.pack,
     type: def.type,
     inputs: frozenShallowCopy(def.inputs),
     params: freezeParams(def.params),
@@ -283,9 +356,13 @@ export function service<
  * Constructs a branded, frozen ConnectionEnd. Pure — nothing executes; the
  * connection's hydrate runs only through the boot pipeline. `required` (if
  * given) is the contract this end depends on — the same value Load compares
- * a wired ref-port against via `satisfies()`.
+ * a wired ref-port against via `satisfies()`. `name` is diagnostic only and
+ * optional — a consumer's dep key (e.g. `deps: { auth: http({ name: "auth" }) }`)
+ * already identifies the end at the wiring site; an unnamed end falls back to
+ * its `type`.
  */
 export function connectionEnd<P extends Params, C, Req = unknown>(def: {
+  name?: string;
   type: string;
   connection: Connection<P, C>;
   required?: Req;
@@ -298,6 +375,7 @@ export function connectionEnd<P extends Params, C, Req = unknown>(def: {
   const node: ConnectionEnd<C, Req> = {
     [NODE]: true,
     kind: 'connection',
+    name: def.name !== undefined && def.name.length > 0 ? def.name : def.type,
     type: def.type,
     connection: connection as Connection<Params, C>,
     required: def.required,
@@ -310,9 +388,7 @@ export function connectionEnd<P extends Params, C, Req = unknown>(def: {
  * wiring, not user code, and runs only when the hex is Loaded.
  */
 export function hex(name: string, body: (h: HexBuilder) => void): HexNode {
-  if (typeof name !== 'string' || name.length === 0) {
-    throw new Error('hex() requires a non-empty name.');
-  }
+  requireName(name, 'hex');
   const node: HexNode = {
     [NODE]: true,
     kind: 'hex',

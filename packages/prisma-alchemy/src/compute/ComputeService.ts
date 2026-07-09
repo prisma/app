@@ -4,13 +4,17 @@ import * as Effect from 'effect/Effect';
 import { ManagementClient } from '../client.ts';
 import { call, callOptional, callVoid } from '../http.ts';
 
-export type ComputeRegion =
-  | 'us-east-1'
-  | 'us-west-1'
-  | 'eu-west-3'
-  | 'eu-central-1'
-  | 'ap-northeast-1'
-  | 'ap-southeast-1';
+/** Every region Prisma Compute serves — the runtime source of truth; `ComputeRegion` is derived from it so the two can never drift. */
+export const COMPUTE_REGIONS = [
+  'us-east-1',
+  'us-west-1',
+  'eu-west-3',
+  'eu-central-1',
+  'ap-northeast-1',
+  'ap-southeast-1',
+] as const;
+
+export type ComputeRegion = (typeof COMPUTE_REGIONS)[number];
 
 export interface ComputeServiceProps {
   /** The project that will own this compute service. */
