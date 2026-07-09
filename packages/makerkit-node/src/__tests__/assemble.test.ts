@@ -2,14 +2,22 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { assemble } from '../assemble.ts';
 
 const tmpDirs: string[] = [];
 
+/** A tmp dir standing in for a service package: src/service.ts + a dist/ sibling. */
 function makeServiceDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-node-assemble-'));
   tmpDirs.push(dir);
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   return dir;
+}
+
+/** The authoring module's import.meta.url for a service dir's src/service.ts (need not exist on disk unless the test writes it). */
+function moduleUrl(serviceDir: string): string {
+  return pathToFileURL(path.join(serviceDir, 'src', 'service.ts')).href;
 }
 
 afterEach(() => {
@@ -24,9 +32,7 @@ describe('assemble()', () => {
     const serviceDir = makeServiceDir();
     await expect(
       assemble({
-        serviceDir,
-        serviceModule: path.join(serviceDir, 'src', 'service.ts'),
-        build: { kind: 'nextjs', entry: 'server.js' },
+        build: { kind: 'nextjs', module: moduleUrl(serviceDir), entry: 'server.js' },
       }),
     ).rejects.toThrow(/expected a "node" build adapter/);
   });
@@ -35,9 +41,7 @@ describe('assemble()', () => {
     const serviceDir = makeServiceDir();
     await expect(
       assemble({
-        serviceDir,
-        serviceModule: path.join(serviceDir, 'src', 'service.ts'),
-        build: { kind: 'node', entry: 'dist/server.js' },
+        build: { kind: 'node', module: moduleUrl(serviceDir), entry: '../dist/server.js' },
       }),
     ).rejects.toThrow(/no built entry at .*dist\/server\.js/);
   });
@@ -48,27 +52,22 @@ describe('assemble()', () => {
     fs.writeFileSync(path.join(serviceDir, 'dist', 'main.js'), 'export {};\n');
     await expect(
       assemble({
-        serviceDir,
-        serviceModule: path.join(serviceDir, 'src', 'service.ts'),
-        build: { kind: 'node', entry: 'dist/main.js' },
+        build: { kind: 'node', module: moduleUrl(serviceDir), entry: '../dist/main.js' },
       }),
     ).rejects.toThrow(/reserved for the MakerKit wrapper/);
   });
 
-  test('produces a bundle dir containing the wrapper and a copy of the built entry', async () => {
+  test('produces a bundle dir (beside the built entry) containing the wrapper and a copy of the built entry', async () => {
     const serviceDir = makeServiceDir();
     fs.mkdirSync(path.join(serviceDir, 'dist'), { recursive: true });
     fs.writeFileSync(path.join(serviceDir, 'dist', 'server.js'), 'export default "app-entry";\n');
-    fs.mkdirSync(path.join(serviceDir, 'src'), { recursive: true });
     fs.writeFileSync(
       path.join(serviceDir, 'src', 'service.ts'),
       'export default { hello: "wrapper" as const };\n',
     );
 
     const result = await assemble({
-      serviceDir,
-      serviceModule: path.join(serviceDir, 'src', 'service.ts'),
-      build: { kind: 'node', entry: 'dist/server.js' },
+      build: { kind: 'node', module: moduleUrl(serviceDir), entry: '../dist/server.js' },
     });
 
     expect(result.dir).toBe(path.join(serviceDir, 'dist', 'bundle'));

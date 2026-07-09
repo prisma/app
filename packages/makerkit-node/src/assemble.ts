@@ -11,17 +11,17 @@
  * gets its own self-contained build and the app's already-built entry is
  * copied in untouched. @makerkit/* is inlined (node_modules isn't shipped);
  * `bun` is a Compute runtime built-in.
+ *
+ * All paths are file-relative (ADR-0004): `build.entry` resolves against
+ * `dirname(build.module)`, never against a discovered package directory.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { BuildAdapter } from '@makerkit/core';
 import { build } from 'tsdown';
 
 export interface AssembleInput {
-  /** The nearest package.json dir above the service's authoring module. */
-  readonly serviceDir: string;
-  /** The service module (e.g. src/service.ts) — what the wrapper bundles. */
-  readonly serviceModule: string;
   readonly build: BuildAdapter;
   /**
    * Extra patterns to inline into the wrapper besides `@makerkit/*` — the
@@ -43,11 +43,13 @@ export async function assemble(input: AssembleInput): Promise<AssembledBundle> {
     );
   }
 
-  const entryPath = path.resolve(input.serviceDir, input.build.entry);
+  const serviceModule = fileURLToPath(input.build.module);
+  const moduleDir = path.dirname(serviceModule);
+  const entryPath = path.resolve(moduleDir, input.build.entry);
   if (!fs.existsSync(entryPath)) {
     throw new Error(
       `no built entry at ${entryPath} — run this app's own build first (the build adapter's ` +
-        `entry, "${input.build.entry}", is resolved against the service dir).`,
+        `entry, "${input.build.entry}", is resolved against dirname(module)).`,
     );
   }
   // "main" is the wrapper's name inside the bundle; an app entry with the same
@@ -59,12 +61,14 @@ export async function assemble(input: AssembleInput): Promise<AssembledBundle> {
     );
   }
 
-  const bundleDir = path.join(input.serviceDir, 'dist', 'bundle');
+  // Beside the built entry — file-relative to the resolved entry, not a
+  // discovered package dir (ADR-0004).
+  const bundleDir = path.join(path.dirname(entryPath), 'bundle');
   await fs.promises.rm(bundleDir, { recursive: true, force: true });
   await fs.promises.mkdir(bundleDir, { recursive: true });
 
   await build({
-    entry: [input.serviceModule],
+    entry: [serviceModule],
     outDir: bundleDir,
     format: 'esm',
     platform: 'node',

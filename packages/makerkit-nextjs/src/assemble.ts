@@ -16,19 +16,20 @@
  * Requires a hoisted node_modules (see the repo `.npmrc`): pnpm's default
  * isolated layout hides Next's peers (e.g. styled-jsx) under `.pnpm`, and the
  * flattened standalone `next` copy can't resolve them at boot.
+ *
+ * All paths are file-relative (ADR-0004): the build adapter's `appDir`
+ * resolves against `dirname(build.module)`, never against a discovered
+ * package directory.
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { BuildAdapter } from '@makerkit/core';
+import { fileURLToPath } from 'node:url';
 import { build } from 'tsdown';
+import type { NextjsBuildAdapter } from './index.ts';
 
 export interface AssembleInput {
-  /** The nearest package.json dir above the service's authoring module. */
-  readonly serviceDir: string;
-  /** The service module (e.g. src/service.ts) — what the wrapper bundles. */
-  readonly serviceModule: string;
-  readonly build: BuildAdapter;
+  readonly build: NextjsBuildAdapter;
   /**
    * Extra patterns to inline into the wrapper besides `@makerkit/*` — the
    * service module's own imports that are neither in the assembled artifact's
@@ -58,7 +59,9 @@ export async function assemble(input: AssembleInput): Promise<AssembledBundle> {
     );
   }
 
-  const resolvedApp = path.resolve(input.serviceDir);
+  const serviceModule = fileURLToPath(input.build.module);
+  const moduleDir = path.dirname(serviceModule);
+  const resolvedApp = path.resolve(moduleDir, input.build.appDir);
   const appOut = nextStandaloneDir(resolvedApp);
   const entryPath = path.join(appOut, input.build.entry);
   if (!fs.existsSync(entryPath)) {
@@ -100,7 +103,7 @@ export async function assemble(input: AssembleInput): Promise<AssembledBundle> {
   const bundleTmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'makerkit-nextjs-main-'));
   try {
     await build({
-      entry: [input.serviceModule],
+      entry: [serviceModule],
       outDir: bundleTmp,
       format: 'esm',
       platform: 'node',

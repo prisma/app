@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { assemble, nextStandaloneDir } from '../assemble.ts';
 
 const tmpDirs: string[] = [];
@@ -12,8 +13,13 @@ function makeAppDir(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-nextjs-assemble-'));
   tmpDirs.push(root);
   const appDir = path.join(root, 'a', 'b', 'c', 'app');
-  fs.mkdirSync(appDir, { recursive: true });
+  fs.mkdirSync(path.join(appDir, 'src'), { recursive: true });
   return appDir;
+}
+
+/** The authoring module's import.meta.url for an app dir's src/service.ts. */
+function moduleUrl(appDir: string): string {
+  return pathToFileURL(path.join(appDir, 'src', 'service.ts')).href;
 }
 
 afterEach(() => {
@@ -28,9 +34,15 @@ describe('assemble()', () => {
     const appDir = makeAppDir();
     await expect(
       assemble({
-        serviceDir: appDir,
-        serviceModule: path.join(appDir, 'src', 'service.ts'),
-        build: { kind: 'node', entry: 'server.js' },
+        // A "node" kind reaching here at all would only happen through the
+        // untyped CLI seam (assemblerPackFor already routes by kind before
+        // calling in) — forced here to exercise the runtime guard directly.
+        build: {
+          kind: 'node',
+          module: moduleUrl(appDir),
+          appDir: '..',
+          entry: 'server.js',
+        } as never,
       }),
     ).rejects.toThrow(/expected a "nextjs" build adapter/);
   });
@@ -39,9 +51,7 @@ describe('assemble()', () => {
     const appDir = makeAppDir();
     await expect(
       assemble({
-        serviceDir: appDir,
-        serviceModule: path.join(appDir, 'src', 'service.ts'),
-        build: { kind: 'nextjs', entry: 'server.js' },
+        build: { kind: 'nextjs', module: moduleUrl(appDir), appDir: '..', entry: 'server.js' },
       }),
     ).rejects.toThrow(/no standalone server\.js at .* run `next build`/);
   });
@@ -62,16 +72,13 @@ describe('assemble()', () => {
     fs.mkdirSync(path.join(appDir, 'public'), { recursive: true });
     fs.writeFileSync(path.join(appDir, 'public', 'favicon.ico'), 'icon\n');
 
-    fs.mkdirSync(path.join(appDir, 'src'), { recursive: true });
     fs.writeFileSync(
       path.join(appDir, 'src', 'service.ts'),
       'export default { hello: "wrapper" as const };\n',
     );
 
     const result = await assemble({
-      serviceDir: appDir,
-      serviceModule: path.join(appDir, 'src', 'service.ts'),
-      build: { kind: 'nextjs', entry: 'server.js' },
+      build: { kind: 'nextjs', module: moduleUrl(appDir), appDir: '..', entry: 'server.js' },
     });
 
     expect(result.dir).toBe(standaloneDir);
