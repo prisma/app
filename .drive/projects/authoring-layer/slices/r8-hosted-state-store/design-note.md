@@ -97,6 +97,17 @@ The Layer's init (scoped, once per stack run):
 A second machine needs exactly what it already needed to deploy at all: the
 service token and workspace id. That is the silky onramp.
 
+Why a dedicated *Project* and not a resource inside the app's own project
+(operator question, 2026-07-09): PDP has no workspace-level database — the
+hierarchy is Workspace → Project → Database, so the store must live under
+*some* project. The app's own project is circular: it is itself a resource
+tracked in state (doesn't exist before the first apply; destroyed by the
+teardown it must record), and per-app stores fragment `listStacks`,
+cross-stack refs, and the fresh-machine bootstrap. A dedicated project outside
+user topology is the closest expressible stand-in for the real design
+(layering.md: state is ambient platform infrastructure) until the Management
+API implements StateApi v5, at which point the visible project disappears.
+
 Known race: two first-ever deployers can double-create the state project.
 Mitigation: on create failure/duplicate, re-list and adopt the winner by name;
 document the residual (same class of race every find-or-create has).
@@ -174,10 +185,14 @@ product surface.
 
 ## Proof (slice DoD)
 
-1. **Fresh-clone no-op:** deploy `examples/makerkit-hello` with hosted state
-   from workdir A; delete/absent `.alchemy/` in a second workdir B; deploy the
-   same stack name from B → **`Plan: N to noop`**, zero duplicates. (This is
-   the exact failure hosted state exists to kill.)
+1. **Fresh-clone no-op:** deploy `examples/storefront-auth` with hosted state
+   from workdir A (round trip live); delete/absent `.alchemy/` in a second
+   workdir B; deploy the same stack name from B → **`Plan: N to noop`**, zero
+   duplicates. (This is the exact failure hosted state exists to kill. The
+   Next artifact's known non-determinism may re-version the storefront — the
+   no-op assertion applies to the deterministic nodes; zero *duplicates* is
+   the hard assertion.) Operator accepted the file-conflict risk with the
+   parallel CLI track (2026-07-09); rebase over it if it lands first.
 2. **Lock:** while A holds a deploy open, B's deploy fails fast with the
    contention error; after A finishes, B succeeds.
 3. **Crash-release:** kill a deployer mid-run; a following deploy acquires the
@@ -196,14 +211,14 @@ the two-line `Target.state` seam in `packages/makerkit-core/src/deploy.ts` +
 `Target` type, docs (`layering.md` status, a short domain doc if warranted),
 `plan.md`/spec updates, the Linear ask. Does **not** touch: adapters, examples'
 config/build files, `e2e-deploy.yml`, anything in the CLI brief's §6 list.
-Residual overlap: `deploy.ts` (different functions) and possibly example
-`alchemy.run.ts` if we wire hosted state into an example before the CLI's
-`makerkit.config.ts` lands — prefer proving on `makerkit-hello`, whose files
-the CLI track does not own.
+Residual overlap: `deploy.ts` (different functions) and
+`examples/storefront-auth` deploy wiring (the proof target — operator accepted
+the conflict risk; rebase over the CLI track if needed).
 
 ## Open items for operator review
 
 1. D5(b) — the optional `Target.state` default. Approve the core SPI addition?
+   (Cost acknowledged: flipping the default requires a one-time
+   `syncState(local → hosted)` or destroy/redeploy per existing stack.)
 2. Reserved state-project name: `makerkit-state` per workspace — naming OK?
-3. Proof uses `makerkit-hello` (not storefront-auth) to stay off the CLI
-   track's files — OK?
+3. ~~Proof example~~ — settled: `storefront-auth`, conflict risk accepted.
