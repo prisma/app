@@ -221,6 +221,27 @@ describe('bootstrapStateConnection', () => {
     expect(state.createCalls).toBe(0);
   });
 
+  test('workspace-id shape mismatch: a wksp_-prefixed API id still matches a bare configured id (and vice versa)', async () => {
+    state.projects.push({
+      id: 'proj-existing',
+      name: 'makerkit-state',
+      createdAt: new Date(1).toISOString(),
+      workspace: { id: 'wksp_ws-1' },
+    });
+    state.databases['proj-existing'] = [{ id: 'db-existing', name: 'default', isDefault: true }];
+
+    // Configured bare, API returns prefixed — the CI shape that caused a
+    // fresh state project to be provisioned on every run.
+    const result = await run(state, verifierFor({ 'db-existing': { kind: 'ours' } }), 'ws-1');
+    expect(result.projectId).toBe('proj-existing');
+    expect(state.createCalls).toBe(0);
+
+    // Configured prefixed, API returns prefixed (the local shape).
+    const result2 = await run(state, verifierFor({ 'db-existing': { kind: 'ours' } }), 'wksp_ws-1');
+    expect(result2.projectId).toBe('proj-existing');
+    expect(state.createCalls).toBe(0);
+  });
+
   test('adopt-legacy: a candidate with our tables but no marker yet is adopted (migratePrismaState writes the marker on the way in)', async () => {
     state.projects.push({
       id: 'proj-legacy',

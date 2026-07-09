@@ -65,6 +65,16 @@ const listAllProjects = (
   });
 
 /**
+ * Workspace ids circulate in two shapes: the API returns them `wksp_`-prefixed
+ * (`wksp_abc…`), while tokens/config often carry the bare id (`abc…`) — the
+ * API accepts both on writes. Comparing them raw silently never matches when
+ * the shapes differ, which made bootstrap re-provision a fresh state project
+ * on every run in CI. Compare bare-to-bare.
+ */
+const bareWorkspaceId = (id: string): string =>
+  id.startsWith('wksp_') ? id.slice('wksp_'.length) : id;
+
+/**
  * All projects named `makerkit-state` in the workspace — plural, because PDP
  * allows duplicate project names (verified 2026-07-09), so name-based
  * discovery can never assume there is at most one. See `resolveStateProject`
@@ -76,7 +86,11 @@ const listStateProjects = (
 ): Effect.Effect<readonly ProjectSummary[], PrismaApiError> =>
   listAllProjects(client).pipe(
     Effect.map((projects) =>
-      projects.filter((p) => p.workspace.id === workspaceId && p.name === STATE_PROJECT_NAME),
+      projects.filter(
+        (p) =>
+          bareWorkspaceId(p.workspace.id) === bareWorkspaceId(workspaceId) &&
+          p.name === STATE_PROJECT_NAME,
+      ),
     ),
   );
 
