@@ -355,9 +355,10 @@ is in `layering.md`; this is the term-by-term catalogue.
 - **Stage** — an isolated instance of a Stack (`dev`, `staging`, `prod`,
   `pr-42`) with its own state and physical names. `→` **Environment**.
 - **State store** — persists each Resource's state per stack+stage so the engine
-  can diff the next deploy. `localState()` today; `layering.md` Step 1 is a
-  Prisma-hosted, workspace-scoped store. Control-plane infra, never a topology
-  node.
+  can diff the next deploy. `prismaCloud()` defaults every deploy to a
+  Prisma-hosted, workspace-scoped store (`@makerkit/prisma-alchemy/state`); an
+  explicit state layer always overrides it. Control-plane infra, never a
+  topology node.
 
 ### Alchemy — engine verbs (provider lifecycle)
 
