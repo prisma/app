@@ -2,7 +2,14 @@
 
 ## Status
 
-Accepted
+Accepted. Amended (this revision): `pack` now lives on one shared base type
+for pack-authored nodes (service + resource — see `core-model.md`'s
+`PackAuthoredNode`), and `type` is the node's own unqualified discriminant
+(e.g. `"postgres"`, `"compute"`, never `"prisma-cloud/postgres"`). This does
+not change the reasoning below — inference always read `pack`, never `type`
+— it only makes explicit that the two are separate axes: `pack` selects the
+target, `type` routes within it (the target's own lowering tables, e.g.
+`Target.resources`/`Target.services`, key on the bare `type`).
 
 ## Decision
 

@@ -6,7 +6,8 @@ for the CLI MVP; the decisions it rests on are recorded in
 [ADR-0003](../90-decisions/ADR-0003-deploy-derives-everything-from-the-root-node.md)
 (no config file, everything derived from the root node),
 [ADR-0004](../90-decisions/ADR-0004-service-nodes-carry-their-authoring-url.md)
-(`url: import.meta.url` anchoring),
+(every path is relative to the file that writes it; the build adapter carries
+the authoring module),
 [ADR-0005](../90-decisions/ADR-0005-users-build-makerkit-assembles.md) (users
 build, MakerKit assembles), and
 [ADR-0006](../90-decisions/ADR-0006-every-node-is-named.md) (node names; the
@@ -41,22 +42,27 @@ with the CI e2e green.
    an error naming the input and pointing at the composing hex.
 3. **Infer the target.** Collect the pack package name each node carries.
    Exactly one pack must appear (mixed packs → error). Dynamically import that
-   package's `/target` entry and call its `fromEnv()` export, which reads its
-   own environment variables and errors naming any missing one. Inference
-   can't silently pick wrong: `lower()` routes every node type through the
-   target's tables, and a mismatch is a `LowerError` naming the unknown type.
+   package's `/target` entry — resolved from the entry module's own file path,
+   the same way node's own resolver would (no discovery of any kind) — and
+   call its `fromEnv()` export, which reads its own environment variables and
+   errors naming any missing one. Inference can't silently pick wrong:
+   `lower()` routes every node type through the target's tables, and a
+   mismatch is a `LowerError` naming the unknown type.
 4. **Resolve the name.** The root node's name (every node is named — ADR-0006),
    unless `--name` overrides it — CI's per-run ephemeral deploys use this so a
    name never collides with a standing demo.
-5. **Assemble each service.** From the node's `url`, walk up to the nearest
-   `package.json` — that directory anchors the adapter's `entry` paths. Route
-   by the build adapter's `kind` to that kind's assembly (see below). Assembly
-   validates the user's built output exists (missing → "run your build" error;
-   staleness is not detected) and produces a normalized bundle
-   `{ dir, entry }`.
+5. **Assemble each service.** Route by the build adapter's `kind` to that
+   kind's assembly (see below); the adapter resolves its own `entry` (and any
+   other path field) relative to `dirname(build.module)` — the authoring
+   module the descriptor itself carries (ADR-0004) — no directory discovery of
+   any kind. Assembly validates the user's built output exists (missing →
+   "run your build" error; staleness is not detected) and produces a
+   normalized bundle `{ dir, entry }`.
 6. **Lower and drive.** Hand the root, the target, and the per-service
    assembled bundles to `lower()`; execute the resulting Alchemy stack
-   (deploy or destroy) with state and stage options.
+   (deploy or destroy) with state and stage options. `.makerkit/` and any
+   Alchemy state are written in the process's own working directory — tool
+   state lives where you run the tool, like any other CLI.
 
 Step 5 is what made the interim `alchemy.run.ts` unnecessary: the pass that
 runs assembly for a service is the same pass that lowers it, so the
@@ -88,10 +94,11 @@ Two new seams, both small:
   pack's `/target` entry exports `fromEnv(): Target`. This is how a community
   pack becomes deployable with zero CLI changes.
 - **Assembly per adapter kind.** The build adapter *descriptor* stays pure
-  data on the node (`{ kind, entry }` — where the user's build puts its
-  output, never how to produce it). The heavy per-kind assembly module is
-  resolved by `kind` at deploy and never ships in a bundle. Its contract is
-  roughly `assemble(anchorDir, descriptor) → { dir, entry }`.
+  data on the node (`{ kind, module, entry }` — where the user's build puts
+  its output, never how to produce it; `entry` and any kind-specific path
+  resolve relative to `dirname(module)`). The heavy per-kind assembly module
+  is resolved by `kind` at deploy and never ships in a bundle. Its contract is
+  roughly `assemble({ build: descriptor }) → { dir, entry }`.
 
 ## Error surface
 
@@ -103,7 +110,6 @@ The CLI's quality lives in its errors; each failure names its fix:
 | Unwired connection input | which input, and to deploy the composing hex |
 | Mixed packs in one graph | the packs found; one target per application |
 | Missing target env | the exact variable(s) `fromEnv()` needed |
-| No `package.json` above `url` | the service needs a package anchor |
 | Built output missing | the expected path, and "run your build" |
 | Unknown adapter kind | the kind, and the kinds with assemblies available |
 
@@ -112,7 +118,7 @@ The CLI's quality lives in its errors; each failure names its fix:
 - **`makerkit build`** — and with it any build-command convention or override.
 - **`makerkit dev`** — the local loop.
 - **Topology emission** — the serialized-topology artifact for agents/tooling;
-  when it lands it must strip the machine-specific `url` (ADR-0004).
+  when it lands it must strip the machine-specific `build.module` (ADR-0004).
 - **Config-file escape hatch** — a `makerkit.config.ts` may return as the
   *optional* override for multi-target or heavily parameterized setups; never
   the standard path.

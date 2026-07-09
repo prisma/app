@@ -63,7 +63,7 @@ The boundary is decided; only the carve is deferred.
 | `@makerkit/node/assemble` · `@makerkit/nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
 
 A build adapter splits exactly like a target pack: a **lean authoring descriptor**
-that the service module carries (pure data — `{ kind, entry }`), and a **heavy
+that the service module carries (pure data — `{ kind, module, entry }`), and a **heavy
 deploy-side assembler** invoked once at deploy on the build machine. The descriptor
 rides into every bundle that imports `service.ts`; the assembler never does.
 
@@ -163,10 +163,20 @@ const NODE: unique symbol = Symbol.for("makerkit:node") as never
 interface NodeBase {
   readonly [NODE]: true
   readonly kind: "service" | "resource" | "connection"
-  readonly type: string                        // routing key, e.g. "prisma-cloud/postgres"
+  readonly type: string                        // the node's OWN routing key, unqualified — e.g. "postgres", "compute"
 }
 // HexNode is deliberately NOT a NodeBase: it has no routing `type` — it is
 // transparent wiring, not a routable thing (see § Nodes).
+
+// Shared base for pack-authored nodes (service + resource): the pack's package
+// name, e.g. "@makerkit/prisma-cloud" — deploy tooling reads it off the graph
+// to resolve `${pack}/target` (ADR-0003). ConnectionEnd stays pack-less.
+// Deploy tooling routes on the (pack, type) pair: `pack` selects the target,
+// `type` selects that target's lowering-table entry within it — `type` never
+// carries a pack prefix itself.
+interface PackAuthoredNode extends NodeBase {
+  readonly pack: string
+}
 
 // ——— Configuration model (core owns structure; the pack owns encoding) ———
 //
@@ -220,19 +230,25 @@ interface Config {
 //
 // How a service's app becomes a runnable artifact. The DESCRIPTOR is pure data
 // the service node carries (rides in service.ts, into every bundle); it names the
-// adapter and the built-entry location, RELATIVE to the service dir — never an
-// absolute or machine path. The heavy ASSEMBLER (fs, framework tooling) is looked
-// up by `kind` at deploy and never ships in a bundle (§ Lowering, § Extension).
+// adapter, the authoring module, and the built-entry location. `entry` (and any
+// other kind-specific path, e.g. nextjs's `appDir`) resolves relative to
+// `dirname(module)` — exactly like an import specifier (ADR-0004) — never an
+// absolute or machine path. `module` is the one sanctioned exception: deploy-time
+// metadata only, and bundlers preserve it as an expression, so it re-evaluates
+// inside the deploy artifact instead of baking in a dev-machine path. The heavy
+// ASSEMBLER (fs, framework tooling) is looked up by `kind` at deploy and never
+// ships in a bundle (§ Lowering, § Extension).
 interface BuildAdapter {
   readonly kind: string                        // "node" · "nextjs" — the assembler routing key
-  readonly entry: string                       // built runnable, service-dir-relative (e.g. "dist/server.js")
+  readonly module: string                      // the authoring module's import.meta.url — the anchor every other path resolves against
+  readonly entry: string                       // built runnable, resolved relative to dirname(module) (e.g. "../dist/server.js")
 }
 
 // ——— Nodes ———
 
 // A Resource a service depends on, carrying its connection face. C flows from
 // the connection's hydrate return type into the loaded dependency.
-interface ResourceNode<C = unknown> extends NodeBase {
+interface ResourceNode<C = unknown> extends PackAuthoredNode {
   readonly kind: "resource"
   readonly connection: Connection<Params, C>
 }
@@ -242,7 +258,9 @@ interface ResourceNode<C = unknown> extends NodeBase {
 // It carries NO handler; the app's entry is the code that serves. The BASE node is
 // not runnable: booting needs a target's environment knowledge, so the pack's
 // factory returns a runnable/loadable subclass that adds `run`/`load` (§ Runtime).
-interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends NodeBase {
+// No `url`/anchor field here — the service's build adapter carries its own
+// authoring module (BuildAdapter.module, ADR-0004).
+interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends PackAuthoredNode {
   readonly kind: "service"
   readonly inputs: D
   readonly params: P                           // service-level config (e.g. port) — no special "context" concept
@@ -669,7 +687,7 @@ export interface PostgresConfig { readonly url: string }
 // The app supplies the client factory; C is inferred from its return type.
 export const postgres = <C>(opts: { client: (config: PostgresConfig) => C | Promise<C> }): ResourceNode<C> =>
   resource({
-    type: "prisma-cloud/postgres",
+    pack: "@makerkit/prisma-cloud", type: "postgres",
     connection: {
       params: { url: { type: "string", secret: true } },
       hydrate: (v) => opts.client({ url: v.url }),   // v: { url: string } — enforced by the declaration
@@ -683,7 +701,7 @@ export const postgres = <C>(opts: { client: (config: PostgresConfig) => C | Prom
 export interface HttpClient { readonly url: string; fetch(path: string, init?: RequestInit): Promise<Response> }
 export const http = <C = HttpClient>(opts?: { client?: (cfg: { url: string }) => C }): ConnectionEnd<C> =>
   connectionEnd({
-    type: "prisma-cloud/http",
+    type: "http",
     connection: {
       params: { url: { type: "string" } },
       hydrate: (v) => (opts?.client ?? defaultHttpClient)({ url: v.url }),
@@ -701,7 +719,7 @@ export const compute = <D extends Deps>(def: {
   build: BuildAdapter
 }): RunnableServiceNode<D, typeof computeParams> => {
   const node = service({
-    type: "prisma-cloud/compute", inputs: def.deps, params: computeParams, build: def.build,
+    pack: "@makerkit/prisma-cloud", type: "compute", inputs: def.deps, params: computeParams, build: def.build,
   })
   let loaded: Loaded<D, typeof computeParams> | undefined   // per-process memo for load()
   return Object.freeze({
@@ -777,7 +795,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
 
   resources: {
     // Each postgres input gets its own Database in the application's project.
-    "prisma-cloud/postgres": ({ id, application }) =>
+    postgres: ({ id, application }) =>
       Effect.gen(function* () {
         const db = yield* Prisma.Database(`${id}-db`, {
           projectId: application.outputs.projectId, name: id,
@@ -790,7 +808,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   },
 
   services: {
-    "prisma-cloud/compute": {
+    compute: {
       // The service as a PLACE inside the application's Project: the App,
       // identity-bearing only, no code runs.
       provision: ({ id, application }) =>
@@ -867,19 +885,23 @@ The assembler normalizes the app's own build output into a bundle dir with the
 MakerKit wrapper, and reports the runtime entry path.
 
 ```ts
-// @makerkit/node — the authoring descriptor (lean; rides in service.ts)
-export default (opts: { entry: string }): BuildAdapter => ({ kind: "node", entry: opts.entry })
+// @makerkit/node — the authoring descriptor (lean; rides in service.ts). `entry`
+// resolves relative to dirname(module) — exactly like an import specifier.
+export default (opts: { module: string; entry: string }): BuildAdapter =>
+  ({ kind: "node", module: opts.module, entry: opts.entry })
 
-// @makerkit/nextjs — same shape; the app passes the built standalone server's
-// path (relative to the assembled bundle dir)
-export default (opts: { entry: string }): BuildAdapter => ({ kind: "nextjs", entry: opts.entry })
+// @makerkit/nextjs — carries an extra `appDir` (the Next app's root, the
+// standalone layout root), also resolved relative to dirname(module). `entry`
+// is a bare filename inside the standalone output dir.
+export default (opts: { module: string; appDir: string; entry: string }): NextjsBuildAdapter =>
+  ({ kind: "nextjs", module: opts.module, appDir: opts.appDir, entry: opts.entry })
 
 // @makerkit/<adapter>/assemble — the deploy-side assembler (heavy; deploy machine)
 // Produces the normalized bundle dir + the runtime entry path for the bootstrap.
+// No serviceDir/serviceModule input: the descriptor's own `module` is the anchor.
 interface Assembler {
   assemble(input: {
-    serviceDir: string          // where service.ts lives; anchors the descriptor's relative entry
-    build: BuildAdapter         // the descriptor (entry, kind)
+    build: BuildAdapter         // the descriptor (module, entry, kind, + kind-specific fields)
   }): Promise<AssembledBundle>  // { dir, entry }
 }
 ```
@@ -911,9 +933,10 @@ const db = postgres({ name: "db", client: ({ url }) => new SQL({ url }) })
 
 export default compute({
   name: "hello",                                // ADR-0006: every node named; at root this names the app
-  url: import.meta.url,                         // ADR-0004: deploy-time anchor; inert at runtime
   deps: { db },
-  build: node({ entry: "dist/server.js" }),     // where the APP's build puts the runnable
+  // ADR-0004: module anchors entry's resolution — dirname(module) is src/, so
+  // "../dist/server.js" reaches the app's build output. Inert at runtime.
+  build: node({ module: import.meta.url, entry: "../dist/server.js" }),
 })
 
 // src/server.ts — the app's OWN entrypoint. The app bundles this to dist/server.js
@@ -961,8 +984,9 @@ disappear into core's sequencing.
 import { compute, http } from "@makerkit/prisma-cloud"
 import nextjs from "@makerkit/nextjs"
 const auth = http({ name: "auth" })
-export default compute({ name: "storefront", url: import.meta.url,
-  deps: { auth }, build: nextjs() })
+export default compute({ name: "storefront",
+  deps: { auth },
+  build: nextjs({ module: import.meta.url, appDir: "..", entry: "server.js" }) })
 
 // storefront/app/page.tsx — the app's own Next code; `next build` bundles it.
 // It pulls the typed auth client via load() — the SAME mechanism the Hono entry
@@ -976,7 +1000,9 @@ export default async function Home() {
 }
 
 // app.ts — the app's hex: transparent wiring, runs at Load. Its name becomes
-// the application (Project) name; each service's dir comes from its own `url`.
+// the application (Project) name; each service's build adapter carries its own
+// authoring module (BuildAdapter.module), so a hex can compose services that
+// live in entirely different directories.
 import authService from "./hexes/auth/src/service"
 import storefrontService from "./hexes/storefront/src/service"
 export default hex("storefront-auth", (h) => {
