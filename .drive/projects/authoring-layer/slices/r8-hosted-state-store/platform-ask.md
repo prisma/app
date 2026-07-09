@@ -4,7 +4,7 @@ Draft for a Linear ticket (agent sessions have no Linear access — file manuall
 or via the Ignite gotcha/ask workflow). Target project: platform / Management
 API.
 
-## Ask
+## Ask 1 — workspace-scoped state API
 
 Implement **Alchemy's HTTP state-store API** as a Management API surface,
 workspace-scoped, authorized by service tokens / workspace RBAC.
@@ -58,3 +58,28 @@ provisioning-state spectrum — this is Step 1's final form, enabling Step 2).
 - Encryption at rest; values contain provisioning secrets today (see the
   MakerKit deferred item "provisioned credentials → transient platform
   secret" for the longer-term shape).
+
+## Ask 2 — reserved/unique project names
+
+Verified 2026-07-09: PDP allows duplicate project names — two projects in the
+same workspace can both be named `makerkit-state`. The hosted state store
+discovers its project by listing and filtering on this name (`bootstrap.ts`),
+so without a way to reserve or enforce uniqueness, that discovery is
+ambiguous (which of several same-named projects is ours?) and squattable
+(anyone with workspace access can create a project named `makerkit-state`
+before the real bootstrap ever runs, or after, occupying the name).
+
+The current mitigation (`bootstrap.ts` `verifyOwnership`) is entirely
+client-side: it connects to each same-named candidate's default database and
+inspects its tables/marker row to decide ownership, in deterministic
+`createdAt` order, and refuses to adopt anything that looks foreign. This
+works, but it is strictly a workaround for a platform gap — a client can
+never fully rule out a race between its own discovery query and another
+actor's concurrent create.
+
+Ask: either enforce unique project names per workspace (reject a create that
+collides with an existing name), or provide a way to reserve/claim a name
+atomically (e.g. a name-is-a-unique-key create-if-absent semantics, or a
+dedicated "system project" concept outside normal user-created project
+space). Either removes the need for `verifyOwnership`'s data-inspection
+workaround entirely.

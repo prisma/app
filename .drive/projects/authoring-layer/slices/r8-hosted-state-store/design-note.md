@@ -132,6 +132,20 @@ On Layer init, on a **reserved connection**:
   come later.
 - The affordance lives in our store; alchemy's interface stays untouched. If
   the interface ever grows locking, we migrate; nothing else in MakerKit knows.
+- **Per-operation lease re-verification (`checkLive`) — amended to the
+  shipped mechanism (2026-07-09, post-review probe).** Every storage call
+  reasserts the lease before running, but it never queries the reserved
+  connection directly: postgres.js does not transparently reconnect a
+  server-killed reserved connection, and querying a dead one throws inside
+  postgres.js's deferred write path rather than rejecting cleanly — a risk
+  verified with a real `pg_terminate_backend` (FT-5219 class), which could
+  crash the deploy process outright. `checkLive` instead captures the
+  reserved connection's backend pid at acquire time and asks a *separate
+  pool connection* whether that pid still holds the advisory lock, via
+  `pg_locks` — never the connection that might already be dead. The check is
+  best-effort and not atomic with the operation it guards (the lease could
+  theoretically be lost in the gap); that residual is accepted. See
+  `lock.ts`'s `checkLive` and `service.ts`'s `guardStateService`.
 
 Answers the operator's "can we use a DB transaction lock?" — yes, in
 session-scoped form (transaction scope would release at the first commit;
