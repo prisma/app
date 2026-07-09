@@ -1,3 +1,4 @@
+import { blindCast } from './casts.ts';
 import {
   type ConnectionEnd,
   type HexBuilder,
@@ -53,8 +54,11 @@ export class LoadError extends Error {
  *
  * Validation: every node branded with a non-empty type; every ConnectionEnd
  * input of a provisioned service wired to a provisioned producer (dangling =
- * LoadError); the connection edges form a DAG (a cycle is a LoadError with
- * the cycle named). A lone service Loaded outside any hex may have unwired
+ * LoadError); a wired ref-port whose ConnectionEnd declares a required
+ * contract must satisfy() it (LoadError on mismatch — TypeScript already
+ * rejects this at the wiring site, so reaching here means a cast bypassed
+ * it); the connection edges form a DAG (a cycle is a LoadError with the cycle
+ * named). A lone service Loaded outside any hex may have unwired
  * ConnectionEnds — connectedness is a topology-level check; booting it
  * unwired still fails loudly through the ordinary missing-config path.
  * Executes nothing of the user's.
@@ -92,7 +96,7 @@ function serviceInputs(
       throw new LoadError(`Input "${input}" of "${serviceId}" has an empty node type.`);
     }
     const id = `${serviceId}.${input}`;
-    nodes.push({ id, node: value as ResourceNode | ConnectionEnd });
+    nodes.push({ id, node: value });
     edges.push({ from: id, to: serviceId, input, kind: 'input' });
   }
   return { nodes, edges };
@@ -111,7 +115,32 @@ function loadService(root: ServiceNode, rootId: NodeId): Graph {
 interface Provisioned {
   readonly id: string;
   readonly service: ServiceNode;
-  readonly wiring: Record<string, ProvisionedRef>;
+  readonly wiring: Record<string, unknown>;
+}
+
+/**
+ * Builds the ref a provision() call hands back: the id (so a producer with no
+ * exposed ports — or an untyped slot — can still be wired wholesale) plus one
+ * ref-port per exposed contract, each the contract's own runtime value (so
+ * its `satisfies()` still works) tagged with the provider's id.
+ */
+function refFor(id: string, service: ServiceNode): ProvisionedRef {
+  const ports: Record<string, unknown> = {};
+  for (const [port, contract] of Object.entries(service.expose ?? {})) {
+    ports[port] = { ...contract, __providerId: id };
+  }
+  return blindCast<
+    ProvisionedRef,
+    'ref-ports are built from the service exposed contracts keyed by port name, matching ProvisionedRef mapped shape'
+  >({ id, ...ports });
+}
+
+/** A wired value's producer id: a ref-port's `__providerId`, or a bare ref's `id`. */
+function producerIdOf(ref: unknown): string | undefined {
+  if (typeof ref !== 'object' || ref === null) return undefined;
+  if ('__providerId' in ref && typeof ref.__providerId === 'string') return ref.__providerId;
+  if ('id' in ref && typeof ref.id === 'string') return ref.id;
+  return undefined;
 }
 
 function loadHex(root: HexNode, opts?: { id?: NodeId }): Graph {
@@ -120,7 +149,7 @@ function loadHex(root: HexNode, opts?: { id?: NodeId }): Graph {
   const ids = new Set<string>();
 
   const builder: HexBuilder = {
-    provision(id, service, wiring) {
+    provision(id: string, service: ServiceNode, wiring?: Record<string, unknown>) {
       if (typeof id !== 'string' || id.length === 0) {
         throw new LoadError(`provision() requires a non-empty id (hex "${root.name}").`);
       }
@@ -134,7 +163,7 @@ function loadHex(root: HexNode, opts?: { id?: NodeId }): Graph {
       }
       ids.add(id);
       provisioned.push({ id, service, wiring: { ...(wiring ?? {}) } });
-      return { id };
+      return refFor(id, service);
     },
   };
 
@@ -157,12 +186,29 @@ function loadHex(root: HexNode, opts?: { id?: NodeId }): Graph {
           `Wiring for "${id}" names "${input}", which is not a ConnectionEnd input of that service.`,
         );
       }
-      if (typeof ref?.id !== 'string' || !ids.has(ref.id)) {
+      const producerId = producerIdOf(ref);
+      if (producerId === undefined || !ids.has(producerId)) {
         throw new LoadError(
-          `Wiring for "${id}.${input}" references "${String(ref?.id)}", which is not a provisioned service in hex "${root.name}".`,
+          `Wiring for "${id}.${input}" references "${String(producerId)}", which is not a provisioned service in hex "${root.name}".`,
         );
       }
-      edges.push({ from: ref.id, to: id, input, kind: 'connection' });
+
+      const required = declared.required;
+      if (required !== undefined) {
+        if (
+          typeof ref !== 'object' ||
+          ref === null ||
+          !('satisfies' in ref) ||
+          typeof ref.satisfies !== 'function' ||
+          !ref.satisfies(required)
+        ) {
+          throw new LoadError(
+            `Wiring for "${id}.${input}" does not satisfy its required contract.`,
+          );
+        }
+      }
+
+      edges.push({ from: producerId, to: id, input, kind: 'connection' });
     }
 
     // Dangling check: every ConnectionEnd input must be wired.

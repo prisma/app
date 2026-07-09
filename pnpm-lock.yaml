@@ -87,9 +87,21 @@ importers:
       '@makerkit/prisma-cloud':
         specifier: workspace:*
         version: link:../../packages/makerkit-prisma-cloud
+      '@makerkit/rpc':
+        specifier: workspace:*
+        version: link:../../packages/makerkit-rpc
+      '@storefront-auth/auth':
+        specifier: workspace:*
+        version: link:hexes/auth
+      '@storefront-auth/storefront':
+        specifier: workspace:*
+        version: link:hexes/storefront
       alchemy:
         specifier: 2.0.0-beta.59
         version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.92(effect@4.0.0-beta.92))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.92)(ioredis@5.11.1))(@types/node@24.10.13)(@types/react@19.2.14)(effect@4.0.0-beta.92)(vite@8.1.2(@types/node@24.10.13)(esbuild@0.27.0)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.9(@types/node@24.10.13)(vite@8.1.2(@types/node@24.10.13)(esbuild@0.27.0)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.0)
+      arktype:
+        specifier: ^2.2.3
+        version: 2.2.3
       effect:
         specifier: 4.0.0-beta.92
         version: 4.0.0-beta.92
@@ -115,9 +127,12 @@ importers:
       '@makerkit/prisma-cloud':
         specifier: workspace:*
         version: link:../../../../packages/makerkit-prisma-cloud
-      hono:
-        specifier: ^4.11.4
-        version: 4.12.27
+      '@makerkit/rpc':
+        specifier: workspace:*
+        version: link:../../../../packages/makerkit-rpc
+      arktype:
+        specifier: ^2.2.3
+        version: 2.2.3
     devDependencies:
       '@types/bun':
         specifier: ^1.3.13
@@ -140,6 +155,15 @@ importers:
       '@makerkit/prisma-cloud':
         specifier: workspace:*
         version: link:../../../../packages/makerkit-prisma-cloud
+      '@makerkit/rpc':
+        specifier: workspace:*
+        version: link:../../../../packages/makerkit-rpc
+      '@storefront-auth/auth':
+        specifier: workspace:*
+        version: link:../auth
+      arktype:
+        specifier: ^2.2.3
+        version: 2.2.3
       next:
         specifier: ^15.5.4
         version: 15.5.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -227,6 +251,25 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/makerkit-rpc:
+    dependencies:
+      '@makerkit/core':
+        specifier: workspace:*
+        version: link:../makerkit-core
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
+      arktype:
+        specifier: ^2.2.3
+        version: 2.2.3
+    devDependencies:
+      '@types/bun':
+        specifier: ^1.3.13
+        version: 1.3.14
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/prisma-alchemy:
     dependencies:
       '@prisma/management-api-sdk':
@@ -257,6 +300,12 @@ packages:
 
   '@alchemy.run/node-utils@0.0.5':
     resolution: {integrity: sha512-5agdhQxWBodxa5hDRyjnpx91RTU3g+qd5fxYB7uNDCaOzB0XC47UU/KHR6zf6jhz/NXf61gJS+vhYwn8NHeRoQ==}
+
+  '@ark/schema@0.56.2':
+    resolution: {integrity: sha512-Qx4D2JFbBWpntiHZaTv7bGG4H/M2rigiknezKg/WVyDSaLdE4YCcWAOoFB7pjjDqHbbV2OqRfntm1nnXvwMexg==}
+
+  '@ark/util@0.56.2':
+    resolution: {integrity: sha512-9kU2sUE38FZEGG7l3hamYMBieLYEJh2L1mrYD2eXpT+78EnQSV1bhjxJhnxGBMSTbtwpBSDNSK+K60WvaI/DTQ==}
 
   '@aws-crypto/crc32@5.2.0':
     resolution: {integrity: sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg==}
@@ -1553,6 +1602,12 @@ packages:
   anynum@1.0.1:
     resolution: {integrity: sha512-N6//FLET/tXYNM/F6ABca1oH6fWB+KlTt909Le28WMDBk8oaT4vY17DCrwg2MvmuqUKt3Ni4N5dGJ/EoBgcO6A==}
 
+  arkregex@0.0.8:
+    resolution: {integrity: sha512-PJcx6G1kQTgLKPUbeYlYecDRaKq15AMSGVajlKFYWlPeJRQL+j3dKE6tyMs40HZ99djS1l9Vhl3ezAHy9JBIqQ==}
+
+  arktype@2.2.3:
+    resolution: {integrity: sha512-7W+0RLTUNJiBFIIZXwOQxSR8Z273IAd6IvqBeG9+gHnQKFsIx2C0iOtGTmMrPnlX4qLXyc5+ll7A0BIj9WrbTg==}
+
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
@@ -1798,10 +1853,6 @@ packages:
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
     engines: {node: '>= 6'}
-
-  hono@4.12.27:
-    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
-    engines: {node: '>=16.9.0'}
 
   hookable@5.5.3:
     resolution: {integrity: sha512-Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ==}
@@ -2655,6 +2706,12 @@ snapshots:
       is-fullwidth-code-point: 5.1.0
 
   '@alchemy.run/node-utils@0.0.5': {}
+
+  '@ark/schema@0.56.2':
+    dependencies:
+      '@ark/util': 0.56.2
+
+  '@ark/util@0.56.2': {}
 
   '@aws-crypto/crc32@5.2.0':
     dependencies:
@@ -3849,6 +3906,16 @@ snapshots:
 
   anynum@1.0.1: {}
 
+  arkregex@0.0.8:
+    dependencies:
+      '@ark/util': 0.56.2
+
+  arktype@2.2.3:
+    dependencies:
+      '@ark/schema': 0.56.2
+      '@ark/util': 0.56.2
+      arkregex: 0.0.8
+
   assertion-error@2.0.1: {}
 
   ast-kit@2.2.0:
@@ -4072,8 +4139,6 @@ snapshots:
   glob-parent@5.1.2:
     dependencies:
       is-glob: 4.0.3
-
-  hono@4.12.27: {}
 
   hookable@5.5.3: {}
 

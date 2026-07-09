@@ -32,10 +32,10 @@ const leanTokens = [
   '"node:', // a node:-scheme import always appears quoted in a bundle
 ];
 
-describe('entry map: core splits into authoring + deploy only — no runtime entry', () => {
-  test("package.json exports exactly '.' and './deploy'", () => {
+describe('entry map: core splits into authoring + deploy + pure utils — no runtime entry', () => {
+  test("package.json exports '.', './deploy', and the ./casts + ./assertions utilities", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
-    expect(Object.keys(pkg.exports).sort()).toEqual(['.', './deploy']);
+    expect(Object.keys(pkg.exports).sort()).toEqual(['.', './assertions', './casts', './deploy']);
   });
 });
 

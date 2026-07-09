@@ -1,21 +1,19 @@
 {
-  "name": "@makerkit/core",
+  "name": "@makerkit/rpc",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./deploy": "./src/deploy.ts",
-    "./casts": "./src/casts.ts",
-    "./assertions": "./src/assertions.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
   "dependencies": {
-    "alchemy": "2.0.0-beta.59",
-    "effect": "4.0.0-beta.92"
+    "@makerkit/core": "workspace:*",
+    "@standard-schema/spec": "^1.1.0",
+    "arktype": "^2.2.3"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",

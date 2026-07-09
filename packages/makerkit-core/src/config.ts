@@ -62,7 +62,7 @@ export interface ConfigDeclaration {
   readonly type: ParamType;
   readonly secret: boolean;
   readonly optional: boolean;
-  readonly default?: string | number;
+  readonly default: string | number | undefined;
 }
 
 /**
@@ -105,7 +105,7 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
         type: param.type,
         secret: param.secret === true,
         optional: param.optional === true,
-        ...(param.default !== undefined ? { default: param.default } : {}),
+        default: param.default,
       });
     }
   }
@@ -117,7 +117,7 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
       type: param.type,
       secret: param.secret === true,
       optional: param.optional === true,
-      ...(param.default !== undefined ? { default: param.default } : {}),
+      default: param.default,
     });
   }
 

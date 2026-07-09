@@ -1,12 +1,13 @@
-import type { BuildAdapter, Deps, Loaded, RunnableServiceNode } from '@makerkit/core';
+import type { BuildAdapter, Deps, Expose, Loaded, RunnableServiceNode } from '@makerkit/core';
 import { configOf, hydrateSync, service } from '@makerkit/core';
+import { blindCast } from '@makerkit/core/casts';
 import { deserialize, stash } from './serializer.ts';
 
 const computeParams = { port: { type: 'number', default: 3000 } } as const;
 
 /**
- * A Prisma Compute service — declarations only (deps + build), no handler.
- * Returns the pack's runnable/loadable node:
+ * A Prisma Compute service — declarations only (deps + build + the ports it
+ * exposes), no handler. Returns the pack's runnable/loadable node:
  *   · run(address, boot) — the process controller: deserialize the platform
  *     environment (keyed off `address`, the pack's ONE env read) into a typed
  *     Config, re-emit it under address-free process-local stash keys, then call
@@ -15,10 +16,11 @@ const computeParams = { port: { type: 'number', default: 3000 } } as const;
  *     deps synchronously, memoize per process, return them merged with the
  *     resolved service params (typed).
  */
-export const compute = <D extends Deps>(def: {
+export const compute = <D extends Deps, E extends Expose = Record<never, never>>(def: {
   deps: D;
   build: BuildAdapter;
-}): RunnableServiceNode<D, typeof computeParams> => {
+  expose?: E;
+}): RunnableServiceNode<D, typeof computeParams, E> => {
   // load() merges deps and service params into one object; a dep whose name
   // collides with a service param would be silently clobbered. Fail at
   // authoring instead.
@@ -29,16 +31,17 @@ export const compute = <D extends Deps>(def: {
       );
     }
   }
-  const node = service({
+  const node = service<D, typeof computeParams, E>({
     type: 'prisma-cloud/compute',
     inputs: def.deps,
     params: computeParams,
     build: def.build,
+    ...(def.expose !== undefined ? { expose: def.expose } : {}),
   });
 
   let loaded: Loaded<D, typeof computeParams> | undefined;
 
-  return Object.freeze({
+  const runnable: RunnableServiceNode<D, typeof computeParams, E> = {
     ...node,
     async run(address: string, boot: () => Promise<unknown>) {
       const shape = configOf(node);
@@ -49,12 +52,13 @@ export const compute = <D extends Deps>(def: {
       if (loaded === undefined) {
         const shape = configOf(node);
         const config = deserialize(shape, '');
-        loaded = { ...hydrateSync(node, config), ...config.service } as Loaded<
-          D,
-          typeof computeParams
-        >;
+        loaded = blindCast<
+          Loaded<D, typeof computeParams>,
+          'merges hydrated deps with the deserialized service config record (untyped at runtime) into the typed Loaded shape'
+        >({ ...hydrateSync(node, config), ...config.service });
       }
       return loaded;
     },
-  }) as RunnableServiceNode<D, typeof computeParams>;
+  };
+  return Object.freeze(runnable);
 };
