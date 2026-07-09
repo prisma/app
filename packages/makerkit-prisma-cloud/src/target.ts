@@ -7,6 +7,7 @@ import type { ServiceNode } from '@makerkit/core';
 import { configOf } from '@makerkit/core';
 import type { Target } from '@makerkit/core/deploy';
 import * as Prisma from '@makerkit/prisma-alchemy';
+import { prismaState } from '@makerkit/prisma-alchemy/state';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import type * as Layer from 'effect/Layer';
@@ -27,6 +28,12 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   // pre-existing typings gap in prisma-alchemy. It satisfies them at runtime;
   // this is the one commented cast, and it lives in the pack, not core.
   providers: () => Prisma.providers() as unknown as Layer.Layer<never>,
+
+  // Hosted state is the default for this target: any deployer with a service
+  // token and the workspace id shares the same state, killing the
+  // duplicate-stack footgun of untracked local `.alchemy/` files. An explicit
+  // opts.state (e.g. CI's ephemeral runs) still overrides this.
+  state: () => prismaState({ workspaceId: o.workspaceId }),
 
   // Runs ONCE per lowering, before any service: the application's Project,
   // with the poison DATABASE_URL/DATABASE_URL_POOLED variables written
