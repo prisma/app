@@ -19,6 +19,8 @@ const NODE: unique symbol = Symbol.for('makerkit:node') as never;
 export interface NodeBase {
   readonly [NODE]: true;
   readonly kind: 'service' | 'resource' | 'connection';
+  /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
+  readonly name: string;
   /** Routing key, e.g. "prisma-cloud/postgres". */
   readonly type: string;
 }
@@ -29,6 +31,8 @@ export interface NodeBase {
  */
 export interface ResourceNode<C = unknown> extends NodeBase {
   readonly kind: 'resource';
+  /** The pack package name that authored this node, e.g. "@makerkit/prisma-cloud" — lets the deploy CLI resolve `${pack}/target` (ADR-0003). */
+  readonly pack: string;
   readonly connection: Connection<Params, C>;
 }
 
@@ -36,8 +40,9 @@ export interface ResourceNode<C = unknown> extends NodeBase {
  * How a service's app becomes a runnable artifact. The DESCRIPTOR is pure data
  * the service node carries (rides in service.ts, into every bundle); it names
  * the adapter and the built-entry location, RELATIVE to the service dir — never
- * an absolute or machine path. The heavy assembler is looked up by `kind` at
- * deploy and never ships in a bundle.
+ * an absolute or machine path. (The service node's own `url` is the one
+ * sanctioned exception to that rule — see ServiceNode, ADR-0004.) The heavy
+ * assembler is looked up by `kind` at deploy and never ships in a bundle.
  */
 export interface BuildAdapter {
   /** Assembler routing key, e.g. "node" · "nextjs". */
@@ -60,6 +65,17 @@ export interface ServiceNode<
   E extends Expose = Expose,
 > extends NodeBase {
   readonly kind: 'service';
+  /** The pack package name that authored this node, e.g. "@makerkit/prisma-cloud" — lets the deploy CLI resolve `${pack}/target` (ADR-0003). */
+  readonly pack: string;
+  /**
+   * The authoring module's `import.meta.url`. Deploy-time anchor only — the
+   * CLI walks up from it to the nearest `package.json` to locate the
+   * service's directory (ADR-0004); nothing reads it at runtime. The
+   * sanctioned exception to BuildAdapter's no-machine-path rule: bundlers
+   * preserve `import.meta.url` as an expression, so it re-evaluates inside
+   * the deploy artifact instead of baking in a dev-machine path.
+   */
+  readonly url: string;
   readonly inputs: D;
   /** Service-level config declarations (e.g. port). */
   readonly params: P;
@@ -216,6 +232,18 @@ function requireType(type: string, factory: string): void {
   }
 }
 
+function requireName(name: string, factory: string): void {
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new Error(`${factory}() requires a non-empty name.`);
+  }
+}
+
+function requireUrl(url: string, factory: string): void {
+  if (typeof url !== 'string' || url.length === 0) {
+    throw new Error(`${factory}() requires a non-empty url (pass import.meta.url).`);
+  }
+}
+
 function freezeParams<P extends Params>(params: P): P {
   const frozen: Record<string, ConfigParam> = {};
   for (const [name, param] of Object.entries(params)) {
@@ -234,9 +262,12 @@ function frozenShallowCopy<T extends object>(obj: T): T {
 
 /** Constructs a branded, frozen Resource node. Pure — nothing executes. */
 export function resource<P extends Params, C>(def: {
+  name: string;
+  pack: string;
   type: string;
   connection: Connection<P, C>;
 }): ResourceNode<C> {
+  requireName(def.name, 'resource');
   requireType(def.type, 'resource');
   const connection: Connection<P, C> = Object.freeze({
     params: freezeParams(def.connection.params),
@@ -245,6 +276,8 @@ export function resource<P extends Params, C>(def: {
   const node: ResourceNode<C> = {
     [NODE]: true,
     kind: 'resource',
+    name: def.name,
+    pack: def.pack,
     type: def.type,
     connection: connection as Connection<Params, C>,
   };
@@ -260,17 +293,25 @@ export function service<
   P extends Params,
   E extends Expose = Record<never, never>,
 >(def: {
+  name: string;
+  pack: string;
   type: string;
+  url: string;
   inputs: D;
   params: P;
   build: BuildAdapter;
   expose?: E;
 }): ServiceNode<D, P, E> {
+  requireName(def.name, 'service');
   requireType(def.type, 'service');
+  requireUrl(def.url, 'service');
   const node: ServiceNode<D, P, E> = {
     [NODE]: true,
     kind: 'service',
+    name: def.name,
+    pack: def.pack,
     type: def.type,
+    url: def.url,
     inputs: frozenShallowCopy(def.inputs),
     params: freezeParams(def.params),
     build: Object.freeze({ ...def.build }),
@@ -283,9 +324,13 @@ export function service<
  * Constructs a branded, frozen ConnectionEnd. Pure — nothing executes; the
  * connection's hydrate runs only through the boot pipeline. `required` (if
  * given) is the contract this end depends on — the same value Load compares
- * a wired ref-port against via `satisfies()`.
+ * a wired ref-port against via `satisfies()`. `name` is diagnostic only and
+ * optional — a consumer's dep key (e.g. `deps: { auth: http({ name: "auth" }) }`)
+ * already identifies the end at the wiring site; an unnamed end falls back to
+ * its `type`.
  */
 export function connectionEnd<P extends Params, C, Req = unknown>(def: {
+  name?: string;
   type: string;
   connection: Connection<P, C>;
   required?: Req;
@@ -298,6 +343,7 @@ export function connectionEnd<P extends Params, C, Req = unknown>(def: {
   const node: ConnectionEnd<C, Req> = {
     [NODE]: true,
     kind: 'connection',
+    name: def.name !== undefined && def.name.length > 0 ? def.name : def.type,
     type: def.type,
     connection: connection as Connection<Params, C>,
     required: def.required,
@@ -310,9 +356,7 @@ export function connectionEnd<P extends Params, C, Req = unknown>(def: {
  * wiring, not user code, and runs only when the hex is Loaded.
  */
 export function hex(name: string, body: (h: HexBuilder) => void): HexNode {
-  if (typeof name !== 'string' || name.length === 0) {
-    throw new Error('hex() requires a non-empty name.');
-  }
+  requireName(name, 'hex');
   const node: HexNode = {
     [NODE]: true,
     kind: 'hex',
