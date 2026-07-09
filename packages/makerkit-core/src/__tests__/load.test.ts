@@ -3,7 +3,7 @@ import { Load, LoadError } from '../graph.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', entry: 'server.js' };
+const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' };
 
 const db = () =>
   resource({
@@ -16,7 +16,6 @@ const app = (inputs: Record<string, ReturnType<typeof db>>) =>
   service({
     name: 'test-service',
     pack: 'test/pack',
-    url: 'file:///test/service.ts',
     type: 'fake/app',
     inputs,
     params: {},
@@ -57,7 +56,6 @@ describe('Load', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         db: resource({
@@ -109,7 +107,6 @@ describe('Load', () => {
     const root = service({
       name: 'storefront',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: { auth },
       params: {},

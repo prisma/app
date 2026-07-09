@@ -21,36 +21,66 @@ export interface NodeBase {
   readonly kind: 'service' | 'resource' | 'connection';
   /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
   readonly name: string;
-  /** Routing key, e.g. "prisma-cloud/postgres". */
+  /**
+   * The node's OWN routing key, unqualified (e.g. "postgres", "compute") —
+   * never carries a pack prefix. Deploy tooling routes on the (pack, type)
+   * pair: `pack` (PackAuthoredNode) selects the target; `type` selects that
+   * target's lowering table entry within it.
+   */
   readonly type: string;
+}
+
+/**
+ * Shared base for pack-authored nodes — a service or resource constructed by
+ * a target pack's own factory, stamped with that pack's package name. Deploy
+ * tooling reads `pack` off the loaded graph to resolve `${pack}/target`
+ * (ADR-0003). ConnectionEnd stays pack-less: `rpc(contract)` builds one from a
+ * contract alone, with no pack in scope to supply one, and nothing is
+ * provisioned for a connection end — only provisioned nodes route through a
+ * target.
+ */
+export interface PackAuthoredNode extends NodeBase {
+  /** The pack package name that authored this node, e.g. "@makerkit/prisma-cloud". */
+  readonly pack: string;
 }
 
 /**
  * A Resource a service depends on, carrying its connection face. C flows from
  * the connection's hydrate return type into the loaded dependency.
  */
-export interface ResourceNode<C = unknown> extends NodeBase {
+export interface ResourceNode<C = unknown> extends PackAuthoredNode {
   readonly kind: 'resource';
-  /** The pack package name that authored this node, e.g. "@makerkit/prisma-cloud" — lets the deploy CLI resolve `${pack}/target` (ADR-0003). */
-  readonly pack: string;
   readonly connection: Connection<Params, C>;
 }
 
 /**
  * How a service's app becomes a runnable artifact. The DESCRIPTOR is pure data
  * the service node carries (rides in service.ts, into every bundle); it names
- * the adapter and the built-entry location, RELATIVE to the service dir — never
- * an absolute or machine path. (The service node's own `url` is the one
- * sanctioned exception to that rule — see ServiceNode, ADR-0004.) The heavy
- * assembler is looked up by `kind` at deploy and never ships in a bundle.
+ * the adapter, the authoring module, and the built-entry location. `entry`
+ * (and any other kind-specific path field, e.g. nextjs's `appDir`) resolves
+ * RELATIVE TO `dirname(module)` — exactly like an import specifier — never an
+ * absolute or machine path. `module` (the authoring module's
+ * `import.meta.url`) is the one sanctioned exception to that rule (ADR-0004):
+ * deploy-time metadata only, and bundlers preserve it as an expression rather
+ * than a literal, so it re-evaluates inside the deploy artifact instead of
+ * baking in a dev-machine path. The heavy assembler is looked up by `kind` at
+ * deploy and never ships in a bundle.
  */
 export interface BuildAdapter {
   /** Assembler routing key, e.g. "node" · "nextjs". */
   readonly kind: string;
   /**
-   * The app's built runnable; the kind's assembler interprets it. "node":
-   * a service-dir-relative path (e.g. "dist/server.js"). "nextjs": a bare
-   * filename inside the standalone output dir (e.g. "server.js").
+   * The authoring module's `import.meta.url` — every other path on this
+   * descriptor resolves relative to `dirname(module)`. Nothing reads it at
+   * runtime.
+   */
+  readonly module: string;
+  /**
+   * The app's built runnable, resolved relative to `dirname(module)`. The
+   * kind's assembler interprets it. "node": a path to the built server file
+   * (e.g. "../dist/server.js"). "nextjs": a bare filename inside the
+   * standalone output dir (e.g. "server.js") — see the nextjs adapter's
+   * `appDir` for where that output dir itself is anchored.
    */
   readonly entry: string;
 }
@@ -67,19 +97,8 @@ export interface ServiceNode<
   D extends Deps = Deps,
   P extends Params = Params,
   E extends Expose = Expose,
-> extends NodeBase {
+> extends PackAuthoredNode {
   readonly kind: 'service';
-  /** The pack package name that authored this node, e.g. "@makerkit/prisma-cloud" — lets the deploy CLI resolve `${pack}/target` (ADR-0003). */
-  readonly pack: string;
-  /**
-   * The authoring module's `import.meta.url`. Deploy-time anchor only — the
-   * CLI walks up from it to the nearest `package.json` to locate the
-   * service's directory (ADR-0004); nothing reads it at runtime. The
-   * sanctioned exception to BuildAdapter's no-machine-path rule: bundlers
-   * preserve `import.meta.url` as an expression, so it re-evaluates inside
-   * the deploy artifact instead of baking in a dev-machine path.
-   */
-  readonly url: string;
   readonly inputs: D;
   /** Service-level config declarations (e.g. port). */
   readonly params: P;
@@ -242,12 +261,6 @@ function requireName(name: string, factory: string): void {
   }
 }
 
-function requireUrl(url: string, factory: string): void {
-  if (typeof url !== 'string' || url.length === 0) {
-    throw new Error(`${factory}() requires a non-empty url (pass import.meta.url).`);
-  }
-}
-
 function requirePack(pack: string, factory: string): void {
   if (typeof pack !== 'string' || pack.length === 0) {
     throw new Error(`${factory}() requires a non-empty pack (the authoring pack's package name).`);
@@ -307,7 +320,6 @@ export function service<
   name: string;
   pack: string;
   type: string;
-  url: string;
   inputs: D;
   params: P;
   build: BuildAdapter;
@@ -316,14 +328,12 @@ export function service<
   requireName(def.name, 'service');
   requirePack(def.pack, 'service');
   requireType(def.type, 'service');
-  requireUrl(def.url, 'service');
   const node: ServiceNode<D, P, E> = {
     [NODE]: true,
     kind: 'service',
     name: def.name,
     pack: def.pack,
     type: def.type,
-    url: def.url,
     inputs: frozenShallowCopy(def.inputs),
     params: freezeParams(def.params),
     build: Object.freeze({ ...def.build }),

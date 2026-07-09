@@ -26,7 +26,11 @@ const db = () =>
 const httpEnd = () =>
   connectionEnd({ type: 'fake/http', connection: conn({ url: { type: 'string' } }, () => ({})) });
 
-const defaultBuild: BuildAdapter = { kind: 'node', entry: 'server.js' };
+const defaultBuild: BuildAdapter = {
+  kind: 'node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
 
 const app = (
   type: string,
@@ -37,7 +41,6 @@ const app = (
   service({
     name: 'test-service',
     pack: 'test/pack',
-    url: 'file:///test/service.ts',
     type,
     inputs,
     params: params as never,
@@ -249,7 +252,12 @@ describe('lowering a lone service root', () => {
 
   test('the build descriptor is inert to lowering — any kind/entry lowers identically', () => {
     const { target } = fakeTarget();
-    const root = app('fake/compute', { db: db() }, {}, { kind: 'nonsense', entry: 'whatever.js' });
+    const root = app(
+      'fake/compute',
+      { db: db() },
+      {},
+      { kind: 'nonsense', module: 'file:///test/service.ts', entry: 'whatever.js' },
+    );
 
     const result = run(
       lowering(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } })),

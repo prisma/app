@@ -31,6 +31,7 @@ export type {
   HydratedDeps,
   Loaded,
   NodeBase,
+  PackAuthoredNode,
   ProvisionedRef,
   RefPort,
   ResourceNode,

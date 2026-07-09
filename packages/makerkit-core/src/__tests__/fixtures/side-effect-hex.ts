@@ -7,11 +7,10 @@ export let bodyCallCount = 0;
 const svc = service({
   name: 'test-service',
   pack: 'test/pack',
-  url: 'file:///test/service.ts',
   type: 'fixture/app',
   inputs: {},
   params: {},
-  build: { kind: 'node', entry: 'server.js' },
+  build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
 });
 
 export default hex('fixture-hex', (h) => {

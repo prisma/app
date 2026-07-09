@@ -3,7 +3,7 @@ import { hydrate, hydrateSync } from '../hydrate.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', entry: 'server.js' };
+const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' };
 
 const dbNode = (record?: (values: { url: string }) => void) =>
   resource({
@@ -24,7 +24,6 @@ describe('hydrate', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: { db: dbNode((v) => made.push(v)) },
       params: portParams,
@@ -44,7 +43,6 @@ describe('hydrate', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         auth: connectionEnd({
@@ -68,7 +66,6 @@ describe('hydrate', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         db: resource({
@@ -94,7 +91,6 @@ describe('hydrate', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {},
       params: portParams,
@@ -111,7 +107,6 @@ describe('hydrateSync', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: { db: dbNode((v) => made.push(v)) },
       params: portParams,
@@ -131,7 +126,6 @@ describe('hydrateSync', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         db: resource({

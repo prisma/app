@@ -7,7 +7,7 @@
  * and reversing it (see core-model.md § Runtime). Core never stringifies and
  * never touches an environment.
  */
-import type { ResourceNode, ServiceNode } from './node.ts';
+import type { ServiceNode } from './node.ts';
 
 /** Runtime-validatable param types. Curated; extended consciously. */
 export type ParamType = 'string' | 'number';
@@ -91,9 +91,10 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
 
   for (const [input, value] of Object.entries(root.inputs)) {
     if (typeof value !== 'object' || value === null) continue;
-    // Resource and connection-end inputs declare params identically.
-    const node = value as ResourceNode;
-    for (const [name, param] of Object.entries(node.connection.params)) {
+    // Resource and connection-end inputs both declare `connection.params` in
+    // the identical shape (Connection<Params, C>), so the union needs no
+    // narrowing to read it.
+    for (const [name, param] of Object.entries(value.connection.params)) {
       entries.push({
         owner: { input },
         name,

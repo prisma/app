@@ -3,14 +3,13 @@ import { configOf } from '../config.ts';
 import { connectionEnd, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', entry: 'server.js' };
+const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' };
 
 describe('configOf', () => {
   test('enumerates input params then service params — semantic, no platform keys', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         db: resource({
@@ -59,7 +58,6 @@ describe('configOf', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         cache: resource({
@@ -84,7 +82,6 @@ describe('configOf', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {},
       params: { port: { type: 'number', default: 3000 } },
@@ -108,7 +105,6 @@ describe('configOf', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         db: resource({
@@ -136,7 +132,6 @@ describe('configOf over connection-end inputs', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/app',
       inputs: {
         db: resource({

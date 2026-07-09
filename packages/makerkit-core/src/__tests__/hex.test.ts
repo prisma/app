@@ -5,7 +5,7 @@ import type { ProvisionedRef } from '../node.ts';
 import { connectionEnd, hex, resource, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
-const build = { kind: 'node', entry: 'server.js' };
+const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' };
 
 const dbResource = () =>
   resource({
@@ -25,7 +25,6 @@ const makeAuthService = () =>
   service({
     name: 'test-service',
     pack: 'test/pack',
-    url: 'file:///test/service.ts',
     type: 'fake/compute',
     inputs: { db: dbResource() },
     params: {},
@@ -36,7 +35,6 @@ const makeStorefrontService = () =>
   service({
     name: 'test-service',
     pack: 'test/pack',
-    url: 'file:///test/service.ts',
     type: 'fake/compute',
     inputs: { auth: httpEnd() },
     params: {},
@@ -84,7 +82,6 @@ describe('Load of a hex root', () => {
     const svc = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -161,7 +158,6 @@ describe('Load of a hex root', () => {
     const a = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/compute',
       inputs: { peer: httpEnd() },
       params: {},
@@ -170,7 +166,6 @@ describe('Load of a hex root', () => {
     const b = service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/compute',
       inputs: { peer: httpEnd() },
       params: {},
@@ -244,7 +239,6 @@ describe('Load of a hex root — typed ConnectionEnd wiring (the satisfies() bac
     service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -256,7 +250,6 @@ describe('Load of a hex root — typed ConnectionEnd wiring (the satisfies() bac
     service({
       name: 'test-service',
       pack: 'test/pack',
-      url: 'file:///test/service.ts',
       type: 'fake/compute',
       inputs: { auth: typedAuthEnd() },
       params: {},

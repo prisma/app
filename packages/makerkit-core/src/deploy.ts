@@ -131,8 +131,8 @@ export interface LoweredNode {
 export interface LowerOptions {
   /** Stack + root node id. */
   readonly name: string;
-  // The interim carrier of assembled bundle dirs (the makerkit-deploy CLI runs
-  // each service's build-adapter assembler and drops this map). Service root:
+  // The interim carrier of assembled bundle dirs (deploy tooling runs each
+  // service's build-adapter assembler and drops this map). Service root:
   // one bundle. Hex root: one per provisioned service, keyed by provision id.
   readonly bundle?: Bundle;
   readonly bundles?: Record<string, Bundle>;

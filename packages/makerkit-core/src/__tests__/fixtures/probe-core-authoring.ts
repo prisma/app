@@ -15,11 +15,10 @@ const db = resource({
 const app = service({
   name: 'test-service',
   pack: 'test/pack',
-  url: 'file:///test/service.ts',
   type: 'probe/app',
   inputs: { db },
   params: { port: { type: 'number', default: 3000 } },
-  build: { kind: 'node', entry: 'server.js' },
+  build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
 });
 
 const peer = connectionEnd({
@@ -30,11 +29,10 @@ const peer = connectionEnd({
 const caller = service({
   name: 'test-service',
   pack: 'test/pack',
-  url: 'file:///test/service.ts',
   type: 'probe/app',
   inputs: { peer },
   params: {},
-  build: { kind: 'node', entry: 'server.js' },
+  build: { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' },
 });
 
 export const wired = Load(

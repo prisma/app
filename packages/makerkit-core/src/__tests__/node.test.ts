@@ -67,9 +67,9 @@ describe('resource()', () => {
 });
 
 describe('service()', () => {
-  const build = { kind: 'node', entry: 'dist/server.js' };
+  const build = { kind: 'node', module: 'file:///app/src/service.ts', entry: 'dist/server.js' };
 
-  test('returns a branded, frozen service node with frozen name, pack, url, inputs, params, and build', () => {
+  test('returns a branded, frozen service node with frozen name, pack, inputs, params, and build', () => {
     const db = resource({
       name: 'db',
       pack: 'test/pack',
@@ -79,7 +79,6 @@ describe('service()', () => {
     const node = service({
       name: 'hello',
       pack: '@makerkit/prisma-cloud',
-      url: 'file:///app/src/service.ts',
       type: 'fake/app',
       inputs: { db },
       params: { port: { type: 'number', default: 3000 } },
@@ -90,11 +89,14 @@ describe('service()', () => {
     expect(node.kind).toBe('service');
     expect(node.name).toBe('hello');
     expect(node.pack).toBe('@makerkit/prisma-cloud');
-    expect(node.url).toBe('file:///app/src/service.ts');
     expect(node.type).toBe('fake/app');
     expect(node.inputs.db).toBe(db);
     expect(node.params).toEqual({ port: { type: 'number', default: 3000 } });
-    expect(node.build).toEqual({ kind: 'node', entry: 'dist/server.js' });
+    expect(node.build).toEqual({
+      kind: 'node',
+      module: 'file:///app/src/service.ts',
+      entry: 'dist/server.js',
+    });
     expect(Object.isFrozen(node)).toBe(true);
     expect(Object.isFrozen(node.inputs)).toBe(true);
     expect(Object.isFrozen(node.params)).toBe(true);
@@ -106,7 +108,6 @@ describe('service()', () => {
     const node = service({
       name: 'hello',
       pack: 'test/pack',
-      url: 'file:///app/src/service.ts',
       type: 'fake/app',
       inputs: {
         db: resource({
@@ -129,7 +130,6 @@ describe('service()', () => {
       service({
         name: 'hello',
         pack: 'test/pack',
-        url: 'file:///app/src/service.ts',
         type: '',
         inputs: {},
         params: {},
@@ -143,7 +143,6 @@ describe('service()', () => {
       service({
         name: '',
         pack: 'test/pack',
-        url: 'file:///app/src/service.ts',
         type: 'fake/app',
         inputs: {},
         params: {},
@@ -152,25 +151,10 @@ describe('service()', () => {
     ).toThrow(/non-empty name/);
   });
 
-  test('throws on an empty url', () => {
-    expect(() =>
-      service({
-        name: 'hello',
-        pack: 'test/pack',
-        url: '',
-        type: 'fake/app',
-        inputs: {},
-        params: {},
-        build,
-      }),
-    ).toThrow(/non-empty url/);
-  });
-
   test('expose is absent by default', () => {
     const node = service({
       name: 'hello',
       pack: 'test/pack',
-      url: 'file:///app/src/service.ts',
       type: 'fake/app',
       inputs: {},
       params: {},
@@ -185,7 +169,6 @@ describe('service()', () => {
     const node = service({
       name: 'hello',
       pack: 'test/pack',
-      url: 'file:///app/src/service.ts',
       type: 'fake/app',
       inputs: {},
       params: {},
