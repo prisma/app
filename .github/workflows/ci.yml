@@ -51,6 +51,30 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Test
         run: pnpm test
+      - name: Test scripts (cast-ratchet unit tests)
+        run: pnpm test:scripts
+
+  cast-ratchet:
+    name: Cast ratchet
+    # PR-only: the ratchet compares HEAD against the PR base. On push to main
+    # there is no diff to measure.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Full history so the merge-base commit is present for the worktree scan.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # The PR base sha is already in history (fetch-depth: 0); point origin/main
+      # at it so the script needs no authenticated network fetch.
+      - name: Establish origin/main baseline ref
+        run: git update-ref refs/remotes/origin/main ${{ github.event.pull_request.base.sha }}
+      - name: Cast ratchet (no new bare `as` casts vs base)
+        run: pnpm lint:casts
 
   build:
     name: Build
