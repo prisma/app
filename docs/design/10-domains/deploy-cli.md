@@ -5,7 +5,7 @@ contracts it introduces, and what stays out of its scope. This is the design
 for the CLI MVP; the decisions it rests on are recorded in
 [ADR-0003](../90-decisions/ADR-0003-deploy-derives-everything-from-the-root-node.md)
 (no config file, everything derived from the root node),
-[ADR-0004](../90-decisions/ADR-0004-service-nodes-carry-their-authoring-url.md)
+[ADR-0004](../90-decisions/ADR-0004-paths-resolve-relative-to-the-authoring-file.md)
 (every path is relative to the file that writes it; the build adapter carries
 the authoring module),
 [ADR-0005](../90-decisions/ADR-0005-users-build-makerkit-assembles.md) (users
