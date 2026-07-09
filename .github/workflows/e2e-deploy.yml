@@ -63,6 +63,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy
+        id: deploy
         # Never `pnpm exec alchemy` or plain `bunx alchemy` — the CLI must run
         # under bun (`--bun`) or it fails with "Cannot find package 'bun'".
         # Do not use the package's `deploy` script: it sources ../../.env,
@@ -75,15 +76,15 @@ jobs:
         run: bash scripts/e2e-verify.sh
 
       - name: Destroy
-        # Always runs, even on failure above: alchemy state is local to this
-        # runner and dies with it, so a failed run without destroy leaves
-        # orphaned cloud resources nobody else can clean up.
-        if: always()
+        # Runs whenever the Deploy step actually started (success or
+        # failure) — even on failure above, so a failed run doesn't leave
+        # orphaned cloud resources nobody else can clean up. Deploy state is
+        # hosted by default (the workspace's `makerkit-state` project, via
+        # PRISMA_SERVICE_TOKEN + PRISMA_WORKSPACE_ID — both already set on
+        # this job), not local to the runner, so `.alchemy/` presence is not
+        # a reliable signal of whether a deploy ran; gate on the Deploy
+        # step's own outcome instead (`skipped` only when Deploy itself never
+        # ran, e.g. Build failed first).
+        if: always() && steps.deploy.outcome != 'skipped'
         working-directory: examples/storefront-auth
-        run: |
-          set -euo pipefail
-          if [ ! -d .alchemy ]; then
-            echo "No .alchemy state dir — deploy never started, nothing to destroy."
-            exit 0
-          fi
-          bunx --bun alchemy destroy --yes
+        run: bunx --bun alchemy destroy --yes
