@@ -1,10 +1,10 @@
 # Connection contracts — typed service-to-service interfaces
 
 A service-to-service dependency is described by a **Contract**: a value both the
-consumer and the provider import. Compatibility between them is checked in three
-places — plain TypeScript assignability where the two are wired, a runtime
-`satisfies()` check at Load, and per-call input/output validation at Run. The
-first protocol is RPC.
+consumer and the provider import. A Contract is parametric over its **kind**; the
+first — and today only — kind is **RPC**. Compatibility between consumer and provider
+is checked in three places — plain TypeScript assignability where the two are wired, a
+runtime `satisfies()` check at Load, and per-call input/output validation at Run.
 
 This replaces the untyped `http()` Connection from
 [core-model.md](core-model.md), which hydrated to a URL-anchored `fetch` wrapper
@@ -75,22 +75,26 @@ deps, consumed via `load()`) and typed **output ports** (its `expose`, served vi
 
 ## What a Contract is
 
-A Contract is the declared interface of a dependency: a value, owned by neither
-side, that both the consumer and the provider refer to. It is the same idea as a
-Prisma **Data Contract**, pointed at a different kind of dependency:
+A **Contract** is the declared interface at a dependency boundary: a value, owned by
+neither side, that both the consumer and the provider refer to. It is **parametric
+over its kind** — one abstraction, one set of checks, spanning different kinds of
+dependency:
 
-- a service dependency → a **Contract** (methods and their input/output shapes);
+- a service dependency → an **RPC Contract** (methods and their input/output shapes);
 - a data dependency → a **Data Contract** (the data shape a consumer depends on,
   plus migration compatibility).
 
-Both are "the interface at a dependency boundary," checked across the same set of
-places. A bare "Contract" means the service kind; "Data Contract" stays the
-qualified data one.
+The prose name of a kind is its `kind` brand plus "Contract" — `Contract<'rpc'>` is an
+*RPC Contract*, `Contract<'data'>` a *Data Contract*. **Bare "Contract" always means
+the abstraction, never a specific kind**; RPC gets no default privilege. Today RPC is
+the only implemented kind. Data Contract is Prisma's existing concept (see PDL below);
+naming it a sibling kind rather than a loose analogy is deliberate — it makes our
+taxonomy and Prisma's the same one.
 
 The core is **parametric over the Contract**: it holds contract *values*, carries
 their *types* (TypeScript does the compile-time compatibility), and calls their
-`satisfies()` method (runtime compatibility). It never inspects the protocol or the
-comparison mechanics. So the protocol (RPC first; gRPC, WebSocket, or GraphQL as
+`satisfies()` method (runtime compatibility). It never inspects the kind or the
+comparison mechanics. So the kind (RPC first; gRPC, WebSocket, or GraphQL as
 later ecosystem packages), the comparison mechanics (nominal now, structural later),
 and the number of outputs are all open without the core changing.
 
@@ -130,7 +134,7 @@ Enforcement happens in three places:
 
 ### The compile-time check is plain TypeScript assignability
 
-The framework holds a `Contract` as a protocol **brand** plus an **opaque
+The framework holds a `Contract` as a **kind** brand plus an **opaque
 comparison type** `Cmp`, and a runtime `satisfies()` method:
 
 ```ts
@@ -248,12 +252,12 @@ identity-based Load compatibility is enough today.
 - **Errors deferred** from the first contract shape (`{ input, output }` only).
   Adding an `error` schema later is backward-compatible (an optional field).
 - **Wire format private to the target pack**, which owns both adapters — rather than
-  a framework-fixed protocol.
+  a framework-fixed wire format.
 - **PDL as a later authoring surface.** A Contract is a value today (Standard Schema
   in TypeScript). Later it can be authored in Prisma Definition Language and compiled
   to the same value — the Data Contract is the natural first PDL output, the RPC
   Contract a later one. PDL changes the ergonomics, not the runtime.
-- **New protocol kinds** (gRPC, WebSocket, GraphQL) as ecosystem packages: each
+- **New kinds** (gRPC, WebSocket, GraphQL) as ecosystem packages: each
   provides its own `contract()`/`serve()`/client-binding and slots in, because the
   framework only asks TypeScript "assignable?" and the contract "satisfies?".
 
