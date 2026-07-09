@@ -177,3 +177,27 @@ export const makePrismaStateService = (sql: postgres.Sql): StateService => ({
       `,
     ).pipe(Effect.map(() => request.value)),
 });
+
+/**
+ * Wraps a {@link StateService} so every method first re-verifies the state
+ * lock's lease via `checkLive` before touching storage. Used to enforce
+ * "a dropped lock connection fails loudly" — see {@link ../lock.ts}.
+ */
+export const guardStateService = (
+  service: StateService,
+  checkLive: Effect.Effect<void, StateStoreError, never>,
+): StateService => ({
+  id: service.id,
+  getVersion: () => checkLive.pipe(Effect.andThen(service.getVersion())),
+  listStacks: () => checkLive.pipe(Effect.andThen(service.listStacks())),
+  listStages: (stack) => checkLive.pipe(Effect.andThen(service.listStages(stack))),
+  get: (request) => checkLive.pipe(Effect.andThen(service.get(request))),
+  getReplacedResources: (request) =>
+    checkLive.pipe(Effect.andThen(service.getReplacedResources(request))),
+  set: (request) => checkLive.pipe(Effect.andThen(service.set(request))),
+  delete: (request) => checkLive.pipe(Effect.andThen(service.delete(request))),
+  deleteStack: (request) => checkLive.pipe(Effect.andThen(service.deleteStack(request))),
+  list: (request) => checkLive.pipe(Effect.andThen(service.list(request))),
+  getOutput: (request) => checkLive.pipe(Effect.andThen(service.getOutput(request))),
+  setOutput: (request) => checkLive.pipe(Effect.andThen(service.setOutput(request))),
+});
