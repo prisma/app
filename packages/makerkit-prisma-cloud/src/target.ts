@@ -18,6 +18,49 @@ export interface PrismaCloudOptions {
   region?: Prisma.ComputeRegion;
 }
 
+const KNOWN_REGIONS = [
+  'us-east-1',
+  'us-west-1',
+  'eu-west-3',
+  'eu-central-1',
+  'ap-northeast-1',
+  'ap-southeast-1',
+] as const satisfies readonly Prisma.ComputeRegion[];
+
+// Widened to a plain ReadonlySet<string> (a type annotation, not a cast) so
+// `.has()` accepts an arbitrary env-var string, not just a known region literal.
+const KNOWN_REGION_SET: ReadonlySet<string> = new Set(KNOWN_REGIONS);
+
+function isComputeRegion(value: string): value is Prisma.ComputeRegion {
+  return KNOWN_REGION_SET.has(value);
+}
+
+/**
+ * The pack's CLI seam (ADR-0003): builds a Target from the process
+ * environment. `makerkit deploy` calls this once it has inferred this pack
+ * from the loaded graph — never reads `PRISMA_SERVICE_TOKEN`/`ALCHEMY_PASSWORD`
+ * here; those are consumed by prisma-alchemy's providers and Alchemy itself
+ * at run time, not by target construction.
+ */
+export function fromEnv(): Target {
+  const workspaceId = process.env['PRISMA_WORKSPACE_ID'];
+  if (workspaceId === undefined || workspaceId.length === 0) {
+    throw new Error('fromEnv(): environment variable PRISMA_WORKSPACE_ID is required.');
+  }
+
+  const region = process.env['PRISMA_REGION'];
+  if (region === undefined || region.length === 0) {
+    return prismaCloud({ workspaceId });
+  }
+  if (!isComputeRegion(region)) {
+    throw new Error(
+      `fromEnv(): environment variable PRISMA_REGION="${region}" is not a known region ` +
+        `(expected one of: ${KNOWN_REGIONS.join(', ')}).`,
+    );
+  }
+  return prismaCloud({ workspaceId, region });
+}
+
 export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   name: 'prisma-cloud',
 

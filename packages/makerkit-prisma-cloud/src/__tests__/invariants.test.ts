@@ -54,8 +54,8 @@ describe('invariant 2: authoring imports stay lean (core + pack)', () => {
   });
 });
 
-describe('invariant 4: the only environment touches are inside the config serializer', () => {
-  test("the process-env token appears exactly twice in the pack's src, both in serializer.ts (deserialize's one read, stash's one write)", () => {
+describe('invariant 4: environment touches are confined to the config serializer and the CLI seam', () => {
+  test("the process-env token appears only in serializer.ts (deserialize's one read, stash's one write) and target.ts's fromEnv() (the pack's CLI seam, ADR-0003 — PRISMA_WORKSPACE_ID + optional PRISMA_REGION)", () => {
     const sources = shippedSources();
     expect(sources.length).toBeGreaterThan(0);
 
@@ -65,7 +65,10 @@ describe('invariant 4: the only environment touches are inside the config serial
       return count > 0 ? [{ file, count }] : [];
     });
 
-    expect(hits).toEqual([{ file: 'serializer.ts', count: 2 }]);
+    expect(hits).toEqual([
+      { file: 'serializer.ts', count: 2 },
+      { file: 'target.ts', count: 2 },
+    ]);
   });
 });
 
