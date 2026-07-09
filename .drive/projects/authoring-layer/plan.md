@@ -12,6 +12,16 @@ roadmap (typed interfaces, hexes, contracts, …) follows as later projects.
 
 ## Current position
 
+**Update — R6 merged (2026-07-09).** R1–R6 are all on `main`. R6 (typed RPC contracts)
+landed via [PR #13](https://github.com/prisma/makerkit/pull/13), together with the
+repo-wide no-bare-cast enforcement machinery. **Next up:** the `makerkit deploy` CLI over
+a declarative `makerkit.config.ts` (see
+[`makerkit-deploy-cli-brief.md`](makerkit-deploy-cli-brief.md)), which also folds
+`bundle-next.ts` into `@makerkit/nextjs`'s assembler. R6 follow-ups remain deferred
+(in-memory/mock bindings, structural `satisfies`, gRPC/WebSocket kinds, PDL authoring,
+contract errors, distributed spec compare, hex boundary ports). The paragraphs below are
+the historical R1–R5 narrative.
+
 **R1–R3 merged** (R1 → [#6](https://github.com/prisma/makerkit/pull/6),
 R2 → [#7](https://github.com/prisma/makerkit/pull/7), R3 →
 [#8](https://github.com/prisma/makerkit/pull/8)). **R4 (Connection primitive)
@@ -38,14 +48,18 @@ re-prove live is the headline proof. See the R5 slice below.
 
 ## Build slices (this project)
 
-### [~] Slice R6 — typed RPC connection contracts
+### [x] Slice R6 — typed RPC connection contracts — **merged** (PR #13 → `main`)
 
-> **Built + proven live**, in review — [PR #13](https://github.com/prisma/makerkit/pull/13)
-> on `claude/rpc-contracts` (off `main`). Design + two compiled proofs
-> (`contract-satisfaction.poc.ts`, `typed-hex-wiring.poc.ts`); four dispatched units
-> (types → runtime → example → hex enforcement), Opus-reviewed (finding closed), green,
-> and the storefront renders `auth.verify() -> { ok: true }` over real RPC. Awaiting
-> operator merge decision.
+> **Merged.** The accept/reject matrix lives as a CI-typechecked type-test
+> (`@makerkit/rpc/src/__tests__/contract-satisfaction.test-d.ts` — the two `.poc.ts`
+> files were folded into it); four dispatched units (types → runtime → example → hex
+> enforcement), Opus-reviewed, a PR-review round addressed (data structures carry no
+> optional keys, only possibly-undefined values; "RPC first, not REST"; the identity
+> check is the RPC contract's own `satisfies()`, not a framework-level rule), green incl.
+> real-cloud E2E, and the storefront renders `auth.verify() -> { ok: true }` over real
+> RPC. Landed alongside repo-wide **no-bare-cast** enforcement
+> (`biome-plugins/no-bare-cast.grit` + the `scripts/lint-casts.mjs` ratchet +
+> `blindCast`/`castAs` in `@makerkit/core/casts`; `.cursor/rules/no-bare-casts.mdc`).
 
 **Outcome:** service-to-service Connections become typed. A framework-owned
 `Contract<Kind, Cmp>` (opaque `Cmp` + `kind` brand + runtime `satisfies()`); the
@@ -235,11 +249,12 @@ deliverable (prisma-cloud pack + Management API surface).
 - **Config-key separator ambiguity** — `configKey` joins `address ▸ owner ▸ name` with `_` and uppercases, so `db_url` (a service param) and `db`.`url` (an input's param) both yield `AUTH_DB_URL`. Not triggered today (only param is `port`; inputs are `db`/`auth`). Fix: forbid `_` in param/input names at construction, or a collision-proof delimiter.
 - **`port` param ↔ listen port decoupling** — `Deployment` hardcodes `port: 3000`; `computeParams.port` defaults `3000`; `run()` stashes the param into `PORT` which the app entry binds. They agree only because all three are `3000` — set the param to anything else and the app binds a port the platform doesn't route to, silently unreachable. Pre-existing from R4, more visible now that `server.ts` reads `port` from `load()`. Fix: thread the resolved `port` into the `Deployment`.
 - **Graph is not topologically sorted** (pre-existing, R4) — `graph.ts`'s hex load preserves provision order and only validates acyclicity; a valid DAG authored consumer-before-producer would feed `undefined` into the consumer's `buildConfig`, contradicting the doc's "topo-ordered (deps first)". Not exercised (the example provisions `auth` first). Fix: real topological sort at Load, or correct the doc's claim.
+- **`@makerkit/node` name is a misnomer** (noted in R6 review) — the adapter's `kind: 'node'` means "plain long-running server process" (as opposed to `nextjs`), but the example's server runtime is **Bun** (`Bun.serve` in `server.ts`, `Bun.SQL`, `@effect/platform-bun`, `bunx --bun alchemy deploy`). The name reads as "Node.js runtime" and caused reviewer confusion. Consider renaming the descriptor kind (e.g. `server`) or documenting the distinction where it's defined (`packages/makerkit-node/src/index.ts`).
 
 ## PR-review follow-ups (operator review of PR #10)
 
 - **Dev-mode e2e for storefront-auth** (operator ask) — the primitives are runnable in dev today (`load()` reads the address-free `DB_URL`/`PORT` straight from the local env; `run()` is only for translating production's address-prefixed keys — verified by booting both examples). Needs a CI test that boots the services in dev against a local Postgres and asserts the round trip. Approach: a script that starts auth's dev server against a test Postgres, reads its URL, sets `STOREFRONT_AUTH_URL`, starts storefront's dev server, curls the page. Needs a Postgres service in the workflow. Operator noted this becomes a core framework concern later.
-- **`bundle-next.ts` belongs in `@makerkit/nextjs/assemble`** (operator ask #11) — `next.config.ts` already owns what it can (standalone output, tracing excludes); the residue (copy `.next/static`+`public`, bundle the wrapper, `bunfig`) can't move to `next.config` (Next omits those by design) but should not be an app-owned script. It moves into the adapter's assembler — folded into the `makerkit deploy` CLI brief.
+- **`bundle-next.ts` belongs in `@makerkit/nextjs/assemble`** (operator ask #11) — `next.config.ts` already owns what it can (standalone output, tracing excludes); the residue (copy `.next/static`+`public`, bundle the wrapper, `bunfig`) can't move to `next.config` (Next omits those by design) but should not be an app-owned script. It moves into the adapter's assembler — folded into the `makerkit deploy` CLI brief. **When it moves, carry over the tsdown `noExternal` rule that inlines the app's own hex packages (`@storefront-auth/*`), not just `@makerkit/*`:** a contract imported by package specifier (`@storefront-auth/auth/contract`) left external is an unresolved import in `main.mjs` that boot-crashes the artifact, so Compute serves "Service not found." This regressed the E2E in R6 when the hexes were renamed from relative imports to package specifiers; fixed in PR #13.
 
 ## Close-out (required)
 
