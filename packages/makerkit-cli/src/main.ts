@@ -73,13 +73,14 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
 
   // 1. Import the entry module; its default export must be a node.
   const entryModule = await loadEntry(args.entry, cwd);
+  const entryPkgDir = findPackageDir(entryModule.path, 'the entry module');
 
   // 2. Load — core's LoadError (unwired connection input, etc.) surfaces as-is.
   const graph = Load(entryModule.root);
   const isHexRoot = graph.root.node.kind === 'hex';
 
   // 3. Infer the target — validates the pack's env NOW, before any assembly work.
-  const { pack } = await inferTarget(graph);
+  const { pack } = await inferTarget(graph, entryPkgDir);
 
   // 4. Resolve the name.
   const name = args.name ?? entryModule.root.name;
@@ -92,7 +93,7 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
   // built output blocks destroy too — say so instead of just "run your build".
   let assembled: Awaited<ReturnType<typeof assembleServices>>;
   try {
-    assembled = await assembleServices(graph, isHexRoot, deps.runAssembler);
+    assembled = await assembleServices(graph, isHexRoot, entryPkgDir, deps.runAssembler);
   } catch (error) {
     if (args.command === 'destroy' && error instanceof Error) {
       throw new CliError(
@@ -104,7 +105,6 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
   }
 
   // 6. Generate .makerkit/alchemy.run.ts inside the entry module's package dir.
-  const entryPkgDir = findPackageDir(entryModule.path, 'the entry module');
   const stackPath = writeStackFile({
     entryPath: entryModule.path,
     entryPkgDir,

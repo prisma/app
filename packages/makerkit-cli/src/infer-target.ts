@@ -8,6 +8,7 @@ import type { Graph } from '@makerkit/core';
 import { assertDefined } from '@makerkit/core/assertions';
 import type { Target } from '@makerkit/core/deploy';
 import { CliError } from './cli-error.ts';
+import { importFromEntry } from './resolve-from-entry.ts';
 
 export function collectPacks(graph: Graph): string[] {
   const packs = new Set<string>();
@@ -53,11 +54,10 @@ export interface InferredTarget {
   readonly target: Target;
 }
 
-export async function inferTarget(graph: Graph): Promise<InferredTarget> {
+/** `entryPkgDir` anchors resolution of the pack's `/target` entry (see resolve-from-entry.ts). */
+export async function inferTarget(graph: Graph, entryPkgDir: string): Promise<InferredTarget> {
   const pack = resolveSinglePack(collectPacks(graph));
-  const specifier = `${pack}/target`;
-  // A dynamic import() with a non-literal specifier types as `any`.
-  const mod = await import(specifier);
-  const fromEnv = extractFromEnv(pack, specifier, mod);
+  const mod = await importFromEntry(entryPkgDir, pack, 'target');
+  const fromEnv = extractFromEnv(pack, `${pack}/target`, mod);
   return { pack, target: fromEnv() };
 }

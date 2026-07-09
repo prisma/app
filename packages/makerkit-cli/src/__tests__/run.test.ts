@@ -3,8 +3,14 @@
  * already exposes (RunDeps): a fake assembler (no real wrapper build) and a
  * fake alchemy runner (no real process). The entry module, the package
  * anchor, and the generated stack file are all real — written to a temp dir.
+ *
+ * inferTarget() is NOT faked — it does a real entry-anchored resolution (see
+ * resolve-from-entry.ts) of the graph's pack. So the fixture app carries its
+ * own throwaway "fixture-target-pack" under node_modules (not a real
+ * MakerKit pack): this suite tests the CLI's own pipeline, which must not
+ * depend on any specific target/adapter pack.
  */
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -23,19 +29,40 @@ const coreIndex = path.resolve(
 );
 
 const tmpDirs: string[] = [];
-let previousWorkspaceId: string | undefined;
+
+/** A fixture pack under `dir/node_modules` — resolvable via createRequire, no real MakerKit pack involved. */
+function writeFixtureTargetPack(dir: string): void {
+  const packDir = path.join(dir, 'node_modules', 'fixture-target-pack');
+  fs.mkdirSync(packDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(packDir, 'package.json'),
+    JSON.stringify({
+      name: 'fixture-target-pack',
+      type: 'module',
+      exports: { './target': './target.ts' },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(packDir, 'target.ts'),
+    "export function fromEnv() { return { name: 'fixture-target' }; }\n",
+  );
+}
 
 /**
  * A real app package in a temp dir: package.json + an entry module whose
  * default export is a genuine service node (importing core by absolute path
- * — the temp dir has no node_modules). Pack is @makerkit/prisma-cloud so
- * inferTarget's dynamic import resolves from this package and fromEnv() works
- * against the PRISMA_WORKSPACE_ID set in beforeEach.
+ * — the temp dir has no other node_modules). The pack is a fixture pack
+ * (see writeFixtureTargetPack) so inferTarget's real resolution succeeds
+ * without any real MakerKit target/adapter pack.
  */
 function makeAppDir(name = 'fixture-app'): { dir: string; entryPath: string } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-cli-run-')));
   tmpDirs.push(dir);
-  fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+  fs.writeFileSync(
+    path.join(dir, 'package.json'),
+    JSON.stringify({ dependencies: { 'fixture-target-pack': '1.0.0' } }),
+  );
+  writeFixtureTargetPack(dir);
   const entryPath = path.join(dir, 'service.ts');
   fs.writeFileSync(
     entryPath,
@@ -44,8 +71,8 @@ function makeAppDir(name = 'fixture-app'): { dir: string; entryPath: string } {
       '',
       'export default service({',
       `  name: ${JSON.stringify(name)},`,
-      "  pack: '@makerkit/prisma-cloud',",
-      "  type: 'prisma-cloud/compute',",
+      "  pack: 'fixture-target-pack',",
+      "  type: 'fixture/compute',",
       '  url: import.meta.url,',
       '  inputs: {},',
       '  params: {},',
@@ -57,19 +84,12 @@ function makeAppDir(name = 'fixture-app'): { dir: string; entryPath: string } {
   return { dir, entryPath };
 }
 
-const fakeAssembler = async (_specifier: string, input: { serviceDir: string }) => ({
+const fakeAssembler = async (_pack: string, input: { serviceDir: string }) => ({
   dir: path.join(input.serviceDir, 'dist', 'bundle'),
   entry: 'server.js',
 });
 
-beforeEach(() => {
-  previousWorkspaceId = process.env['PRISMA_WORKSPACE_ID'];
-  process.env['PRISMA_WORKSPACE_ID'] = 'ws-test';
-});
-
 afterEach(() => {
-  if (previousWorkspaceId === undefined) delete process.env['PRISMA_WORKSPACE_ID'];
-  else process.env['PRISMA_WORKSPACE_ID'] = previousWorkspaceId;
   while (tmpDirs.length > 0) {
     const dir = tmpDirs.pop();
     if (dir !== undefined) fs.rmSync(dir, { recursive: true, force: true });

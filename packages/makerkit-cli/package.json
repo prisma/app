@@ -18,9 +18,6 @@
     "@makerkit/core": "workspace:*"
   },
   "devDependencies": {
-    "@makerkit/nextjs": "workspace:*",
-    "@makerkit/node": "workspace:*",
-    "@makerkit/prisma-cloud": "workspace:*",
     "@types/bun": "^1.3.13",
     "@types/node": "^24.10.13",
     "typescript": "^6.0.3"

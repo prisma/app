@@ -43,7 +43,7 @@ describe('assembleServices()', () => {
     });
     const graph = Load(root);
 
-    const assembled = await assembleServices(graph, false, fakeRun);
+    const assembled = await assembleServices(graph, false, dir, fakeRun);
 
     expect(assembled.bundle).toEqual({ dir: path.join(dir, 'dist', 'bundle'), entry: 'server.js' });
     expect(assembled.bundles).toBeUndefined();
@@ -68,7 +68,7 @@ describe('assembleServices()', () => {
     });
     const graph: Graph = Load(root);
 
-    const assembled = await assembleServices(graph, true, fakeRun);
+    const assembled = await assembleServices(graph, true, dirOne, fakeRun);
 
     expect(assembled.bundles).toEqual({
       auth: { dir: path.join(dirOne, 'dist', 'bundle'), entry: 'server.js' },
@@ -90,7 +90,7 @@ describe('assembleServices()', () => {
     });
     const graph = Load(root);
 
-    await expect(assembleServices(graph, false, fakeRun)).rejects.toThrow(
+    await expect(assembleServices(graph, false, dir, fakeRun)).rejects.toThrow(
       /declares build kind "deno".*known kinds: nextjs, node/,
     );
   });
@@ -110,6 +110,8 @@ describe('assembleServices()', () => {
     });
     const graph = Load(root);
 
-    await expect(assembleServices(graph, false, fakeRun)).rejects.toThrow(/needs a package anchor/);
+    await expect(assembleServices(graph, false, dir, fakeRun)).rejects.toThrow(
+      /needs a package anchor/,
+    );
   });
 });

@@ -10,12 +10,13 @@ import { fileURLToPath } from 'node:url';
 import type { BuildAdapter, Graph, GraphNode, ServiceNode } from '@makerkit/core';
 import { CliError } from './cli-error.ts';
 import { findPackageDir } from './package-anchor.ts';
+import { importFromEntry } from './resolve-from-entry.ts';
 import { INLINE_EVERYTHING_EXCEPT_RUNTIME_BUILTINS } from './wrapper-inline.ts';
 
-/** kind → the assembler module resolved for it (mirrors the pack's light/`/target` split). */
-const ASSEMBLER_BY_KIND: Record<string, string> = {
-  node: '@makerkit/node/assemble',
-  nextjs: '@makerkit/nextjs/assemble',
+/** kind → the pack whose `/assemble` entry builds it (mirrors the pack's light/`/target` split). */
+const ASSEMBLER_PACK_BY_KIND: Record<string, string> = {
+  node: '@makerkit/node',
+  nextjs: '@makerkit/nextjs',
 };
 
 export interface Bundle {
@@ -37,32 +38,52 @@ export interface AssemblerInput {
   readonly wrapperNoExternal: readonly RegExp[];
 }
 
-/** Runs the module at `specifier`'s `assemble()` export — the seam tests substitute to avoid a real build. */
-export type RunAssembler = (specifier: string, input: AssemblerInput) => Promise<Bundle>;
-
-const runAssembler: RunAssembler = async (specifier, input) => {
-  // A dynamic import() with a non-literal specifier types as `any`.
-  const mod = await import(specifier);
-  return mod.assemble(input);
-};
-
-function assemblerSpecifierFor(node: ServiceNode): string {
-  const specifier = ASSEMBLER_BY_KIND[node.build.kind];
-  if (specifier === undefined) {
+/** Extracts and validates a pack's `/assemble` module's `assemble` export — mirrors infer-target.ts's extractFromEnv. */
+// biome-ignore lint/complexity/noBannedTypes: `mod` is an unknown dynamic-import result; the runtime `typeof assemble === 'function'` check right below is the actual guard, and the caller invokes it with its own typed AssemblerInput/Bundle.
+function extractAssemble(pack: string, specifier: string, mod: unknown): Function {
+  const assemble =
+    typeof mod === 'object' && mod !== null && 'assemble' in mod ? mod.assemble : undefined;
+  if (typeof assemble !== 'function') {
     throw new CliError(
-      `Service "${node.name}" declares build kind "${node.build.kind}", which has no assembler ` +
-        `(known kinds: ${Object.keys(ASSEMBLER_BY_KIND).sort().join(', ')}).`,
+      `Pack "${pack}" has no assemble() export at "${specifier}" — a build adapter pack must ` +
+        'export an assemble(input): Promise<Bundle> function from its /assemble entry.',
     );
   }
-  return specifier;
+  return assemble;
+}
+
+/** Runs the pack's `/assemble` export against `input` — the seam tests substitute to avoid a real build. */
+export type RunAssembler = (pack: string, input: AssemblerInput) => Promise<Bundle>;
+
+/** `entryPkgDir` anchors resolution of each pack's `/assemble` entry (see resolve-from-entry.ts). */
+async function runAssemblerFromEntry(
+  entryPkgDir: string,
+  pack: string,
+  input: AssemblerInput,
+): Promise<Bundle> {
+  const specifier = `${pack}/assemble`;
+  const mod = await importFromEntry(entryPkgDir, pack, 'assemble');
+  const assemble = extractAssemble(pack, specifier, mod);
+  return assemble(input);
+}
+
+function assemblerPackFor(node: ServiceNode): string {
+  const pack = ASSEMBLER_PACK_BY_KIND[node.build.kind];
+  if (pack === undefined) {
+    throw new CliError(
+      `Service "${node.name}" declares build kind "${node.build.kind}", which has no assembler ` +
+        `(known kinds: ${Object.keys(ASSEMBLER_PACK_BY_KIND).sort().join(', ')}).`,
+    );
+  }
+  return pack;
 }
 
 async function assembleOne(node: ServiceNode, run: RunAssembler): Promise<Bundle> {
   const serviceModule = fileURLToPath(node.url);
   const serviceDir = findPackageDir(serviceModule, `service "${node.name}"`);
-  const specifier = assemblerSpecifierFor(node);
+  const pack = assemblerPackFor(node);
 
-  return run(specifier, {
+  return run(pack, {
     serviceDir,
     serviceModule,
     build: node.build,
@@ -73,7 +94,8 @@ async function assembleOne(node: ServiceNode, run: RunAssembler): Promise<Bundle
 export async function assembleServices(
   graph: Graph,
   isHexRoot: boolean,
-  run: RunAssembler = runAssembler,
+  entryPkgDir: string,
+  run: RunAssembler = (pack, input) => runAssemblerFromEntry(entryPkgDir, pack, input),
 ): Promise<AssembledServices> {
   const serviceNodes = graph.nodes.filter(
     (n): n is GraphNode & { node: ServiceNode } => n.node.kind === 'service',
