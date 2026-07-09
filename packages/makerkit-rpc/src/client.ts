@@ -6,7 +6,9 @@
  * before returning it (a provider can be typed-compatible and still lie at
  * runtime — this is the per-call layer that catches that).
  */
+
 import type { Contract } from '@makerkit/core';
+import { blindCast } from '@makerkit/core/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Client, RpcFns } from './rpc.ts';
 import { standardValidate } from './standard-schema.ts';
@@ -35,7 +37,7 @@ async function errorDetail(res: Response): Promise<string | undefined> {
   try {
     const body: unknown = await res.json();
     return typeof body === 'object' && body !== null && 'error' in body
-      ? String((body as { error: unknown }).error)
+      ? String(body.error)
       : undefined;
   } catch {
     return undefined;
@@ -51,7 +53,10 @@ export function makeClient<C extends Contract<'rpc', RpcFns>>(
   const client: Record<string, (input: unknown) => Promise<unknown>> = {};
 
   for (const [method, schemas] of Object.entries(
-    contract.__cmp as unknown as Record<string, MethodSchemas>,
+    blindCast<
+      Record<string, MethodSchemas>,
+      'rpc() stores each method input/output Standard Schemas on the function value; RpcFns types only the call signature'
+    >(contract.__cmp),
   )) {
     client[method] = async (input: unknown) => {
       const res = await send(
@@ -72,5 +77,8 @@ export function makeClient<C extends Contract<'rpc', RpcFns>>(
     };
   }
 
-  return client as Client<C>;
+  return blindCast<
+    Client<C>,
+    'client is assembled dynamically from the contract methods; each entry matches Client<C> by construction'
+  >(client);
 }

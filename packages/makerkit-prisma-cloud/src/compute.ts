@@ -1,5 +1,6 @@
 import type { BuildAdapter, Deps, Expose, Loaded, RunnableServiceNode } from '@makerkit/core';
 import { configOf, hydrateSync, service } from '@makerkit/core';
+import { blindCast } from '@makerkit/core/casts';
 import { deserialize, stash } from './serializer.ts';
 
 const computeParams = { port: { type: 'number', default: 3000 } } as const;
@@ -51,10 +52,10 @@ export const compute = <D extends Deps, E extends Expose = Record<never, never>>
       if (loaded === undefined) {
         const shape = configOf(node);
         const config = deserialize(shape, '');
-        loaded = { ...hydrateSync(node, config), ...config.service } as Loaded<
-          D,
-          typeof computeParams
-        >;
+        loaded = blindCast<
+          Loaded<D, typeof computeParams>,
+          'merges hydrated deps with the deserialized service config record (untyped at runtime) into the typed Loaded shape'
+        >({ ...hydrateSync(node, config), ...config.service });
       }
       return loaded;
     },

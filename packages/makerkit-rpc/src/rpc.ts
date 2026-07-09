@@ -45,7 +45,8 @@ function isRpcContract(value: unknown): value is Contract<'rpc', RpcFns> {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as { kind?: unknown }).kind === 'rpc' &&
+    'kind' in value &&
+    value.kind === 'rpc' &&
     '__cmp' in value &&
     'satisfies' in value
   );

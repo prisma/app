@@ -8,6 +8,7 @@
  * core reads no environment. A node's `type` is its routing key at deploy;
  * core never interprets it beyond lookup.
  */
+import { blindCast } from './casts.ts';
 import type { ConfigParam, Connection, Params, Values } from './config.ts';
 import type { Contract } from './contract.ts';
 
@@ -223,6 +224,14 @@ function freezeParams<P extends Params>(params: P): P {
   return Object.freeze(frozen) as P;
 }
 
+/** A frozen shallow copy that keeps the caller's declared type. */
+function frozenShallowCopy<T extends object>(obj: T): T {
+  return blindCast<
+    T,
+    'frozen shallow copy of the caller value; freeze widens the inferred type but the runtime shape is unchanged'
+  >(Object.freeze({ ...obj }));
+}
+
 /** Constructs a branded, frozen Resource node. Pure — nothing executes. */
 export function resource<P extends Params, C>(def: {
   type: string;
@@ -262,10 +271,10 @@ export function service<
     [NODE]: true,
     kind: 'service',
     type: def.type,
-    inputs: Object.freeze({ ...def.inputs }) as D,
+    inputs: frozenShallowCopy(def.inputs),
     params: freezeParams(def.params),
     build: Object.freeze({ ...def.build }),
-    expose: def.expose !== undefined ? (Object.freeze({ ...def.expose }) as E) : undefined,
+    expose: def.expose !== undefined ? frozenShallowCopy(def.expose) : undefined,
   };
   return Object.freeze(node);
 }

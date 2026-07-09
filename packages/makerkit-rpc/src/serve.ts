@@ -8,7 +8,9 @@
  * handlers)` call does not compile; extra handler methods/ports are allowed
  * (width, same as a provider exposing more than a consumer requires).
  */
-import type { Contract, RunnableServiceNode } from '@makerkit/core';
+
+import type { Contract, Expose, RunnableServiceNode } from '@makerkit/core';
+import { blindCast } from '@makerkit/core/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { standardValidate } from './standard-schema.ts';
 
@@ -51,7 +53,7 @@ function jsonResponse(body: unknown, status = 200): Response {
  * more than one port is a construction-time error, as is a missing handler.
  */
 function methodTable(
-  expose: Record<string, Contract<string, Record<string, unknown>>>,
+  expose: Expose,
   handlers: Record<string, Record<string, RpcHandler>>,
 ): Map<string, MethodSchemas & { handler: RpcHandler }> {
   const table = new Map<string, MethodSchemas & { handler: RpcHandler }>();
@@ -69,7 +71,10 @@ function methodTable(
       if (handler === undefined) {
         throw new Error(`serve(): no handler supplied for exposed method "${port}.${method}".`);
       }
-      const { input, output } = fn as unknown as MethodSchemas;
+      const { input, output } = blindCast<
+        MethodSchemas,
+        'rpc() stores the method input/output Standard Schemas on the function value; the Cmp type models only the call signature'
+      >(fn);
       table.set(method, { input, output, handler });
     }
   }
@@ -89,8 +94,11 @@ export function serve<S extends AnyRunnable, H extends Handlers<S>>(
   handlers: H,
 ): (req: Request) => Promise<Response> {
   const table = methodTable(
-    (service.expose ?? {}) as Record<string, Contract<string, Record<string, unknown>>>,
-    handlers as unknown as Record<string, Record<string, RpcHandler>>,
+    service.expose ?? {},
+    blindCast<
+      Record<string, Record<string, RpcHandler>>,
+      'Handlers<S> is the exhaustive typed handler map; methodTable indexes it by the runtime port/method strings'
+    >(handlers),
   );
   const deps = service.load();
 

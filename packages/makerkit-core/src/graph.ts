@@ -1,3 +1,4 @@
+import { blindCast } from './casts.ts';
 import {
   type ConnectionEnd,
   type HexBuilder,
@@ -95,7 +96,7 @@ function serviceInputs(
       throw new LoadError(`Input "${input}" of "${serviceId}" has an empty node type.`);
     }
     const id = `${serviceId}.${input}`;
-    nodes.push({ id, node: value as ResourceNode | ConnectionEnd });
+    nodes.push({ id, node: value });
     edges.push({ from: id, to: serviceId, input, kind: 'input' });
   }
   return { nodes, edges };
@@ -128,16 +129,18 @@ function refFor(id: string, service: ServiceNode): ProvisionedRef {
   for (const [port, contract] of Object.entries(service.expose ?? {})) {
     ports[port] = { ...contract, __providerId: id };
   }
-  return { id, ...ports } as ProvisionedRef;
+  return blindCast<
+    ProvisionedRef,
+    'ref-ports are built from the service exposed contracts keyed by port name, matching ProvisionedRef mapped shape'
+  >({ id, ...ports });
 }
 
 /** A wired value's producer id: a ref-port's `__providerId`, or a bare ref's `id`. */
 function producerIdOf(ref: unknown): string | undefined {
   if (typeof ref !== 'object' || ref === null) return undefined;
-  const providerId = (ref as { __providerId?: unknown }).__providerId;
-  if (typeof providerId === 'string') return providerId;
-  const id = (ref as { id?: unknown }).id;
-  return typeof id === 'string' ? id : undefined;
+  if ('__providerId' in ref && typeof ref.__providerId === 'string') return ref.__providerId;
+  if ('id' in ref && typeof ref.id === 'string') return ref.id;
+  return undefined;
 }
 
 function loadHex(root: HexNode, opts?: { id?: NodeId }): Graph {
@@ -190,10 +193,15 @@ function loadHex(root: HexNode, opts?: { id?: NodeId }): Graph {
         );
       }
 
-      const required = (declared as ConnectionEnd).required;
+      const required = declared.required;
       if (required !== undefined) {
-        const provided = ref as { satisfies?: (required: unknown) => boolean };
-        if (typeof provided.satisfies !== 'function' || !provided.satisfies(required)) {
+        if (
+          typeof ref !== 'object' ||
+          ref === null ||
+          !('satisfies' in ref) ||
+          typeof ref.satisfies !== 'function' ||
+          !ref.satisfies(required)
+        ) {
           throw new LoadError(
             `Wiring for "${id}.${input}" does not satisfy its required contract.`,
           );
