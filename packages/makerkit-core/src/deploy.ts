@@ -10,7 +10,6 @@
 
 import type { StackServices } from 'alchemy';
 import * as Alchemy from 'alchemy';
-import { localState } from 'alchemy/State/LocalState';
 import type { State } from 'alchemy/State/State';
 import * as Effect from 'effect/Effect';
 import type * as Layer from 'effect/Layer';
@@ -37,8 +36,8 @@ export interface Target {
   readonly resources: Record<string, Lowering>;
   /** Service type id → the phased SPI. */
   readonly services: Record<string, ServiceLowering>;
-  /** The target's default state backend, if it has one; explicit opts.state always wins; the ultimate fallback is localState(). */
-  readonly state?: () => AlchemyStateLayer;
+  /** The target's default state backend — every target supplies one (e.g. local state), so a deploy never falls back to a core-owned default; explicit opts.state always wins. */
+  readonly state: () => AlchemyStateLayer;
 }
 
 /**
@@ -142,7 +141,7 @@ export interface LowerOptions {
   readonly bundle?: Bundle;
   readonly bundles?: Record<string, Bundle>;
   readonly stage?: string;
-  /** Alchemy state store for the stack. Defaults to the target's state (if any), then local state. */
+  /** Alchemy state store for the stack. Defaults to the target's own state layer. */
   readonly state?: AlchemyStateLayer;
 }
 
@@ -224,12 +223,12 @@ function missingBundleError(id: NodeId, isHexRoot: boolean): LowerError {
 
 /**
  * The state-layer precedence a deploy resolves to: an explicit opts.state
- * always wins; failing that, the target's own default (if it supplies one);
- * failing that, local state. A pure function so the precedence is testable
- * without booting Alchemy.
+ * always wins; failing that, the target's own default (every target supplies
+ * one). A pure function so the precedence is testable without booting
+ * Alchemy.
  */
 export function resolveStateLayer(opts: LowerOptions, target: Target): AlchemyStateLayer {
-  return opts.state ?? target.state?.() ?? localState();
+  return opts.state ?? target.state();
 }
 
 /**

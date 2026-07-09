@@ -69,6 +69,10 @@ function fakeTarget() {
     providers: () => {
       throw new Error('providers() must not be called by lowering()');
     },
+    // Every target must supply a default state layer now (Target.state is
+    // required); this fake's is a sentinel, never booted by these tests
+    // (which drive `lowering()`, not `lower()`'s Alchemy.Stack wrapping).
+    state: () => ({ __sentinel: 'fake-target-default' }) as unknown as AlchemyStateLayer,
     application: {
       provision: (ctx) => {
         calls.push({ phase: 'application', id: ctx.id });
@@ -443,19 +447,10 @@ describe('resolveStateLayer', () => {
     expect(resolveStateLayer(opts({ state: optsState }), target)).toBe(optsState);
   });
 
-  test('target.state wins over the localState default when opts.state is absent', () => {
+  test('target.state is used when opts.state is absent — every target must supply one', () => {
     const targetState = sentinel('target');
     const target: Target = { ...fakeTarget().target, state: () => targetState };
 
     expect(resolveStateLayer(opts(), target)).toBe(targetState);
-  });
-
-  test('localState is the fallback when neither opts.state nor target.state is supplied', () => {
-    const target: Target = fakeTarget().target;
-
-    const resolved = resolveStateLayer(opts(), target);
-
-    expect(resolved).toBeDefined();
-    expect(resolved).not.toBe(sentinel('opts'));
   });
 });
