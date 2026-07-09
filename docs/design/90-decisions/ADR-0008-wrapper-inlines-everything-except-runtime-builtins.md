@@ -19,7 +19,7 @@ vocabulary, a database client factory, and whatever its contracts need:
 
 ```ts
 // src/service.ts
-import { compute, postgres } from "@makerkit/prisma-cloud";
+import { compute, postgresDep } from "@makerkit/prisma-cloud";
 import { SQL } from "bun";
 import { authContract } from "@storefront-auth/auth/contract"; // evaluates arktype at import
 ```

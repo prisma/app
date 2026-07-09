@@ -26,16 +26,26 @@ service and its dependencies, in vocabulary imported from a target pack:
 
 ```ts
 // src/service.ts
-import { compute, postgres } from "@makerkit/prisma-cloud";
+import { compute, postgresDep } from "@makerkit/prisma-cloud";
 import node from "@makerkit/node";
 import { SQL } from "bun";
 
-const db = postgres({ name: "db", client: ({ url }) => new SQL({ url }) });
+const db = postgresDep({ client: ({ url }) => new SQL({ url }) });
 
 export default compute({
   name: "hello",
   deps: { db },
   build: node({ module: import.meta.url, entry: "../dist/server.js" }),
+});
+
+// src/hex.ts — the root: the hex provisions the database and wires it in (ADR-0009).
+import { hex } from "@makerkit/core";
+import { postgres } from "@makerkit/prisma-cloud";
+import service from "./service.ts";
+
+export default hex("hello", (h) => {
+  const db = h.provision("db", postgres({ name: "db" }));
+  h.provision("hello", service, { db });
 });
 ```
 
@@ -66,8 +76,9 @@ deploy-side code therefore has to pick the target and construct it — and the
 only question is where that code lives.
 
 It can live in the CLI itself, because the graph already knows its target.
-Every node above was created by a factory from `@makerkit/prisma-cloud` — the
-knowledge exists at authoring time. It doesn't survive into the value on its
+Every pack-authored node above — the service, the provisioned resource — was
+created by a factory from `@makerkit/prisma-cloud`; the knowledge exists at
+authoring time. It doesn't survive into the value on its
 own (a JavaScript object carries no record of which package's factory made
 it), so the factories stamp it: every pack-authored node carries `pack`, its
 pack's **package name** (`"@makerkit/prisma-cloud"`), on one shared base type.
@@ -104,9 +115,10 @@ follow:
   larger system can be deployed in isolation, and it cannot collide with the
   composed application because it carries its own name and therefore its own
   project.
-- A service with **unwired connection inputs** (inputs an enclosing hex
-  normally wires at `provision`) fails at Load, with an error naming the
-  unwired input and pointing at deploying the composing hex instead.
+- A service with **unwired dependency slots** (resource or connection ends an
+  enclosing hex normally wires at `provision` — ADR-0009) fails at Load, with
+  an error naming the unwired input and pointing at deploying the composing
+  hex instead.
 
 ## Consequences
 
@@ -154,5 +166,7 @@ follow:
   build/assembly ownership split the CLI drives.
 - [`ADR-0006`](ADR-0006-every-node-is-named.md) — where the application name
   comes from.
+- [`ADR-0009`](ADR-0009-resources-are-provisioned-by-hexes-deps-are-declarations.md)
+  — why the database lives in the hex, not the service's deps.
 - [`../10-domains/deploy-cli.md`](../10-domains/deploy-cli.md) — the full
   pipeline this decision anchors.
