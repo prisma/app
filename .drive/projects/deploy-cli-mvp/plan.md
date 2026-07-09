@@ -29,7 +29,15 @@ the interim deploy path stays green until the last slice deletes it.
 
 ## Build slices
 
-### [ ] Slice S1 — node identity + Load error quality (core)
+### [x] Slice S1 — node identity + Load error quality (core)
+
+> **Done.** Commits `fd6a0d8`…`d1843b5` + review fix `8f8c93e`. Opus review:
+> MERGE-READY; M1 (requirePack) applied. Deviations recorded: connectionEnd
+> name optional defaulting to type (ADR-0006 amended — rpc(contract) has no
+> name slot); configOf() walks root.inputs directly instead of Load() (required
+> so hex-composed services still resolve config at runtime; reviewer confirmed
+> behavior-preserving). Note: R6 rpc-contracts merged mid-flight; the project
+> branch rebased onto it during this slice's integration.
 
 **Outcome:** every node carries `name` (ADR-0006) and its pack's package name;
 service nodes carry `url` (ADR-0004). Pack factories (`compute`, `postgres`,
@@ -43,7 +51,17 @@ guards still green (authoring entries lean, no new imports); e2e unchanged.
 **Builds on:** main (R5).
 **Hands to:** S3 — nodes self-describe location (`url`), pack, and name.
 
-### [ ] Slice S2 — assembly extraction (`/assemble` entries)
+### [x] Slice S2 — assembly extraction (`/assemble` entries)
+
+> **Done.** Commits `d7ee9b9`…`20a26ee` + review cleanups `dae8152`. Opus
+> review: MERGE-READY; MEDIUM fixed (node assemble rejects an app entry named
+> main.js/main.mjs — reserved for the wrapper). Integration ported de8ec01
+> (post-fork bundle-next fix) as an `assemble` option: `wrapperNoExternal`
+> (both kinds) — the wrapper build can't rely on the artifact's node_modules
+> for the service module's own import-time deps; storefront passes
+> `@storefront-auth/*` + `arktype`. **S3 input:** the CLI has no config file,
+> so it can't take per-app regexes — it needs a general answer for wrapper
+> inlining (likely: inline everything not shipped in the artifact).
 
 **Outcome:** `@makerkit/node/assemble` and `@makerkit/nextjs/assemble` exist
 per design-notes' contract (`{ serviceDir, serviceModule, build } →
