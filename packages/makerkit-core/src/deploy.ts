@@ -18,6 +18,9 @@ import type { Config } from './config.ts';
 import { type Graph, Load, type NodeId } from './graph.ts';
 import type { HexNode, ResourceNode, ServiceNode } from './node.ts';
 
+/** The Layer shape every Alchemy state store must satisfy — what `LowerOptions.state` and `Target.state` both traffic in. */
+export type AlchemyStateLayer = Layer.Layer<State, never, StackServices>;
+
 /**
  * What a target pack's /target entry produces — data + per-type SPI
  * functions. The pack is never the actor: these are tools core invokes at
@@ -34,6 +37,8 @@ export interface Target {
   readonly resources: Record<string, Lowering>;
   /** Service type id → the phased SPI. */
   readonly services: Record<string, ServiceLowering>;
+  /** The target's default state backend, if it has one; explicit opts.state always wins; the ultimate fallback is localState(). */
+  readonly state?: () => AlchemyStateLayer;
 }
 
 /**
@@ -137,8 +142,8 @@ export interface LowerOptions {
   readonly bundle?: Bundle;
   readonly bundles?: Record<string, Bundle>;
   readonly stage?: string;
-  /** Alchemy state store for the stack. Defaults to local state. */
-  readonly state?: Layer.Layer<State, never, StackServices>;
+  /** Alchemy state store for the stack. Defaults to the target's state (if any), then local state. */
+  readonly state?: AlchemyStateLayer;
 }
 
 /**
@@ -215,6 +220,16 @@ function resolveBundle(opts: LowerOptions, id: NodeId, isHexRoot: boolean): Bund
 function missingBundleError(id: NodeId, isHexRoot: boolean): LowerError {
   const where = isHexRoot ? `opts.bundles["${id}"]` : 'opts.bundle';
   return new LowerError(`No bundle provided for service "${id}" (${where} is required).`);
+}
+
+/**
+ * The state-layer precedence a deploy resolves to: an explicit opts.state
+ * always wins; failing that, the target's own default (if it supplies one);
+ * failing that, local state. A pure function so the precedence is testable
+ * without booting Alchemy.
+ */
+export function resolveStateLayer(opts: LowerOptions, target: Target): AlchemyStateLayer {
+  return opts.state ?? target.state?.() ?? localState();
 }
 
 /**
@@ -338,7 +353,7 @@ export function lower(root: ServiceNode | HexNode, target: Target, opts: LowerOp
 
   return Alchemy.Stack(
     opts.name,
-    { providers: target.providers(), state: opts.state ?? localState() },
+    { providers: target.providers(), state: resolveStateLayer(opts, target) },
     stackEffect,
   );
 }

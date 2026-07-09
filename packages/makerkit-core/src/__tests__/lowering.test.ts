@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import * as Effect from 'effect/Effect';
 import type { Config } from '../config.ts';
 import {
+  type AlchemyStateLayer,
   type Artifact,
   type Bundle,
   buildConfig,
@@ -10,6 +11,7 @@ import {
   type LowerOptions,
   lower,
   lowering,
+  resolveStateLayer,
   type Target,
 } from '../deploy.ts';
 import { Load } from '../graph.ts';
@@ -424,5 +426,36 @@ describe('lower()', () => {
     const stack = lower(root, target, opts({ bundle: { dir: 'dist/bundle', entry: 'server.js' } }));
 
     expect(stack).toBeDefined();
+  });
+});
+
+describe('resolveStateLayer', () => {
+  // Sentinel objects, not real Alchemy Layers — resolveStateLayer is a pure
+  // selector, so identity comparison against sentinels proves precedence
+  // without booting Alchemy.
+  const sentinel = (tag: string): AlchemyStateLayer =>
+    ({ __sentinel: tag }) as unknown as AlchemyStateLayer;
+
+  test('opts.state wins over target.state', () => {
+    const optsState = sentinel('opts');
+    const target: Target = { ...fakeTarget().target, state: () => sentinel('target') };
+
+    expect(resolveStateLayer(opts({ state: optsState }), target)).toBe(optsState);
+  });
+
+  test('target.state wins over the localState default when opts.state is absent', () => {
+    const targetState = sentinel('target');
+    const target: Target = { ...fakeTarget().target, state: () => targetState };
+
+    expect(resolveStateLayer(opts(), target)).toBe(targetState);
+  });
+
+  test('localState is the fallback when neither opts.state nor target.state is supplied', () => {
+    const target: Target = fakeTarget().target;
+
+    const resolved = resolveStateLayer(opts(), target);
+
+    expect(resolved).toBeDefined();
+    expect(resolved).not.toBe(sentinel('opts'));
   });
 });
