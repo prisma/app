@@ -453,7 +453,7 @@ interface ServiceLowering {
 // caller. The pack owns the printer and the node owns run(), so any
 // environment-specific data passes through this closed channel.
 interface PackageInput {
-  readonly assembled: AssembledBundle   // the build adapter's product (dir + entry)
+  readonly assembled: Bundle            // the build adapter's product (dir + entry)
   readonly address: string              // the node's graph address — baked into the bootstrap
 }
 
@@ -489,8 +489,7 @@ interface LowerOptions {
   readonly state?: AlchemyStateLayer                     // default: localState(); the
                                                          // hosted-state store slots in here
 }
-interface Bundle { readonly dir: string }                            // an assembled bundle dir
-interface AssembledBundle { readonly dir: string; readonly entry: string }  // adapter product: dir + runtime entry
+interface Bundle { readonly dir: string; readonly entry: string }          // the ONE assembled-bundle shape (assembler product; defined once, here)
 interface Artifact { readonly path: string; readonly sha256: string }       // package()'s product
 
 // Load → route each node through target.lower[node.type] → an Alchemy Stack
