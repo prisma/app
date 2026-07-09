@@ -7,7 +7,7 @@ const makeService = (name: string) =>
     type: 'fixture/service',
     inputs: {},
     params: {},
-    build: { kind: 'node', module: import.meta.url, entry: 'server.js' },
+    build: { kind: 'node', pack: '@makerkit/node', module: import.meta.url, entry: 'server.js' },
   });
 
 export default hex('fixture-hex', (h) => {

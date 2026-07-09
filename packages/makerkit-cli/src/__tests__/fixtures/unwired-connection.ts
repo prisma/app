@@ -11,5 +11,5 @@ export default service({
     }),
   },
   params: {},
-  build: { kind: 'node', module: import.meta.url, entry: 'server.js' },
+  build: { kind: 'node', pack: '@makerkit/node', module: import.meta.url, entry: 'server.js' },
 });

@@ -82,7 +82,7 @@ function makeAppDir(name = 'fixture-app'): { dir: string; entryPath: string } {
       "  type: 'fixture/compute',",
       '  inputs: {},',
       '  params: {},',
-      "  build: { kind: 'node', module: import.meta.url, entry: 'dist/server.js' },",
+      "  build: { kind: 'node', pack: '@makerkit/node', module: import.meta.url, entry: 'dist/server.js' },",
       '});',
       '',
     ].join('\n'),
@@ -208,5 +208,71 @@ describe('run() — the full pipeline over fakes', () => {
     const message = (error as Error).message;
     expect(message).toContain('no built entry at');
     expect(message).not.toContain('destroy evaluates');
+  });
+
+  describe('destroy with no local .alchemy state (R2a-review guardrail)', () => {
+    test('warns (not fails) before running alchemy when .alchemy is missing', async () => {
+      const app = makeAppDir();
+      process.chdir(app.dir);
+      const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const status = await run(['destroy', app.entryPath], {
+          runAssembler: fakeAssembler,
+          alchemy: () => 0,
+        });
+
+        expect(status).toBe(0);
+        const printed = warnSpy.mock.calls.map((args) => args.join(' ')).join('\n');
+        expect(printed).toContain(`No prior deploy state under ${app.dir}`);
+        expect(printed).toContain(
+          'if you deployed from a different directory, run destroy from there',
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    test('warns when .alchemy exists but is empty', async () => {
+      const app = makeAppDir();
+      process.chdir(app.dir);
+      fs.mkdirSync(path.join(app.dir, '.alchemy'), { recursive: true });
+      const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await run(['destroy', app.entryPath], { runAssembler: fakeAssembler, alchemy: () => 0 });
+
+        const printed = warnSpy.mock.calls.map((args) => args.join(' ')).join('\n');
+        expect(printed).toContain('No prior deploy state under');
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    test('does not warn when .alchemy has state', async () => {
+      const app = makeAppDir();
+      process.chdir(app.dir);
+      fs.mkdirSync(path.join(app.dir, '.alchemy'), { recursive: true });
+      fs.writeFileSync(path.join(app.dir, '.alchemy', 'state.json'), '{}');
+      const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await run(['destroy', app.entryPath], { runAssembler: fakeAssembler, alchemy: () => 0 });
+
+        expect(warnSpy).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    test('a deploy never checks .alchemy state — no warning', async () => {
+      const app = makeAppDir();
+      process.chdir(app.dir);
+      const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await run(['deploy', app.entryPath], { runAssembler: fakeAssembler, alchemy: () => 0 });
+
+        expect(warnSpy).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 });

@@ -30,6 +30,29 @@ describe('renderStackFile() — a service root', () => {
     expect(content).not.toContain('stage:');
   });
 
+  test('a cwd containing "*/" does not break the generated file (F01)', () => {
+    // A legal (if exotic) unix path — a directory literally named "foo*" —
+    // yields a cwd containing the two-character sequence "*/". A /** */
+    // block-comment header would close early there and emit a syntactically
+    // broken file; the header must survive it regardless.
+    const cwd = '/repo/examples/foo*/app';
+    const content = renderStackFile({
+      entryPath: '/repo/examples/foo*/app/src/service.ts',
+      cwd,
+      pack: '@makerkit/prisma-cloud',
+      name: 'hello',
+      assembled: { bundle: { dir: '/repo/examples/foo*/app/dist/bundle', entry: 'server.js' } },
+    });
+
+    expect(content).toContain(cwd);
+    expect(content).not.toContain('/**');
+    // The import lines (and everything after the header) must survive intact
+    // — a block-comment header would have truncated the file right after the
+    // embedded "*/" in the cwd, before these lines are even reached.
+    expect(content).toContain("import { lower } from '@makerkit/core/deploy';");
+    expect(content).toContain('name: "hello"');
+  });
+
   test('renders `bundles` (keyed by provision id) for a hex root, not `bundle`', () => {
     const content = renderStackFile({
       entryPath: '/repo/app/hex.ts',

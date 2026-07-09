@@ -1,9 +1,18 @@
 import { describe, expect, test } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { AssembleError } from '@makerkit/assemble';
 import type { Graph } from '@makerkit/core';
 import { resource, service } from '@makerkit/core';
-import { collectPacks, extractFromEnv, resolveSinglePack } from '../infer-target.ts';
+import { collectPacks, extractFromEnv, inferTarget, resolveSinglePack } from '../infer-target.ts';
 
-const build = { kind: 'node', module: 'file:///test/service.ts', entry: 'server.js' } as const;
+const build = {
+  kind: 'node',
+  pack: '@makerkit/node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+} as const;
 
 function graphWithPacks(packs: readonly string[]): Graph {
   const nodes = packs.map((pack, i) => ({
@@ -86,5 +95,25 @@ describe("extractFromEnv() — the pack's /target module must export fromEnv()",
     expect(() => extractFromEnv('@fake/pack', '@fake/pack/target', null)).toThrow(
       /has no fromEnv\(\) export/,
     );
+  });
+});
+
+describe('inferTarget() — an unresolvable pack (F03, verifying the S5 entry-anchored rewrite closed it)', () => {
+  test('a pack that is not installed surfaces an AssembleError naming the pack and the fix, not a raw module error', async () => {
+    const dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-cli-infer-target-')),
+    );
+    try {
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'fixture-app' }));
+      const entryPath = path.join(dir, 'service.ts');
+      const graph = graphWithPacks(['@makerkit/does-not-exist']);
+
+      await expect(inferTarget(graph, entryPath)).rejects.toThrow(AssembleError);
+      await expect(inferTarget(graph, entryPath)).rejects.toThrow(
+        /Cannot resolve "@makerkit\/does-not-exist\/target".*must depend on "@makerkit\/does-not-exist"/s,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

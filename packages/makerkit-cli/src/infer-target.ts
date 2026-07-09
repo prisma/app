@@ -3,12 +3,18 @@
  * carries the package name of the pack that authored it. Collect that set
  * over the loaded graph — exactly one must appear — then dynamically import
  * that pack's `/target` entry and call its `fromEnv()` export.
+ *
+ * Resolution reuses @makerkit/assemble's entry-anchored `importFromEntry`
+ * rather than a second copy of the same mechanism — this seam
+ * (`${pack}/target`) and the assembler seam (`${build.pack}/assemble`) are
+ * structurally identical (ADR-0003), and the CLI already depends on
+ * @makerkit/assemble for orchestration.
  */
+import { importFromEntry } from '@makerkit/assemble';
 import type { Graph } from '@makerkit/core';
 import { assertDefined } from '@makerkit/core/assertions';
 import type { Target } from '@makerkit/core/deploy';
 import { CliError } from './cli-error.ts';
-import { importFromEntry } from './resolve-from-entry.ts';
 
 export function collectPacks(graph: Graph): string[] {
   const packs = new Set<string>();

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { parseArgs, UsageError } from '../main.ts';
+import { UsageError } from 'clipanion';
+import { parseArgs } from '../main.ts';
 
-describe('parseArgs()', () => {
+describe('parseArgs() (clipanion-backed)', () => {
   test('parses a bare deploy invocation', () => {
     expect(parseArgs(['deploy', 'src/service.ts'])).toEqual({
       command: 'deploy',
@@ -39,5 +40,29 @@ describe('parseArgs()', () => {
   test('throws UsageError when the entry is missing', () => {
     expect(() => parseArgs(['deploy'])).toThrow(UsageError);
     expect(() => parseArgs(['deploy', '--name', 'x'])).toThrow(UsageError);
+  });
+
+  // F02: a trailing --name/--stage with no value used to be silently
+  // accepted by the handrolled parser (name/stage ended up undefined, no
+  // error) — clipanion's own arity checking now catches it as a usage error.
+  test('throws UsageError on a trailing --name with no value (F02)', () => {
+    expect(() => parseArgs(['deploy', 'src/service.ts', '--name'])).toThrow(UsageError);
+  });
+
+  test('throws UsageError on a trailing --stage with no value (F02)', () => {
+    expect(() => parseArgs(['deploy', 'src/service.ts', '--stage'])).toThrow(UsageError);
+  });
+
+  test('throws UsageError on an unknown flag', () => {
+    expect(() => parseArgs(['deploy', 'src/service.ts', '--bogus'])).toThrow(UsageError);
+  });
+
+  test('an empty --name value parses through (validated downstream by run(), not by parsing)', () => {
+    expect(parseArgs(['deploy', 'src/service.ts', '--name', ''])).toEqual({
+      command: 'deploy',
+      entry: 'src/service.ts',
+      name: '',
+      stage: undefined,
+    });
   });
 });

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { run, UsageError } from './main.ts';
+import { UsageError } from 'clipanion';
+import { run } from './main.ts';
 
 run(process.argv.slice(2))
   .then((status) => {

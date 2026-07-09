@@ -11,17 +11,20 @@ import * as path from 'node:path';
 const binPath = path.join(import.meta.dir, '..', 'bin.ts');
 
 describe('node compatibility smoke test', () => {
-  test('a bare invocation under node prints usage and exits nonzero', () => {
+  test('a bare invocation under node prints usage (deploy and destroy) and exits nonzero', () => {
     const result = spawnSync('node', [binPath], { encoding: 'utf8' });
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Usage: makerkit <deploy|destroy> <entry>');
+    expect(result.stderr).toContain('makerkit deploy');
+    expect(result.stderr).toContain('makerkit destroy');
+    expect(result.stderr).toContain('<entry>');
   });
 
   test('an unknown command under node prints usage and exits nonzero', () => {
     const result = spawnSync('node', [binPath, 'build', 'src/service.ts'], { encoding: 'utf8' });
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Usage: makerkit <deploy|destroy> <entry>');
+    expect(result.stderr).toContain('makerkit deploy');
+    expect(result.stderr).toContain('makerkit destroy');
   });
 });
