@@ -15,13 +15,18 @@ authored it. The descriptor captures that module explicitly —
 directory discovery anywhere in the system: no walk to a nearest
 `package.json`, no inferred "service directory".
 
-The same rule holds one layer up, in the deploy tooling. Resolving a pack's
-`/target` or `/assemble` module happens by seeding `createRequire` with the
-entry module's own file path, letting the platform's resolver walk
-`node_modules` upward the way it would for a plain `import` in that file. And
-tool state — the generated `.makerkit/alchemy.run.ts`, Alchemy's `.alchemy`
-state directory — lives in the process's working directory, like any other
-CLI's state: where you run the tool, not somewhere the tool infers.
+The same rule holds one layer up, in the deploy tooling: heavy deploy-only
+modules resolve by seeding `createRequire` with the file whose declaration
+needs them, letting the platform's resolver walk `node_modules` upward the way
+it would for a plain `import` in that file. The target pack's `/target`
+resolves from the deploy *entry* module — the target is the application's own
+declaration. Each build adapter's `/assemble` resolves from that service's
+*authoring* module (`build.module`) — the adapter is the service's own choice,
+so a service that arrives from an installed package carries its own adapter
+dependency instead of leaking it onto the app (ADR-0014). And tool state — the
+generated `.makerkit/alchemy.run.ts`, Alchemy's `.alchemy` state directory —
+lives in the process's working directory, like any other CLI's state: where
+you run the tool, not somewhere the tool infers.
 
 ## Reasoning
 

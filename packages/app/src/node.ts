@@ -168,7 +168,7 @@ export interface DependencyEnd<C = unknown, Req = unknown> extends NodeBase {
 
 /**
  * A Hex: the same boundary a service has — a `Deps` map of typed inputs and
- * an `Expose` map of contract outputs (ADR-0009) — around transparent wiring
+ * an `Expose` map of contract outputs (ADR-0014) — around transparent wiring
  * instead of a black-box body. The body runs at Load (it is wiring, not user
  * code), receives its declared inputs as forwardable wiring values plus
  * `provision`, and returns one ref-port per declared output. `provision()`
@@ -291,7 +291,7 @@ export interface HexBuilder {
   /**
    * Registers an owned child hex under a stable id — the same call shape a
    * service gets, since a `HexNode<D, E>` is wireable anywhere a
-   * `ServiceNode<D, _, E>` is (ADR-0009). Left for the runtime dangling check
+   * `ServiceNode<D, _, E>` is (ADR-0014). Left for the runtime dangling check
    * to catch, same as the no-wiring service overload.
    */
   provision<D extends Deps, E extends Expose>(id: string, child: HexNode<D, E>): ProvisionedRef<E>;

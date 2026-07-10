@@ -1,5 +1,5 @@
 /**
- * The hex boundary (ADR-0009): `deps`/`expose` on `hex()`, forwarding through
+ * The hex boundary (ADR-0014): `deps`/`expose` on `hex()`, forwarding through
  * the body, `provision()` accepting a hex, and Load's boundary validation
  * errors plus recursive flattening into hierarchical addresses. `hex.test.ts`
  * covers the pre-boundary Load mechanics (still exercised by an

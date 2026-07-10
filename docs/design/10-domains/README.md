@@ -10,6 +10,8 @@ architecture/design phase that comes *after* the high-level model is settled.
   (`makerkit deploy` / `makerkit destroy`): the pipeline, the pack CLI seam and
   per-kind assembly contracts, and the error surface. Rests on ADR-0003 …
   ADR-0006.
+- [`hex-composition.md`](hex-composition.md) — hex boundaries (deps/expose),
+  forwarding, nesting, and the packaged reusable hex. Rests on ADR-0014.
 
 The settled high-level model is recorded in:
 

@@ -1,5 +1,5 @@
 /**
- * Type-level tests for the hex boundary (ADR-0009): the body's `HexOutputs`
+ * Type-level tests for the hex boundary (ADR-0014): the body's `HexOutputs`
  * return type checked against `expose`, `ctx.inputs`' `InputRef` brand
  * assignable wherever a `Wiring<D>` slot is (the same check a producer's
  * ref-port gets), and that inference survives 3 levels of nesting without
@@ -63,7 +63,7 @@ hex('expose-missing', { expose: { verify: verifyContract } }, () => {
 
 // ---- forwarding: ctx.inputs is a Wiring<D>-assignable value, same as a producer's ref-port ----
 //
-// Under the unified model (ADR-0009) EVERY dependency slot — resource-backed
+// Under the unified model (ADR-0014) EVERY dependency slot — resource-backed
 // or service-backed — is the same `DependencyEnd<C, Req>`, so there is no
 // separate resource-backed type to test here: `verifyEnd`/`chargeEnd` stand
 // equally for either case. (The old pre-unification ResourceEnd carried a
