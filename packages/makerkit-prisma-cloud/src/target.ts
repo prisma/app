@@ -28,6 +28,30 @@ function isComputeRegion(value: string): value is Prisma.ComputeRegion {
   return KNOWN_REGION_SET.has(value);
 }
 
+// Prisma resource names have a length floor the makerkit id space doesn't:
+// the Management API's Connection create (`POST /v1/connections`,
+// `POST /v1/databases/{databaseId}/connections`) constrains `name` to
+// `minLength: 3, maxLength: 65` (sourced from GET https://api.prisma.io/v1/doc;
+// Database/Project `name` and Compute `displayName` are looser — 1 / 1–256 —
+// with no `pattern`). A postgres resource id feeds both the Database and the
+// Connection, so it must clear 3–65; applying that one Connection rule to every
+// name the target derives from a provision id (project, resource, service) is
+// the tightest of them and keeps a single rule. `_`/`.` are already rejected by
+// core at id construction, so charset is pre-constrained — this validates only
+// the length floor/ceiling Prisma adds on top.
+const PRISMA_NAME_MIN = 3;
+const PRISMA_NAME_MAX = 65;
+
+function validateName(value: string, source: string): void {
+  if (value.length < PRISMA_NAME_MIN || value.length > PRISMA_NAME_MAX) {
+    throw new Error(
+      `prisma-cloud: ${source} "${value}" (${value.length} characters) is not a valid Prisma ` +
+        `resource name — Prisma requires ${PRISMA_NAME_MIN}–${PRISMA_NAME_MAX} characters. ` +
+        'Rename the provision id (or the deploy --name) to fit.',
+    );
+  }
+}
+
 /**
  * The pack's CLI seam (ADR-0003): builds a Target from the process
  * environment. `makerkit deploy` calls this once it has inferred this pack
@@ -76,6 +100,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   application: {
     provision: ({ opts }) =>
       Effect.gen(function* () {
+        validateName(opts.name, 'application name');
         const project = yield* Prisma.Project(`${opts.name}-project`, {
           workspaceId: o.workspaceId,
           name: opts.name,
@@ -103,6 +128,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
     // own named key — never the platform default.
     postgres: ({ id, application }) =>
       Effect.gen(function* () {
+        validateName(id, 'resource name (from provision id)');
         const db = yield* Prisma.Database(`${id}-db`, {
           projectId: application.outputs['projectId'] as string,
           name: id,
@@ -120,6 +146,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
       // identity-bearing only, no code runs.
       provision: ({ id, application }) =>
         Effect.gen(function* () {
+          validateName(id, 'service name (from provision id)');
           const svc = yield* Prisma.ComputeService(`${id}-svc`, {
             projectId: application.outputs['projectId'] as string,
             name: id,

@@ -104,17 +104,19 @@ describe("prismaCloud().resources['postgres']", () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     // ctx.id is the hex provision id — one Database per provisioned resource.
     const ctx = {
-      id: 'db',
+      id: 'data',
       application: { outputs: { projectId: 'shop-project#cloud-id' } },
     } as unknown as LowerContext;
 
     const result = run<LoweredNode>(target.resources['postgres']!(ctx));
 
-    expect(result.outputs).toEqual({ url: 'postgres://db-conn' });
+    expect(result.outputs).toEqual({ url: 'postgres://data-conn' });
     expect(recorded.db).toEqual([
-      ['db-db', { projectId: 'shop-project#cloud-id', name: 'db', region: 'us-east-1' }],
+      ['data-db', { projectId: 'shop-project#cloud-id', name: 'data', region: 'us-east-1' }],
     ]);
-    expect(recorded.conn).toEqual([['db-conn', { databaseId: 'db-db#cloud-id', name: 'db' }]]);
+    expect(recorded.conn).toEqual([
+      ['data-conn', { databaseId: 'data-db#cloud-id', name: 'data' }],
+    ]);
   });
 });
 
@@ -293,7 +295,7 @@ describe('sharing: one hex-provisioned postgres, two compute consumers — throu
     };
     const client = ({ url }: { url: string }) => ({ url });
     const root = hex('shop', (h) => {
-      const db = h.provision('db', postgres({ name: 'db' }));
+      const db = h.provision('data', postgres({ name: 'data' }));
       h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
         main: db,
       });
@@ -320,24 +322,98 @@ describe('sharing: one hex-provisioned postgres, two compute consumers — throu
     );
 
     expect(recorded.db.slice(before.db)).toEqual([
-      ['db-db', { projectId: 'shop-project#cloud-id', name: 'db', region: 'us-east-1' }],
+      ['data-db', { projectId: 'shop-project#cloud-id', name: 'data', region: 'us-east-1' }],
     ]);
     expect(recorded.conn.slice(before.conn)).toEqual([
-      ['db-conn', { databaseId: 'db-db#cloud-id', name: 'db' }],
+      ['data-conn', { databaseId: 'data-db#cloud-id', name: 'data' }],
     ]);
 
     const writes = recorded.envVar.slice(before.envVar).map(([, props]) => props);
     expect(writes).toContainEqual({
       projectId: 'shop-project#cloud-id',
       key: 'AUTH_MAIN_URL',
-      value: 'postgres://db-conn',
+      value: 'postgres://data-conn',
       class: 'production',
     });
     expect(writes).toContainEqual({
       projectId: 'shop-project#cloud-id',
       key: 'BILLING_STORE_URL',
-      value: 'postgres://db-conn',
+      value: 'postgres://data-conn',
       class: 'production',
     });
+  });
+});
+
+describe('name validation — fail fast on Prisma name constraints, before creating anything', () => {
+  const build = {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  };
+  const client = ({ url }: { url: string }) => ({ url });
+  const bundles = { auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' } };
+
+  // The plain throw validateName raises becomes an Effect defect; run() (runSync)
+  // re-raises it synchronously — exactly what `lower()`'s Effect.orDie surfaces
+  // at deploy. Capture it directly rather than through the typed error channel.
+  const lowerError = (eff: Effect.Effect<unknown, unknown, unknown>): Error => {
+    try {
+      run(eff);
+    } catch (e) {
+      return e as Error;
+    }
+    throw new Error('expected lowering to throw');
+  };
+
+  test('a too-short postgres provision id throws the makerkit error at lower time, before any Database is recorded', () => {
+    const target = prismaCloud({ workspaceId: 'ws_1' });
+    const root = hex('shop', (h) => {
+      const db = h.provision('db', postgres({ name: 'db' }));
+      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+        main: db,
+      });
+    });
+    const before = recorded.db.length;
+
+    const error = lowerError(lowering(root, target, { name: 'shop', bundles }));
+
+    // A makerkit authoring error naming the id and the constraint — not a raw PrismaApiError.
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toContain('resource name (from provision id) "db"');
+    expect(error.message).toContain('3–65 characters');
+    expect(error.message).not.toContain('PrismaApiError');
+    // It failed BEFORE creating the Database (strictly better than the mid-deploy API error).
+    expect(recorded.db.length).toBe(before);
+  });
+
+  test('a too-short service provision id throws the makerkit error naming the service name', () => {
+    const target = prismaCloud({ workspaceId: 'ws_1' });
+    const root = hex('shop', (h) => {
+      h.provision('a', compute({ name: 'a', deps: {}, build }));
+    });
+    const before = recorded.svc.length;
+
+    const error = lowerError(
+      lowering(root, target, { name: 'shop', bundles: { a: bundles.auth } }),
+    );
+
+    expect(error.message).toContain('service name (from provision id) "a"');
+    expect(error.message).toContain('3–65 characters');
+    expect(recorded.svc.length).toBe(before);
+  });
+
+  test('a valid-name hex lowers unchanged — no throw, the Database is created', () => {
+    const target = prismaCloud({ workspaceId: 'ws_1' });
+    const root = hex('shop', (h) => {
+      const db = h.provision('data', postgres({ name: 'data' }));
+      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+        main: db,
+      });
+    });
+    const before = recorded.db.length;
+
+    expect(() => run<LoweredNode>(lowering(root, target, { name: 'shop', bundles }))).not.toThrow();
+    expect(recorded.db.length).toBe(before + 1);
   });
 });
