@@ -334,7 +334,7 @@ export class DependencyEnd<C = unknown, Req = unknown> extends Node {
 
 /**
  * A System: the same boundary a service has — a `Deps` map of typed inputs and
- * an `Expose` map of contract outputs (ADR-0015) — around transparent wiring
+ * an `Expose` map of contract outputs (ADR-0016) — around transparent wiring
  * instead of a black-box body. The body runs at Load (it is wiring, not user
  * code), receives its declared inputs as forwardable wiring values plus
  * `provision`, and returns one ref-port per declared output. `provision()`
@@ -492,7 +492,7 @@ export interface SystemBuilder {
   /**
    * Registers an owned child system under a stable id — the same call shape a
    * service gets, since a `SystemNode<D, E>` is wireable anywhere a
-   * `ServiceNode<D, _, E>` is (ADR-0015). Left for the runtime dangling check
+   * `ServiceNode<D, _, E>` is (ADR-0016). Left for the runtime dangling check
    * to catch, same as the no-wiring service overload.
    */
   provision<D extends Deps, E extends Expose>(

@@ -2,7 +2,7 @@
 
 How a system declares a boundary, forwards through it, nests, and is consumed
 from another module. The decision this design rests on is
-[ADR-0015](../90-decisions/ADR-0015-a-system-has-the-same-boundary-as-a-service.md)
+[ADR-0016](../90-decisions/ADR-0016-a-system-has-the-same-boundary-as-a-service.md)
 (a system has the same boundary as a service); the uniform-port principle it
 realizes is described in
 [`../03-domain-model/authoring-surface.md`](../03-domain-model/authoring-surface.md).
@@ -181,7 +181,7 @@ const auth = provision("auth", fakeAuthService);   // same contract, no database
 
 ## Related
 
-- [`ADR-0015`](../90-decisions/ADR-0015-a-system-has-the-same-boundary-as-a-service.md)
+- [`ADR-0016`](../90-decisions/ADR-0016-a-system-has-the-same-boundary-as-a-service.md)
 - [`core-model.md`](core-model.md) — the node types and wiring machinery this
   extends (`Expose`, `ProvisionedRef`, `Wiring`).
 - [`deploy-cli.md`](deploy-cli.md) — the pipeline that consumes the flattened

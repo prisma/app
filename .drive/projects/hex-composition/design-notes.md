@@ -1,6 +1,6 @@
 # System Composition — Design Notes
 
-The design lives in ADR-0015 and `docs/design/10-domains/system-composition.md`.
+The design lives in ADR-0016 and `docs/design/10-domains/system-composition.md`.
 This file records implementation-level calls, the seams, and the points held
 for operator confirmation.
 

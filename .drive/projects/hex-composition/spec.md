@@ -49,7 +49,7 @@ provision("storefront", storefrontService, { auth: auth.verify });
 
 `prisma-app deploy system.ts` deploys the composed topology; `prisma-app deploy
 system.fake.ts` deploys (or Load-checks) the faked one. Design contract:
-[ADR-0015](../../../docs/design/90-decisions/ADR-0015-a-system-has-the-same-boundary-as-a-service.md)
+[ADR-0016](../../../docs/design/90-decisions/ADR-0016-a-system-has-the-same-boundary-as-a-service.md)
 + [system-composition.md](../../../docs/design/10-domains/system-composition.md)
 (exact signatures, Load rules, addresses).
 
@@ -115,7 +115,7 @@ design-notes.md § Coordination facts.
 - Compile-time checks primary, Load `satisfies()` backstop; `lint:casts`
   delta ≤ 0; plane-separation and runtime-portability invariants hold
   (composition adds nothing to runtime bundles).
-- Doc-first covenant: deviations from ADR-0015/system-composition.md amend the
+- Doc-first covenant: deviations from ADR-0016/system-composition.md amend the
   doc, never silently diverge.
 
 ## Project DoD

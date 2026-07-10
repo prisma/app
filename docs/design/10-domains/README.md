@@ -12,7 +12,7 @@ architecture/design phase that comes *after* the high-level model is settled.
   on ADR-0003 … ADR-0006.
 - [`system-composition.md`](system-composition.md) — system boundaries
   (deps/expose), forwarding, nesting, and the packaged reusable system. Rests
-  on ADR-0015.
+  on ADR-0016.
 
 The settled high-level model is recorded in:
 

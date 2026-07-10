@@ -37,3 +37,7 @@ prisma-next/
 # `pnpm rules:sync` (wired into `prepare`); ignore them so only canonical is tracked.
 .cursor/rules
 .claude/rules
+
+# Next.js build output (any location — a stray copy under an unexpected path once got committed)
+.next/
+next-env.d.ts

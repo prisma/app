@@ -1,4 +1,4 @@
-# ADR-0015: A system has the same boundary as a service
+# ADR-0016: A system has the same boundary as a service
 
 ## Status
 

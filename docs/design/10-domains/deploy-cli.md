@@ -52,7 +52,7 @@ loading the graph imports that module — the app's choice, not a CLI limit.
 3. **Infer the target.** Collect the distinct target-module specifier each
    pack-authored node carries (`targetModule`). Exactly one must appear (mixed
    targets → error). Ask a node carrying it to load its own target —
-   `node.loadTarget()` dynamically imports the specifier (ADR-0016); the CLI
+   `node.loadTarget()` dynamically imports the specifier (ADR-0017); the CLI
    constructs no specifier and resolves no path — then call the module's
    `fromEnv()` export, which reads its own environment variables and errors
    naming any missing one. Inference can't silently pick wrong: `lower()`
@@ -62,7 +62,7 @@ loading the graph imports that module — the app's choice, not a CLI limit.
    unless `--name` overrides it — CI's per-run ephemeral deploys use this so a
    name never collides with a standing demo.
 5. **Assemble each service.** Ask each service node to assemble itself —
-   `node.assemble()` loads the build adapter's own assembler (ADR-0016) and
+   `node.assemble()` loads the build adapter's own assembler (ADR-0017) and
    calls it. The assembler resolves its `entry` (and any other path field)
    relative to `dirname(build.module)` — the authoring module the descriptor
    carries (ADR-0004) — no directory discovery of any kind. Assembly validates
@@ -100,7 +100,7 @@ model.
 ## Contracts this introduces
 
 Two new seams, both symmetric — a node carries the full module specifier of
-its deploy-only module as data and loads it itself (ADR-0016), with zero CLI
+its deploy-only module as data and loads it itself (ADR-0017), with zero CLI
 changes for a new pack or adapter:
 
 - **Pack CLI seam.** Every pack-authored node carries its target's specifier
@@ -113,7 +113,7 @@ changes for a new pack or adapter:
   relative to `dirname(module)`). `assembler` is the full specifier of the
   adapter's own `/assemble` module, baked in by its factory (`node()` →
   `"@prisma/app-node/assemble"`, `nextjs()` → `"@prisma/app-nextjs/assemble"`).
-  `node.assemble()` loads it via a variable-argument `import` (ADR-0016), so a
+  `node.assemble()` loads it via a variable-argument `import` (ADR-0017), so a
   community build adapter works with zero changes anywhere and the heavy
   assembler never leaks into the runtime wrapper. `kind` stays the descriptor's
   own discriminant; the loaded `/assemble` module validates it matches. The
@@ -142,7 +142,7 @@ The CLI's quality lives in its errors; each failure names its fix:
 | Mixed targets in one graph | the target specifiers found; one target per application |
 | Missing target env | the exact variable(s) `fromEnv()` needed |
 | Built output missing | the expected path, and "run your build" |
-| Unresolvable target/assembler module | the specifier, and to add/check the dependency on that package (node-owned load — ADR-0016) |
+| Unresolvable target/assembler module | the specifier, and to add/check the dependency on that package (node-owned load — ADR-0017) |
 
 ## Out of scope (designed around)
 

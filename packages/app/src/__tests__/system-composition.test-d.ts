@@ -1,5 +1,5 @@
 /**
- * Type-level tests for the system boundary (ADR-0015): the body's `SystemOutputs`
+ * Type-level tests for the system boundary (ADR-0016): the body's `SystemOutputs`
  * return type checked against `expose`, `ctx.inputs`' `InputRef` brand
  * assignable wherever a `Wiring<D>` slot is (the same check a producer's
  * ref-port gets), and that inference survives 3 levels of nesting without
@@ -63,7 +63,7 @@ system('expose-missing', { expose: { verify: verifyContract } }, () => {
 
 // ---- forwarding: ctx.inputs is a Wiring<D>-assignable value, same as a producer's ref-port ----
 //
-// Under the unified model (ADR-0015) EVERY dependency slot — resource-backed
+// Under the unified model (ADR-0016) EVERY dependency slot — resource-backed
 // or service-backed — is the same `DependencyEnd<C, Req>`, so there is no
 // separate resource-backed type to test here: `verifyEnd`/`chargeEnd` stand
 // equally for either case. (The old pre-unification ResourceEnd carried a

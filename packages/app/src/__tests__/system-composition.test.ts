@@ -1,5 +1,5 @@
 /**
- * The system boundary (ADR-0015): `deps`/`expose` on `system()`, forwarding through
+ * The system boundary (ADR-0016): `deps`/`expose` on `system()`, forwarding through
  * the body, `provision()` accepting a system, and Load's boundary validation
  * errors plus recursive flattening into hierarchical addresses. `system.test.ts`
  * covers the pre-boundary Load mechanics (still exercised by an

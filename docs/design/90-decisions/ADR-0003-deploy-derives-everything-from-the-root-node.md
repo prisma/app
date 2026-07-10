@@ -88,7 +88,7 @@ Because the field holds a real module specifier, a community pack resolves by
 exactly the same mechanism as a first-party one, with no registry and no naming
 convention. Why the specifier is stored as data and loaded through a variable —
 rather than written as a literal `import` in the factory — is a bundler-firewall
-requirement recorded in [ADR-0016](ADR-0016-nodes-own-their-deploy-module-loads.md).
+requirement recorded in [ADR-0017](ADR-0017-nodes-own-their-deploy-module-loads.md).
 
 Constructing the target then needs its options — and those are
 environment-shaped in practice (a workspace id, a region). So each pack's
@@ -127,7 +127,7 @@ follow:
 - The standard deploy is zero-config: `prisma-app deploy src/system.ts` plus
   environment variables.
 - Target packs have a small, fixed CLI-facing contract: nodes carry the target
-  module's specifier and load it themselves (ADR-0016), and the `/target` entry
+  module's specifier and load it themselves (ADR-0017), and the `/target` entry
   exports `fromEnv()`. This is the seam a community pack plugs into with zero
   CLI changes.
 - One target per application. Multi-target or heavily parameterized setups

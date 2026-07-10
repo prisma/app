@@ -4,7 +4,7 @@
 
 Three slices: the core boundary/forwarding/nesting reshape, the deploy-pipeline
 follow-through (hierarchical bundle keys + adapter resolution anchor), and the
-reusable Auth system proven live with its fake. Design contract: ADR-0015 +
+reusable Auth system proven live with its fake. Design contract: ADR-0016 +
 `docs/design/10-domains/system-composition.md`.
 
 **Spec:** `.drive/projects/system-composition/spec.md` ·
@@ -70,7 +70,7 @@ correctly keyed bundles.
 ### [ ] Slice H3 — the reusable Auth system, live, with its fake
 
 **Outcome:** a workspace package (e.g. `examples/auth-system`) exporting an Auth
-system per ADR-0015's grounding example — built runnables shipped in-package,
+system per ADR-0016's grounding example — built runnables shipped in-package,
 `@prisma/app*` as peer dependencies, expose = the auth contract; `db` as a
 boundary input if resource slots have landed, internally owned otherwise.
 `examples/storefront-auth` provisions it (nested system, forwarding both ways)
