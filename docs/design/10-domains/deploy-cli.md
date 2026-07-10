@@ -48,24 +48,25 @@ loading the graph imports that module — the app's choice, not a CLI limit.
    composing hex. The deploy root must be a hex — a bare service is not
    independently deployable; the CLI errors naming the fix (wrap it:
    `hex('name', (h) => h.provision(...))`).
-3. **Infer the target.** Collect the pack package name each node carries.
-   Exactly one pack must appear (mixed packs → error). Dynamically import that
-   package's `/target` entry — resolved from the entry module's own file path,
-   the same way node's own resolver would (no discovery of any kind) — and
-   call its `fromEnv()` export, which reads its own environment variables and
-   errors naming any missing one. Inference can't silently pick wrong:
-   `lower()` routes every node type through the target's tables, and a
-   mismatch is a `LowerError` naming the unknown type.
+3. **Infer the target.** Collect the distinct target-module specifier each
+   pack-authored node carries (`targetModule`). Exactly one must appear (mixed
+   targets → error). Ask a node carrying it to load its own target —
+   `node.loadTarget()` dynamically imports the specifier (ADR-0015); the CLI
+   constructs no specifier and resolves no path — then call the module's
+   `fromEnv()` export, which reads its own environment variables and errors
+   naming any missing one. Inference can't silently pick wrong: `lower()`
+   routes every node type through the target's tables, and a mismatch is a
+   `LowerError` naming the unknown type.
 4. **Resolve the name.** The root node's name (every node is named — ADR-0006),
    unless `--name` overrides it — CI's per-run ephemeral deploys use this so a
    name never collides with a standing demo.
-5. **Assemble each service.** Route by the build adapter's `kind` to that
-   kind's assembly (see below); the adapter resolves its own `entry` (and any
-   other path field) relative to `dirname(build.module)` — the authoring
-   module the descriptor itself carries (ADR-0004) — no directory discovery of
-   any kind. Assembly validates the user's built output exists (missing →
-   "run your build" error; staleness is not detected) and produces a
-   normalized bundle `{ dir, entry }`.
+5. **Assemble each service.** Ask each service node to assemble itself —
+   `node.assemble()` loads the build adapter's own assembler (ADR-0015) and
+   calls it. The assembler resolves its `entry` (and any other path field)
+   relative to `dirname(build.module)` — the authoring module the descriptor
+   carries (ADR-0004) — no directory discovery of any kind. Assembly validates
+   the user's built output exists (missing → "run your build" error; staleness
+   is not detected) and produces a normalized bundle `{ dir, entry }`.
 6. **Lower and drive.** Write the pipeline's results as a runnable stack
    module at `.makerkit/alchemy.run.ts` and drive the `alchemy` CLI against
    it (ADR-0007). The generated file and Alchemy's state live in the
@@ -97,29 +98,29 @@ model.
 
 ## Contracts this introduces
 
-Two new seams, both symmetric — both resolve a heavy, deploy-only module from
-a package name the node/descriptor carries, entry-anchored, with zero CLI
+Two new seams, both symmetric — a node carries the full module specifier of
+its deploy-only module as data and loads it itself (ADR-0015), with zero CLI
 changes for a new pack or adapter:
 
-- **Pack CLI seam.** Every node carries its pack's package name, and the
-  pack's `/target` entry exports `fromEnv(): Target`. This is how a community
-  pack becomes deployable with zero CLI changes.
+- **Pack CLI seam.** Every pack-authored node carries its target's specifier
+  (`targetModule`) and loads it via `node.loadTarget()`; the pack's `/target`
+  entry exports `fromEnv(): Target`. This is how a community pack becomes
+  deployable with zero CLI changes.
 - **Assembler seam.** The build adapter *descriptor* stays pure data on the
-  node (`{ kind, pack, module, entry }` — where the user's build puts its
+  node (`{ kind, assembler, module, entry }` — where the user's build puts its
   output, never how to produce it; `entry` and any kind-specific path resolve
-  relative to `dirname(module)`). `pack` is the adapter's own package name,
-  baked in by its factory (`node()` → `"@makerkit/node"`, `nextjs()` →
-  `"@makerkit/nextjs"`) — the same uniform rule as a node's own `pack`
-  (ADR-0003): a thing's `pack` names the package that gives it meaning.
-  `@makerkit/assemble` resolves `${build.pack}/assemble` through the same
-  entry-anchored resolver the pack seam uses (no hardcoded kind→package map),
-  so a community build adapter works with zero changes anywhere. `kind` stays
-  the descriptor's own discriminant; the resolved `/assemble` module validates
-  it matches. The heavy assembly module never ships in a bundle. Its contract
+  relative to `dirname(module)`). `assembler` is the full specifier of the
+  adapter's own `/assemble` module, baked in by its factory (`node()` →
+  `"@prisma/app-node/assemble"`, `nextjs()` → `"@prisma/app-nextjs/assemble"`).
+  `node.assemble()` loads it via a variable-argument `import` (ADR-0015), so a
+  community build adapter works with zero changes anywhere and the heavy
+  assembler never leaks into the runtime wrapper. `kind` stays the descriptor's
+  own discriminant; the loaded `/assemble` module validates it matches. The
+  heavy assembly module never ships in a bundle. Its contract
   is `assemble({ build: descriptor }) → { dir, entry }`
-  (`@makerkit/core/deploy`'s `AssembleInput`/`Bundle` — defined once there,
-  imported by every adapter and by `@makerkit/assemble` itself).
-- **`@makerkit/assemble`** owns the orchestration this seam drives: routing
+  (`@prisma/app/deploy`'s `AssembleInput`/`Bundle` — defined once there,
+  imported by every adapter and by `@prisma/app-assemble` itself).
+- **`@prisma/app-assemble`** owns the orchestration this seam drives: routing
   every service node in the loaded graph to its adapter's `/assemble` entry
   (one bundle per provision id — the root is always a hex) and the
   wrapper-inlining policy. The CLI is its first consumer; the future
@@ -137,10 +138,10 @@ The CLI's quality lives in its errors; each failure names its fix:
 | Default export isn't a node | what the entry module must export |
 | Deploy root isn't a hex | to wrap the service in a hex |
 | Unwired dependency slot | which input, and to deploy the composing hex |
-| Mixed packs in one graph | the packs found; one target per application |
+| Mixed targets in one graph | the target specifiers found; one target per application |
 | Missing target env | the exact variable(s) `fromEnv()` needed |
 | Built output missing | the expected path, and "run your build" |
-| Unresolvable pack/adapter subpath | the pack, the subpath, and to add/check the dependency (same resolver, pack or assembler seam) |
+| Unresolvable target/assembler module | the specifier, and to add/check the dependency on that package (node-owned load — ADR-0015) |
 
 ## Out of scope (designed around)
 

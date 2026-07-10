@@ -35,7 +35,7 @@ export async function loadEntry(entryArg: string, cwd: string): Promise<LoadedEn
     path: resolvedPath,
     root: blindCast<
       ServiceNode | HexNode,
-      "isNode() plus the kind check above prove root is a service or hex node at runtime; isNode's return type (NodeBase | HexNode) is the common supertype and structurally lacks each kind's own fields, so TS cannot narrow further on its own"
+      "isNode() plus the kind check above prove root is a service or hex node at runtime; isNode's return type (the branded ServiceNode | ResourceNode | DependencyEnd | HexNode union) structurally lacks each kind's own fields, so TS cannot narrow further on its own"
     >(root),
   };
 }

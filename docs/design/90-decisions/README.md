@@ -30,4 +30,5 @@ _Earlier drafts (ADR-0001, ADR-0002) were retired as the high-level design settl
 - [ADR-0012](ADR-0012-the-state-store-speaks-sql-directly.md) — The state store speaks SQL directly; Prisma Next adoption is deferred.
 - [ADR-0013](ADR-0013-resources-are-provisioned-by-hexes-deps-are-declarations.md) — Resources are provisioned by hexes; dependencies are uniform contract-checked slots.
 - [ADR-0014](ADR-0014-a-hex-has-the-same-boundary-as-a-service.md) — A hex has the same boundary as a service: deps in, expose out, forwarding as data flow; reusable hexes follow.
+- [ADR-0015](ADR-0015-nodes-own-their-deploy-module-loads.md) — Nodes own their deploy-module loads: author-written specifiers as data, loaded through a variable-argument import; no CLI-side path resolution.
 
