@@ -148,7 +148,7 @@ describe("prismaCloud().services['compute']", () => {
       },
       build: {
         kind: 'node',
-        pack: '@prisma/app-node',
+        assembler: '@prisma/app-node/assemble',
         module: 'file:///test/service.ts',
         entry: 'server.js',
       },
@@ -202,7 +202,7 @@ describe("prismaCloud().services['compute']", () => {
       deps: {},
       build: {
         kind: 'node',
-        pack: '@prisma/app-node',
+        assembler: '@prisma/app-node/assemble',
         module: 'file:///test/service.ts',
         entry: 'server.js',
       },
@@ -220,7 +220,7 @@ describe("prismaCloud().services['compute']", () => {
     expect(result.outputs['port']).toBe(8080);
   });
 
-  test("package delegates to @prisma/alchemy's deterministic artifact packager", () => {
+  test("package delegates to prisma-alchemy's deterministic artifact packager", () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const ctx = { id: 'auth' } as unknown as LowerContext;
 
@@ -287,7 +287,7 @@ describe('sharing: one hex-provisioned postgres, two compute consumers — throu
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const build = {
       kind: 'node',
-      pack: '@prisma/app-node',
+      assembler: '@prisma/app-node/assemble',
       module: 'file:///test/service.ts',
       entry: 'server.js',
     };

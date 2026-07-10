@@ -53,7 +53,7 @@ describe('assemble()', () => {
       assemble({
         build: {
           kind: 'nextjs',
-          pack: '@prisma/app-nextjs',
+          assembler: '@prisma/app-nextjs/assemble',
           module: moduleUrl(appDir),
           appDir: '..',
           entry: 'server.js',
@@ -86,7 +86,7 @@ describe('assemble()', () => {
     const result = await assemble({
       build: {
         kind: 'nextjs',
-        pack: '@prisma/app-nextjs',
+        assembler: '@prisma/app-nextjs/assemble',
         module: moduleUrl(appDir),
         appDir: '..',
         entry: 'server.js',

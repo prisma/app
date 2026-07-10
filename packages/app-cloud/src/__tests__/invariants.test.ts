@@ -43,7 +43,7 @@ describe('invariant 2: authoring imports stay lean (core + pack)', () => {
     for (const token of [
       'alchemy',
       'effect',
-      '@prisma/alchemy',
+      'prisma-alchemy',
       'new SQL(',
       'ProviderCollection',
       'from "bun"',
@@ -113,5 +113,35 @@ describe('invariant 5: no runtime coupling in shipped surface', () => {
       expect(dep).not.toMatch(/^@types\/(bun|node)$/);
       expect(dep).not.toMatch(/^node(-|:)/);
     }
+  });
+});
+
+describe('invariant 6 (H2, node-owned loads): no static import() edge to /target or /assemble', () => {
+  test('no shipped source contains a literal import()/require() of a /target or /assemble subpath — the bundler firewall', () => {
+    // targetModule/build.assembler must reach core's loadTarget()/assemble()
+    // as DATA (a string field a node carries), never as the literal argument
+    // of an import()/require() call here — a literal would get followed and
+    // inlined by the wrapper's own bundler (tsdown/rolldown), dragging
+    // deploy-only tooling (this pack's target.ts, and transitively
+    // prisma-alchemy/tsdown) into the runtime artifact.
+    const sources = shippedSources();
+    expect(sources.length).toBeGreaterThan(0);
+
+    const literalDynamicImportPattern =
+      /(?:import|require)\s*\(\s*["'][^"']*\/(?:target|assemble)["']\s*\)/;
+    for (const { file, text } of sources) {
+      expect({ file, hasLiteralImport: literalDynamicImportPattern.test(text) }).toEqual({
+        file,
+        hasLiteralImport: false,
+      });
+    }
+  });
+
+  test('targetModule is plain string data on the nodes compute()/postgres({ name }) construct', () => {
+    const computeSrc = fs.readFileSync(path.join(srcDir, 'compute.ts'), 'utf8');
+    const postgresSrc = fs.readFileSync(path.join(srcDir, 'postgres.ts'), 'utf8');
+
+    expect(computeSrc).toContain("'@prisma/app-cloud/target'");
+    expect(postgresSrc).toContain("targetModule: '@prisma/app-cloud/target'");
   });
 });

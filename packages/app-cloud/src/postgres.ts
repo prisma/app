@@ -51,7 +51,12 @@ export function postgres<C>(opts: { name?: string; client?: ClientFactory<C> }):
     );
   }
   if (name !== undefined) {
-    return resource({ name, pack: '@prisma/app-cloud', provides: postgresContract });
+    return resource({
+      name,
+      pack: '@prisma/app-cloud',
+      provides: postgresContract,
+      targetModule: '@prisma/app-cloud/target',
+    });
   }
   if (client !== undefined) {
     return dependency({

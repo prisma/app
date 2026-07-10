@@ -34,7 +34,7 @@ describe('assemble()', () => {
       assemble({
         build: {
           kind: 'nextjs',
-          pack: '@prisma/app-nextjs',
+          assembler: '@prisma/app-nextjs/assemble',
           module: moduleUrl(serviceDir),
           entry: 'server.js',
         },
@@ -48,7 +48,7 @@ describe('assemble()', () => {
       assemble({
         build: {
           kind: 'node',
-          pack: '@prisma/app-node',
+          assembler: '@prisma/app-node/assemble',
           module: moduleUrl(serviceDir),
           entry: '../dist/server.js',
         },
@@ -64,7 +64,7 @@ describe('assemble()', () => {
       assemble({
         build: {
           kind: 'node',
-          pack: '@prisma/app-node',
+          assembler: '@prisma/app-node/assemble',
           module: moduleUrl(serviceDir),
           entry: '../dist/main.js',
         },
@@ -85,7 +85,7 @@ describe('assemble()', () => {
       assemble({
         build: {
           kind: 'node',
-          pack: '@prisma/app-node',
+          assembler: '@prisma/app-node/assemble',
           module: moduleUrl(serviceDir),
           entry: '../dist/bundle',
         },
@@ -105,7 +105,7 @@ describe('assemble()', () => {
     const result = await assemble({
       build: {
         kind: 'node',
-        pack: '@prisma/app-node',
+        assembler: '@prisma/app-node/assemble',
         module: moduleUrl(serviceDir),
         entry: '../dist/server.js',
       },

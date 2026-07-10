@@ -5,6 +5,8 @@ import { deserialize, stash } from './serializer.ts';
 
 const computeParams = { port: { type: 'number', default: 3000 } } as const;
 
+const TARGET_MODULE = '@prisma/app-cloud/target';
+
 /**
  * A Prisma Compute service — declarations only (deps + build + the ports it
  * exposes), no handler. Returns the pack's runnable/loadable node:
@@ -15,6 +17,14 @@ const computeParams = { port: { type: 'number', default: 3000 } } as const;
  *   · load() — called from inside the app's entry: read the stash, hydrate the
  *     deps synchronously, memoize per process, return them merged with the
  *     resolved service params (typed).
+ *
+ * `service()`'s underlying node carries `targetModule` (this pack's own
+ * `/target` entry) so deploy tooling's `loadTarget()` resolves it — node-owned
+ * loading, never a framework-constructed specifier. The returned `runnable`
+ * is built via `Object.create`/`Object.assign` (not `{ ...node, run, load }`)
+ * specifically to keep `node`'s prototype (and therefore its
+ * `loadTarget()`/`loadAssembler()`/`assemble()` methods) intact — a plain
+ * object spread only copies OWN properties and would silently drop them.
  */
 export const compute = <D extends Deps, E extends Expose = Record<never, never>>(def: {
   name: string;
@@ -39,13 +49,13 @@ export const compute = <D extends Deps, E extends Expose = Record<never, never>>
     inputs: def.deps,
     params: computeParams,
     build: def.build,
+    targetModule: TARGET_MODULE,
     ...(def.expose !== undefined ? { expose: def.expose } : {}),
   });
 
   let loaded: Loaded<D, typeof computeParams> | undefined;
 
-  const runnable: RunnableServiceNode<D, typeof computeParams, E> = {
-    ...node,
+  const runnable = Object.assign(Object.create(Object.getPrototypeOf(node)), node, {
     async run(address: string, boot: () => Promise<unknown>) {
       const shape = configOf(node);
       stash(shape, deserialize(shape, address));
@@ -62,6 +72,11 @@ export const compute = <D extends Deps, E extends Expose = Record<never, never>>
       }
       return loaded;
     },
-  };
-  return Object.freeze(runnable);
+  });
+  return Object.freeze(
+    blindCast<
+      RunnableServiceNode<D, typeof computeParams, E>,
+      "Object.create/Object.assign's return widens to `any`; the object literally is node's own data plus run/load on node's prototype, which is exactly RunnableServiceNode's shape"
+    >(runnable),
+  );
 };
