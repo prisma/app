@@ -15,7 +15,7 @@ import { guardStateService, makePrismaStateService } from './service.ts';
 
 /**
  * The hosted Alchemy state store. On layer init (scoped, once per stack
- * run): find-or-create the workspace's `makerkit-state` project, mint a
+ * run): find-or-create the workspace's `prisma-app-state` project, mint a
  * fresh connection to its default database, migrate the schema, and
  * acquire the (stack, stage) advisory lock — see `bootstrap.ts` and
  * `lock.ts`. The Management API plumbing (`ManagementClient`,
@@ -43,7 +43,7 @@ export const prismaState = (opts: {
 
       const { connectionString } = yield* bootstrapStateConnection(opts.workspaceId).pipe(
         Effect.provide(client.layer().pipe(Layer.provide(credentials.fromEnv()))),
-        Effect.mapError(bootstrapError('finding/creating the makerkit-state project')),
+        Effect.mapError(bootstrapError('finding/creating the prisma-app-state project')),
       );
 
       // The pool reconnects on demand for ordinary (non-reserved) queries —

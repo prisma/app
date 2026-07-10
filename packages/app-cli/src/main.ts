@@ -5,8 +5,8 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { assembleServices, type RunAssembler } from '@prisma/app-assemble';
 import { Load } from '@prisma/app';
+import { assembleServices, type RunAssembler } from '@prisma/app-assemble';
 import { Cli, Command, Option, UsageError } from 'clipanion';
 import { CliError } from './cli-error.ts';
 import { GENERATED_STACK_RELATIVE_PATH, writeStackFile } from './generate-stack.ts';

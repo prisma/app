@@ -39,8 +39,8 @@ jobs:
       PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
       # The stack name becomes the PDP Project name. A per-run name keeps this
       # ephemeral CI deploy from colliding with — or destroying — a standing
-      # demo in the shared workspace. Passed as `makerkit`'s `--name` override
-      # (deploy-cli.md) — hex.ts's own name is the local-dev default.
+      # demo in the shared workspace. Passed as `prisma-app`'s `--name` override
+      # (deploy-cli.md) — system.ts's own name is the local-dev default.
       STOREFRONT_STACK_NAME: storefront-auth-ci-${{ github.run_id }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -52,11 +52,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # storefront-auth's own `build` script is a no-op — turbo's ^build
-      # (from the workspace deps in its package.json) builds the two hexes.
+      # (from the workspace deps in its package.json) builds the two systems.
       # `pnpm build` alone wouldn't trigger that, so run it through turbo.
       - name: Build
         working-directory: examples/storefront-auth
-        run: pnpm turbo run build --filter @makerkit/example-storefront-auth...
+        run: pnpm turbo run build --filter @prisma/example-storefront-auth...
 
       - name: Deploy
         id: deploy
@@ -64,11 +64,11 @@ jobs:
         # which doesn't exist in CI; env vars are already set on this job.
         # The CLI must run under BUN: Load imports the app's service modules,
         # and auth's imports `bun` (SQL) — under node that import throws.
-        # `bun node_modules/.bin/makerkit` also sets npm_config_user_agent=bun,
+        # `bun node_modules/.bin/prisma-app` also sets npm_config_user_agent=bun,
         # which the spawned `alchemy` launcher uses to re-exec itself under bun
-        # when it evaluates the generated stack (which imports hex.ts again).
+        # when it evaluates the generated stack (which imports system.ts again).
         working-directory: examples/storefront-auth
-        run: bun node_modules/.bin/makerkit deploy hex.ts --name "$STOREFRONT_STACK_NAME"
+        run: bun node_modules/.bin/prisma-app deploy system.ts --name "$STOREFRONT_STACK_NAME"
 
       - name: Verify the round trip (storefront -> auth)
         working-directory: examples/storefront-auth
@@ -78,7 +78,7 @@ jobs:
         # Runs whenever the Deploy step actually started (success or
         # failure) — even on failure above, so a failed run doesn't leave
         # orphaned cloud resources nobody else can clean up. Deploy state is
-        # hosted by default (the workspace's `makerkit-state` project, via
+        # hosted by default (the workspace's `prisma-app-state` project, via
         # PRISMA_SERVICE_TOKEN + PRISMA_WORKSPACE_ID — both already set on
         # this job), not local to the runner, so `.alchemy/` presence is not
         # a reliable signal of whether a deploy ran; gate on the Deploy
@@ -86,4 +86,4 @@ jobs:
         # ran, e.g. Build failed first).
         if: always() && steps.deploy.outcome != 'skipped'
         working-directory: examples/storefront-auth
-        run: bash ../scripts/destroy-guard.sh "" hex.ts "$STOREFRONT_STACK_NAME"
+        run: bash ../scripts/destroy-guard.sh "" system.ts "$STOREFRONT_STACK_NAME"

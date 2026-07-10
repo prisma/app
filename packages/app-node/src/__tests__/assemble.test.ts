@@ -9,7 +9,7 @@ const tmpDirs: string[] = [];
 
 /** A tmp dir standing in for a service package: src/service.ts + a dist/ sibling. */
 function makeServiceDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-node-assemble-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-node-assemble-'));
   tmpDirs.push(dir);
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   return dir;
@@ -69,7 +69,7 @@ describe('assemble()', () => {
           entry: '../dist/main.js',
         },
       }),
-    ).rejects.toThrow(/reserved for the MakerKit wrapper/);
+    ).rejects.toThrow(/reserved for the Prisma App wrapper/);
   });
 
   test('rejects an entry that resolves to the reserved bundle output dir itself (F04)', async () => {

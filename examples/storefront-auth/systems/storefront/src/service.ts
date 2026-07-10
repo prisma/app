@@ -1,5 +1,5 @@
-import nextjs from '@prisma/app-nextjs';
 import { compute } from '@prisma/app-cloud';
+import nextjs from '@prisma/app-nextjs';
 import { rpc } from '@prisma/app-rpc';
 import { authContract } from '@storefront-auth/auth/contract';
 

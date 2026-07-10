@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { AssembleError } from '@prisma/app-assemble';
 import type { Graph } from '@prisma/app';
 import { resource, service } from '@prisma/app';
+import { AssembleError } from '@prisma/app-assemble';
 import { collectPacks, extractFromEnv, inferTarget, resolveSinglePack } from '../infer-target.ts';
 
 const build = {
@@ -104,7 +104,7 @@ describe("extractFromEnv() — the pack's /target module must export fromEnv()",
 describe('inferTarget() — an unresolvable pack (F03, verifying the S5 entry-anchored rewrite closed it)', () => {
   test('a pack that is not installed surfaces an AssembleError naming the pack and the fix, not a raw module error', async () => {
     const dir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-cli-infer-target-')),
+      fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-cli-infer-target-')),
     );
     try {
       fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'fixture-app' }));

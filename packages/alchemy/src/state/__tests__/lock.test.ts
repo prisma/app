@@ -9,7 +9,7 @@ const pg: TestPostgres | undefined = startTestPostgres();
 
 if (pg === undefined) {
   console.warn(
-    '[prisma-alchemy/state] skipping lock tests: no Postgres available. ' +
+    '[alchemy/state] skipping lock tests: no Postgres available. ' +
       'Set STATE_TEST_DATABASE_URL to point at one, or install initdb/pg_ctl ' +
       '(e.g. `brew install postgresql@15`) on PATH.',
   );
@@ -100,7 +100,7 @@ describe.skipIf(pg === undefined)('acquireStateLock', () => {
     // — by joining the advisory lock it holds (identified by the same key
     // `acquireStateLock` computes) to `pg_stat_activity`, not by reaching
     // into `acquireStateLock`'s internals.
-    const key = `makerkit:${stack}/${stage}`;
+    const key = `prisma-app:${stack}/${stage}`;
     const lockRows = await admin<{ pid: number }[]>`
       select l.pid
       from pg_locks l

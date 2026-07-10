@@ -1,7 +1,7 @@
 /**
  * Deploy-only (ADR-0005): the user's own build produces the app's runnable;
- * this assembles MakerKit's deploy artifact from it. Validates the built
- * entry exists, bundles the service module (the MakerKit wrapper) to its own
+ * this assembles Prisma App's deploy artifact from it. Validates the built
+ * entry exists, bundles the service module (the Prisma App wrapper) to its own
  * output, then copies the app's entry in beside it.
  *
  * Two SEPARATE builds, not one multi-entry build: a single build would
@@ -44,7 +44,7 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
   if (/^main\.m?js$/.test(path.basename(entryPath))) {
     throw new Error(
       `the build adapter's entry ("${input.build.entry}") may not be named main.js/main.mjs — ` +
-        'that name is reserved for the MakerKit wrapper in the assembled bundle.',
+        'that name is reserved for the Prisma App wrapper in the assembled bundle.',
     );
   }
 
@@ -57,7 +57,7 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
   if (entryPath === bundleDir || entryPath.startsWith(bundleDir + path.sep)) {
     throw new Error(
       `the build adapter's entry ("${entryPath}") resolves inside its own output dir ` +
-        `("${bundleDir}") — MakerKit reserves that directory for the assembled bundle and ` +
+        `("${bundleDir}") — Prisma App reserves that directory for the assembled bundle and ` +
         'clears it before every assemble; point entry at your build output elsewhere.',
     );
   }

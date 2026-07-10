@@ -3,13 +3,13 @@
  * into the bundle dir the pack packages at deploy. Run `next build` first.
  * Next's standalone tree omits the static assets and `public/`, so this
  * copies them in. The bundle entry is NOT server.js directly: the app's
- * MakerKit wrapper (the service module — declarations only, whose node
+ * Prisma App wrapper (the service module — declarations only, whose node
  * carries its own run()) is bundled to `main.mjs` next to server.js, so the
- * relative import resolves inside the artifact and the MakerKit boot loop
+ * relative import resolves inside the artifact and the Prisma App boot loop
  * runs first (bootstrap.js imports main.mjs, then dynamically imports
  * server.js — see @prisma/app/deploy's PackageInput).
  *
- * MakerKit ships no build step, but it does own the artifact envelope —
+ * Prisma App ships no build step, but it does own the artifact envelope —
  * bootstrap.js + compute.manifest.json + the deterministic tar are printed
  * by the pack's `package()` at deploy, not here.
  *
@@ -100,11 +100,11 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
     await fs.promises.cp(publicDir, path.join(appOut, 'public'), { recursive: true });
   }
 
-  // Bundle the MakerKit wrapper to a temp dir, then place it next to
+  // Bundle the Prisma App wrapper to a temp dir, then place it next to
   // server.js as main.mjs (unambiguously ESM — the standalone tree's
   // package.json is CJS-default). Its run()'s `import("./server.js")`
   // resolves relative to this file inside the artifact.
-  const bundleTmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'makerkit-nextjs-main-'));
+  const bundleTmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'prisma-app-nextjs-main-'));
   try {
     await build({
       entry: [serviceModule],

@@ -9,7 +9,9 @@ const tmpDirs: string[] = [];
 
 /** A throwaway app package dir with an entry FILE (need not exist on disk — createRequire only needs its dirname). */
 function makeEntryPath(): string {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-assemble-resolve-')));
+  const dir = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-assemble-resolve-')),
+  );
   tmpDirs.push(dir);
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'fixture-app' }));
   return path.join(dir, 'service.ts');

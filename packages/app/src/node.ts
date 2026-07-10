@@ -14,7 +14,7 @@ import type { Contract } from './contract.ts';
 
 // Brand — set by the factories below; how Load tells a node from junk.
 // Symbol.for so the check survives duplicated module instances in a workspace.
-const NODE: unique symbol = Symbol.for('makerkit:node') as never;
+const NODE: unique symbol = Symbol.for('prisma:node') as never;
 
 export interface NodeBase {
   readonly [NODE]: true;

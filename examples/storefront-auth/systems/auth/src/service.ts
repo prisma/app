@@ -1,5 +1,5 @@
-import node from '@prisma/app-node';
 import { compute, postgres } from '@prisma/app-cloud';
+import node from '@prisma/app-node';
 import { SQL } from 'bun';
 import { authContract } from './contract.ts';
 

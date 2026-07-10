@@ -12,7 +12,7 @@
  */
 import { expectTypeOf, test } from 'vitest';
 import type { Contract } from '../contract.ts';
-import type { BuildAdapter, SystemBuilder, RefPort } from '../node.ts';
+import type { BuildAdapter, RefPort, SystemBuilder } from '../node.ts';
 import { dependency, resource, service } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 

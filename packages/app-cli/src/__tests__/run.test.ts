@@ -12,7 +12,7 @@
  * inferTarget() is NOT faked — it does a real entry-anchored resolution (see
  * resolve-from-entry.ts) of the graph's pack. So the fixture app carries its
  * own throwaway "fixture-target-pack" under node_modules (not a real
- * MakerKit pack): this suite tests the CLI's own pipeline, which must not
+ * Prisma App pack): this suite tests the CLI's own pipeline, which must not
  * depend on any specific target/adapter pack.
  */
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
@@ -24,20 +24,12 @@ import { CliError } from '../cli-error.ts';
 import { run } from '../main.ts';
 import type { RunAlchemyInput } from '../run-alchemy.ts';
 
-const coreIndex = path.resolve(
-  import.meta.dir,
-  '..',
-  '..',
-  '..',
-  'app',
-  'src',
-  'index.ts',
-);
+const coreIndex = path.resolve(import.meta.dir, '..', '..', '..', 'app', 'src', 'index.ts');
 
 const tmpDirs: string[] = [];
 const originalCwd = process.cwd();
 
-/** A fixture pack under `dir/node_modules` — resolvable via createRequire, no real MakerKit pack involved. */
+/** A fixture pack under `dir/node_modules` — resolvable via createRequire, no real Prisma App pack involved. */
 function writeFixtureTargetPack(dir: string): void {
   const packDir = path.join(dir, 'node_modules', 'fixture-target-pack');
   fs.mkdirSync(packDir, { recursive: true });
@@ -60,10 +52,10 @@ function writeFixtureTargetPack(dir: string): void {
  * default export is a genuine service node (importing core by absolute path
  * — the temp dir has no other node_modules). The pack is a fixture pack
  * (see writeFixtureTargetPack) so inferTarget's real resolution succeeds
- * without any real MakerKit target/adapter pack.
+ * without any real Prisma App target/adapter pack.
  */
 function makeAppDir(name = 'fixture-app'): { dir: string; entryPath: string } {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-cli-run-')));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-cli-run-')));
   tmpDirs.push(dir);
   fs.writeFileSync(
     path.join(dir, 'package.json'),

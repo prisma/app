@@ -10,7 +10,7 @@ const pg: TestPostgres | undefined = startTestPostgres();
 
 if (pg === undefined) {
   console.warn(
-    '[prisma-alchemy/state] skipping ownership tests: no Postgres available. ' +
+    '[alchemy/state] skipping ownership tests: no Postgres available. ' +
       'Set STATE_TEST_DATABASE_URL to point at one, or install initdb/pg_ctl ' +
       '(e.g. `brew install postgresql@15`) on PATH.',
   );
@@ -34,7 +34,7 @@ describe.skipIf(pg === undefined)('verifyOwnership', () => {
 
   const freshDatabaseUrl = async (): Promise<string> => {
     counter++;
-    const name = `makerkit_state_ownership_test_${counter}`;
+    const name = `prisma_app_state_ownership_test_${counter}`;
     await admin.unsafe(`create database ${name}`);
     const url = new URL(pg.url);
     url.pathname = `/${name}`;
@@ -93,11 +93,11 @@ describe.skipIf(pg === undefined)('verifyOwnership', () => {
     const url = await freshDatabaseUrl();
     const sql = postgres(url, { max: 1, onnotice: () => {} });
     await sql`
-      create table makerkit_state_meta (
+      create table prisma_app_state_meta (
         marker text primary key, created_at timestamptz not null default now()
       )
     `;
-    await sql`insert into makerkit_state_meta (marker) values ('not-our-marker')`;
+    await sql`insert into prisma_app_state_meta (marker) values ('not-our-marker')`;
     await sql.end({ timeout: 1 });
 
     const verdict = await Effect.runPromise(verifyOwnership(Redacted.make(url)));

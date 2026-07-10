@@ -15,7 +15,7 @@ import * as Effect from 'effect/Effect';
 import type * as Layer from 'effect/Layer';
 import type { Config } from './config.ts';
 import { type Graph, Load, type NodeId } from './graph.ts';
-import type { BuildAdapter, SystemNode, ResourceNode, ServiceNode } from './node.ts';
+import type { BuildAdapter, ResourceNode, ServiceNode, SystemNode } from './node.ts';
 
 /** The Layer shape every Alchemy state store must satisfy — what `LowerOptions.state` and `Target.state` both traffic in. */
 export type AlchemyStateLayer = Layer.Layer<State, never, StackServices>;
@@ -91,7 +91,7 @@ export interface ServiceLowering {
 }
 
 /**
- * The bootstrap the pack prints is the ONLY runnable MakerKit adds. It imports
+ * The bootstrap the pack prints is the ONLY runnable Prisma App adds. It imports
  * the wrapper and calls run with the address AND a boot thunk that imports the
  * app's built entry (`assembled.entry`) — a printed, literal dynamic import, so
  * no bundler ever follows it.
@@ -238,7 +238,7 @@ export function resolveStateLayer(opts: LowerOptions, target: Target): AlchemySt
 }
 
 /**
- * Composable form — for MIXED topologies: MakerKit-authored nodes beside
+ * Composable form — for MIXED topologies: Prisma App-authored nodes beside
  * hand-wired Alchemy resources in one stack. Runs the same Load → route walk
  * inside the caller's stack effect and returns the root's LoweredNode, whose
  * outputs (e.g. the deployed URL) hand-wired resources may consume. A system

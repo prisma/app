@@ -10,10 +10,11 @@
  * structurally identical (ADR-0003), and the CLI already depends on
  * @prisma/app-assemble for orchestration.
  */
-import { importFromEntry } from '@prisma/app-assemble';
+
 import type { Graph } from '@prisma/app';
 import { assertDefined } from '@prisma/app/assertions';
 import type { Target } from '@prisma/app/deploy';
+import { importFromEntry } from '@prisma/app-assemble';
 import { CliError } from './cli-error.ts';
 
 export function collectPacks(graph: Graph): string[] {

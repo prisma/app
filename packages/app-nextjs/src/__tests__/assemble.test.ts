@@ -10,7 +10,7 @@ const tmpDirs: string[] = [];
 /** A 4-levels-deep app dir under a fresh tmp root — mirrors the monorepo
  * layout nextStandaloneDir assumes (workspaceRoot = 4 levels up). */
 function makeAppDir(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'makerkit-nextjs-assemble-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-nextjs-assemble-'));
   tmpDirs.push(root);
   const appDir = path.join(root, 'a', 'b', 'c', 'app');
   fs.mkdirSync(path.join(appDir, 'src'), { recursive: true });

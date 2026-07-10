@@ -17,7 +17,7 @@ export interface PackageComputeArtifactOptions {
   readonly id: string;
   /** The assembled bundle directory (wrapper + app entry + fixups). */
   readonly bundleDir: string;
-  /** The MakerKit wrapper file inside bundleDir. Defaults to main.js|main.mjs. */
+  /** The Prisma App wrapper file inside bundleDir. Defaults to main.js|main.mjs. */
   readonly bundleEntry?: string;
   /**
    * The app's own runnable inside bundleDir (e.g. "server.js") — baked into the
@@ -158,7 +158,7 @@ export function packageComputeArtifact(opts: PackageComputeArtifactOptions): Com
   // on Windows — still a valid, deterministic directory name.
   const outDir = path.join(
     os.tmpdir(),
-    `makerkit-compute-${String(os.userInfo().uid)}`,
+    `prisma-app-compute-${String(os.userInfo().uid)}`,
     sha256.slice(0, 16),
   );
   fs.mkdirSync(outDir, { recursive: true });

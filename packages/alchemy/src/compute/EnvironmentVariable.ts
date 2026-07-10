@@ -52,7 +52,7 @@ export const EnvironmentVariableProvider = () =>
           // Find the row to write, adopting in order: our own prior row
           // (output.id), then a pre-existing row at the same (project, class,
           // key). The platform seeds DATABASE_URL/_POOLED at project creation,
-          // which MakerKit poisons — a duplicate POST 409s and the API directs
+          // which Prisma App poisons — a duplicate POST 409s and the API directs
           // callers to PATCH. Adopting also makes create idempotent.
           let id = output?.id;
           if (id !== undefined) {

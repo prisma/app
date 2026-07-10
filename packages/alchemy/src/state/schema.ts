@@ -7,11 +7,11 @@ import { toStateStoreError } from './errors.ts';
 
 /**
  * The well-known marker row written into every database this store owns.
- * Its presence proves the database is genuinely MakerKit's state store, not
+ * Its presence proves the database is genuinely Prisma App's state store, not
  * a same-named project squatting on the discovery query (see `bootstrap.ts`
  * `verifyOwnership` — PDP allows duplicate project names).
  */
-export const STATE_META_MARKER = 'makerkit-state-v1';
+export const STATE_META_MARKER = 'prisma-app-state-v1';
 
 /**
  * Idempotent schema migration for the Prisma-hosted state store — safe to run
@@ -44,13 +44,13 @@ export const migratePrismaState = (
         )
       `;
       await sql`
-        create table if not exists makerkit_state_meta (
+        create table if not exists prisma_app_state_meta (
           marker text primary key,
           created_at timestamptz not null default now()
         )
       `;
       await sql`
-        insert into makerkit_state_meta (marker) values (${STATE_META_MARKER})
+        insert into prisma_app_state_meta (marker) values (${STATE_META_MARKER})
         on conflict (marker) do nothing
       `;
     },

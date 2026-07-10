@@ -65,7 +65,7 @@ export async function importFromEntry(
       throw new AssembleError(
         `"${pack}" is installed but does not export "./${subpath}" ` +
           `(resolved from ${entryDir}) — the installed version may be too old or not a ` +
-          'MakerKit pack.',
+          'Prisma App pack.',
       );
     }
     if (code !== undefined) {

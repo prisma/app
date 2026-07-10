@@ -3,11 +3,11 @@
  * Deploy-time only; never lands in a runtime bundle.
  */
 
+import * as Prisma from '@prisma/alchemy';
+import { prismaState } from '@prisma/alchemy/state';
 import type { ServiceNode } from '@prisma/app';
 import { configOf } from '@prisma/app';
 import type { Target } from '@prisma/app/deploy';
-import * as Prisma from '@prisma/alchemy';
-import { prismaState } from '@prisma/alchemy/state';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import type * as Layer from 'effect/Layer';

@@ -11,7 +11,7 @@ const pg: TestPostgres | undefined = startTestPostgres();
 
 if (pg === undefined) {
   console.warn(
-    '[prisma-alchemy/state] skipping state store tests: no Postgres available. ' +
+    '[alchemy/state] skipping state store tests: no Postgres available. ' +
       'Set STATE_TEST_DATABASE_URL to point at one, or install initdb/pg_ctl ' +
       '(e.g. `brew install postgresql@15`) on PATH.',
   );

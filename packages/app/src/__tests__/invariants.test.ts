@@ -71,7 +71,7 @@ describe("invariant 2: the '.' authoring entry bundles lean", () => {
 
     const js = await out.outputs[0]!.text();
     // Positive marker: the probe genuinely bundled core's factories.
-    expect(js).toContain('makerkit:node');
+    expect(js).toContain('prisma:node');
     for (const token of leanTokens) {
       expect(js).not.toContain(token);
     }

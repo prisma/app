@@ -1,12 +1,12 @@
 import { blindCast } from './casts.ts';
 import {
   type DependencyEnd,
-  type SystemBuilder,
-  type SystemNode,
   isNode,
   type ProvisionedRef,
   type ResourceNode,
   type ServiceNode,
+  type SystemBuilder,
+  type SystemNode,
 } from './node.ts';
 
 /** Path-derived: root "shop", a provision "auth", its input "auth.db". */
