@@ -6,7 +6,7 @@ This directory contains artifacts produced by the **Agent OS product planning wo
 
 ## Source of truth for design/architecture
 
-MakerKit design and architecture documentation lives in:
+Prisma App Framework design and architecture documentation lives in:
 
 - `docs/design/`
 
