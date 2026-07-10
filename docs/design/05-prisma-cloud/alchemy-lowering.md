@@ -81,9 +81,9 @@ edge.
 
 ```mermaid
 flowchart LR
-  SF[storefront service] -- connection --> AU[auth service]
-  SF -- resource --> SDB[(storefront db)]
-  AU -- resource --> ADB[(auth db)]
+  SF[storefront service] -- dependency --> AU[auth service]
+  SF -- dependency --> SDB[(storefront db)]
+  AU -- dependency --> ADB[(auth db)]
 ```
 
 **The Alchemy graph it lowers to** (one Project — the application):

@@ -43,11 +43,11 @@ loading the graph imports that module — the app's choice, not a CLI limit.
    hex). No marked root exists in the model — whatever you point the CLI at
    *is* the application, and the graph reachable from it is what deploys.
 2. **Load.** Core's `Load` walks the graph. A service with an unwired
-   dependency slot — a connection end, or a resource end whose resource only
-   an enclosing hex can provision — fails here, with an error naming the input
-   and pointing at the composing hex. The deploy root must be a hex — a bare
-   service is not independently deployable; the CLI errors naming the fix (wrap
-   it: `hex('name', (h) => h.provision(...))`).
+   dependency slot (one an enclosing hex normally wires to a provisioned
+   producer) fails here, with an error naming the input and pointing at the
+   composing hex. The deploy root must be a hex — a bare service is not
+   independently deployable; the CLI errors naming the fix (wrap it:
+   `hex('name', (h) => h.provision(...))`).
 3. **Infer the target.** Collect the pack package name each node carries.
    Exactly one pack must appear (mixed packs → error). Dynamically import that
    package's `/target` entry — resolved from the entry module's own file path,
@@ -136,7 +136,7 @@ The CLI's quality lives in its errors; each failure names its fix:
 | --- | --- |
 | Default export isn't a node | what the entry module must export |
 | Deploy root isn't a hex | to wrap the service in a hex |
-| Unwired dependency slot (resource end or connection end) | which input, and to deploy the composing hex |
+| Unwired dependency slot | which input, and to deploy the composing hex |
 | Mixed packs in one graph | the packs found; one target per application |
 | Missing target env | the exact variable(s) `fromEnv()` needed |
 | Built output missing | the expected path, and "run your build" |

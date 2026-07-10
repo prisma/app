@@ -269,5 +269,5 @@ contract's identity-based `satisfies()` is enough today.
 ## Related
 
 - [`core-model.md`](core-model.md) — the Connection primitive (`http()`,
-  `ConnectionEnd`, the hex) this types.
+  `DependencyEnd`, the hex) this types.
 - [`../03-domain-model/authoring-surface.md`](../03-domain-model/authoring-surface.md) — ports, direction-from-position.

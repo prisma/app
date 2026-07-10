@@ -115,8 +115,8 @@ follow:
   larger system can be deployed in isolation, and it cannot collide with the
   composed application because it carries its own name and therefore its own
   project.
-- A service with **unwired dependency slots** (resource or connection ends an
-  enclosing hex normally wires at `provision` — ADR-0013) fails at Load, with
+- A service with **unwired dependency slots** (which an enclosing hex
+  normally wires to a provisioned producer — ADR-0013) fails at Load, with
   an error naming the unwired input and pointing at deploying the composing
   hex instead.
 
