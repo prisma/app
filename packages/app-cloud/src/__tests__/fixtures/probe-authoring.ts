@@ -20,9 +20,10 @@ const app = compute({
 });
 
 export const graph = Load(
-  hex('probe-hex', (h) => {
-    const db = h.provision('db', postgres({ name: 'db' }));
-    h.provision('app', app, { db });
+  hex('probe-hex', {}, ({ provision }) => {
+    const db = provision('db', postgres({ name: 'db' }));
+    provision('app', app, { db });
+    return {};
   }),
   { id: 'probe' },
 );

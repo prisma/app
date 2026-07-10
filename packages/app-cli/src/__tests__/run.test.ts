@@ -76,8 +76,8 @@ function makeAppDir(name = 'fixture-app'): { dir: string; entryPath: string } {
     [
       `import { hex, service } from ${JSON.stringify(coreIndex)};`,
       '',
-      `export default hex(${JSON.stringify(name)}, (h) => {`,
-      `  h.provision(${JSON.stringify(name)}, service({`,
+      `export default hex(${JSON.stringify(name)}, {}, ({ provision }) => {`,
+      `  provision(${JSON.stringify(name)}, service({`,
       `    name: ${JSON.stringify(name)},`,
       "    pack: 'fixture-target-pack',",
       "    type: 'fixture/compute',",
@@ -85,6 +85,7 @@ function makeAppDir(name = 'fixture-app'): { dir: string; entryPath: string } {
       '    params: {},',
       "    build: { kind: 'node', pack: '@prisma/app-node', module: import.meta.url, entry: 'dist/server.js' },",
       '  }));',
+      '  return {};',
       '});',
       '',
     ].join('\n'),

@@ -14,9 +14,13 @@ import storefrontService from '@storefront-auth/storefront';
  * shorter than 3 characters. The wiring key stays `db` (auth's input name), so
  * the deployed env key is still `AUTH_DB_URL` — it derives from the input
  * name, not the provision id.
+ *
+ * A closed root: empty boundary (no inputs, no outputs) — nothing wires into
+ * or out of this hex from the outside.
  */
-export default hex('storefront-auth', (h) => {
-  const db = h.provision('database', postgres({ name: 'database' }));
-  const authRef = h.provision('auth', authService, { db });
-  h.provision('storefront', storefrontService, { auth: authRef.rpc });
+export default hex('storefront-auth', {}, ({ provision }) => {
+  const db = provision('database', postgres({ name: 'database' }));
+  const authRef = provision('auth', authService, { db });
+  provision('storefront', storefrontService, { auth: authRef.rpc });
+  return {};
 });

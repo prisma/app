@@ -9,8 +9,8 @@ import { compute } from '@prisma/app-cloud';
  * anchored at this fixture's entry package (test/integration itself) — see
  * `../cli.entry-anchored-resolution.test.ts`. The deploy root must be a hex.
  */
-export default hex('entry-anchored-fixture', (h) => {
-  h.provision(
+export default hex('entry-anchored-fixture', {}, ({ provision }) => {
+  provision(
     'entry-anchored-fixture',
     compute({
       name: 'entry-anchored-fixture',
@@ -18,4 +18,5 @@ export default hex('entry-anchored-fixture', (h) => {
       build: node({ module: import.meta.url, entry: 'dist/server.js' }),
     }),
   );
+  return {};
 });

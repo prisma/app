@@ -186,7 +186,7 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
   if (graph.root.node.kind !== 'hex') {
     throw new CliError(
       'The deploy root must be a hex — wrap your service, e.g. ' +
-        "export default hex('name', (h) => h.provision('name', service)).",
+        "export default hex('name', {}, ({ provision }) => { provision('name', service); return {}; }).",
     );
   }
 

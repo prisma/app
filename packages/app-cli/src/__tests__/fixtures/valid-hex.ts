@@ -10,7 +10,8 @@ const makeService = (name: string) =>
     build: { kind: 'node', pack: '@prisma/app-node', module: import.meta.url, entry: 'server.js' },
   });
 
-export default hex('fixture-hex', (h) => {
-  h.provision('one', makeService('one'));
-  h.provision('two', makeService('two'));
+export default hex('fixture-hex', {}, ({ provision }) => {
+  provision('one', makeService('one'));
+  provision('two', makeService('two'));
+  return {};
 });

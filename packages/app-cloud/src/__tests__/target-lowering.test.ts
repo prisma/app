@@ -292,16 +292,17 @@ describe('sharing: one hex-provisioned postgres, two compute consumers — throu
       entry: 'server.js',
     };
     const client = ({ url }: { url: string }) => ({ url });
-    const root = hex('shop', (h) => {
-      const db = h.provision('db', postgres({ name: 'db' }));
-      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+    const root = hex('shop', {}, ({ provision }) => {
+      const db = provision('db', postgres({ name: 'db' }));
+      provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
         main: db,
       });
-      h.provision(
+      provision(
         'billing',
         compute({ name: 'billing', deps: { store: postgres({ client }) }, build }),
         { store: db },
       );
+      return {};
     });
     const before = {
       db: recorded.db.length,

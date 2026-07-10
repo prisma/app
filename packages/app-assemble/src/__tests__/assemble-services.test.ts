@@ -31,9 +31,10 @@ describe('assembleServices()', () => {
           entry: 'server.js',
         },
       });
-    const root = hex('fixture-hex', (h) => {
-      h.provision('auth', makeService('auth', dirOne));
-      h.provision('storefront', makeService('storefront', dirTwo));
+    const root = hex('fixture-hex', {}, ({ provision }) => {
+      provision('auth', makeService('auth', dirOne));
+      provision('storefront', makeService('storefront', dirTwo));
+      return {};
     });
     const graph: Graph = Load(root);
 
@@ -46,7 +47,7 @@ describe('assembleServices()', () => {
   });
 
   test('a hex with no provisioned services throws AssembleError', async () => {
-    const root = hex('empty-hex', () => {});
+    const root = hex('empty-hex', {}, () => ({}));
     const graph: Graph = Load(root);
 
     await expect(assembleServices(graph, '/fixtures/entry.ts', fakeRun)).rejects.toThrow(
@@ -72,8 +73,9 @@ describe('assembleServices()', () => {
           entry: 'x',
         },
       });
-    const root = hex('fixture-hex', (h) => {
-      h.provision('svc', makeService());
+    const root = hex('fixture-hex', {}, ({ provision }) => {
+      provision('svc', makeService());
+      return {};
     });
     const graph = Load(root);
     const seenPacks: string[] = [];
