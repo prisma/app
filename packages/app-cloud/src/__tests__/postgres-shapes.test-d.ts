@@ -1,34 +1,34 @@
 /**
- * The accept/reject matrix for postgres()'s two argument shapes. With the dual
- * form gone, `{ name }` is the provisionable identity and `{ client }` is the
- * dependency; `{ name, client }` and `{}` are compile errors.
+ * postgres()'s two shapes and the binding each dependency yields.
+ * `{ name }` is the provisionable identity; `postgres()` is the dependency,
+ * whose binding is `PostgresConfig` (the app builds its own client — ADR-0015).
+ * No `client` argument exists anymore.
  *
  * Type-only (vitest `--typecheck`, never executed). Positive cases assert the
- * returned role via `expectTypeOf`; the rejected shapes keep a
- * `// @ts-expect-error` on the offending line.
+ * returned role and the binding via `expectTypeOf`; a stray `client` argument
+ * keeps a `// @ts-expect-error`.
  */
-import type { DependencyEnd, ResourceNode } from '@prisma/app';
+import type { DependencyEnd, Hydrated, ResourceNode } from '@prisma/app';
 import { expectTypeOf, test } from 'vitest';
 import { postgres, type postgresContract } from '../index.ts';
+import type { PostgresConfig } from '../postgres.ts';
 
 const identity = postgres({ name: 'db' });
-const dep = postgres({ client: ({ url }) => ({ url }) });
+const dep = postgres();
 
 test('{ name } yields the resource identity providing postgresContract', () => {
   expectTypeOf(identity).toEqualTypeOf<ResourceNode<typeof postgresContract>>();
 });
 
-test('{ client } yields the dependency slot requiring postgresContract, C inferred', () => {
-  expectTypeOf(dep).toEqualTypeOf<DependencyEnd<{ url: string }, typeof postgresContract>>();
+test('postgres() yields the dependency requiring postgresContract; its binding is PostgresConfig', () => {
+  expectTypeOf(dep).toEqualTypeOf<DependencyEnd<PostgresConfig, typeof postgresContract>>();
+  // The binding load() hands the app is the typed config, not a client.
+  expectTypeOf<Hydrated<typeof dep>>().toEqualTypeOf<PostgresConfig>();
 });
 
-test('bad argument shapes do not compile', () => {
-  // @ts-expect-error an empty argument is no shape at all
+test('a client argument no longer compiles', () => {
+  // @ts-expect-error the dependency takes no arguments — the app builds its own client from the binding
+  postgres({ client: ({ url }: { url: string }) => ({ url }) });
+  // @ts-expect-error {} is not the identity shape (needs `name`) and postgres() takes no args
   postgres({});
-  // @ts-expect-error name and client are mutually exclusive — the identity and the dependency are separate
-  postgres({ name: 'db', client: ({ url }: { url: string }) => ({ url }) });
-  // @ts-expect-error a client must be a factory, not a config value
-  postgres({ client: 'postgres://url' });
-  // @ts-expect-error name is the identity's, not a factory
-  postgres({ name: ({ url }: { url: string }) => ({ url }) });
 });

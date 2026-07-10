@@ -39,11 +39,9 @@ describe('postgres({ name })', () => {
   });
 });
 
-describe('postgres({ client })', () => {
+describe('postgres()', () => {
   test('returns a branded dependency end requiring postgresContract, declaring { url: string, secret }', () => {
-    const end = postgres({
-      client: ({ url }) => ({ url }),
-    });
+    const end = postgres();
 
     expect(isNode(end)).toBe(true);
     expect(end.kind).toBe('dependency');
@@ -53,31 +51,14 @@ describe('postgres({ client })', () => {
     expect(end.connection.params).toEqual({ url: { type: 'string', secret: true } });
   });
 
-  test("hydrate delegates to the app's client factory; C is inferred", async () => {
-    const made: unknown[] = [];
-    const end = postgres({
-      client: (config) => {
-        made.push(config);
-        return { fake: 'client', ...config };
-      },
-    });
+  test('the binding IS the typed config — hydrate is the identity on its values (ADR-0015)', () => {
+    const end = postgres();
 
-    const client = await end.connection.hydrate({ url: 'postgres://u:p@host:5432/db' });
+    const binding = end.connection.hydrate({ url: 'postgres://u:p@host:5432/db' });
 
-    expect(made).toEqual([{ url: 'postgres://u:p@host:5432/db' }]);
-    expect(client).toEqual({ fake: 'client', url: 'postgres://u:p@host:5432/db' });
-  });
-});
-
-describe('postgres() argument-shape exclusivity', () => {
-  test('an empty argument throws naming the accepted shapes', () => {
-    expect(() => postgres({} as never)).toThrow(/requires `name`.+`client`/);
-  });
-
-  test('both name and client throws — the identity and the dependency are separate', () => {
-    expect(() =>
-      postgres({ name: 'db', client: ({ url }: { url: string }) => ({ url }) } as never),
-    ).toThrow(/takes `name`.+OR `client`.+not both/);
+    // No client factory: load() hands the app PostgresConfig, which it turns
+    // into its own client. hydrate returns its input unchanged.
+    expect(binding).toEqual({ url: 'postgres://u:p@host:5432/db' });
   });
 });
 
@@ -97,14 +78,8 @@ describe('compute()', () => {
     expect(typeof node.load).toBe('function');
   });
 
-  test('is inert until run or load — the client factory does not run at construction', () => {
-    let calls = 0;
-    const db = postgres({
-      client: ({ url }) => {
-        calls += 1;
-        return { url };
-      },
-    });
+  test('is inert until run or load — constructing the node hydrates nothing', () => {
+    const db = postgres();
     const node = compute({
       name: 'test-service',
       deps: { db },
@@ -112,16 +87,13 @@ describe('compute()', () => {
     });
 
     expect(node.inputs.db).toBe(db);
-    expect(calls).toBe(0);
   });
 
   test('DI without any environment: hydrateSync against a hand-built Config runs the real connection factories', () => {
     const node = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -173,9 +145,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -190,9 +160,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -227,9 +195,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -258,9 +224,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -317,9 +281,7 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -338,9 +300,7 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -355,8 +315,8 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     expect(loaded).toEqual({ db: { url: 'postgres://y' }, port: 3000 });
   });
 
-  test('a client dependency in deps round-trips through run()/load() — typed hydration', async () => {
-    const db = postgres({ client: ({ url }) => ({ url }) });
+  test('a postgres dependency in deps round-trips through run()/load() — the binding is its config', async () => {
+    const db = postgres();
     const app = compute({ name: 'test-service', deps: { db }, build });
 
     let loaded: unknown;
@@ -386,18 +346,10 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
 });
 
 describe('compute().load()', () => {
-  test('returns hydrated deps merged with resolved params, memoized per process (hydrate runs once)', async () => {
-    let hydrateCalls = 0;
+  test('returns the deps merged with resolved params, memoized per process (same object on re-load)', async () => {
     const app = compute({
       name: 'test-service',
-      deps: {
-        db: postgres({
-          client: ({ url }) => {
-            hydrateCalls += 1;
-            return { url };
-          },
-        }),
-      },
+      deps: { db: postgres() },
       build,
     });
 
@@ -405,11 +357,10 @@ describe('compute().load()', () => {
       const first = app.load();
       const second = app.load();
 
+      // Memoized: one binding set per process — the same object each call.
       expect(first).toBe(second);
       expect(first).toEqual({ db: { url: 'postgres://z' }, port: 3000 });
     });
-
-    expect(hydrateCalls).toBe(1);
   });
 });
 
@@ -418,9 +369,7 @@ describe('the config pipeline over pack nodes', () => {
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build,
     });
@@ -467,15 +416,17 @@ describe('the config pipeline over pack nodes', () => {
 });
 
 describe('importing a service module', () => {
-  test('runs nothing (invariant 3): the client factory only runs when load() hydrates it', async () => {
+  test('runs nothing (invariant 3): construction is inert; load() yields the binding from the env', async () => {
     const fixture = await import('./fixtures/side-effect-service.ts');
 
-    expect(fixture.clientCalls).toBe(0);
+    // Importing the module must not throw or read the environment; the module
+    // top-level does nothing but construct nodes (pure).
+    expect(fixture.imported).toBe(true);
 
-    await withEnv({ DB_URL: 'postgres://fixture', PORT: '' }, () => {
-      fixture.default.load();
-    });
+    const loaded = await withEnv({ DB_URL: 'postgres://fixture', PORT: '' }, () =>
+      fixture.default.load(),
+    );
 
-    expect(fixture.clientCalls).toBe(1);
+    expect(loaded).toEqual({ db: { url: 'postgres://fixture' }, port: 3000 });
   });
 });

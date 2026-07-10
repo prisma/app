@@ -1,18 +1,15 @@
 import { compute, postgres } from '../../index.ts';
 
-// Importing this module must not increment this counter — only load()
-// hydrating the db input should.
-export let clientCalls = 0;
+// Importing this module must run nothing (invariant 3): constructing nodes is
+// pure, and the postgres() dependency carries no user code — its binding is
+// PostgresConfig, built by identity hydrate. This marker just proves the
+// module evaluated without throwing or reading the environment.
+export const imported = true;
 
 export default compute({
   name: 'test-service',
   deps: {
-    db: postgres({
-      client: ({ url }) => {
-        clientCalls += 1;
-        return { url };
-      },
-    }),
+    db: postgres(),
   },
   build: {
     kind: 'node',

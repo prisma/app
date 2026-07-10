@@ -4,9 +4,16 @@
 // reads it directly, with no address.
 
 import { serve } from '@prisma/app-rpc';
+import { SQL } from 'bun';
 import service from './service.ts';
 
-const { port } = service.load();
+const { db, port } = service.load(); // db: PostgresConfig — the app owns its client
+
+// The app constructs its own client from the binding (ADR-0015). Module-scoped,
+// so it is one pool per process. idleTimeout closes the pooled connection
+// before Compute's scale-to-zero drops it, so the next request reconnects
+// instead of erroring (FT-5219).
+const sql = new SQL({ url: db.url, max: 1, idleTimeout: 10 });
 
 // A Prisma Postgres direct connection is closed when it goes idle (and when
 // the service scales to zero). Bun.SQL surfaces that as an async error with
@@ -19,9 +26,9 @@ process.on('unhandledRejection', (err) => console.error('unhandledRejection', er
 // than throwing, so the platform sees an unhealthy dependency, not a crash.
 const handler = serve(service, {
   rpc: {
-    verify: async (_input, { db }) => {
+    verify: async () => {
       try {
-        await db`select 1`;
+        await sql`select 1`;
         return { ok: true };
       } catch (err) {
         console.error('db query failed', err);

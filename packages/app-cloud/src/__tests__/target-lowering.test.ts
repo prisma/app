@@ -144,9 +144,7 @@ describe("prismaCloud().services['compute']", () => {
     const node = compute({
       name: 'test-service',
       deps: {
-        db: postgres({
-          client: ({ url }) => ({ url }),
-        }),
+        db: postgres(),
       },
       build: {
         kind: 'node',
@@ -293,17 +291,14 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
       module: 'file:///test/service.ts',
       entry: 'server.js',
     };
-    const client = ({ url }: { url: string }) => ({ url });
     const root = system('shop', (h) => {
       const db = h.provision('data', postgres({ name: 'data' }));
-      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+      h.provision('auth', compute({ name: 'auth', deps: { main: postgres() }, build }), {
         main: db,
       });
-      h.provision(
-        'billing',
-        compute({ name: 'billing', deps: { store: postgres({ client }) }, build }),
-        { store: db },
-      );
+      h.provision('billing', compute({ name: 'billing', deps: { store: postgres() }, build }), {
+        store: db,
+      });
     });
     const before = {
       db: recorded.db.length,
@@ -351,7 +346,6 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     module: 'file:///test/service.ts',
     entry: 'server.js',
   };
-  const client = ({ url }: { url: string }) => ({ url });
   const bundles = { auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' } };
 
   // The plain throw validateName raises becomes an Effect defect; run() (runSync)
@@ -370,7 +364,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const root = system('shop', (h) => {
       const db = h.provision('db', postgres({ name: 'db' }));
-      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+      h.provision('auth', compute({ name: 'auth', deps: { main: postgres() }, build }), {
         main: db,
       });
     });
@@ -407,7 +401,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const root = system('shop', (h) => {
       const db = h.provision('data', postgres({ name: 'data' }));
-      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+      h.provision('auth', compute({ name: 'auth', deps: { main: postgres() }, build }), {
         main: db,
       });
     });

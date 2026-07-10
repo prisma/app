@@ -7,9 +7,7 @@ import { compute, postgres } from '@prisma/app-cloud';
 const app = compute({
   name: 'test-service',
   deps: {
-    db: postgres({
-      client: ({ url }) => ({ url }),
-    }),
+    db: postgres(),
   },
   build: {
     kind: 'node',
