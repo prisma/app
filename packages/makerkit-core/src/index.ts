@@ -23,6 +23,7 @@ export { hydrate, hydrateSync } from './hydrate.ts';
 export type {
   BuildAdapter,
   ConnectionEnd,
+  Dependable,
   Deps,
   Expose,
   HexBuilder,

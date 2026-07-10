@@ -254,6 +254,87 @@ describe('service()', () => {
   });
 });
 
+describe('service() input normalization', () => {
+  const build = {
+    kind: 'node',
+    pack: '@makerkit/node',
+    module: 'file:///app/src/service.ts',
+    entry: 'dist/server.js',
+  };
+  const dbEnd = () =>
+    resourceEnd({
+      name: 'db',
+      type: 'fake/db',
+      connection: conn({ url: { type: 'string' } }, (v) => ({ url: v.url })),
+    });
+
+  test('a Dependable entry is converted — inputs store the ResourceEnd toDependency() built', () => {
+    const node = service({
+      name: 'test-service',
+      pack: 'test/pack',
+      type: 'fake/app',
+      inputs: { db: { toDependency: dbEnd } },
+      params: {},
+      build,
+    });
+
+    const stored = node.inputs.db;
+    expect(isNode(stored)).toBe(true);
+    expect(stored.kind).toBe('resource-end');
+    expect(stored.type).toBe('fake/db');
+    expect(stored.connection.params).toEqual({ url: { type: 'string' } });
+  });
+
+  test('a dual value (branded resource carrying toDependency) converts to its end, never to the resource', () => {
+    const dual = Object.freeze({
+      ...resource({ name: 'db', pack: 'test/pack', type: 'fake/db' }),
+      toDependency: dbEnd,
+    });
+    const node = service({
+      name: 'test-service',
+      pack: 'test/pack',
+      type: 'fake/app',
+      inputs: { db: dual },
+      params: {},
+      build,
+    });
+
+    expect(node.inputs.db.kind).toBe('resource-end');
+  });
+
+  test('branded ends pass through untouched — the same objects', () => {
+    const end = dbEnd();
+    const auth = connectionEnd({
+      type: 'fake/http',
+      connection: conn({ url: { type: 'string' } }, (v) => ({ url: v.url })),
+    });
+    const node = service({
+      name: 'test-service',
+      pack: 'test/pack',
+      type: 'fake/app',
+      inputs: { db: end, auth },
+      params: {},
+      build,
+    });
+
+    expect(node.inputs.db).toBe(end);
+    expect(node.inputs.auth).toBe(auth);
+  });
+
+  test('toDependency() returning junk is an authoring error naming the input', () => {
+    expect(() =>
+      service({
+        name: 'test-service',
+        pack: 'test/pack',
+        type: 'fake/app',
+        inputs: { db: { toDependency: () => ({}) } as never },
+        params: {},
+        build,
+      }),
+    ).toThrow(/input "db": toDependency\(\) did not return a branded resource end/);
+  });
+});
+
 describe('connectionEnd()', () => {
   test('returns a branded, frozen connection end carrying its given name and connection', () => {
     const end = connectionEnd({

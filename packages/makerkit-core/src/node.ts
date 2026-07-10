@@ -128,7 +128,7 @@ export interface ServiceNode<
   E extends Expose = Expose,
 > extends PackAuthoredNode {
   readonly kind: 'service';
-  readonly inputs: D;
+  readonly inputs: NormalizedDeps<D>;
   /** Service-level config declarations (e.g. port). */
   readonly params: P;
   /** How the app's entry is built + assembled. */
@@ -173,6 +173,18 @@ export interface ConnectionEnd<C = unknown, Req = unknown> extends NodeBase {
   readonly connection: Connection<Params, C>;
   /** The required contract, or `undefined` for an untyped end (e.g. `http()`). */
   readonly required: Req | undefined;
+}
+
+/**
+ * A value that can describe a service's dependency on itself — e.g. a pack's
+ * dual-form resource, provisionable by a hex AND usable directly in `deps`.
+ * `toDependency()` MUST be pure: it constructs the slot node and runs no user
+ * behavior (the same rule a factory obeys at import). `service()` calls it at
+ * construction and stores the returned end, so the rest of the system only
+ * ever sees ends.
+ */
+export interface Dependable<C = unknown, T extends string = string> {
+  toDependency(): ResourceEnd<C, T>;
 }
 
 /**
@@ -229,15 +241,21 @@ type ConnectionKeys<D extends Deps> = {
   [K in keyof D]: D[K] extends ConnectionEnd<any, any> ? K : never;
 }[keyof D];
 
-/** The ResourceEnd keys of a Deps map. */
+/** The resource-slot keys of a Deps map (ResourceEnd or Dependable entries). */
 type ResourceKeys<D extends Deps> = {
   // biome-ignore lint/suspicious/noExplicitAny: C is irrelevant to key selection.
-  [K in keyof D]: D[K] extends ResourceEnd<any, any> ? K : never;
+  [K in keyof D]: D[K] extends ResourceEnd<any, any> | Dependable<any, any> ? K : never;
 }[keyof D];
 
-/** A ResourceEnd's required resource type ("postgres"). */
-// biome-ignore lint/suspicious/noExplicitAny: C is irrelevant to the required type.
-type ResourceTypeOf<RE> = RE extends ResourceEnd<any, infer T> ? T : never;
+/** A resource slot's required resource type ("postgres"). */
+type ResourceTypeOf<RE> =
+  // biome-ignore lint/suspicious/noExplicitAny: C is irrelevant to the required type.
+  RE extends ResourceEnd<any, infer T>
+    ? T
+    : // biome-ignore lint/suspicious/noExplicitAny: C is irrelevant to the required type.
+      RE extends Dependable<any, infer T>
+      ? T
+      : never;
 
 /**
  * `HexBuilder.provision`'s wiring argument: one producer per dependency slot.
@@ -289,13 +307,20 @@ export interface HexBuilder {
 }
 
 /**
- * Dependency map: name → the slot the service declares. Only declarations
- * (ends) are admitted — a concrete ResourceNode never sits in deps, so a
- * service cannot cause infrastructure to exist by mentioning it. `any`, not
- * `unknown` — keeps inference.
+ * Dependency map: name → the slot the service declares, or a Dependable that
+ * describes one (converted to its ResourceEnd by `service()`). A concrete
+ * ResourceNode never sits in deps, so a service cannot cause infrastructure
+ * to exist by mentioning it. `any`, not `unknown` — keeps inference.
  */
-// biome-ignore lint/suspicious/noExplicitAny: `any` (not `unknown`) preserves loaded-dep inference from each entry's hydrate return.
-export type Deps = Record<string, ResourceEnd<any, any> | ConnectionEnd<any, any>>;
+export type Deps = Record<
+  string,
+  // biome-ignore lint/suspicious/noExplicitAny: `any` (not `unknown`) preserves loaded-dep inference from each entry's hydrate return.
+  ResourceEnd<any, any> | ConnectionEnd<any, any> | Dependable<any, any>
+>;
+
+/** A Deps entry as stored on the node: `service()` converts Dependables to their ends. */
+type NormalizedDep<N> = N extends Dependable<infer C, infer T> ? ResourceEnd<C, T> : N;
+export type NormalizedDeps<D extends Deps> = { readonly [K in keyof D]: NormalizedDep<D[K]> };
 
 /** Output-port map: name → the Contract a service exposes for others to depend on. */
 // biome-ignore lint/suspicious/noExplicitAny: opaque per-port Cmp — core never inspects it (see Contract).
@@ -308,7 +333,10 @@ export type Hydrated<N> =
     : // biome-ignore lint/suspicious/noExplicitAny: Req is irrelevant to the hydrated shape.
       N extends ConnectionEnd<infer C, any>
       ? C
-      : never;
+      : // biome-ignore lint/suspicious/noExplicitAny: T is irrelevant to the hydrated shape.
+        N extends Dependable<infer C, any>
+        ? C
+        : never;
 export type HydratedDeps<D extends Deps> = { readonly [K in keyof D]: Hydrated<D[K]> };
 
 /**
@@ -368,6 +396,43 @@ function freezeParams<P extends Params>(params: P): P {
     frozen[name] = Object.freeze({ ...param });
   }
   return Object.freeze(frozen) as P;
+}
+
+/**
+ * `service()`'s input normalization: branded ends pass through; a Dependable
+ * converts via its toDependency(), which must return a branded ResourceEnd;
+ * anything else passes through untouched for Load to reject.
+ */
+function normalizeInputs<D extends Deps>(inputs: D): NormalizedDeps<D> {
+  const normalized: Record<string, unknown> = {};
+  for (const [input, value] of Object.entries(inputs)) {
+    normalized[input] = normalizeInput(input, value);
+  }
+  return blindCast<
+    NormalizedDeps<D>,
+    'entries are pass-through ends or the ResourceEnd each Dependable toDependency() built, matching the NormalizedDeps mapped shape; junk passes through for Load to reject'
+  >(Object.freeze(normalized));
+}
+
+function normalizeInput(input: string, value: unknown): unknown {
+  const kind: string | undefined = isNode(value) ? value.kind : undefined;
+  if (kind === 'resource-end' || kind === 'connection') return value;
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toDependency' in value &&
+    typeof value.toDependency === 'function'
+  ) {
+    const end: unknown = value.toDependency();
+    if (!isNode(end) || end.kind !== 'resource-end') {
+      throw new Error(
+        `service() input "${input}": toDependency() did not return a branded resource end ` +
+          '(construct it with the resourceEnd() factory).',
+      );
+    }
+    return end;
+  }
+  return value;
 }
 
 /** A frozen shallow copy that keeps the caller's declared type. */
@@ -459,7 +524,7 @@ export function service<
     name: def.name,
     pack: def.pack,
     type: def.type,
-    inputs: frozenShallowCopy(def.inputs),
+    inputs: normalizeInputs(def.inputs),
     params: freezeParams(def.params),
     build: Object.freeze({ ...def.build }),
     expose: def.expose !== undefined ? frozenShallowCopy(def.expose) : undefined,
