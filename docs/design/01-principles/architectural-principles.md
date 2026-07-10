@@ -1,32 +1,33 @@
 # Architectural Principles
 
-Structural rules that shape MakerKit's architecture and package boundaries.
+Structural rules that shape the Prisma App Framework's architecture and package boundaries.
 
 ## No globals — all dependencies are injected
 
 Application code never reads global configuration or looks up a service by name —
-no `process.env`, no discovery, no magic. Every resource a Hex uses is handed to it
-as a typed dependency. Configuration still reaches a compute unit as environment
-variables, but that channel **terminates at the MakerKit host shim**, which hydrates
-it and injects typed clients; user code — including framework-hosted code, which
-reaches its dependencies through a `use(…)` accessor — never touches the
-environment. MakerKit propagates data to user code only through dependency
-injection. See
+no `process.env`, no discovery, no magic. Every resource a System uses is handed to
+it as a typed dependency. Configuration still reaches a compute unit as environment
+variables, but that channel **terminates at the framework's host shim**, which
+hydrates it and injects typed clients; user code — including framework-hosted
+code, which reaches its dependencies through a `use(…)` accessor — never touches
+the environment. The framework propagates data to user code only through
+dependency injection. See
 [the authoring surface](../03-domain-model/authoring-surface.md).
 
 ## Wiring precedes execution — Load, then Hydrate
 
-A Service or Hex is *wired* and then *run*; it never runs itself. Executing its
-`define` Loads an in-memory graph that MakerKit validates for integrity before
-anything executes; only then is the graph Hydrated — adapters attached, data pushed
-through. This holds symmetrically for Services and Hexes, so an integrity error
+A Service or System is *wired* and then *run*; it never runs itself. Executing its
+`define` Loads an in-memory graph that the framework validates for integrity
+before anything executes; only then is the graph Hydrated — adapters attached,
+data pushed through. This holds symmetrically for Services and Systems, so an
+integrity error
 surfaces at Load, a test can trust nothing ran until the graph was whole, and the
 topology can be inspected without a deploy. See
 [the authoring surface](../03-domain-model/authoring-surface.md).
 
 ## Runtime-agnostic — no Node or Bun coupling
 
-MakerKit's shipped surface — core and target packs — never depends on a specific
+The framework's shipped surface — core and target packs — never depends on a specific
 JavaScript runtime: no Bun APIs, no Node-only modules, not even type-only imports of
 a runtime's types in public signatures. Anything runtime-specific — a database
 driver, a server API — enters from application code, which owns its runtime choice,
@@ -39,7 +40,7 @@ of the framework.
 Your topology is *inferred* from your application code — type-checked, and living in
 your TypeScript, not a separate manifest you maintain by hand. The structure you
 write is the structure that deploys; the two can't silently drift. The node
-constructor's declaration (`compute(…)`, `hex(…)`) *is* the manifest: one live value
+constructor's declaration (`compute(…)`, `system(…)`) *is* the manifest: one live value
 read by the control plane at deploy and by the runtime host at boot, so there is
 nothing to keep in sync.
 
@@ -51,13 +52,13 @@ lands in your application bundle. You ship only what runs.
 
 ## The framework has no knowledge of specific deployment targets
 
-The core deals only in the abstract model — Hexes, inputs, outputs, resources — and
+The core deals only in the abstract model — Systems, inputs, outputs, resources — and
 never branches on where you're deploying. Everything a given target needs (Prisma
 Cloud's resource types, or another's) arrives as an extension pack.
 
 ## Data contracts are the interface for data resources
 
-A data contract names exactly what a Hex may read and write; a resource plugs in
+A data contract names exactly what a System may read and write; a resource plugs in
 only if it satisfies that contract. It's the data-world version of an Alchemy
 Layer: the consumer depends on a typed interface (`Context.Service`), and any
 implementation that satisfies it can be swapped in.

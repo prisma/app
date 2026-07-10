@@ -1,6 +1,6 @@
 # Goals
 
-The concrete aims that deliver MakerKit's [purpose](README.md). Each is derived
+The concrete aims that deliver the Prisma App Framework's [purpose](README.md). Each is derived
 from the purpose, not the other way around.
 
 ## Goals
@@ -11,8 +11,8 @@ from the purpose, not the other way around.
   separate config or IaC file.
 - **Provision and deploy via Alchemy — no manual wiring.** One command, or your CD
   pipeline, provisions the infrastructure and deploys the system to a target.
-- **Pluggable deployment targets.** Targets are extension packs; MakerKit ships the
-  Prisma Cloud pack, and the core stays target-agnostic.
+- **Pluggable deployment targets.** Targets are extension packs; the framework
+  ships the Prisma Cloud pack, and the core stays target-agnostic.
 - **A queryable topology.** The inferred topology is a first-class artifact you and
   your agents can interrogate from the CLI.
 - **Recreate the whole topology in a fresh environment.** Every element has a
@@ -28,8 +28,8 @@ from the purpose, not the other way around.
   engine (client- or CD-driven); a future server-side orchestrator can evolve
   independently.
 - **Bundling or compiling your code.** Bundlers (tsdown, Bun.build, Alchemy) do
-  that; MakerKit references the bundles.
-- **Generating data contracts.** Prisma Next produces those; MakerKit references
-  them.
+  that; the framework references the bundles.
+- **Generating data contracts.** Prisma Next produces those; the framework
+  references them.
 - **UI / client-framework bindings.** React hooks and Convex-style embedding are a
   deployment-target pack concern, not the core.
