@@ -1,16 +1,16 @@
 # The authoring surface
 
-How a developer writes MakerKit's [Core nouns](glossary.md#core-nouns) and what
+How a developer writes the Prisma App Framework's [Core nouns](glossary.md#core-nouns) and what
 running them does. The developer imports a concrete **vocabulary from a target pack**
 — for Prisma Cloud, `compute` (a Service) and `postgres` (a Resource) from
-`@makerkit/prisma-cloud` — and wires them into a graph. `@makerkit/core` is the
+`@prisma/app-cloud` — and wires them into a graph. `@prisma/app` is the
 target-agnostic engine underneath; see [core and targets](core-and-targets.md) for
 that split. This describes the current design, not a settled decision record.
 
 Grounding example — a service with a Postgres dependency:
 
 ```ts
-import { compute, postgres } from "@makerkit/prisma-cloud"
+import { compute, postgres } from "@prisma/app-cloud"
 
 export default compute({ db: postgres() }, ({ db }) =>
   Bun.serve({ port, fetch: async () => Response.json(await db`select 1 as ok`) })
@@ -18,14 +18,14 @@ export default compute({ db: postgres() }, ({ db }) =>
 ```
 
 `postgres()` is a **Resource** the service depends on; `compute(deps, handler)` is a
-**Service**. MakerKit provisions the Postgres and the compute unit, injects a typed
+**Service**. The framework provisions the Postgres and the compute unit, injects a typed
 `db` client into the handler, and serves — with no `process.env` in the service code.
 The vocabulary (`compute`, `postgres`, `http`, …) belongs to the target; the wiring
 rules below belong to the core.
 
 ## One port mechanic, uniform at every level
 
-Every node — Service, Hex, or Resource — has typed Inputs and Outputs, and a
+Every node — Service, System, or Resource — has typed Inputs and Outputs, and a
 connection wires one node's Output to another's Input of the same named interface.
 This rule already governs the model (see the [domain map](domain-map.md)); the point
 here is that it is also the *authoring surface*. A Service declares its ports as it
@@ -63,33 +63,35 @@ export default compute(
 )
 ```
 
-## Services and Hexes are both wiring; they differ only in opacity
+## Services and Systems are both wiring; they differ only in opacity
 
-Neither a Service nor a Hex runs itself; each is wired and then run by MakerKit. The
-convention is identical for both: **Inputs arrive as arguments, Outputs are the
-return.** A Service's body is opaque — it wires its ports to a server adapter
-(Next.js, Hono, a bare handler) and MakerKit sees only the boundary; it is a **black
-box**. A Hex's body is transparent — MakerKit sees the topology it owns — and it
-additionally gets `provision()`. Forwarding needs no new primitive: a Hex passes its
-Inputs *down* into the nodes it owns and returns their Outputs *up* as its own.
-Provisioning and ownership are a Hex concern; a Service only ever *requires*.
+Neither a Service nor a System runs itself; each is wired and then run by the
+framework. The convention is identical for both: **Inputs arrive as arguments,
+Outputs are the return.** A Service's body is opaque — it wires its ports to a
+server adapter (Next.js, Hono, a bare handler) and the framework sees only the
+boundary; it is a **black box**. A System's body is transparent — the framework
+sees the topology it owns — and it additionally gets `provision()`. Forwarding
+needs no new primitive: a System passes its Inputs *down* into the nodes it owns
+and returns their Outputs *up* as its own. Provisioning and ownership are a
+System concern; a Service only ever *requires*.
 
 ```ts
-// a hex — same port mechanic for its boundary; body only wires
+// a system — same port mechanic for its boundary; body only wires
 import store, { Auth } from "./storefront-service"
-export default hex("storefront",
-  { auth: Auth, web: http(StoreInterface) },   // hex-level ports
+export default system("storefront",
+  { auth: Auth, web: http(StoreInterface) },   // system-level ports
   ({ auth, provision }) => {
-    const db  = provision(postgres())           // the Hex owns resources
-    const svc = provision(store, { db, auth })  // forward hex Input → service Input
-    return { web: svc.web }                      // forward service Output → hex Output
+    const db  = provision(postgres())           // the System owns resources
+    const svc = provision(store, { db, auth })  // forward system Input → service Input
+    return { web: svc.web }                      // forward service Output → system Output
   }
 )
 ```
 
-Wiring resolves at define time for both, symmetrically — enforced for a Hex (MakerKit
-can see it), expected of a Service (a black box it cannot reach into). Keeping
-resolution time the same is deliberate: it makes a Hex behave like a Service, so the
+Wiring resolves at define time for both, symmetrically — enforced for a System (the
+framework can see it), expected of a Service (a black box it cannot reach into).
+Keeping resolution time the same is deliberate: it makes a System behave like a
+Service, so the
 model stays predictable, and it guarantees nothing executes before the wiring is
 complete.
 
@@ -97,7 +99,7 @@ complete.
 
 A constructor like `compute(...)` or `postgres()` runs no logic — it returns a plain
 data object (see [core and targets](core-and-targets.md)). That object *is* the
-manifest: there is no separate MakerKit manifest file (the platform's
+manifest: there is no separate framework manifest file (the platform's
 `compute.manifest.json` stays — it only names the boot entrypoint). The same value is
 read twice: the control plane at deploy time routes each node's metadata to its
 provider and wires the config; the runtime host hydrates the Inputs and injects them.
@@ -113,24 +115,26 @@ At boot, the node's **`run`** loop executes: core enumerates the config shape
 platform environment into a typed `Config` by its own serializer (privately knowing
 that a `url` param lives at, say, `AUTH_DB_URL`), and core's **`hydrate`** hands
 each connection its typed values so it can build its client — with the driver
-factory the app supplied at authoring time, since MakerKit ships none (the
+factory the app supplied at authoring time, since the Prisma App Framework ships
+none (the
 [runtime-agnostic principle](../01-principles/architectural-principles.md)).
 Validating the values is the pack reversing its own serialization. Config is
 thereby enumerable without booting (`configOf`), injectable with fakes in tests
 (`invoke`), and reportable (secrets redacted) in production. When the "handler" is a framework that owns
-its own server — Next.js — MakerKit does not wrap the handler signature; it wires the
+its own server — Next.js — the Prisma App Framework does not wrap the handler
+signature; it wires the
 framework in as the implementation of an HTTP Output, and framework code reaches its
 dependencies through a DI accessor (`use(…)`), never through the environment. This is
 the concrete form of the [no-globals
-principle](../01-principles/architectural-principles.md): MakerKit propagates data to
-user code only through dependency injection.
+principle](../01-principles/architectural-principles.md): the Prisma App Framework
+propagates data to user code only through dependency injection.
 
 ## Load, then Hydrate
 
 Loading the graph — walking the constructors' data and validating it — constructs a
 typed dataflow graph (a graph of streams, where request/response is the bounded case:
-one message in, one out). At the end the graph is closed, so MakerKit validates its
-integrity: every Input satisfied, interfaces compatible, nothing dangling. That is
+one message in, one out). At the end the graph is closed, so the framework validates
+its integrity: every Input satisfied, interfaces compatible, nothing dangling. That is
 **Load** — the graph is in memory to inspect, validate, or manipulate, and nothing
 has executed. **Hydrate** is the second phase: attach adapters and push data through
 the Inputs and out of the Outputs.
@@ -140,12 +144,12 @@ nothing, the topology can be interrogated and emitted for tooling independently 
 deploy. Because integrity is validated at Load before any Hydrate, an error surfaces
 before execution and a test can trust that nothing ran until the graph was whole. And
 because a fake Output can be substituted at any Input — the same dependency inversion
-— a Service or Hex is testable with no real infrastructure, which is the
+— a Service or System is testable with no real infrastructure, which is the
 local-emulation story.
 
 ## Alternatives set aside
 
-- **A separate MakerKit manifest file** describing each service's inputs. The
+- **A separate framework manifest file** describing each service's inputs. The
   constructor's returned data already carries it; a second artifact would only restate
   the code and risk drifting from it, and per-service isolation makes convention-based
   env names sufficient.
@@ -155,20 +159,20 @@ local-emulation story.
 - **A generic core `service()` the user calls.** The concrete constructor is
   target-provided (`compute`), because the node it produces must carry the target's
   routing. Core defines the *kind* Service; the target stamps out nodes of it.
-- **A framework as its own entrypoint kind**, distinct from a MakerKit service. It
-  fractures the model into "native" and "framework-hosted" cases; a framework server
-  is better understood as one implementation of an HTTP Output.
+- **A framework as its own entrypoint kind**, distinct from a service the framework
+  defines. It fractures the model into "native" and "framework-hosted" cases; a
+  framework server is better understood as one implementation of an HTTP Output.
 
 ## Open questions
 
 - **Deploy-time URL baking vs. runtime name resolution.** Baking a consumer's
   `AUTH_URL` from a deployed URL forces the topology into a DAG with a deploy order and
-  forbids two hexes calling each other. A name-based internal registry (stable internal
+  forbids two Systems calling each other. A name-based internal registry (stable internal
   addressing resolved at runtime) would allow cycles and independent redeploys.
 - **`use(…)` scoping** in framework-hosted code — process-scoped (a module singleton,
   e.g. the database pool) vs request-scoped (via `AsyncLocalStorage`).
 - **Cross-repo contract provenance.** A monorepo type-only import of a connection type
-  is trivial; hexes in separate repos need it published as a package or generated.
+  is trivial; Systems in separate repos need it published as a package or generated.
 - The core↔target architecture's own open questions (Alchemy in core vs behind the
   target; where connection types route; a serializable plan) live in
   [core and targets](core-and-targets.md#open-questions).
