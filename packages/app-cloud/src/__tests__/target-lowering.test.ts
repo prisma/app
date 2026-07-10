@@ -226,7 +226,7 @@ describe("prismaCloud().services['compute']", () => {
 
     const result = run(
       target.services['compute']!.package(ctx, {
-        assembled: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+        assembled: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
         address: 'auth',
       }),
     );
@@ -235,7 +235,7 @@ describe("prismaCloud().services['compute']", () => {
       [
         {
           id: 'auth',
-          bundleDir: 'hexes/auth/dist/bundle',
+          bundleDir: 'systems/auth/dist/bundle',
           appEntry: 'server.js',
           address: 'auth',
         },
@@ -313,8 +313,8 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
       lowering(root, target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          billing: { dir: 'hexes/billing/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          billing: { dir: 'systems/billing/dist/bundle', entry: 'server.js' },
         },
       }),
     );

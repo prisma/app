@@ -350,8 +350,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(twoServiceSystem(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -380,8 +380,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(twoServiceSystem(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -399,8 +399,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(twoServiceSystem(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -418,8 +418,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(twoServiceSystem(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -437,8 +437,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(twoServiceSystem(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -470,8 +470,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(root, target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -495,7 +495,7 @@ describe('lowering a system root — a provisioned resource and two connected se
     const error = runError(
       lowering(twoServiceSystem(), target, {
         name: 'shop',
-        bundles: { auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' } },
+        bundles: { auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' } },
       }),
     );
 
@@ -510,8 +510,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(twoServiceSystem(), target, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'hexes/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -551,8 +551,8 @@ describe('lowering a system root — one resource shared by two consumers', () =
   const sharedOpts = {
     name: 'shop',
     bundles: {
-      auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
-      billing: { dir: 'hexes/billing/dist/bundle', entry: 'server.js' },
+      auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+      billing: { dir: 'systems/billing/dist/bundle', entry: 'server.js' },
     },
   };
 

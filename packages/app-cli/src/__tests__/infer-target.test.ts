@@ -64,13 +64,13 @@ describe('collectPacks() + resolveSinglePack() (ADR-0003)', () => {
       ],
       edges: [],
     };
-    expect(collectPacks(graph)).toEqual(['@prisma/app-cloud', '@other/pack']);
+    expect(collectPacks(graph)).toEqual(['@other/pack', '@prisma/app-cloud']);
   });
 
   test('throws listing every pack found when a graph mixes more than one', () => {
     const graph = graphWithPacks(['@prisma/app-cloud', '@other/pack']);
     expect(() => resolveSinglePack(collectPacks(graph))).toThrow(
-      /mixes more than one pack \(@prisma\/app-cloud, @other\/pack\)/,
+      /mixes more than one pack \(@other\/pack, @prisma\/app-cloud\)/,
     );
   });
 

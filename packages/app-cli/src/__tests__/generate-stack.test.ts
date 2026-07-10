@@ -8,28 +8,28 @@ import { loadEntry } from '../load-entry.ts';
 describe('renderStackFile() — a system root', () => {
   test('renders imports, the name literal, and the bundles dir/entry literals', () => {
     const content = renderStackFile({
-      entryPath: '/repo/app/hex.ts',
+      entryPath: '/repo/app/system.ts',
       cwd: '/repo/app',
       pack: '@prisma/app-cloud',
       name: 'app',
       assembled: {
         bundles: {
-          auth: { dir: '/repo/app/hexes/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: '/repo/app/hexes/storefront/standalone', entry: 'server.js' },
+          auth: { dir: '/repo/app/systems/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: '/repo/app/systems/storefront/standalone', entry: 'server.js' },
         },
       },
     });
 
     expect(content).toContain("import { lower } from '@prisma/app/deploy';");
     expect(content).toContain('import { fromEnv } from "@prisma/app-cloud/target";');
-    expect(content).toContain('import app from "../hex.ts";');
+    expect(content).toContain('import app from "../system.ts";');
     expect(content).toContain('name: "app"');
     expect(content).toContain('bundles: {');
     expect(content).toContain(
-      '"auth": { dir: "/repo/app/hexes/auth/dist/bundle", entry: "server.js" }',
+      '"auth": { dir: "/repo/app/systems/auth/dist/bundle", entry: "server.js" }',
     );
     expect(content).toContain(
-      '"storefront": { dir: "/repo/app/hexes/storefront/standalone", entry: "server.js" }',
+      '"storefront": { dir: "/repo/app/systems/storefront/standalone", entry: "server.js" }',
     );
     // No `stage:` in the generated LowerOptions — core's lower() never reads
     // it; the stage rides on the `alchemy --stage` flag instead.
@@ -43,7 +43,7 @@ describe('renderStackFile() — a system root', () => {
     // broken file; the header must survive it regardless.
     const cwd = '/repo/examples/foo*/app';
     const content = renderStackFile({
-      entryPath: '/repo/examples/foo*/app/hex.ts',
+      entryPath: '/repo/examples/foo*/app/system.ts',
       cwd,
       pack: '@prisma/app-cloud',
       name: 'app',

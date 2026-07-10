@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["bun"]
   },
-  "include": ["hex.ts"]
+  "include": ["system.ts"]
 }
