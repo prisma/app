@@ -10,8 +10,8 @@ of the dependency graph rather than luck.
 A PDP Project is a **shared config namespace** (every App on a branch snapshots
 the same variable set into its versions) and a **shared lifecycle** (deletion
 cascades). MakerKit's placement rule: **one Project per MakerKit application** —
-all of an application's services are Apps in that one Project, each with its own
-Database beside it. Consequences, stated plainly:
+all of an application's services are Apps in that one Project, with the
+hex-provisioned Databases beside them. Consequences, stated plainly:
 
 - Config keys are namespaced per service by the pack's mapping (e.g.
   `AUTH_DB_URL`, `STOREFRONT_AUTH_URL`) — collisions are a naming concern the
@@ -45,7 +45,7 @@ it manages whatever a provider package registers).
 | Our resource | PDP entity it manages | Props (in) | Outputs (out) | Notes |
 | --- | --- | --- | --- | --- |
 | `Project` | Project | workspaceId, name | id | **one per MakerKit application**; the poison `DATABASE_URL` variables are written at provision (see above) |
-| `Database` | Database | projectId, name | id, connection info | one per service that declares a postgres input; never the project default |
+| `Database` | Database | projectId, name | id, connection info | one per hex-provisioned postgres resource; never the project default |
 | `Connection` | database connection info | databaseId | url | direct/pooled endpoints; the url is written as the service's own named variable via the pack's `serialize` |
 | `ComputeService` | App | projectId, name, region | id | PDP attaches it to the production branch implicitly |
 | `EnvironmentVariable` | ConfigVariable | projectId, class, key, value, branchId? | id | we write production-class templates only |
@@ -81,9 +81,9 @@ edge.
 
 ```mermaid
 flowchart LR
-  SF[storefront service] -- connection --> AU[auth service]
-  SF -- input --> SDB[(storefront db)]
-  AU -- input --> ADB[(auth db)]
+  SF[storefront service] -- dependency --> AU[auth service]
+  SF -- dependency --> SDB[(storefront db)]
+  AU -- dependency --> ADB[(auth db)]
 ```
 
 **The Alchemy graph it lowers to** (one Project — the application):

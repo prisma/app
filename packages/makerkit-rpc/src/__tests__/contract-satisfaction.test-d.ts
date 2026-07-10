@@ -1,16 +1,18 @@
 /**
  * The accept/reject matrix for contract compatibility, checked on the real
  * hex: `HexBuilder.provision` wiring a ref-port into a consumer's
- * `rpc(contract)` slot, using this package's real
- * `contract()`/`rpc()`. Typechecked only (the package's `typecheck` script) —
- * never executed: the reject cases are structurally valid providers that
- * simply fail Load's nominal `satisfies()` check (see rpc-connection.test.ts
- * and @makerkit/core's hex.test.ts), so running this file would throw.
- * `.test-d` (not `.test`) keeps it out of `bun test`.
+ * `rpc(contract)` slot, using this package's real `contract()`/`rpc()`.
+ *
+ * Type-only (vitest `--typecheck`, never executed): the reject cases are
+ * structurally valid providers that simply fail Load's nominal `satisfies()`
+ * check (see rpc-connection.test.ts and @makerkit/core's hex.test.ts), so
+ * running the calls would throw. Positive cases use `expectTypeOf` matchers;
+ * the negative wirings keep a `// @ts-expect-error` on the offending line.
  */
 import type { BuildAdapter, Contract, HexBuilder } from '@makerkit/core';
-import { connectionEnd, service } from '@makerkit/core';
+import { dependency, service } from '@makerkit/core';
 import { type } from 'arktype';
+import { expectTypeOf, test } from 'vitest';
 import { contract } from '../contract.ts';
 import { type Client, rpc } from '../rpc.ts';
 
@@ -59,9 +61,9 @@ const wrongKind = wsContract({
   verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
 });
 
-// an untyped connection end — http()'s shape (Req = unknown, the escape hatch).
+// an untyped dependency end — http()'s shape (Req = unknown, the escape hatch).
 const legacyEnd = () =>
-  connectionEnd({
+  dependency({
     type: 'fake/http',
     connection: { params: { url: { type: 'string' } }, hydrate: (v: { url: string }) => v },
   });
@@ -95,30 +97,45 @@ const extraInputRef = h.provision('s4', provider(extraInput));
 const missingRef = h.provision('s5', provider(missing));
 const wrongKindRef = h.provision('s6', provider(wrongKind));
 
-// ---- MUST compile ----
-h.provision('c1', storefront, { auth: exactRef.auth, legacy: exactRef.auth });
-h.provision('c2', storefront, { auth: extraOutRef.auth, legacy: exactRef.auth }); // covariant output
-h.provision('c3', storefront, { auth: extraMethodRef.auth, legacy: exactRef.auth }); // width
-h.provision('c4', storefront, { auth: exactRef.auth, legacy: missingRef.auth }); // untyped slot: anything
+test('a satisfying (or wider) ref-port fills the required rpc slot', () => {
+  expectTypeOf(h.provision).toBeCallableWith('c1', storefront, {
+    auth: exactRef.auth,
+    legacy: exactRef.auth,
+  });
+  // covariant output
+  expectTypeOf(h.provision).toBeCallableWith('c2', storefront, {
+    auth: extraOutRef.auth,
+    legacy: exactRef.auth,
+  });
+  // width
+  expectTypeOf(h.provision).toBeCallableWith('c3', storefront, {
+    auth: extraMethodRef.auth,
+    legacy: exactRef.auth,
+  });
+  // untyped slot: anything
+  expectTypeOf(h.provision).toBeCallableWith('c4', storefront, {
+    auth: exactRef.auth,
+    legacy: missingRef.auth,
+  });
+});
 
-// ---- MUST be rejected ----
-// @ts-expect-error provider requires an extra input the consumer never sends (contravariant)
-h.provision('c5', storefront, { auth: extraInputRef.auth, legacy: exactRef.auth });
-// @ts-expect-error provider is missing the required method
-h.provision('c6', storefront, { auth: missingRef.auth, legacy: exactRef.auth });
-// @ts-expect-error different protocol kind
-h.provision('c7', storefront, { auth: wrongKindRef.auth, legacy: exactRef.auth });
-// @ts-expect-error the ref exposes no such port
-h.provision('c8', storefront, { auth: exactRef.nope, legacy: exactRef.auth });
+test('an incompatible ref-port for a required rpc slot does not compile', () => {
+  // @ts-expect-error provider requires an extra input the consumer never sends (contravariant)
+  h.provision('c5', storefront, { auth: extraInputRef.auth, legacy: exactRef.auth });
+  // @ts-expect-error provider is missing the required method
+  h.provision('c6', storefront, { auth: missingRef.auth, legacy: exactRef.auth });
+  // @ts-expect-error different protocol kind
+  h.provision('c7', storefront, { auth: wrongKindRef.auth, legacy: exactRef.auth });
+  // @ts-expect-error the ref exposes no such port
+  h.provision('c8', storefront, { auth: exactRef.nope, legacy: exactRef.auth });
+});
 
-// ---- and the derived client is typed both ways ----
-export async function clientUsage() {
+test('the derived client is typed both ways', () => {
   const auth = null as unknown as Client<typeof authContract>;
-  const r = await auth.verify({ token: 't' });
-  const ok: boolean = r.ok;
+  expectTypeOf(auth.verify).toBeCallableWith({ token: 't' });
+  expectTypeOf(auth.verify({ token: 't' })).resolves.toExtend<{ ok: boolean }>();
   // @ts-expect-error unknown method
   auth.nope();
   // @ts-expect-error wrong input shape (token must be a string)
-  await auth.verify({ token: 123 });
-  return ok;
-}
+  auth.verify({ token: 123 });
+});

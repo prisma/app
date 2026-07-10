@@ -6,11 +6,11 @@ import { loadEntry } from '../load-entry.ts';
 const fixture = (name: string) => path.join(import.meta.dir, 'fixtures', name);
 
 describe('the pipeline surfaces core Load() errors as-is (deploy-cli.md step 2)', () => {
-  test('a service with an unwired connection input fails naming the input and the composing hex', async () => {
+  test('a service with an unwired dependency input fails naming the input and the composing hex', async () => {
     const entry = await loadEntry(fixture('unwired-connection.ts'), import.meta.dir);
 
     expect(() => Load(entry.root)).toThrow(LoadError);
-    expect(() => Load(entry.root)).toThrow(/unwired connection input "auth"/);
+    expect(() => Load(entry.root)).toThrow(/unwired dependency input "auth"/);
     expect(() => Load(entry.root)).toThrow(/deploy the hex instead/);
   });
 

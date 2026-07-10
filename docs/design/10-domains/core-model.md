@@ -4,10 +4,11 @@ The complete type-level design of `@makerkit/core` and the target-pack contract,
 with `@makerkit/prisma-cloud` as the worked instance. This is the implementation
 design under [`core-and-targets.md`](../03-domain-model/core-and-targets.md): that
 doc says *what* the split is; this one says exactly *which types exist, what fields
-they carry, and who imports what*. Scope: the current model — Services with
-Resource inputs, service-to-service **Connections**, the minimal **Hex** that
-wires them, and the **build adapter** that turns a service's app into a runnable
-artifact; typed interfaces and full Hex composition are named extension points.
+they carry, and who imports what*. Scope: the current model — Services declaring
+**dependency slots** (one mechanism, whoever the producer is), the minimal
+**Hex** that provisions the Resources and services and wires every slot, and
+the **build adapter** that turns a service's app into a runnable artifact;
+typed interfaces and full Hex composition are named extension points.
 
 ## The service is declarations; the app owns its entry
 
@@ -55,9 +56,9 @@ The boundary is decided; only the carve is deferred.
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
-| `@makerkit/core` | node factories (`service`, `resource`, `connectionEnd`, `hex`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
+| `@makerkit/core` | node factories (`service`, `resource`, `dependency`, `hex`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
 | `@makerkit/core/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
-| `@makerkit/prisma-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres({ client })`, `http()` | `@makerkit/core` only |
+| `@makerkit/prisma-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@makerkit/core` only |
 | `@makerkit/rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@makerkit/core` + a Standard Schema validator |
 | `@makerkit/prisma-cloud/target` | `prismaCloud()` | `@makerkit/prisma-alchemy`, `alchemy`, `effect` |
 | `@makerkit/node` · `@makerkit/nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@makerkit/core` only |
@@ -167,7 +168,7 @@ const NODE: unique symbol = Symbol.for("makerkit:node") as never
 
 interface NodeBase {
   readonly [NODE]: true
-  readonly kind: "service" | "resource" | "connection"
+  readonly kind: "service" | "resource" | "dependency"
   readonly type: string                        // the node's OWN routing key, unqualified — e.g. "postgres", "compute"
 }
 // HexNode is deliberately NOT a NodeBase: it has no routing `type` — it is
@@ -175,7 +176,7 @@ interface NodeBase {
 
 // Shared base for pack-authored nodes (service + resource): the pack's package
 // name, e.g. "@makerkit/prisma-cloud" — deploy tooling reads it off the graph
-// to resolve `${pack}/target` (ADR-0003). ConnectionEnd stays pack-less.
+// to resolve `${pack}/target` (ADR-0003). DependencyEnd stays pack-less.
 // Deploy tooling routes on the (pack, type) pair: `pack` selects the target,
 // `type` selects that target's lowering-table entry within it — `type` never
 // carries a pack prefix itself.
@@ -252,11 +253,17 @@ interface BuildAdapter {
 
 // ——— Nodes ———
 
-// A Resource a service depends on, carrying its connection face. C flows from
-// the connection's hydrate return type into the loaded dependency.
-interface ResourceNode<C = unknown> extends PackAuthoredNode {
+// A Resource's identity: the ONE place a piece of infrastructure exists. A hex
+// provisions it (`h.provision("db", postgres({ name: "db" }))`) and wires the
+// returned ref into each consumer's dependency slot — a resource is never
+// created because a service mentioned it. `provides` is the Contract it offers
+// (its single port); the routing `type` is DERIVED as `provides.kind`, so a
+// slot requiring that contract is satisfied — at compile time and at Load —
+// through exactly the machinery a service port uses.
+interface ResourceNode<C extends Contract<any, any> = Contract<any, any>> extends PackAuthoredNode {
   readonly kind: "resource"
-  readonly connection: Connection<Params, C>
+  readonly type: C["kind"]
+  readonly provides: C
 }
 
 // A Service: inputs + its own declared params + how it is built. This IS the
@@ -273,24 +280,30 @@ interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends 
   readonly build: BuildAdapter                 // how the app's entry is built + assembled
 }
 
-// A service-to-service dependency end. Sits in a Deps slot like a ResourceNode,
-// but nothing is provisioned FOR it — at deploy it becomes an EDGE to the
-// producer service the enclosing hex wires it to; at run it hydrates a client
-// through exactly the same Connection machinery as a resource. The consumer
-// never learns HOW the producer's address reached it (written env var today;
-// runtime name lookup later would change only pack internals).
-interface ConnectionEnd<C = unknown> extends NodeBase {
-  readonly kind: "connection"
+// THE dependency slot a service declares, whoever the producer is. Nothing is
+// provisioned FOR it: at Load the enclosing hex wires a provisioned producer's
+// ref into it (a service's exposed port, or a resource — the contract
+// determines validity, never the producer's kind), and at deploy it becomes an
+// EDGE from that producer to the consumer. At run it hydrates a client through
+// the Connection machinery; the consumer never learns HOW the producer's
+// address reached it. `Req` is the required Contract — `unknown` for an untyped
+// end (`http()`, the escape hatch that accepts anything); `required` carries it
+// as a value so Load can call `satisfies()` as the backstop.
+interface DependencyEnd<C = unknown, Req = unknown> extends NodeBase {
+  readonly kind: "dependency"
   readonly connection: Connection<Params, C>
+  readonly required: Req | undefined
 }
 
-// Dependency map: name → what the service consumes. Loaded types are inferred
-// from each entry's hydrate return type — identical mechanics for both kinds.
-type Deps = Record<string, ResourceNode<any> | ConnectionEnd<any>>
+// Dependency map: name → the slot the service declares. Only declarations are
+// admitted — a concrete ResourceNode never sits in deps, so a service cannot
+// cause infrastructure to exist by mentioning it. Loaded types are inferred
+// from each entry's hydrate return type.
+type Deps = Record<string, DependencyEnd<any, any>>
 
 // A Hex: transparent wiring, no code of its own. The body runs at Load (it is
 // wiring, not user code) and provisions the services it owns, supplying a
-// producer for every ConnectionEnd input. Minimal form — boundary ports and
+// producer for every dependency input. Minimal form — boundary ports and
 // nesting arrive with full Hex composition (see § Extension points).
 interface HexNode {
   readonly [NODE]: true
@@ -299,15 +312,23 @@ interface HexNode {
   body(h: HexBuilder): void
 }
 interface HexBuilder {
-  // Registers an owned service under a stable id; `wiring` satisfies the
-  // service's ConnectionEnd inputs with previously provisioned producers.
+  // Provisions an owned resource under a stable id — the ONE place it exists.
+  // Returns the ref (the provided contract, tagged with the id) a later
+  // provision() wires into a consumer's dependency slot.
+  provision<C extends Contract<any, any>>(id: string, resource: ResourceNode<C>):
+    { readonly id: string } & RefPort<C>
+  // Registers an owned service under a stable id; `wiring` supplies a producer
+  // ref for each dependency slot, checked against the slot's required contract
+  // (an untyped slot's Req is `unknown`, so it accepts anything).
   provision(id: string, service: ServiceNode<any, any>,
-            wiring?: Record<string, ProvisionedRef>): ProvisionedRef
+            wiring?: Record<string, RefPort<Contract<any, any>>>): ProvisionedRef
 }
-type ProvisionedRef = { readonly id: string }   // opaque handle within the hex body
+// One ref shape: a stable id plus one ref-port per exposed contract (a service
+// with `expose`, or a resource's single provided port flattened onto the ref).
+type ProvisionedRef = { readonly id: string }
+type RefPort<C extends Contract<any, any>> = C & { readonly __providerId: string }
 
-type Hydrated<N> =
-  N extends ResourceNode<infer C> ? C : N extends ConnectionEnd<infer C> ? C : never
+type Hydrated<N> = N extends DependencyEnd<infer C, any> ? C : never
 type HydratedDeps<D extends Deps> = { readonly [K in keyof D]: Hydrated<D[K]> }
 
 // What load() returns: the hydrated deps and the service's resolved params, merged
@@ -323,10 +344,18 @@ validate, and freeze. This is the whole "framework provides / pack wraps" contra
 
 ```ts
 // @makerkit/core
-function resource<P extends Params, C>(def: {
+function resource<C extends Contract<any, any>>(def: {
+  name: string
+  pack: string
+  provides: C                      // the routing `type` is derived as provides.kind
+}): ResourceNode<C>
+
+function dependency<P extends Params, C, Req = unknown>(def: {
+  name?: string                    // diagnostic only; falls back to `type`
   type: string
   connection: Connection<P, C>
-}): ResourceNode<C>
+  required?: Req                   // the Contract this slot requires (undefined = untyped)
+}): DependencyEnd<C, Req>
 
 function service<D extends Deps, P extends Params>(def: {
   type: string
@@ -335,58 +364,62 @@ function service<D extends Deps, P extends Params>(def: {
   build: BuildAdapter
 }): ServiceNode<D, P>   // the pack wraps this and returns its runnable/loadable subclass
 
-function connectionEnd<P extends Params, C>(def: {
-  type: string
-  connection: Connection<P, C>
-}): ConnectionEnd<C>
-
 function hex(name: string, body: (h: HexBuilder) => void): HexNode   // body runs at Load, not here
 ```
 
-`service()` freezes `inputs`/`params`/`build`; `resource()` freezes the
-connection's declared params. Both throw on an empty `type`; `service()`,
-`resource()`, and `connectionEnd()` also reject an input or param name containing
-`_`, and a hex's `provision()` rejects an id containing `_` or `.` — the pack's
-config-key serializer joins address segments and names with `_` (node ids join path
-segments with `.`), so either character inside a name would collide with that
-separator. Nothing executes: constructing nodes is pure. The pack's authoring
-factory (`compute()`) calls `service()` and returns a subclass carrying `run` and
-`load`.
+`service()` freezes `inputs`/`params`/`build`; `dependency()` freezes the
+connection's declared params; `resource()` derives `type` from `provides.kind`.
+All throw on an empty `type`; `service()` and `dependency()` also reject an
+input or param name containing `_`, and a hex's `provision()` rejects an id
+containing `_` or `.` — the pack's config-key serializer joins address segments
+and names with `_` (node ids join path segments with `.`), so either character
+inside a name would collide with that separator. Nothing executes: constructing
+nodes is pure. The pack's authoring factory (`compute()`) calls `service()` and
+returns a subclass carrying `run` and `load`.
 
 ## Graph and Load (`@makerkit/core`)
 
 ```ts
 type NodeId = string           // path-derived: root "hello", its input "hello.db"
 
-interface GraphNode { readonly id: NodeId; readonly node: ServiceNode | ResourceNode }
-interface Edge { readonly from: NodeId; readonly to: NodeId; readonly input: string }
-                               // resource → service, labeled with the input name
+interface GraphNode { readonly id: NodeId
+                      readonly node: ServiceNode | ResourceNode | DependencyEnd | HexNode }
+interface Edge { readonly from: NodeId; readonly to: NodeId; readonly input: string
+                 readonly kind: "input" | "dependency" }
 
 interface Graph {
   readonly root: GraphNode
-  readonly nodes: readonly GraphNode[]     // root + one per input, topo-ordered (deps first)
+  readonly nodes: readonly GraphNode[]     // root + the provisioned/declared nodes, topo-ordered (deps first)
   readonly edges: readonly Edge[]
 }
 
-function Load(root: ServiceNode, opts?: { id?: NodeId }): Graph   // throws LoadError
+function Load(root: ServiceNode | HexNode, opts?: { id?: NodeId }): Graph   // throws LoadError
 class LoadError extends Error {}
 ```
 
 Load accepts a service or a hex root. For a service it walks `root.inputs`, assigns
 ids, builds edges. For a hex it **executes the body** (the body is wiring, not user
 code — running it at Load is the designed exception to imports-run-nothing) with a
-collector `HexBuilder`, producing the owned services and one **connection edge**
-per wired ConnectionEnd input. Edges carry a kind: `input` (service consumes a
-resource) or `connection` (service calls a service). Validation: every node
-branded with a non-empty `type`; every ConnectionEnd input of a provisioned
-service **wired to a provisioned producer** (dangling connection = LoadError); the
-connection edges form a **DAG** (a cycle is a LoadError with the cycle named — a
-consequence of address-at-deploy-time wiring: if A needs B's address to deploy and
-B needs A's, neither can go first). A lone service Loaded outside any hex may have
-unwired ConnectionEnds — connectedness is a topology-level check; booting it
-unwired still fails loudly through the ordinary missing-config path. Load
-executes nothing of the user's — the graph is data in memory to inspect or hand to
-`lower` (or the node's `run`). A **topology view** — nodes as `{ id, kind, type }`
+collector `HexBuilder`, producing the owned resources and services and one
+**dependency edge** per wired slot. Edges carry a kind: `input` (a service
+consumes its own declared slot) or `dependency` (a service consumes a
+provisioned producer — a service port OR a resource, the one mechanism), the
+latter running from the producer to the consumer, labeled with the consumer's
+input name. Validation: every node branded with a non-empty `type`; every
+dependency slot of a provisioned service **wired to a provisioned producer**,
+and when the slot declares a required contract the wired ref must `satisfies()`
+it (dangling or unsatisfied = LoadError) — no producer-kind branching, a
+service ref cannot satisfy a postgres-requiring slot because no service port
+carries that contract kind; a concrete ResourceNode found inside `deps` is a
+targeted LoadError — a resource is provisioned by the composing hex, never
+created by mention; the dependency edges form a **DAG** (a cycle is a LoadError
+with the cycle named — a consequence of address-at-deploy-time wiring: if A
+needs B's address to deploy and B needs A's, neither can go first; resources
+take no wiring, so only service-to-service edges can cycle). A service Loaded
+directly as the root may carry no dependency slot at all — nothing at the root
+wires or provisions for it — so an unwired slot is a LoadError naming the input
+and pointing at deploying the composing hex instead. Load executes nothing of the user's — the graph is data
+in memory to inspect or hand to `lower` (or the node's `run`). A **topology view** — nodes as `{ id, kind, type }`
 plus edges, function slots dropped — is `JSON.stringify`-able by construction; the
 serialized-artifact emit step builds on this later.
 
@@ -531,25 +564,27 @@ service, and wires its own resources around the returned `outputs`.
 
 **Core's deploy-path sequencing** — the control flow no pack can misorder.
 First, `application.provision` runs once (the Project, with the poison
-`DATABASE_URL` variables). Then walk services in topological order over the
-connection edges (the DAG Load validated); for each service:
+`DATABASE_URL` variables). Then walk the graph in topological order (the hex
+body's provision order; the dependency DAG Load validated). Each hex-provisioned
+**resource** lowers exactly once via `Target.resources` (e.g. one Database +
+Connection — outputs carry the url), no matter how many services consume it;
+dependency-slot nodes are edges only and never lower. Then for each service:
 
-1. Lower its resource inputs via `Target.resources` (e.g. the service's own
-   Database + Connection — outputs carry the url).
-2. `provision` — the service now has identity (its App).
-3. core **builds the typed `Config`** — each input's declared params matched by
-   name to the lowered outputs: resource params from the resource lowering, and
-   wired ConnectionEnd params from the **producer's deploy outputs** (the
-   producer, earlier in topo order, is already fully deployed — its URL is real,
-   not the create-time placeholder) — plus service-param defaults. Leaf values
-   are provisioning refs, not strings.
-4. `serialize(config)` — the pack encodes that typed Config into the service's
+1. `provision` — the service now has identity (its App).
+2. core **builds the typed `Config`** — each input's declared params matched by
+   name to its producer's lowered outputs through the one `dependency` edge:
+   whatever the hex wired in — a resource's lowered outputs (shared by every
+   consumer wired to it) or a producer service's deploy outputs (the producer,
+   earlier in topo order, is already fully deployed — its URL is real, not the
+   create-time placeholder) — plus service-param defaults. Leaf values are
+   provisioning refs, not strings.
+3. `serialize(config)` — the pack encodes that typed Config into the service's
    runtime environment (Prisma Cloud: one env write per leaf, keyed by the
    pack's own naming from the address, value = the ref). Never the platform default.
-5. `package({ assembled, address })` — the build adapter's assembler has produced
+4. `package({ assembled, address })` — the build adapter's assembler has produced
    the normalized bundle dir; the pack prints the bootstrap (address + boot import
    baked in, § below) and wraps it in the target envelope.
-6. `deploy(artifact)` — the first version snapshots an environment that is already
+5. `deploy(artifact)` — the first version snapshots an environment that is already
    complete.
 
 **How the ordering is actually enforced:** our walk only *assembles* Alchemy
@@ -691,29 +726,51 @@ Authoring entry — nodes carrying their connection/host knowledge; the driver i
 **parameter**, so the pack ships none and the client type is inferred:
 
 ```ts
-import { resource, service, connectionEnd, configOf, hydrate,
-  type BuildAdapter, type Config, type ConfigDeclaration, type Connection, type Deps,
-  type Loaded, type ResourceNode, type ConnectionEnd, type RunnableServiceNode } from "@makerkit/core"
+import { resource, dependency, service, configOf, hydrate,
+  type BuildAdapter, type Config, type ConfigDeclaration, type Connection,
+  type Contract, type Deps, type DependencyEnd, type Loaded, type ResourceNode,
+  type RunnableServiceNode } from "@makerkit/core"
 
 export interface PostgresConfig { readonly url: string }
 
-// The app supplies the client factory; C is inferred from its return type.
-export const postgres = <C>(opts: { client: (config: PostgresConfig) => C | Promise<C> }): ResourceNode<C> =>
-  resource({
-    pack: "@makerkit/prisma-cloud", type: "postgres",
-    connection: {
-      params: { url: { type: "string", secret: true } },
-      hydrate: (v) => opts.client({ url: v.url }),   // v: { url: string } — enforced by the declaration
-    },
+type ClientFactory<C> = (config: PostgresConfig) => C | Promise<C>
+
+// The contract a Postgres provides AND its consumers require. satisfies()
+// compares KIND, not identity — a pack module can be duplicated across a
+// workspace (same rationale as the Symbol.for node brand), and every
+// duplicate's contract must still satisfy.
+export const postgresContract: Contract<"postgres", PostgresConfig> = Object.freeze({
+  kind: "postgres", __cmp: { url: "" },
+  satisfies: (required) => required.kind === "postgres",
+})
+
+// ONE postgres factory, two exclusive shapes (`?: never`, re-checked at
+// runtime). { name }: the identity a hex provisions — the ONE place the
+// database exists, providing postgresContract. { client }: the consumer's
+// dependency slot requiring it; the app supplies the client factory and C is
+// inferred. { name, client } and {} are compile errors and runtime throws.
+export function postgres(opts: { name: string; client?: never }): ResourceNode<typeof postgresContract>
+export function postgres<C>(opts: { client: ClientFactory<C>; name?: never }): DependencyEnd<C, typeof postgresContract>
+export function postgres<C>(opts: { name?: string; client?: ClientFactory<C> }): unknown {
+  const { name, client } = opts
+  if (name !== undefined && client !== undefined) throw new Error("postgres() takes `name` OR `client`, not both")
+  if (name !== undefined) return resource({ name, pack: "@makerkit/prisma-cloud", provides: postgresContract })
+  if (client !== undefined) return dependency({
+    type: "postgres",
+    connection: { params: { url: { type: "string", secret: true } }, hydrate: (v) => client({ url: v.url }) },
+    required: postgresContract,
   })
+  throw new Error("postgres() requires `name` or `client`.")
+}
 
 // A service-to-service dependency. Default client is a thin URL-anchored fetch
 // wrapper (fetch is standard across runtimes — no driver, no runtime coupling);
-// an app factory can replace it. The typed generated client arrives with the
-// interface primitive (§ Extension points).
+// an app factory can replace it. Untyped (required undefined) — the escape
+// hatch; typed generated clients arrive with the interface primitive
+// (§ Extension points).
 export interface HttpClient { readonly url: string; fetch(path: string, init?: RequestInit): Promise<Response> }
-export const http = <C = HttpClient>(opts?: { client?: (cfg: { url: string }) => C }): ConnectionEnd<C> =>
-  connectionEnd({
+export const http = <C = HttpClient>(opts?: { client?: (cfg: { url: string }) => C }): DependencyEnd<C> =>
+  dependency({
     type: "http",
     connection: {
       params: { url: { type: "string" } },
@@ -808,7 +865,9 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   },
 
   resources: {
-    // Each postgres input gets its own Database in the application's project.
+    // One Database per hex-provisioned postgres resource — `id` is the hex
+    // provision id (e.g. "db"), so a resource shared by several services is
+    // created exactly once.
     postgres: ({ id, application }) =>
       Effect.gen(function* () {
         const db = yield* Prisma.Database(`${id}-db`, {
@@ -895,7 +954,7 @@ There is **no public runtime entry**: the boot loop rides on the node itself
 the whole thing), so the wrapper bundle carries the runtime with a single copy of
 core and the bootstrap needs nothing but `./main.js` and a dynamic import of the
 app's entry. (A missing client factory is impossible by construction —
-`postgres({ client })` requires it at authoring, at compile time.)
+the dependency shapes of `postgres()` require `client` at compile time.)
 
 ## The build adapter — worked instances
 
@@ -946,20 +1005,34 @@ only; the app writes and bundles its own entry:
 
 ```ts
 // src/service.ts — the authored service: name + deps + build + where it lives.
-// No handler.
+// No handler. `db` is a DEPENDENCY (a slot): `postgres({ client })` requires
+// postgresContract and never provisions anything — the composing hex owns the
+// database and wires its ref in.
 import { compute, postgres } from "@makerkit/prisma-cloud"
 import node from "@makerkit/node"
 import { SQL } from "bun"                       // the APP's choice of client
 
-const db = postgres({ name: "db", client: ({ url }) => new SQL({ url }) })
+const db = postgres({ client: ({ url }) => new SQL({ url }) })
 // typeof hydrated db = SQL — inferred from the factory, no phantom declaration
 
 export default compute({
-  name: "hello",                                // ADR-0006: every node named; at root this names the app
+  name: "hello",                                // ADR-0006: every node named
   deps: { db },
   // ADR-0004: module anchors entry's resolution — dirname(module) is src/, so
   // "../dist/server.js" reaches the app's build output. Inert at runtime.
   build: node({ module: import.meta.url, entry: "../dist/server.js" }),
+})
+
+// src/hex.ts — the app root: the hex OWNS the database. It provisions the
+// identity `postgres({ name })` and wires its ref into the service's slot (the
+// contract matches); its name names the app (ADR-0006).
+import { hex } from "@makerkit/core"
+import { postgres } from "@makerkit/prisma-cloud"
+import service from "./service.ts"
+
+export default hex("hello", (h) => {
+  const db = h.provision("db", postgres({ name: "db" }))
+  h.provision("hello", service, { db })
 })
 
 // src/server.ts — the app's OWN entrypoint. The app bundles this to dist/server.js
@@ -973,15 +1046,15 @@ Bun.serve({ port, hostname: "0.0.0.0",
 // There is no deploy config file (ADR-0003). The app builds itself first
 // (its own bundler produces dist/server.js), then:
 //
-//   makerkit deploy src/service.ts
+//   makerkit deploy src/hex.ts
 //
 // The CLI infers the target pack from the nodes, constructs it from the
 // environment (the pack's /target fromEnv() reads PRISMA_WORKSPACE_ID), runs
 // each service's assembly, and drives Alchemy — no bundle map, no stack file.
 ```
 
-`service.load()` is typed end to end by the chain `postgres({ client })` → `C =
-SQL` → `compute({ deps: { db } })` captures `{ db: SQL }` → `load()` returns it.
+`service.load()` is typed end to end by the chain `postgres({ client })` →
+`C = SQL` → `compute({ deps: { db } })` captures `{ db: SQL }` → `load()` returns it.
 The app never annotates a dependency type. Note where Bun appears: only in
 `service.ts` (the `new SQL` factory) and `server.ts` (`Bun.serve`, the app's own
 entry) — the app's choice, since it deploys to a Bun runtime. Switching the client
@@ -996,8 +1069,11 @@ model promises. The config round-trip is proven separately at the pack level
 
 ### Two services, connected — the hex (a framework-hosted consumer)
 
-The storefront-auth shape: `auth` is a self-served Hono service (as above);
-`storefront` is a **framework-hosted** Next.js service whose page pulls the `auth`
+The storefront-auth shape: `auth` is a self-served Hono service shaped like the
+one above, except its `db` is the SPLIT form — a client-only
+`postgres({ client })` slot, because the resource is owned away from the
+consumer, by the composing hex below; `storefront` is a **framework-hosted**
+Next.js service whose page pulls the `auth`
 client via `load()`. This replaces the hand-written mixed stack — the URL plumbing,
 the `requireStringOutput` guard, and the hand-named `EnvironmentVariable` all
 disappear into core's sequencing.
@@ -1022,22 +1098,26 @@ export default async function Home() {
   return <p>Auth /verify says: {res.status} {await res.text()}</p>
 }
 
-// app.ts — the app's hex: transparent wiring, runs at Load. Its name becomes
+// app.ts — the app's hex: transparent wiring, runs at Load. It owns the shared
+// Postgres — provisioned once here, wired into auth's slot. Its name becomes
 // the application (Project) name; each service's build adapter carries its own
 // authoring module (BuildAdapter.module), so a hex can compose services that
 // live in entirely different directories.
+import { postgres } from "@makerkit/prisma-cloud"
 import authService from "./hexes/auth/src/service"
 import storefrontService from "./hexes/storefront/src/service"
 export default hex("storefront-auth", (h) => {
-  const authRef = h.provision("auth", authService)
-  h.provision("storefront", storefrontService, { auth: authRef })  // wires the edge
+  const db = h.provision("db", postgres({ name: "db" }))
+  const authRef = h.provision("auth", authService, { db })         // db→auth dependency edge
+  h.provision("storefront", storefrontService, { auth: authRef })  // auth→storefront dependency edge
 })
 
 // No deploy config file (ADR-0003): build both apps, then
 //   makerkit deploy app.ts
 ```
 
-At deploy, core sequences: auth provision → auth deploy (URL now real) → storefront
+At deploy, core sequences: the db resource (lowered once) → auth provision →
+auth deploy (URL now real) → storefront
 provision → build the storefront's `Config` (auth's deploy URL fills the
 `auth.url` leaf) → `serialize` (the pack encodes it under its address-prefixed
 keys) → `nextjs` assembler → package → storefront deploy — the first VM boots with
@@ -1045,7 +1125,7 @@ its config present. At boot, `bootstrap.js` calls `main.run(address, () =>
 import("./server.js"))`: `run` deserializes the storefront's env, re-emits it under
 address-free stash keys, then boots the Next server; the page's `service.load()`
 reads the stash and hydrates the `auth` leaf into a client exactly as the Hono
-entry hydrates `db`. Neither entry can tell a connection from a resource.
+entry hydrates `db`. Neither entry can tell a service producer from a resource — one mechanism.
 
 ## Invariants (enforced, not aspirational)
 

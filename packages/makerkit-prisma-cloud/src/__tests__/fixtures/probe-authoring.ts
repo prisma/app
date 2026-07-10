@@ -1,14 +1,13 @@
 // Bundle probe for the import-split guard: uses BOTH authoring entries (core
 // and pack) the way a user service module would, with real value usage so
 // nothing tree-shakes away.
-import { configOf, Load } from '@makerkit/core';
+import { configOf, hex, Load } from '@makerkit/core';
 import { compute, postgres } from '@makerkit/prisma-cloud';
 
 const app = compute({
   name: 'test-service',
   deps: {
     db: postgres({
-      name: 'test-resource',
       client: ({ url }) => ({ url }),
     }),
   },
@@ -20,5 +19,12 @@ const app = compute({
   },
 });
 
-export const graph = Load(app, { id: 'probe' });
+export const graph = Load(
+  hex('probe-hex', (h) => {
+    const db = h.provision('db', postgres({ name: 'db' }));
+    h.provision('app', app, { db });
+  }),
+  { id: 'probe' },
+);
+
 export const manifest = configOf(app);

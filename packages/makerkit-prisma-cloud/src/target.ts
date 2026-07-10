@@ -96,9 +96,11 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   },
 
   resources: {
-    // Each postgres input gets its own Database in the application's project.
-    // The url output fills the service's db.url Config leaf and is encoded by
-    // serialize under the service's own named key — never the platform default.
+    // One Database per hex-provisioned postgres resource, in the application's
+    // project — `id` is the hex provision id (e.g. "db"), so a resource shared
+    // by several consumers is created exactly once. The url output fills each
+    // consumer's Config leaf and is encoded by serialize under that service's
+    // own named key — never the platform default.
     postgres: ({ id, application }) =>
       Effect.gen(function* () {
         const db = yield* Prisma.Database(`${id}-db`, {

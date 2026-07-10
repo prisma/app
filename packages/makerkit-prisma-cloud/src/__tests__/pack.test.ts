@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Contract } from '@makerkit/core';
 import { configOf, hydrateSync, isNode } from '@makerkit/core';
-import { compute, postgres } from '../index.ts';
+import { compute, postgres, postgresContract } from '../index.ts';
 import { configKey, deserialize } from '../serializer.ts';
 
 const build = {
@@ -25,33 +25,59 @@ async function withEnv<T>(values: Record<string, string>, fn: () => Promise<T> |
   }
 }
 
-describe('postgres({ client })', () => {
-  test('returns a branded resource node declaring { url: string, secret }', () => {
-    const node = postgres({
-      name: 'test-resource',
-      client: ({ url }) => ({ url }),
-    });
+describe('postgres({ name })', () => {
+  test('returns a branded resource identity providing postgresContract; type is the contract kind', () => {
+    const node = postgres({ name: 'db' });
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.type).toBe('postgres');
-    expect(node.connection.params).toEqual({ url: { type: 'string', secret: true } });
+    expect(node.pack).toBe('@makerkit/prisma-cloud');
+    expect(node.name).toBe('db');
+    expect(node.provides).toBe(postgresContract);
+    expect('connection' in node).toBe(false);
+  });
+});
+
+describe('postgres({ client })', () => {
+  test('returns a branded dependency end requiring postgresContract, declaring { url: string, secret }', () => {
+    const end = postgres({
+      client: ({ url }) => ({ url }),
+    });
+
+    expect(isNode(end)).toBe(true);
+    expect(end.kind).toBe('dependency');
+    expect(end.type).toBe('postgres');
+    expect(end.name).toBe('postgres');
+    expect(end.required).toBe(postgresContract);
+    expect(end.connection.params).toEqual({ url: { type: 'string', secret: true } });
   });
 
   test("hydrate delegates to the app's client factory; C is inferred", async () => {
     const made: unknown[] = [];
-    const node = postgres({
-      name: 'test-resource',
+    const end = postgres({
       client: (config) => {
         made.push(config);
         return { fake: 'client', ...config };
       },
     });
 
-    const client = await node.connection.hydrate({ url: 'postgres://u:p@host:5432/db' });
+    const client = await end.connection.hydrate({ url: 'postgres://u:p@host:5432/db' });
 
     expect(made).toEqual([{ url: 'postgres://u:p@host:5432/db' }]);
     expect(client).toEqual({ fake: 'client', url: 'postgres://u:p@host:5432/db' });
+  });
+});
+
+describe('postgres() argument-shape exclusivity', () => {
+  test('an empty argument throws naming the accepted shapes', () => {
+    expect(() => postgres({} as never)).toThrow(/requires `name`.+`client`/);
+  });
+
+  test('both name and client throws — the identity and the dependency are separate', () => {
+    expect(() =>
+      postgres({ name: 'db', client: ({ url }: { url: string }) => ({ url }) } as never),
+    ).toThrow(/takes `name`.+OR `client`.+not both/);
   });
 });
 
@@ -74,7 +100,6 @@ describe('compute()', () => {
   test('is inert until run or load — the client factory does not run at construction', () => {
     let calls = 0;
     const db = postgres({
-      name: 'test-resource',
       client: ({ url }) => {
         calls += 1;
         return { url };
@@ -95,7 +120,6 @@ describe('compute()', () => {
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -150,7 +174,6 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -168,7 +191,6 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -206,7 +228,6 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -238,7 +259,6 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -298,7 +318,6 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -320,7 +339,6 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -335,6 +353,20 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     );
 
     expect(loaded).toEqual({ db: { url: 'postgres://y' }, port: 3000 });
+  });
+
+  test('a client dependency in deps round-trips through run()/load() — typed hydration', async () => {
+    const db = postgres({ client: ({ url }) => ({ url }) });
+    const app = compute({ name: 'test-service', deps: { db }, build });
+
+    let loaded: unknown;
+    await withEnv({ DB_URL: 'postgres://dual', PORT: '' }, () =>
+      app.run('', async () => {
+        loaded = app.load();
+      }),
+    );
+
+    expect(loaded).toEqual({ db: { url: 'postgres://dual' }, port: 3000 });
   });
 
   test('run() calls boot() exactly once, even with nothing to hydrate', async () => {
@@ -360,7 +392,6 @@ describe('compute().load()', () => {
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => {
             hydrateCalls += 1;
             return { url };
@@ -388,7 +419,6 @@ describe('the config pipeline over pack nodes', () => {
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },

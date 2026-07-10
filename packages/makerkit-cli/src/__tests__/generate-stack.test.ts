@@ -96,5 +96,6 @@ describe('the generated stack file for a real hex entry (no alchemy run)', () =>
     expect(content).toContain(
       `"two": { dir: ${JSON.stringify(path.join(fixtureDir, 'two', 'dist', 'bundle'))}, entry: "server.js" }`,
     );
+    expect(content).not.toContain('bundle:');
   });
 });

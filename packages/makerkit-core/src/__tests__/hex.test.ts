@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import type { Contract } from '../contract.ts';
 import { Load, LoadError } from '../graph.ts';
 import type { ProvisionedRef } from '../node.ts';
-import { connectionEnd, hex, resource, service } from '../node.ts';
-import { conn } from './helpers.ts';
+import { dependency, hex, resource, service } from '../node.ts';
+import { conn, providerContract } from './helpers.ts';
 
 const build = {
   kind: 'node',
@@ -12,16 +12,20 @@ const build = {
   entry: 'server.js',
 };
 
-const dbResource = () =>
-  resource({
-    name: 'test-resource',
-    pack: 'test/pack',
+const dbContract = () => providerContract('fake/db', { url: '' });
+
+const dbResource = () => resource({ name: 'db', pack: 'test/pack', provides: dbContract() });
+
+const dbDep = () =>
+  dependency({
+    name: 'db',
     type: 'fake/db',
     connection: conn({ url: { type: 'string', secret: true } }, (v) => ({ url: v.url })),
+    required: dbContract(),
   });
 
-const httpEnd = () =>
-  connectionEnd({
+const httpDep = () =>
+  dependency({
     type: 'fake/http',
     connection: conn({ url: { type: 'string' } }, (v) => ({ url: v.url })),
   });
@@ -31,7 +35,7 @@ const makeAuthService = () =>
     name: 'test-service',
     pack: 'test/pack',
     type: 'fake/compute',
-    inputs: { db: dbResource() },
+    inputs: { db: dbDep() },
     params: {},
     build,
   });
@@ -41,19 +45,20 @@ const makeStorefrontService = () =>
     name: 'test-service',
     pack: 'test/pack',
     type: 'fake/compute',
-    inputs: { auth: httpEnd() },
+    inputs: { auth: httpDep() },
     params: {},
     build,
   });
 
 const twoServiceHex = () =>
   hex('shop', (h) => {
-    const authRef = h.provision('auth', makeAuthService());
+    const db = h.provision('db', dbResource());
+    const authRef = h.provision('auth', makeAuthService(), { db });
     h.provision('storefront', makeStorefrontService(), { auth: authRef });
   });
 
 describe('Load of a hex root', () => {
-  test('executes the body, producing owned services, input edges, and connection edges', () => {
+  test('executes the body, producing owned resources and services, input edges, and dependency edges', () => {
     const root = twoServiceHex();
 
     const graph = Load(root);
@@ -61,16 +66,18 @@ describe('Load of a hex root', () => {
     expect(graph.root.id).toBe('shop');
     expect(graph.root.node).toBe(root);
     expect(graph.nodes.map((n) => ({ id: n.id, kind: n.node.kind }))).toEqual([
-      { id: 'auth.db', kind: 'resource' },
+      { id: 'db', kind: 'resource' },
+      { id: 'auth.db', kind: 'dependency' },
       { id: 'auth', kind: 'service' },
-      { id: 'storefront.auth', kind: 'connection' },
+      { id: 'storefront.auth', kind: 'dependency' },
       { id: 'storefront', kind: 'service' },
       { id: 'shop', kind: 'hex' },
     ]);
     expect(graph.edges).toEqual([
       { from: 'auth.db', to: 'auth', input: 'db', kind: 'input' },
+      { from: 'db', to: 'auth', input: 'db', kind: 'dependency' },
       { from: 'storefront.auth', to: 'storefront', input: 'auth', kind: 'input' },
-      { from: 'auth', to: 'storefront', input: 'auth', kind: 'connection' },
+      { from: 'auth', to: 'storefront', input: 'auth', kind: 'dependency' },
     ]);
   });
 
@@ -102,38 +109,37 @@ describe('Load of a hex root', () => {
     expect(bodyCalls).toBe(1);
   });
 
-  test('duplicate provision ids are a LoadError', () => {
+  test('duplicate provision ids are a LoadError — resources and services share one id space', () => {
     const root = hex('shop', (h) => {
-      h.provision('auth', makeAuthService());
-      h.provision('auth', makeAuthService());
+      h.provision('auth', dbResource());
+      const db = h.provision('db', dbResource());
+      h.provision('auth', makeAuthService(), { db });
     });
 
     expect(() => Load(root)).toThrow(LoadError);
     expect(() => Load(root)).toThrow(/Duplicate provision id "auth"/);
   });
 
-  test('a provision id containing "_" or "." is a LoadError (config-key / node-id separator collision)', () => {
-    // "auth_db" + param "url" would serialize to the same env key as
-    // "auth" + input "db" + param "url" (both AUTH_DB_URL).
-    const underscored = hex('shop', (h) => {
-      h.provision('auth_db', makeAuthService());
+  test('a provision id containing "_" or "." is a LoadError naming the separators', () => {
+    const root = hex('shop', (h) => {
+      h.provision('auth_db', dbResource());
     });
-    expect(() => Load(underscored)).toThrow(/id "auth_db" \(hex "shop"\) may not contain/);
 
-    const dotted = hex('shop', (h) => {
-      h.provision('auth.db', makeAuthService());
-    });
-    expect(() => Load(dotted)).toThrow(/id "auth.db" \(hex "shop"\) may not contain/);
+    expect(() => Load(root)).toThrow(LoadError);
+    expect(() => Load(root)).toThrow(/id "auth_db" \(hex "shop"\) may not contain "_" or "\."/);
   });
 
-  test('a dangling ConnectionEnd input names the service and the input', () => {
+  test('a dangling dependency input names the service and the input', () => {
     const root = hex('shop', (h) => {
-      h.provision('auth', makeAuthService());
+      const db = h.provision('db', dbResource());
+      h.provision('auth', makeAuthService(), { db });
       h.provision('storefront', makeStorefrontService()); // auth input left unwired
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/"auth" of provisioned service "storefront" is not wired/);
+    expect(() => Load(root)).toThrow(
+      /Dependency input "auth" of provisioned service "storefront" is not wired/,
+    );
   });
 
   test('wiring to an unknown producer id is a LoadError', () => {
@@ -147,15 +153,15 @@ describe('Load of a hex root', () => {
     expect(() => Load(root)).toThrow(/"storefront.auth" references "nope"/);
   });
 
-  test('wiring a name that is not a ConnectionEnd input is a LoadError', () => {
+  test('wiring a name that is not a dependency slot of the service is a LoadError', () => {
     const root = hex('shop', (h) => {
-      const authRef = h.provision('auth', makeAuthService());
-      // "db" is a resource input on auth — not wireable.
-      h.provision('other', makeAuthService(), { db: authRef });
+      const db = h.provision('db', dbResource());
+      const authRef = h.provision('auth', makeAuthService(), { db });
+      h.provision('other', makeStorefrontService(), { auth: authRef, extra: authRef } as never);
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/"db", which is not a ConnectionEnd input/);
+    expect(() => Load(root)).toThrow(/"extra", which is not a dependency slot/);
   });
 
   test('builder layer: refs are only obtainable from provision() — honest wiring is create-then-wire', () => {
@@ -163,7 +169,8 @@ describe('Load of a hex root', () => {
     // honest body cannot express a forward reference, let alone a cycle.
     const seen: string[] = [];
     const root = hex('shop', (h) => {
-      const ref = h.provision('auth', makeAuthService());
+      const db = h.provision('db', dbResource());
+      const ref = h.provision('auth', makeAuthService(), { db });
       seen.push(ref.id);
       h.provision('storefront', makeStorefrontService(), { auth: ref });
     });
@@ -178,7 +185,7 @@ describe('Load of a hex root', () => {
       name: 'test-service',
       pack: 'test/pack',
       type: 'fake/compute',
-      inputs: { peer: httpEnd() },
+      inputs: { peer: httpDep() },
       params: {},
       build,
     });
@@ -186,7 +193,7 @@ describe('Load of a hex root', () => {
       name: 'test-service',
       pack: 'test/pack',
       type: 'fake/compute',
-      inputs: { peer: httpEnd() },
+      inputs: { peer: httpDep() },
       params: {},
       build,
     });
@@ -197,7 +204,7 @@ describe('Load of a hex root', () => {
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/Connection cycle/);
+    expect(() => Load(root)).toThrow(/Dependency cycle/);
     try {
       Load(root);
     } catch (error) {
@@ -217,13 +224,15 @@ describe('Load of a hex root', () => {
       h.provision('storefront', makeStorefrontService(), {
         auth: { id: 'auth' } as ProvisionedRef,
       });
-      h.provision('auth', makeAuthService());
+      const db = h.provision('db', dbResource());
+      h.provision('auth', makeAuthService(), { db });
     });
 
     const graph = Load(root);
 
     expect(graph.nodes.map((n) => n.id)).toEqual([
       'storefront.auth',
+      'db',
       'auth.db',
       'auth',
       'storefront',
@@ -234,12 +243,111 @@ describe('Load of a hex root', () => {
     expect(authIndex).toBeLessThan(storefrontIndex);
   });
 
-  test('a lone service Loaded directly with an unwired ConnectionEnd input is a LoadError naming the input and pointing at the composing hex', () => {
+  test('a lone service Loaded directly with an unwired dependency input is a LoadError naming the input and pointing at the composing hex', () => {
     const lone = makeStorefrontService();
 
     expect(() => Load(lone, { id: 'storefront' })).toThrow(LoadError);
     expect(() => Load(lone, { id: 'storefront' })).toThrow(
-      /"storefront" has an unwired connection input "auth".*composed by a hex.*deploy the hex/s,
+      /"storefront" has an unwired dependency input "auth".*composed by a hex.*deploy the hex/s,
+    );
+  });
+});
+
+describe('Load of a hex root — provisioned resources', () => {
+  test('one provisioned resource wired to two services: exactly one resource node, one dependency edge per consumer', () => {
+    const root = hex('shop', (h) => {
+      const db = h.provision('db', dbResource());
+      h.provision('auth', makeAuthService(), { db });
+      h.provision('billing', makeAuthService(), { db });
+    });
+
+    const graph = Load(root);
+
+    const resourceNodes = graph.nodes.filter((n) => n.node.kind === 'resource');
+    expect(resourceNodes.map((n) => n.id)).toEqual(['db']);
+    expect(graph.edges.filter((e) => e.kind === 'dependency')).toEqual([
+      { from: 'db', to: 'auth', input: 'db', kind: 'dependency' },
+      { from: 'db', to: 'billing', input: 'db', kind: 'dependency' },
+    ]);
+  });
+
+  test("provision() hands back the resource's contract as its ref, tagged with the id", () => {
+    let ref: ({ id: string } & Contract<'fake/db', { url: string }>) | undefined;
+    Load(
+      hex('shop', (h) => {
+        ref = h.provision('db', dbResource());
+      }),
+    );
+
+    expect(ref?.id).toBe('db');
+    expect(ref?.kind).toBe('fake/db');
+    expect(typeof ref?.satisfies).toBe('function');
+  });
+
+  test('wiring a slot to a resource whose contract has another kind is a LoadError', () => {
+    const cache = resource({
+      name: 'cache',
+      pack: 'test/pack',
+      provides: providerContract('fake/cache', {}),
+    });
+    const root = hex('shop', (h) => {
+      const cacheRef = h.provision('cache', cache);
+      // TypeScript already rejects this wiring at the call site (see
+      // hex-wiring.test-d.ts) — this exercises the runtime backstop directly,
+      // as if that check were bypassed by a cast.
+      h.provision('auth', makeAuthService(), { db: cacheRef as never });
+    });
+
+    expect(() => Load(root)).toThrow(LoadError);
+    expect(() => Load(root)).toThrow(/"auth.db" does not satisfy its required contract/);
+  });
+
+  test('wiring a contract-requiring slot to a bare service ref (no matching port) is a LoadError', () => {
+    const root = hex('shop', (h) => {
+      const db = h.provision('db', dbResource());
+      const other = h.provision('other', makeAuthService(), { db });
+      h.provision('auth', makeAuthService(), { db: other as never });
+    });
+
+    expect(() => Load(root)).toThrow(LoadError);
+    expect(() => Load(root)).toThrow(/"auth.db" does not satisfy its required contract/);
+  });
+
+  test("an untyped slot accepts a resource ref — uniformity's escape hatch, unchecked by design", () => {
+    const root = hex('shop', (h) => {
+      const db = h.provision('db', dbResource());
+      h.provision('storefront', makeStorefrontService(), { auth: db });
+    });
+
+    const graph = Load(root);
+
+    expect(graph.edges.filter((e) => e.kind === 'dependency')).toEqual([
+      { from: 'db', to: 'storefront', input: 'auth', kind: 'dependency' },
+    ]);
+  });
+
+  test('a dangling dependency input on a resource consumer names the service and the input', () => {
+    const root = hex('shop', (h) => {
+      h.provision('db', dbResource());
+      h.provision('auth', makeAuthService()); // db input left unwired
+    });
+
+    expect(() => Load(root)).toThrow(LoadError);
+    expect(() => Load(root)).toThrow(
+      /Dependency input "db" of provisioned service "auth" is not wired/,
+    );
+  });
+
+  test('passing wiring to a resource provision is a LoadError — a resource has no inputs', () => {
+    const root = hex('shop', (h) => {
+      // TypeScript's overloads reject wiring on a resource provision — forged
+      // here to exercise the runtime backstop.
+      h.provision('db', dbResource() as never, {} as never);
+    });
+
+    expect(() => Load(root)).toThrow(LoadError);
+    expect(() => Load(root)).toThrow(
+      /provision\("db"\) received wiring for a resource — a resource has no inputs to wire/,
     );
   });
 });
@@ -255,7 +363,7 @@ describe('importing a hex module', () => {
   });
 });
 
-describe('Load of a hex root — typed ConnectionEnd wiring (the satisfies() backstop)', () => {
+describe('Load of a hex root — typed wiring (the satisfies() backstop)', () => {
   // A minimal Contract, nominal like @makerkit/rpc's own: satisfies() is
   // identity, so a ref-port only satisfies the contract it was actually built
   // from — mirrors what a cast-bypassed wrong wiring would look like at
@@ -273,8 +381,8 @@ describe('Load of a hex root — typed ConnectionEnd wiring (the satisfies() bac
   const authContract = fakeContract({ verify: async () => ({ ok: true }) });
   const wrongContract = fakeContract({ charge: async () => ({ id: '1' }) });
 
-  const typedAuthEnd = () =>
-    connectionEnd({
+  const typedAuthDep = () =>
+    dependency({
       type: 'fake/rpc',
       connection: conn({ url: { type: 'string' } }, (v) => ({ url: v.url })),
       required: authContract,
@@ -296,7 +404,7 @@ describe('Load of a hex root — typed ConnectionEnd wiring (the satisfies() bac
       name: 'test-service',
       pack: 'test/pack',
       type: 'fake/compute',
-      inputs: { auth: typedAuthEnd() },
+      inputs: { auth: typedAuthDep() },
       params: {},
       build,
     });

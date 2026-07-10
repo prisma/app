@@ -1,5 +1,5 @@
-import type { ConnectionEnd } from '@makerkit/core';
-import { connectionEnd } from '@makerkit/core';
+import type { DependencyEnd } from '@makerkit/core';
+import { dependency } from '@makerkit/core';
 
 /** A service-to-service dependency's default client: a thin URL-anchored fetch wrapper. */
 export interface HttpClient {
@@ -21,8 +21,8 @@ const defaultHttpClient = (cfg: { url: string }): HttpClient => ({
 export const http = <C = HttpClient>(opts: {
   name: string;
   client?: (cfg: { url: string }) => C;
-}): ConnectionEnd<C> =>
-  connectionEnd({
+}): DependencyEnd<C> =>
+  dependency({
     name: opts.name,
     type: 'http',
     connection: {

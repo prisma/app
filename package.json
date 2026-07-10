@@ -12,11 +12,13 @@
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
     "lint:casts": "node scripts/lint-casts.mjs",
+    "rules:sync": "node scripts/sync-agent-rules.mjs",
+    "lint:rules:symlinks": "node scripts/sync-agent-rules.mjs --check",
     "test": "turbo run test",
     "test:scripts": "node --test scripts/*.test.mjs",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
-    "prepare": "husky"
+    "prepare": "husky && node scripts/sync-agent-rules.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

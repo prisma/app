@@ -22,7 +22,7 @@ export { Load, LoadError } from './graph.ts';
 export { hydrate, hydrateSync } from './hydrate.ts';
 export type {
   BuildAdapter,
-  ConnectionEnd,
+  DependencyEnd,
   Deps,
   Expose,
   HexBuilder,
@@ -38,4 +38,4 @@ export type {
   RunnableServiceNode,
   ServiceNode,
 } from './node.ts';
-export { connectionEnd, hex, isNode, resource, service } from './node.ts';
+export { dependency, hex, isNode, resource, service } from './node.ts';

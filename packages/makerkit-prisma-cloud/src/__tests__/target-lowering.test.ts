@@ -58,8 +58,9 @@ mock.module('@makerkit/prisma-alchemy', () => ({
 }));
 
 const { prismaCloud } = await import('../target.ts');
-const { compute } = await import('../index.ts');
-const { postgres } = await import('../index.ts');
+const { compute, postgres } = await import('../index.ts');
+const { hex } = await import('@makerkit/core');
+const { lowering } = await import('@makerkit/core/deploy');
 
 const run = <A>(eff: Effect.Effect<A, unknown, unknown>): A =>
   Effect.runSync(eff as Effect.Effect<A>);
@@ -101,20 +102,19 @@ describe('prismaCloud().application.provision', () => {
 describe("prismaCloud().resources['postgres']", () => {
   test("creates a Database + Connection in the application's project; url unwraps the Redacted connection string", () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
+    // ctx.id is the hex provision id — one Database per provisioned resource.
     const ctx = {
-      id: 'auth.db',
+      id: 'db',
       application: { outputs: { projectId: 'shop-project#cloud-id' } },
     } as unknown as LowerContext;
 
     const result = run<LoweredNode>(target.resources['postgres']!(ctx));
 
-    expect(result.outputs).toEqual({ url: 'postgres://auth.db-conn' });
+    expect(result.outputs).toEqual({ url: 'postgres://db-conn' });
     expect(recorded.db).toEqual([
-      ['auth.db-db', { projectId: 'shop-project#cloud-id', name: 'auth.db', region: 'us-east-1' }],
+      ['db-db', { projectId: 'shop-project#cloud-id', name: 'db', region: 'us-east-1' }],
     ]);
-    expect(recorded.conn).toEqual([
-      ['auth.db-conn', { databaseId: 'auth.db-db#cloud-id', name: 'auth.db' }],
-    ]);
+    expect(recorded.conn).toEqual([['db-conn', { databaseId: 'db-db#cloud-id', name: 'db' }]]);
   });
 });
 
@@ -143,7 +143,6 @@ describe("prismaCloud().services['compute']", () => {
       name: 'test-service',
       deps: {
         db: postgres({
-          name: 'test-resource',
           client: ({ url }) => ({ url }),
         }),
       },
@@ -279,6 +278,66 @@ describe("prismaCloud().services['compute']", () => {
     expect(result.outputs).toEqual({
       url: 'https://auth-deploy.example',
       projectId: 'shop-project#cloud-id',
+    });
+  });
+});
+
+describe('sharing: one hex-provisioned postgres, two compute consumers — through core lowering()', () => {
+  test("ONE Database + Connection; both services' env writes carry its url under their own keys", () => {
+    const target = prismaCloud({ workspaceId: 'ws_1' });
+    const build = {
+      kind: 'node',
+      pack: '@makerkit/node',
+      module: 'file:///test/service.ts',
+      entry: 'server.js',
+    };
+    const client = ({ url }: { url: string }) => ({ url });
+    const root = hex('shop', (h) => {
+      const db = h.provision('db', postgres({ name: 'db' }));
+      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+        main: db,
+      });
+      h.provision(
+        'billing',
+        compute({ name: 'billing', deps: { store: postgres({ client }) }, build }),
+        { store: db },
+      );
+    });
+    const before = {
+      db: recorded.db.length,
+      conn: recorded.conn.length,
+      envVar: recorded.envVar.length,
+    };
+
+    run<LoweredNode>(
+      lowering(root, target, {
+        name: 'shop',
+        bundles: {
+          auth: { dir: 'hexes/auth/dist/bundle', entry: 'server.js' },
+          billing: { dir: 'hexes/billing/dist/bundle', entry: 'server.js' },
+        },
+      }),
+    );
+
+    expect(recorded.db.slice(before.db)).toEqual([
+      ['db-db', { projectId: 'shop-project#cloud-id', name: 'db', region: 'us-east-1' }],
+    ]);
+    expect(recorded.conn.slice(before.conn)).toEqual([
+      ['db-conn', { databaseId: 'db-db#cloud-id', name: 'db' }],
+    ]);
+
+    const writes = recorded.envVar.slice(before.envVar).map(([, props]) => props);
+    expect(writes).toContainEqual({
+      projectId: 'shop-project#cloud-id',
+      key: 'AUTH_MAIN_URL',
+      value: 'postgres://db-conn',
+      class: 'production',
+    });
+    expect(writes).toContainEqual({
+      projectId: 'shop-project#cloud-id',
+      key: 'BILLING_STORE_URL',
+      value: 'postgres://db-conn',
+      class: 'production',
     });
   });
 });

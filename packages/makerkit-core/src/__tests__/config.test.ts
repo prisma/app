@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { configOf } from '../config.ts';
-import { connectionEnd, resource, service } from '../node.ts';
+import { dependency, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
 const build = {
@@ -17,9 +17,8 @@ describe('configOf', () => {
       pack: 'test/pack',
       type: 'fake/app',
       inputs: {
-        db: resource({
-          name: 'test-resource',
-          pack: 'test/pack',
+        db: dependency({
+          name: 'db',
           type: 'fake/db',
           connection: conn(
             { url: { type: 'string', secret: true }, schema: { type: 'string', optional: true } },
@@ -65,9 +64,8 @@ describe('configOf', () => {
       pack: 'test/pack',
       type: 'fake/app',
       inputs: {
-        cache: resource({
-          name: 'test-resource',
-          pack: 'test/pack',
+        cache: dependency({
+          name: 'cache',
           type: 'fake/cache',
           connection: conn({ port: { type: 'number' } }, () => ({})),
         }),
@@ -112,9 +110,8 @@ describe('configOf', () => {
       pack: 'test/pack',
       type: 'fake/app',
       inputs: {
-        db: resource({
-          name: 'test-resource',
-          pack: 'test/pack',
+        db: dependency({
+          name: 'db',
           type: 'fake/db',
           connection: conn({ url: { type: 'string' } }, () => {
             hydrateCalls += 1;
@@ -132,20 +129,19 @@ describe('configOf', () => {
   });
 });
 
-describe('configOf over connection-end inputs', () => {
-  test('connection-end params appear with owner { input } exactly like resource params', () => {
+describe('configOf over dependency inputs', () => {
+  test('every dependency input appears with owner { input }, whatever it will be wired to', () => {
     const root = service({
       name: 'test-service',
       pack: 'test/pack',
       type: 'fake/app',
       inputs: {
-        db: resource({
-          name: 'test-resource',
-          pack: 'test/pack',
+        db: dependency({
+          name: 'db',
           type: 'fake/db',
           connection: conn({ url: { type: 'string', secret: true } }, () => ({})),
         }),
-        auth: connectionEnd({
+        auth: dependency({
           type: 'fake/http',
           connection: conn({ url: { type: 'string' } }, () => ({})),
         }),

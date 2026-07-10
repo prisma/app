@@ -8,7 +8,6 @@ export default compute({
   name: 'test-service',
   deps: {
     db: postgres({
-      name: 'test-resource',
       client: ({ url }) => {
         clientCalls += 1;
         return { url };
