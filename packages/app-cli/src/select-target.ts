@@ -1,12 +1,9 @@
 /**
- * Pipeline step 3 (deploy-cli.md § The pipeline, ADR-0003): a pack-authored
- * service or resource node may carry `targetModule` — a full, author-written
- * specifier for its pack's `/target` entry (@prisma/app's node.ts).
- * Collect the distinct set over the loaded graph — exactly one must appear —
- * then let the carrying node load it itself (node-owned loading: the node's
- * own `loadTarget()` performs the dynamic import; this module never
- * constructs a specifier or resolves anything itself) and call its
- * `fromEnv()` export.
+ * Selects the one deploy target for the application (ADR-0003: one target per
+ * application). A pack-authored service or resource node carries `targetModule`
+ * — the specifier of its pack's `/target` entry. This collects the distinct set
+ * across the graph and requires exactly one: zero or more than one is an error.
+ * The node loads its own target (ADR-0017); this module resolves nothing.
  */
 import type { Graph, GraphNode, ResourceNode, ServiceNode } from '@prisma/app';
 import { assertDefined } from '@prisma/app/assertions';
@@ -48,7 +45,7 @@ export function resolveSingleTargetModule(targetModules: readonly string[]): str
 
 /**
  * Extracts and validates a target module's `fromEnv` export — split out from
- * `inferTarget` so the "missing export" error is testable without a real
+ * `selectTarget` so the "missing export" error is testable without a real
  * dynamic import. The contract: a deployable target module must export a
  * `fromEnv(): Target` function.
  */
@@ -65,13 +62,13 @@ export function extractFromEnv(specifier: string, mod: unknown): Function {
   return fromEnv;
 }
 
-export interface InferredTarget {
+export interface SelectedTarget {
   /** The target module's specifier, e.g. "@prisma/app-cloud/target". */
   readonly targetModule: string;
   readonly target: Target;
 }
 
-export async function inferTarget(graph: Graph): Promise<InferredTarget> {
+export async function selectTarget(graph: Graph): Promise<SelectedTarget> {
   const targetModule = resolveSingleTargetModule(collectTargetModules(graph));
   const carrier = graph.nodes.find(
     (n): n is GraphNode & { node: ServiceNode | ResourceNode } =>

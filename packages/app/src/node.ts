@@ -4,34 +4,18 @@
  * slots beyond deploy-time loading: a Connection's `hydrate` (validated
  * values → client) and, on the target pack's runnable service subclass,
  * `run`/`load` (the process controller and its pull-DI). The Service node
- * carries NO handler — it is a description; the code that serves is the
- * app's own entrypoint. Config declarations are pure data; core reads no
+ * carries NO handler — it is a description; the code that serves is the app's
+ * own entrypoint. Config declarations are pure data; core reads no
  * environment. A node's `type` is its routing key at deploy; core never
  * interprets it beyond lookup.
  *
- * Deploy-only module loading (target packs' `/target`, build adapters'
- * `/assemble`) is NODE-OWNED: a pack factory bakes a full, author-written
- * module specifier onto the node/adapter as data (`targetModule`,
- * `BuildAdapter.assembler`), and the node's own methods (`loadTarget()`,
- * `loadAssembler()`, `assemble()`) perform the dynamic import. Core never
- * constructs a specifier from a pack name and a subpath, never anchors
- * resolution at an entry file, and never uses `createRequire`/
- * `require.resolve` — the specifier is already the whole thing an author
- * wrote, and node's own resolver (walking node_modules up from the file that
- * calls `import()`) does the rest, exactly like any other bare specifier.
- *
- * The firewall this depends on: every `import()` call below takes its
- * specifier from a variable or property access — `this.targetModule`,
- * `this.build.assembler` — NEVER a static string literal. A pack's authoring
- * module (the file that calls `service()`/`compute()`/etc.) gets bundled
- * INTO the production wrapper by each assembler's own build (which inlines
- * `@prisma/app*`), and bundlers only follow an `import()` whose argument is a
- * literal they can see at build time. A literal `import('@prisma/app-node/
- * assemble')` anywhere reachable from an authoring module would get followed
- * and dragged into the runtime artifact; keeping the specifier as data and
- * the import's argument a property read keeps it invisible to the bundler,
- * while still being a completely ordinary dynamic import at the moment
- * deploy tooling actually calls these methods (which is never at runtime).
+ * Deploy-only modules (`/target`, `/assemble`) are node-owned: the specifier
+ * is author-written data (`targetModule`, `BuildAdapter.assembler`) and the
+ * node's own `loadTarget()`/`loadAssembler()`/`assemble()` import it — see
+ * ADR-0017. The one invariant to preserve here: every `import()` below takes
+ * its specifier from a property read, never a static string literal, so the
+ * bundler that inlines this module into the production wrapper cannot follow
+ * it and drag the deploy-only module into the runtime artifact.
  */
 import { blindCast } from './casts.ts';
 import type { ConfigParam, Connection, Params, Values } from './config.ts';

@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import { Load, service, system } from '@prisma/app';
 import { assembleServices } from '@prisma/app-assemble';
 import { renderStackFile } from '../generate-stack.ts';
-import { collectTargetModules, resolveSingleTargetModule } from '../infer-target.ts';
 import { loadEntry } from '../load-entry.ts';
+import { collectTargetModules, resolveSingleTargetModule } from '../select-target.ts';
 
 describe('renderStackFile() — a system root', () => {
   test('renders imports, the name literal, and the bundles dir/entry literals', () => {

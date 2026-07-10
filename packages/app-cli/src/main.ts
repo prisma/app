@@ -10,9 +10,9 @@ import { assembleServices, type RunAssembler } from '@prisma/app-assemble';
 import { Cli, Command, Option, UsageError } from 'clipanion';
 import { CliError } from './cli-error.ts';
 import { GENERATED_STACK_RELATIVE_PATH, writeStackFile } from './generate-stack.ts';
-import { inferTarget } from './infer-target.ts';
 import { loadEntry } from './load-entry.ts';
 import { type RunAlchemyInput, runAlchemy } from './run-alchemy.ts';
+import { selectTarget } from './select-target.ts';
 
 const BINARY_NAME = 'prisma-app';
 
@@ -190,10 +190,10 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
     );
   }
 
-  // 3. Infer the target — the carrying node loads its own targetModule
-  // (node-owned loading); validates the target's env NOW, before any
+  // 3. Select the one target (ADR-0003) — the carrying node loads its own
+  // targetModule (ADR-0017); validate the target's env NOW, before any
   // assembly work.
-  const { targetModule } = await inferTarget(graph);
+  const { targetModule } = await selectTarget(graph);
 
   // 4. Resolve the name.
   const name = args.name ?? entryModule.root.name;

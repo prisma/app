@@ -4,9 +4,9 @@ import { resource, service } from '@prisma/app';
 import {
   collectTargetModules,
   extractFromEnv,
-  inferTarget,
   resolveSingleTargetModule,
-} from '../infer-target.ts';
+  selectTarget,
+} from '../select-target.ts';
 
 const build = {
   kind: 'node',
@@ -118,11 +118,11 @@ describe('extractFromEnv() — the target module must export fromEnv()', () => {
   });
 });
 
-describe('inferTarget() — an unresolvable targetModule (node-owned loading)', () => {
+describe('selectTarget() — an unresolvable targetModule (node-owned loading)', () => {
   test('surfaces an error naming the specifier and the fix, not a raw module error', async () => {
     const graph = graphWithTargetModules(['@prisma/does-not-exist/target']);
 
-    await expect(inferTarget(graph)).rejects.toThrow(
+    await expect(selectTarget(graph)).rejects.toThrow(
       /Cannot resolve the target module "@prisma\/does-not-exist\/target".*must depend on the package/s,
     );
   });
