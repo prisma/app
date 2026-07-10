@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./assemble": "./src/assemble.ts"
+    ".": "./dist/index.mjs",
+    "./assemble": "./dist/assemble.mjs",
+    "./package.json": "./package.json"
   },
   "scripts": {
+    "build": "tsdown",
+    "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
@@ -16,8 +19,16 @@
     "tsdown": "^0.15.9"
   },
   "devDependencies": {
+    "@prisma/app-tsdown": "workspace:*",
     "@types/bun": "^1.3.13",
     "@types/node": "^24.10.13",
     "typescript": "^6.0.3"
-  }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts"
 }

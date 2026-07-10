@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./target": "./src/target.ts"
+    ".": "./dist/index.mjs",
+    "./target": "./dist/target.mjs",
+    "./package.json": "./package.json"
   },
   "scripts": {
+    "build": "tsdown",
+    "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:types": "vitest --typecheck --run"
@@ -19,8 +22,17 @@
     "effect": "4.0.0-beta.92"
   },
   "devDependencies": {
+    "@prisma/app-tsdown": "workspace:*",
     "@types/bun": "^1.3.13",
+    "tsdown": "^0.15.9",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
-  }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts"
 }

@@ -25,7 +25,9 @@ function shippedSources(): { file: string; text: string }[] {
 describe('entry map: the pack splits into authoring + target only', () => {
   test("package.json exports exactly '.' and './target' — no runtime entry", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
-    expect(Object.keys(pkg.exports).sort()).toEqual(['.', './target']);
+    // `./package.json` is a conventional manifest export, not a code entry.
+    const codeEntries = Object.keys(pkg.exports).filter((k) => k !== './package.json');
+    expect(codeEntries.sort()).toEqual(['.', './target']);
   });
 });
 
