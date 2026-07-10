@@ -1,17 +1,17 @@
 # Domain map
 
-The conceptual map of MakerKit's **authoring plane** — the things a developer
-models and how they relate. For how these lower to Alchemy and Prisma Cloud, see
-`layering.md`; for definitions, see `glossary.md`.
+The conceptual map of the Prisma App Framework's **authoring plane** — the
+things a developer models and how they relate. For how these lower to Alchemy
+and Prisma Cloud, see `layering.md`; for definitions, see `glossary.md`.
 
-(MakerKit's *own* internal architecture — its control/execution-plane contexts,
-emitter, runtime — is a separate concern for the architecture phase, not this
-map.)
+(The Prisma App Framework's *own* internal architecture — its
+control/execution-plane contexts, emitter, runtime — is a separate concern for
+the architecture phase, not this map.)
 
 ```mermaid
 flowchart TB
   Topology["Topology — the emitted artifact"]
-  Hex["Hex (Subsystem)"]
+  System["System"]
   Service["Service — your code (compute)"]
   Resource["Resource — managed lifecycle (Postgres + BYO)"]
   Config["Configuration — per-env, not a node"]
@@ -20,15 +20,15 @@ flowchart TB
   Conn["Connection"]
   DC["Data Contract — Prisma Next"]
 
-  Topology -->|contains| Hex
+  Topology -->|contains| System
   Topology -->|contains| Resource
   Topology -->|contains| Conn
 
-  Hex -->|wraps| Service
-  Hex -->|wraps or uses| Resource
-  Hex -->|nests| Hex
-  Hex -->|has| Input
-  Hex -->|has| Output
+  System -->|wraps| Service
+  System -->|wraps or uses| Resource
+  System -->|nests| System
+  System -->|has| Input
+  System -->|has| Output
   Service -->|has| Input
   Service -->|has| Output
   Resource -->|has| Output
@@ -47,22 +47,23 @@ flowchart TB
 
 ## How to read it
 
-- **A Hex wraps Services and Resources** and is reachable from the outside *only*
+- **A System wraps Services and Resources** and is reachable from the outside *only*
   through its Inputs and Outputs. That boundary is what makes the topology
-  truthful — every cross-Hex dependency is an edge.
-- **Nesting isn't a special case.** A Hex behaves like a Service — stateless, with
-  typed I/O — so a nested Hex is wired exactly as a Service is. A wrapped node's
-  Inputs/Outputs connect to the parent Hex's boundary or to a sibling inside the
-  Hex; it reaches outside only through the parent's Inputs/Outputs.
-- **Every node — Hex, Service, or Resource — carries typed Inputs and Outputs.** A
+  truthful — every cross-System dependency is an edge.
+- **Nesting isn't a special case.** A System behaves like a Service — stateless, with
+  typed I/O — so a nested System is wired exactly as a Service is. A wrapped node's
+  Inputs/Outputs connect to the parent System's boundary or to a sibling inside the
+  System; it reaches outside only through the parent's Inputs/Outputs.
+- **Every node — System, Service, or Resource — carries typed Inputs and Outputs.** A
   connection wires an Output to an Input, and the rule is uniform at every level: an
   Input is satisfied by a sibling's Output, a Resource's Output, or the enclosing
-  Hex's boundary Input.
-- **Leaf vs composite; the root Hex.** A Service is a *leaf* — MakerKit sees only
-  its ports. A Hex is a *composite* — it owns the wiring among what it contains. The
-  whole system is the **implicit root Hex**, owning the top-level Hex-to-Hex wiring
-  and any shared Resources. *Who owns the wiring owns the migration:* a shared
-  database is owned and migrated by the root Hex; a private one by its Hex.
+  System's boundary Input.
+- **Leaf vs composite; the outermost System.** A Service is a *leaf* — the
+  framework sees only its ports. A System is a *composite* — it owns the wiring
+  among what it contains. The whole system is the **outermost System**, owning
+  the top-level System-to-System wiring and any shared Resources. *Who owns the
+  wiring owns the migration:* a shared database is owned and migrated by the
+  outermost System; a private one by its System.
 - **Every node carries a managed lifecycle** — Services (your code) and Resources
   (managed dependencies). That's what lets the whole topology be recreated in a new
   environment and reproduced in the local emulator.
@@ -72,20 +73,20 @@ flowchart TB
   plus its config), never an edge to a node. Provision it (a Resource) or wrap it
   in a Service to bring it into the graph.
 - **Two families of connection:**
-  - **communication** (Hex ↔ Hex, or public **ingress**) with a **style**:
+  - **communication** (System ↔ System, or public **ingress**) with a **style**:
     `request/response` or `stream`. The style is a property of the connection; no
     Resource sits "in" it.
-  - **data** (Hex → Postgres Resource) with a **method** (`TCP` / `HTTP`) and a
+  - **data** (System → Postgres Resource) with a **method** (`TCP` / `HTTP`) and a
     **Data Contract**. The Postgres exposes a **Data Output** (the contract hashes
-    it satisfies); the Hex's **Data Input** requires a contract; the wire is valid
+    it satisfies); the System's **Data Input** requires a contract; the wire is valid
     iff the offered hashes satisfy it.
-- **The Topology is the artifact.** MakerKit infers the graph from TypeScript and
+- **The Topology is the artifact.** The framework infers the graph from TypeScript and
   emits it.
 
 ## Dependency direction
 
 The clean-architecture intent carries over: low-level Resources don't depend on
-Hexes; Hexes depend on Resources and on each other's Outputs. Composition (the
+Systems; Systems depend on Resources and on each other's Outputs. Composition (the
 wiring) is explicit and lives in the topology, not in ambient/global state.
 
 ## Open questions

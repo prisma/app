@@ -1,4 +1,4 @@
-# Viability: use Alchemy instead of building MakerKit?
+# Viability: use Alchemy instead of building the Prisma App Framework?
 
 Date: 2026-06-29. Subject: Alchemy v2 (`2.0.0-beta.59`, "Infrastructure-as-Effects").
 
@@ -14,33 +14,34 @@ recommendation below is being revised; read this first.**
   Compute. So "no Prisma providers" (divergence #3) is wrong, and Prisma has
   already partly committed to Alchemy as a user-facing surface.
 
-Consequence: the strongest non-circular reason for "MakerKit as a separate
-artifact-emitter" — an existing server-side orchestrator to feed — does not
-exist. The live question is no longer "Alchemy vs MakerKit" but **where
-provisioning state and reconciliation live: server-side (platform-owned) or
-client-side (Alchemy's current model)** — a question grounded in Prisma being a
-managed, multi-tenant platform, not in how we define MakerKit. The likely shape:
-MakerKit = Prisma's opinionated layer on Alchemy/Effect (definition language +
-the existing Prisma providers + topology extraction) **plus** a server-side
-orchestrator that ingests the serialized resource graph. An Effect decision ADR
-still follows.
+Consequence: the strongest non-circular reason for "the Prisma App Framework
+as a separate artifact-emitter" — an existing server-side orchestrator to feed
+— does not exist. The live question is no longer "Alchemy vs the Prisma App
+Framework" but **where provisioning state and reconciliation live: server-side
+(platform-owned) or client-side (Alchemy's current model)** — a question
+grounded in Prisma being a managed, multi-tenant platform, not in how we
+define the framework. The likely shape: the framework = Prisma's opinionated
+layer on Alchemy/Effect (definition language + the existing Prisma providers +
+topology extraction) **plus** a server-side orchestrator that ingests the
+serialized resource graph. An Effect decision ADR still follows.
 
 ## Recommendation
 
 > Superseded in part by the correction above — retained for the reasoning, not
 > the verdict.
 
-**No — don't adopt Alchemy as MakerKit's foundation. Build MakerKit, treat
-Alchemy as the reference design, and separately decide whether to adopt Effect.**
+**No — don't adopt Alchemy as the Prisma App Framework's foundation. Build the
+framework, treat Alchemy as the reference design, and separately decide
+whether to adopt Effect.**
 
-Alchemy and MakerKit agree almost exactly on the *programming model* but
-disagree on the *system boundary*. Alchemy is a provisioning engine: the program
-defines infrastructure **and applies it** against cloud APIs, owning state and
-reconciliation. MakerKit explicitly does **not** provision — it emits a static
-topology artifact and hands provisioning to Prisma's platform (Foundry) or the
-local emulator (`prisma dev`). That boundary is the entire reason MakerKit
-exists as a distinct thing, and it's the part Alchemy can't give us without
-being turned inside out.
+Alchemy and the Prisma App Framework agree almost exactly on the *programming
+model* but disagree on the *system boundary*. Alchemy is a provisioning
+engine: the program defines infrastructure **and applies it** against cloud
+APIs, owning state and reconciliation. The framework explicitly does **not**
+provision — it emits a static topology artifact and hands provisioning to
+Prisma's platform (Foundry) or the local emulator (`prisma dev`). That
+boundary is the entire reason the framework exists as a distinct thing, and
+it's the part Alchemy can't give us without being turned inside out.
 
 The genuinely valuable, reusable idea underneath Alchemy is **Effect** (its
 Layer-based DI, typed errors, streams). That is separable from Alchemy the IaC
@@ -58,9 +59,9 @@ binding *is* the client" — no `env.BUCKET`); a **Layer** hides a slice of
 infrastructure behind a typed service interface so implementations swap without
 touching consumers. CLI: `deploy` / `destroy` / `plan` / `dev`.
 
-## Where Alchemy matches MakerKit (closely)
+## Where Alchemy matches the Prisma App Framework (closely)
 
-| MakerKit goal / principle | Alchemy v2 mechanism | Match |
+| Prisma App Framework goal / principle | Alchemy v2 mechanism | Match |
 | --- | --- | --- |
 | Code-first topology from TS structure | Resources/Platforms declared in TS, wired by type | Strong |
 | No globals, DI-only ([principle](../../01-principles/architectural-principles.md)) | Bindings: "the binding is the client", no env lookups | Strong — arguably better-realized than our sketch |
@@ -71,15 +72,15 @@ touching consumers. CLI: `deploy` / `destroy` / `plan` / `dev`.
 | Agent-friendly, statically analyzable primitives | Explicit `define`-style primitives, type-checked wiring, LLM-generated providers | Strong |
 
 The user's read is correct: Alchemy "models things very similarly." It's strong
-validation that MakerKit's mental model is sound. The disagreement is about
-boundaries, not concepts.
+validation that the Prisma App Framework's mental model is sound. The
+disagreement is about boundaries, not concepts.
 
 ## Where it diverges (the reasons not to adopt)
 
 ### 1. Provisioning ownership — the crux
 
-- MakerKit's stated **non-goal**: "Provisioning any of these things." We emit a
-  static graph → Foundry / `prisma dev` provisions.
+- The Prisma App Framework's stated **non-goal**: "Provisioning any of these
+  things." We emit a static graph → Foundry / `prisma dev` provisions.
 - Alchemy's **entire core** is provisioning: the plan→reconcile→delete loop,
   the state store, drift detection, adoption, and providers-as-API-clients all
   exist to create/update/delete real cloud resources. "Resources that are
@@ -90,8 +91,8 @@ boundaries, not concepts.
 
 ### 2. No static hand-off artifact
 
-MakerKit's output is a portable topology file (`makerkit.map.json` + bundles)
-for an external orchestrator. Alchemy has **no documented path to emit such an
+The Prisma App Framework's output is a portable topology file
+(`prisma-app.map.json` + bundles) for an external orchestrator. Alchemy has **no documented path to emit such an
 artifact**. `alchemy plan` produces a plan, but it's computed by diffing code
 against persisted/live cloud state through providers' `read`/`diff` (which call
 cloud APIs) — it's an internal step of Alchemy's own apply, not a serializable
@@ -112,7 +113,7 @@ the Correction at the top.
 
 ### 4. `alchemy dev` rejects local emulation — we require it
 
-MakerKit wants `prisma dev` to **emulate the cloud locally**. Alchemy
+The Prisma App Framework wants `prisma dev` to **emulate the cloud locally**. Alchemy
 deliberately refuses this: `alchemy dev` deploys **real** infra to the cloud and
 only runs handler code locally, under a section literally titled "Why not
 emulate everything?". Direct conflict with our local-dev goal.
@@ -141,8 +142,9 @@ whose primary purpose conflicts with ours is the wrong kind of risk.
 
 ## What Alchemy does better than our current sketch (borrow these)
 
-Be honest: in several places Alchemy is ahead of MakerKit's design notes, and we
-should steal the ideas regardless of the build/adopt decision.
+Be honest: in several places Alchemy is ahead of the Prisma App Framework's
+design notes, and we should steal the ideas regardless of the build/adopt
+decision.
 
 - **"The binding is the client"** — the cleanest possible expression of our
   no-globals principle. A dependency resolves to a typed SDK, not a name to look up.
@@ -155,28 +157,29 @@ should steal the ideas regardless of the build/adopt decision.
 - **Event source → transform → sink as streams** — a concrete shape for our
   streaming-first goal.
 - **Provider model** — "declare a type, implement a lifecycle Layer" is a good
-  template for how MakerKit resource kinds could be defined and extended.
+  template for how the framework's resource kinds could be defined and extended.
 
 ## The decision actually worth making: adopt Effect?
 
-The innovation that makes Alchemy "feel like MakerKit" is **Effect**, not
-Alchemy's apply engine. Effect's `Layer`/`Context` system gives us the
-platform-agnostic core (ports/adapters), DI without globals, typed errors,
-retries, structured concurrency, and OpenTelemetry — natively. MakerKit could
-take Effect as its DI/runtime substrate and get ~80% of what's attractive here,
-**without** Alchemy's provisioning loop, state store, or boundary conflict.
+The innovation that makes Alchemy "feel like the Prisma App Framework" is
+**Effect**, not Alchemy's apply engine. Effect's `Layer`/`Context` system
+gives us the platform-agnostic core (ports/adapters), DI without globals,
+typed errors, retries, structured concurrency, and OpenTelemetry — natively.
+The framework could take Effect as its DI/runtime substrate and get ~80% of
+what's attractive here, **without** Alchemy's provisioning loop, state store,
+or boundary conflict.
 
 That is the real fork in the road, and it deserves its own ADR:
 
 - **Pro**: best-in-class DI/ports substrate for free; aligns the execution plane
   with a mature library; typed errors + observability included.
 - **Con**: heavy paradigm in user code; raises the floor for humans and agents;
-  couples MakerKit's public surface to Effect's API and release cadence.
+  couples the framework's public surface to Effect's API and release cadence.
 
-If we say yes to Effect, MakerKit becomes "the static-topology + bundle-emitter +
-local-emulation layer that Alchemy chose not to be, built on the same Effect
-substrate." If we say no, we keep a plain-async DI container and borrow Alchemy's
-*shapes* only.
+If we say yes to Effect, the framework becomes "the static-topology +
+bundle-emitter + local-emulation layer that Alchemy chose not to be, built on
+the same Effect substrate." If we say no, we keep a plain-async DI container
+and borrow Alchemy's *shapes* only.
 
 ## Options considered
 
@@ -184,13 +187,13 @@ substrate." If we say no, we keep a plain-async DI container and borrow Alchemy'
 | --- | --- |
 | **A. Adopt Alchemy v2 wholesale** as the app framework | Reject — forces Prisma into Alchemy's provisioning-owns-everything model, conflicts with Foundry-provisions and `prisma dev` emulation, beta + single-maintainer risk on a core bet |
 | **B. Use Alchemy selectively** (its resource/binding abstractions) but bypass its apply engine with custom providers + a custom "emit static manifest" path | Reject for now — you vendor a beta and invert its core loop; constant fight against the grain; inherits the Effect commitment without a clean exit |
-| **C. Build MakerKit; use Alchemy as reference; decide on Effect separately** | **Recommend** — keep our boundary (emit static graph, delegate provisioning, emulate locally), steal Alchemy's best shapes, make the Effect call deliberately |
+| **C. Build the Prisma App Framework; use Alchemy as reference; decide on Effect separately** | **Recommend** — keep our boundary (emit static graph, delegate provisioning, emulate locally), steal Alchemy's best shapes, make the Effect call deliberately |
 
 ## Open questions to confirm before finalizing
 
 1. **Can Alchemy emit a portable static topology artifact** without running its
    apply loop? (Confirm against v2 source — divergence #2 is inferred.)
-2. **Effect: in or out** for MakerKit's execution plane? → write an ADR.
+2. **Effect: in or out** for the framework's execution plane? → write an ADR.
 3. If Effect is in, is there a smaller **"Alchemy-minus-provisioning"** subset
    (resources + bindings + Layers, no state/apply) we could depend on or
    re-implement, rather than starting the DI layer from scratch?

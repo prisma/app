@@ -1,5 +1,5 @@
 {
-  "name": "makerkit-ws",
+  "name": "prisma-app-ws",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.27.0",

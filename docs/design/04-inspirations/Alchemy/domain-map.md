@@ -67,7 +67,7 @@ flowchart TB
   **persisted state** — they are concrete address coupling, not interface-based.
 - A **Layer** is the interface/ports mechanism, but it operates **within a
   program**, not across deployed Stack boundaries. (This split — Layer vs
-  Reference — is central to the MakerKit takeaways.)
+  Reference — is central to the Prisma App Framework takeaways.)
 
 ## Open questions / assumptions
 

@@ -1,0 +1,26 @@
+{
+  "name": "@prisma/app-cloud",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./target": "./src/target.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:types": "vitest --typecheck --run"
+  },
+  "dependencies": {
+    "@prisma/app": "workspace:*",
+    "@prisma/alchemy": "workspace:*",
+    "alchemy": "2.0.0-beta.59",
+    "effect": "4.0.0-beta.92"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

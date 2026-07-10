@@ -1,9 +1,9 @@
 ---
 name: design-discussion
-description: Facilitate MakerKit design discussions and update docs/design (principles, domain docs) and add ADRs for decisions using the documented workflow and templates.
+description: Facilitate Prisma App Framework design discussions and update docs/design (principles, domain docs) and add ADRs for decisions using the documented workflow and templates.
 ---
 
-# Design discussion (MakerKit)
+# Design discussion (Prisma App Framework)
 
 ## When to use
 

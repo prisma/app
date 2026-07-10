@@ -1,6 +1,6 @@
-# Prisma dogfood report — rough edges building the MakerKit MVP
+# Prisma dogfood report — rough edges building the Prisma App Framework MVP
 
-Friction hit while building a two-hex example (**Storefront** = Next.js, **Auth** =
+Friction hit while building a two-system example (**Storefront** = Next.js, **Auth** =
 Bun/Hono), each with its own Prisma Postgres, deployed to **Prisma Compute** through a
 **custom v2 (Effect) Alchemy provider** that wraps the **Management API SDK**. pnpm
 workspace, Bun runtime.
@@ -55,7 +55,7 @@ unfiled — flagged inline.
 
 - **Cold start returns a hard 502, not a held request.** Scale-to-zero: the first request
   after idle returns `502` (openresty) for ~15s while the VM wakes, then 200. A caller
-  (e.g. another hex) sees a hard 5xx, not a slow 200 — cross-service calls must retry.
+  (e.g. another System) sees a hard 5xx, not a slow 200 — cross-service calls must retry.
   Expected, but surprising and undocumented at the call site. **Minor.**
 
 - **Logs are WebSocket-only.** `GET /v1/compute-services/versions/{id}/logs` → `426

@@ -1,0 +1,27 @@
+{
+  "name": "@storefront-auth/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/service.ts",
+    "./contract": "./src/contract.ts"
+  },
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/app": "workspace:*",
+    "@prisma/app-node": "workspace:*",
+    "@prisma/app-cloud": "workspace:*",
+    "@prisma/app-rpc": "workspace:*",
+    "arktype": "^2.2.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "tsdown": "^0.15.9",
+    "typescript": "^6.0.3"
+  }
+}

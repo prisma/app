@@ -2,11 +2,11 @@
 
 This directory contains artifacts produced by the **Agent OS product planning workflow** (mission, roadmap, tech stack, naming).
 
-- [naming.md](naming.md) — how we name by user value; the piece names (Hex, Hexicon, Prisma Compose, Prisma Data) and the compose-from-blocks distribution model.
+- [naming.md](naming.md) — how we name by user value; the piece names (System, Prisma App, Prisma Data) and the compose-from-blocks distribution model.
 
 ## Source of truth for design/architecture
 
-MakerKit design and architecture documentation lives in:
+Prisma App Framework design and architecture documentation lives in:
 
 - `docs/design/`
 

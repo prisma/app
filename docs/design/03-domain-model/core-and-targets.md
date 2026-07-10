@@ -1,6 +1,6 @@
 # Core and targets
 
-MakerKit splits into a **thin core** that knows only an abstract model, and
+The Prisma App Framework splits into a **thin core** that knows only an abstract model, and
 **target packs** that carry everything a specific deployment platform needs — as
 *data*, not behaviour the core calls. This is the concrete realization of two
 principles the rest of the design leans on:
@@ -14,15 +14,15 @@ design, not a settled decision record.
 Grounding example — a service with a Postgres dependency, deployed to Prisma Cloud:
 
 ```ts
-import { compute, postgres } from "@makerkit/prisma-cloud"
+import { compute, postgres } from "@prisma/app-cloud"
 
 export default compute({ db: postgres() }, ({ db }) => Bun.serve(/* uses db */))
 ```
 
-- **`@makerkit/core`** knows three kinds — **Service**, **Resource**, **Connection**
+- **`@prisma/app`** knows three kinds — **Service**, **Resource**, **Connection**
   — as a graph, plus the machinery to Load, validate, lower, and run that graph. It
   imports no deployment target. It never learns what "Postgres" or "Compute" is.
-- **`@makerkit/prisma-cloud`** (a target pack) provides the concrete vocabulary:
+- **`@prisma/app-cloud`** (a target pack) provides the concrete vocabulary:
   `compute()` — a Service; `postgres()` — a Resource; and connection types like
   `http()`. Each is an ergonomic constructor that returns a **plain data object**
   carrying the metadata that routes it to an Alchemy Stack/Provider.
@@ -35,7 +35,7 @@ underneath.
 `postgres()` does not *do* anything — it returns a description:
 
 ```ts
-// inside @makerkit/prisma-cloud — illustrative shape
+// inside @prisma/app-cloud — illustrative shape
 export const postgres = ({ client }) => ({
   kind: "resource",
   provider: /* the prisma-alchemy Prisma Postgres provider (deploy entry) */,
@@ -55,7 +55,7 @@ knows only "this is a Service node, that is a Resource node," and that each carr
 reference it can hand to Alchemy. All the intelligence about *how* a Prisma Postgres
 is provisioned, or how its connection config reaches the running service, lives in
 the pack, wrapped in the constructor. The client that wraps the connection is
-supplied by the app — MakerKit ships no driver (the [runtime-agnostic
+supplied by the app — the framework ships no driver (the [runtime-agnostic
 principle](../01-principles/architectural-principles.md)).
 
 ## Lowering is routing
@@ -65,7 +65,7 @@ then routes: for each node it instantiates the Alchemy object the node's metadat
 points at. A Service node → its `host` provider; a Resource node → its `provider`.
 That is the whole of lowering. There is no per-target branch and no provisioning
 logic in core; the router only ever follows references it was handed. Swap
-`@makerkit/prisma-cloud` for another target pack and the router is unchanged.
+`@prisma/app-cloud` for another target pack and the router is unchanged.
 
 ## Runtime: core owns structure, the pack owns encoding
 
@@ -91,7 +91,7 @@ only). No pack entry imports a runtime API or driver.
 
 ## Bundling is the app's; the envelope is the pack's
 
-MakerKit does not bundle app code. Turning the service module into a runnable
+The Prisma App Framework does not bundle app code. Turning the service module into a runnable
 bundle is the app's job, with the app's tool (tsdown, esbuild, whatever) — and
 the entry is a pure re-export of the Service node, nothing runs on import. The
 platform artifact *envelope* is the pack's: at deploy the pack prints a two-line
@@ -101,8 +101,8 @@ bootstrap and assembling a tar is deploy-time assembly, not bundling.
 
 ## Why this is the correct boundary
 
-The test of the split is a one-line swap: change `@makerkit/prisma-cloud` to another
-target pack and nothing in `@makerkit/core` changes — not the abstract model, not the
+The test of the split is a one-line swap: change `@prisma/app-cloud` to another
+target pack and nothing in `@prisma/app` changes — not the abstract model, not the
 router, not the boot pipeline. Everything a platform is idiosyncratic about — its
 compute unit, its managed Postgres, how it injects config, its artifact format —
 lives in the pack, as data the core routes rather than code the core contains. A
@@ -112,7 +112,7 @@ target/tooling concerns the core must not absorb.
 ## Open questions
 
 - **Alchemy in core, or behind the target?** — *Resolved*: Alchemy is core's
-  provisioning substrate (`@makerkit/core/deploy` imports it); the principle forbids
+  provisioning substrate (`@prisma/app/deploy` imports it); the principle forbids
   knowledge of deployment *targets*, and Alchemy is the target-neutral engine
   `layering.md` already commits to. Target packs supply only data (providers +
   lowerings). See the decision note in

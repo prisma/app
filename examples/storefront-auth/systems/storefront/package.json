@@ -1,0 +1,31 @@
+{
+  "name": "@storefront-auth/storefront",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/service.ts"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/app": "workspace:*",
+    "@prisma/app-nextjs": "workspace:*",
+    "@prisma/app-cloud": "workspace:*",
+    "@prisma/app-rpc": "workspace:*",
+    "@storefront-auth/auth": "workspace:*",
+    "arktype": "^2.2.3",
+    "next": "^15.5.4",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^6.0.3"
+  }
+}
