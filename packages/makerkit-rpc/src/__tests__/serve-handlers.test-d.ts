@@ -10,8 +10,8 @@
  * assertion. The negative handler shapes keep a `// @ts-expect-error` on the
  * offending line.
  */
-import type { ResourceEnd, RunnableServiceNode } from '@makerkit/core';
-import { resourceEnd, service } from '@makerkit/core';
+import type { DependencyEnd, RunnableServiceNode } from '@makerkit/core';
+import { dependency, service } from '@makerkit/core';
 import { type } from 'arktype';
 import { test } from 'vitest';
 import { contract } from '../contract.ts';
@@ -26,7 +26,7 @@ interface FakeDb {
   readonly validTokens: readonly string[];
 }
 
-const db: ResourceEnd<FakeDb> = resourceEnd({
+const db: DependencyEnd<FakeDb> = dependency({
   name: 'db',
   type: 'fake/db',
   connection: { params: {}, hydrate: () => ({ validTokens: [] }) },
@@ -75,7 +75,9 @@ test('a missing or mistyped handler does not compile', () => {
   serve(authService, {});
 
   // @ts-expect-error wrong input shape (token must be a string, not a number)
-  serve(authService, { rpc: { verify: async (_input: { token: number }, _deps) => ({ ok: true }) } });
+  serve(authService, {
+    rpc: { verify: async (_input: { token: number }, _deps) => ({ ok: true }) },
+  });
 
   // @ts-expect-error wrong output shape (ok must be a boolean, not a string)
   serve(authService, { rpc: { verify: async ({ token }, _deps) => ({ ok: token }) } });

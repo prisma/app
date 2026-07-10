@@ -8,12 +8,12 @@ const authContract = contract({
   verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
 });
 
-describe('rpc(contract) — the connection end', () => {
-  test('returns a branded connection end declaring the same { url: string } param as http()', () => {
+describe('rpc(contract) — the dependency end', () => {
+  test('returns a branded dependency end declaring the same { url: string } param as http()', () => {
     const end = rpc(authContract);
 
     expect(isNode(end)).toBe(true);
-    expect(end.kind).toBe('connection');
+    expect(end.kind).toBe('dependency');
     expect(end.type).toBe('rpc');
     expect(end.connection.params).toEqual({ url: { type: 'string' } });
   });

@@ -6,14 +6,14 @@
  * Schema validators (arktype the canonical one); the runtime value carries
  * the two schemas for serve()/the client to read back out.
  *
- * A Contract instead types a dependency's connection end — the typed sibling
+ * A Contract instead types a dependency end — the typed sibling
  * of `http()`, same `{ url }` param, hydrating to the typed client `Client<C>`
  * over the network binding in client.ts. It carries the contract as its
  * `required` value, so `HexBuilder.provision`'s wiring is checked against it
  * (compile time) and Load's `satisfies()` backstop re-checks it (runtime).
  */
 import type { Contract } from '@makerkit/core';
-import { type ConnectionEnd, connectionEnd } from '@makerkit/core';
+import { type DependencyEnd, dependency } from '@makerkit/core';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { makeClient } from './client.ts';
 
@@ -25,13 +25,13 @@ export function rpc<I extends StandardSchemaV1, O extends StandardSchemaV1>(m: {
   input: I;
   output: O;
 }): (input: StandardSchemaV1.InferInput<I>) => Promise<StandardSchemaV1.InferOutput<O>>;
-export function rpc<C extends Contract<'rpc', RpcFns>>(contract: C): ConnectionEnd<Client<C>, C>;
+export function rpc<C extends Contract<'rpc', RpcFns>>(contract: C): DependencyEnd<Client<C>, C>;
 export function rpc(
   arg: { input: StandardSchemaV1; output: StandardSchemaV1 } | Contract<'rpc', RpcFns>,
 ): unknown {
   if (!isRpcContract(arg)) return arg;
 
-  return connectionEnd({
+  return dependency({
     type: 'rpc',
     connection: {
       params: { url: { type: 'string' } },

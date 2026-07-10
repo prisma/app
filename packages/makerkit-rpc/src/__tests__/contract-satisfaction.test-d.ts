@@ -10,7 +10,7 @@
  * the negative wirings keep a `// @ts-expect-error` on the offending line.
  */
 import type { BuildAdapter, Contract, HexBuilder } from '@makerkit/core';
-import { connectionEnd, service } from '@makerkit/core';
+import { dependency, service } from '@makerkit/core';
 import { type } from 'arktype';
 import { expectTypeOf, test } from 'vitest';
 import { contract } from '../contract.ts';
@@ -61,9 +61,9 @@ const wrongKind = wsContract({
   verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
 });
 
-// an untyped connection end — http()'s shape (Req = unknown, the escape hatch).
+// an untyped dependency end — http()'s shape (Req = unknown, the escape hatch).
 const legacyEnd = () =>
-  connectionEnd({
+  dependency({
     type: 'fake/http',
     connection: { params: { url: { type: 'string' } }, hydrate: (v: { url: string }) => v },
   });

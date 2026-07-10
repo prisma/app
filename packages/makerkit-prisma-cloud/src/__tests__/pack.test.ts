@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Contract } from '@makerkit/core';
 import { configOf, hydrateSync, isNode } from '@makerkit/core';
-import { compute, postgres } from '../index.ts';
+import { compute, postgres, postgresContract } from '../index.ts';
 import { configKey, deserialize } from '../serializer.ts';
 
 const build = {
@@ -26,7 +26,7 @@ async function withEnv<T>(values: Record<string, string>, fn: () => Promise<T> |
 }
 
 describe('postgres({ name })', () => {
-  test('returns a branded resource identity — name, pack, type; no connection face', () => {
+  test('returns a branded resource identity providing postgresContract; type is the contract kind', () => {
     const node = postgres({ name: 'db' });
 
     expect(isNode(node)).toBe(true);
@@ -34,20 +34,22 @@ describe('postgres({ name })', () => {
     expect(node.type).toBe('postgres');
     expect(node.pack).toBe('@makerkit/prisma-cloud');
     expect(node.name).toBe('db');
+    expect(node.provides).toBe(postgresContract);
     expect('connection' in node).toBe(false);
   });
 });
 
 describe('postgres({ client })', () => {
-  test('returns a branded resource end declaring { url: string, secret }', () => {
+  test('returns a branded dependency end requiring postgresContract, declaring { url: string, secret }', () => {
     const end = postgres({
       client: ({ url }) => ({ url }),
     });
 
     expect(isNode(end)).toBe(true);
-    expect(end.kind).toBe('resource-end');
+    expect(end.kind).toBe('dependency');
     expect(end.type).toBe('postgres');
     expect(end.name).toBe('postgres');
+    expect(end.required).toBe(postgresContract);
     expect(end.connection.params).toEqual({ url: { type: 'string', secret: true } });
   });
 
@@ -67,44 +69,15 @@ describe('postgres({ client })', () => {
   });
 });
 
-describe('postgres({ name, client }) — the dual form', () => {
-  test('is a branded, frozen resource identity that also describes its own dependency', () => {
-    let calls = 0;
-    const db = postgres({
-      name: 'db',
-      client: ({ url }) => {
-        calls += 1;
-        return { url };
-      },
-    });
-
-    expect(isNode(db)).toBe(true);
-    expect(db.kind).toBe('resource');
-    expect(db.type).toBe('postgres');
-    expect(db.pack).toBe('@makerkit/prisma-cloud');
-    expect(Object.isFrozen(db)).toBe(true);
-
-    const end = db.toDependency();
-    expect(isNode(end)).toBe(true);
-    expect(end.kind).toBe('resource-end');
-    expect(end.type).toBe('postgres');
-    // The identity's name is the slot's diagnostic name.
-    expect(end.name).toBe('db');
-    expect(end.connection.params).toEqual({ url: { type: 'string', secret: true } });
-    // toDependency() is pure — the client factory never ran.
-    expect(calls).toBe(0);
+describe('postgres() argument-shape exclusivity', () => {
+  test('an empty argument throws naming the accepted shapes', () => {
+    expect(() => postgres({} as never)).toThrow(/requires `name`.+`client`/);
   });
 
-  test('hydrating the built end delegates to the one client factory', async () => {
-    const db = postgres({ name: 'db', client: ({ url }) => ({ url }) });
-
-    const client = await db.toDependency().connection.hydrate({ url: 'postgres://x' });
-
-    expect(client).toEqual({ url: 'postgres://x' });
-  });
-
-  test('an argument with neither name nor client throws naming the accepted shapes', () => {
-    expect(() => postgres({} as never)).toThrow(/requires `name`.+`client`.+or both/);
+  test('both name and client throws — the identity and the dependency are separate', () => {
+    expect(() =>
+      postgres({ name: 'db', client: ({ url }: { url: string }) => ({ url }) } as never),
+    ).toThrow(/takes `name`.+OR `client`.+not both/);
   });
 });
 
@@ -382,8 +355,8 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     expect(loaded).toEqual({ db: { url: 'postgres://y' }, port: 3000 });
   });
 
-  test('the dual form in deps round-trips through run()/load() — typed hydration, one client', async () => {
-    const db = postgres({ name: 'db', client: ({ url }) => ({ url }) });
+  test('a client dependency in deps round-trips through run()/load() — typed hydration', async () => {
+    const db = postgres({ client: ({ url }) => ({ url }) });
     const app = compute({ name: 'test-service', deps: { db }, build });
 
     let loaded: unknown;

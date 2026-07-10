@@ -9,5 +9,5 @@ export { compute } from './compute.ts';
 export type { HttpClient } from './http.ts';
 export { http } from './http.ts';
 export type { PostgresConfig } from './postgres.ts';
-export { postgres } from './postgres.ts';
+export { postgres, postgresContract } from './postgres.ts';
 export { configKey } from './serializer.ts';

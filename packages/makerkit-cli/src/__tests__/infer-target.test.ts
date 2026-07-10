@@ -50,7 +50,11 @@ describe('collectPacks() + resolveSinglePack() (ADR-0003)', () => {
     const res = resource({
       name: 'res',
       pack: '@other/pack',
-      type: 'fixture/resource',
+      provides: {
+        kind: 'fixture/resource',
+        __cmp: {},
+        satisfies: () => true,
+      },
     });
     const graph: Graph = {
       root: { id: 'root', node: svc },

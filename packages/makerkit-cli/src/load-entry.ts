@@ -24,7 +24,7 @@ export async function loadEntry(entryArg: string, cwd: string): Promise<LoadedEn
   const mod = await import(pathToFileURL(resolvedPath).href);
   const root: unknown = mod.default;
 
-  if (!isNode(root) || root.kind === 'connection' || root.kind === 'resource') {
+  if (!isNode(root) || root.kind === 'dependency' || root.kind === 'resource') {
     throw new CliError(
       `Entry module "${resolvedPath}" must default-export a node (a service or a hex) — ` +
         'construct it with service() or hex() from @makerkit/core.',
