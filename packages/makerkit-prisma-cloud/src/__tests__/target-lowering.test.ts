@@ -58,7 +58,7 @@ mock.module('@makerkit/prisma-alchemy', () => ({
 }));
 
 const { prismaCloud } = await import('../target.ts');
-const { compute, postgres, postgresDep } = await import('../index.ts');
+const { compute, postgres } = await import('../index.ts');
 const { hex } = await import('@makerkit/core');
 const { lowering } = await import('@makerkit/core/deploy');
 
@@ -142,7 +142,7 @@ describe("prismaCloud().services['compute']", () => {
     const node = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -294,16 +294,12 @@ describe('sharing: one hex-provisioned postgres, two compute consumers — throu
     const client = ({ url }: { url: string }) => ({ url });
     const root = hex('shop', (h) => {
       const db = h.provision('db', postgres({ name: 'db' }));
-      h.provision(
-        'auth',
-        compute({ name: 'auth', deps: { main: postgresDep({ client }) }, build }),
-        {
-          main: db,
-        },
-      );
+      h.provision('auth', compute({ name: 'auth', deps: { main: postgres({ client }) }, build }), {
+        main: db,
+      });
       h.provision(
         'billing',
-        compute({ name: 'billing', deps: { store: postgresDep({ client }) }, build }),
+        compute({ name: 'billing', deps: { store: postgres({ client }) }, build }),
         { store: db },
       );
     });

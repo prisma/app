@@ -1,4 +1,4 @@
-import { compute, postgresDep } from '../../index.ts';
+import { compute, postgres } from '../../index.ts';
 
 // Importing this module must not increment this counter — only load()
 // hydrating the db input should.
@@ -7,7 +7,7 @@ export let clientCalls = 0;
 export default compute({
   name: 'test-service',
   deps: {
-    db: postgresDep({
+    db: postgres({
       client: ({ url }) => {
         clientCalls += 1;
         return { url };

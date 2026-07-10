@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Contract } from '@makerkit/core';
 import { configOf, hydrateSync, isNode } from '@makerkit/core';
-import { compute, postgres, postgresDep } from '../index.ts';
+import { compute, postgres } from '../index.ts';
 import { configKey, deserialize } from '../serializer.ts';
 
 const build = {
@@ -25,7 +25,7 @@ async function withEnv<T>(values: Record<string, string>, fn: () => Promise<T> |
   }
 }
 
-describe('postgres()', () => {
+describe('postgres({ name })', () => {
   test('returns a branded resource identity — name, pack, type; no connection face', () => {
     const node = postgres({ name: 'db' });
 
@@ -38,9 +38,9 @@ describe('postgres()', () => {
   });
 });
 
-describe('postgresDep({ client })', () => {
+describe('postgres({ client })', () => {
   test('returns a branded resource end declaring { url: string, secret }', () => {
-    const end = postgresDep({
+    const end = postgres({
       client: ({ url }) => ({ url }),
     });
 
@@ -53,7 +53,7 @@ describe('postgresDep({ client })', () => {
 
   test("hydrate delegates to the app's client factory; C is inferred", async () => {
     const made: unknown[] = [];
-    const end = postgresDep({
+    const end = postgres({
       client: (config) => {
         made.push(config);
         return { fake: 'client', ...config };
@@ -65,10 +65,46 @@ describe('postgresDep({ client })', () => {
     expect(made).toEqual([{ url: 'postgres://u:p@host:5432/db' }]);
     expect(client).toEqual({ fake: 'client', url: 'postgres://u:p@host:5432/db' });
   });
+});
 
-  test('a given name overrides the "postgres" fallback', () => {
-    const end = postgresDep({ name: 'main-db', client: ({ url }) => ({ url }) });
-    expect(end.name).toBe('main-db');
+describe('postgres({ name, client }) — the dual form', () => {
+  test('is a branded, frozen resource identity that also describes its own dependency', () => {
+    let calls = 0;
+    const db = postgres({
+      name: 'db',
+      client: ({ url }) => {
+        calls += 1;
+        return { url };
+      },
+    });
+
+    expect(isNode(db)).toBe(true);
+    expect(db.kind).toBe('resource');
+    expect(db.type).toBe('postgres');
+    expect(db.pack).toBe('@makerkit/prisma-cloud');
+    expect(Object.isFrozen(db)).toBe(true);
+
+    const end = db.toDependency();
+    expect(isNode(end)).toBe(true);
+    expect(end.kind).toBe('resource-end');
+    expect(end.type).toBe('postgres');
+    // The identity's name is the slot's diagnostic name.
+    expect(end.name).toBe('db');
+    expect(end.connection.params).toEqual({ url: { type: 'string', secret: true } });
+    // toDependency() is pure — the client factory never ran.
+    expect(calls).toBe(0);
+  });
+
+  test('hydrating the built end delegates to the one client factory', async () => {
+    const db = postgres({ name: 'db', client: ({ url }) => ({ url }) });
+
+    const client = await db.toDependency().connection.hydrate({ url: 'postgres://x' });
+
+    expect(client).toEqual({ url: 'postgres://x' });
+  });
+
+  test('an argument with neither name nor client throws naming the accepted shapes', () => {
+    expect(() => postgres({} as never)).toThrow(/requires `name`.+`client`.+or both/);
   });
 });
 
@@ -90,7 +126,7 @@ describe('compute()', () => {
 
   test('is inert until run or load — the client factory does not run at construction', () => {
     let calls = 0;
-    const db = postgresDep({
+    const db = postgres({
       client: ({ url }) => {
         calls += 1;
         return { url };
@@ -110,7 +146,7 @@ describe('compute()', () => {
     const node = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -164,7 +200,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -181,7 +217,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -218,7 +254,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -249,7 +285,7 @@ describe("the config serializer (shared by run() and /target's serialize)", () =
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -308,7 +344,7 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -329,7 +365,7 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },
@@ -344,6 +380,20 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     );
 
     expect(loaded).toEqual({ db: { url: 'postgres://y' }, port: 3000 });
+  });
+
+  test('the dual form in deps round-trips through run()/load() — typed hydration, one client', async () => {
+    const db = postgres({ name: 'db', client: ({ url }) => ({ url }) });
+    const app = compute({ name: 'test-service', deps: { db }, build });
+
+    let loaded: unknown;
+    await withEnv({ DB_URL: 'postgres://dual', PORT: '' }, () =>
+      app.run('', async () => {
+        loaded = app.load();
+      }),
+    );
+
+    expect(loaded).toEqual({ db: { url: 'postgres://dual' }, port: 3000 });
   });
 
   test('run() calls boot() exactly once, even with nothing to hydrate', async () => {
@@ -368,7 +418,7 @@ describe('compute().load()', () => {
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => {
             hydrateCalls += 1;
             return { url };
@@ -395,7 +445,7 @@ describe('the config pipeline over pack nodes', () => {
     const app = compute({
       name: 'test-service',
       deps: {
-        db: postgresDep({
+        db: postgres({
           client: ({ url }) => ({ url }),
         }),
       },

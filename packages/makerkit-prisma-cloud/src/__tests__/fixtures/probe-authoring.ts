@@ -2,12 +2,12 @@
 // and pack) the way a user service module would, with real value usage so
 // nothing tree-shakes away.
 import { configOf, hex, Load } from '@makerkit/core';
-import { compute, postgres, postgresDep } from '@makerkit/prisma-cloud';
+import { compute, postgres } from '@makerkit/prisma-cloud';
 
 const app = compute({
   name: 'test-service',
   deps: {
-    db: postgresDep({
+    db: postgres({
       client: ({ url }) => ({ url }),
     }),
   },
