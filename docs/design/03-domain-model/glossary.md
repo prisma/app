@@ -1,6 +1,6 @@
 # Glossary (ubiquitous language)
 
-The shared terms used across MakerKit's design docs. This is the **authoring
+The shared terms used across the framework's design docs. This is the **authoring
 plane** vocabulary — what a developer writes and thinks in. For how these lower
 to the provisioning and hosting planes, see `layering.md`.
 
@@ -12,53 +12,54 @@ Alchemy research write-up lives in `../04-inspirations/Alchemy/glossary.md`.
 
 ## Core nouns
 
-Every element MakerKit provisions carries a **managed lifecycle** — it can be
+Every element the framework provisions carries a **managed lifecycle** — it can be
 recreated in a fresh environment and stood up in the local emulator. Two kinds
 carry that lifecycle: **Services** (your code) and **Resources** (managed
-dependencies); **Hexes** group them into bounded contexts. Anything without a
+dependencies); **Systems** group them into bounded contexts. Anything without a
 lifecycle — an API key, an external URL — is **Configuration**, not a node.
 
-### Hex (Subsystem)
+### System
 
 The unit of composition: a **bounded context** that wraps some Services,
-Resources, and other Hexes, exposes **Inputs** and **Outputs**, and is connected to
-other Hexes only through them. A Hex runs **no code of its own** — its behaviour is
+Resources, and other Systems, exposes **Inputs** and **Outputs**, and is connected to
+other Systems only through them. A System runs **no code of its own** — its behaviour is
 the composition of what it wraps.
 
-A Hex **behaves like a Service**: stateless, reprovisionable, and equivalent to its
+A System **behaves like a Service**: stateless, reprovisionable, and equivalent to its
 past incarnations, with typed Inputs and Outputs. That shared behaviour is what
-makes nesting work — a nested Hex is wired exactly as a Service is. It stays a
+makes nesting work — a nested System is wired exactly as a Service is. It stays a
 distinct type, with composition behaviours a Service doesn't have.
 
-- "Hex" is the working name; **Subsystem** is the literal fallback.
-- A Hex is an *authoring/reasoning* unit. It is not a single deployed object — it
+- A System is an *authoring/reasoning* unit. It is not a single deployed object — it
   lowers to a subgraph of hosting primitives (see `layering.md`).
-- **Nesting.** A wrapped node's Inputs/Outputs connect either to the parent Hex's
-  Inputs/Outputs or to a sibling (Service, Resource, or Hex) inside the same Hex; a
-  wrapped node reaches outside the Hex only through the parent's boundary.
-- **Composite, not atomic.** Where a Service is a leaf (opaque), a Hex is
-  transparent: MakerKit sees its ports *and* the internal topology it owns. The Hex
-  decides how the Services, Resources, and Hexes it wraps connect; its knowledge
-  ends at its boundary.
-- **The implicit root Hex.** The whole system is itself a Hex — the implicit root —
-  that owns the top-level topology: the Hex-to-Hex wiring and any shared Resources.
-  A shared database, for instance, is owned by the root Hex, which wires it to each
-  consumer's Data Input (and owns its migration — see Aggregate Contract).
+- **Nesting.** A wrapped node's Inputs/Outputs connect either to the parent System's
+  Inputs/Outputs or to a sibling (Service, Resource, or System) inside the same System; a
+  wrapped node reaches outside the System only through the parent's boundary.
+- **Composite, not atomic.** Where a Service is a leaf (opaque), a System is
+  transparent: the framework sees its ports *and* the internal topology it owns. The
+  System decides how the Services, Resources, and Systems it wraps connect; its
+  knowledge ends at its boundary.
+- **The App is the outermost System.** The whole application is itself a System —
+  the outermost one, and what you deploy — owning the top-level topology: the
+  System-to-System wiring and any shared Resources. A shared database, for instance,
+  is owned by the outermost System, which wires it to each consumer's Data Input (and
+  owns its migration — see Aggregate Contract). There is no separate root construct;
+  "App" names the outermost System, it is not a distinct kind of node.
 
 ### Service
 
 A **provisioned compute unit that runs your code** — an HTTP API, a web app, a
-worker. It exposes typed **Inputs** and **Outputs** — the same ports a Hex has —
-but it is **atomic**: MakerKit sees those ports and nothing inside. Lowers to a
+worker. It exposes typed **Inputs** and **Outputs** — the same ports a System has —
+but it is **atomic**: the framework sees those ports and nothing inside. Lowers to a
 compute unit on the chosen deployment target — Prisma Compute on Prisma Cloud, or
 another target's equivalent (Alchemy calls it a Platform).
 
 ### Resource
 
-A **provisioned dependency with a managed lifecycle** — MakerKit, through a
+A **provisioned dependency with a managed lifecycle** — the framework, through a
 provider, can create, update, and delete it. Its defining characteristic is the
 **state** it holds: a database, a bucket, a cache. Surfaced as a typed
-**capability** (via an Alchemy Layer): a Resource's Output provides it, a Hex's
+**capability** (via an Alchemy Layer): a Resource's Output provides it, a System's
 Input requires one, and the wire is valid iff provided satisfies required.
 
 The lifecycle can be implemented by cloud APIs *or* third-party/partner APIs, so a
@@ -67,9 +68,9 @@ bucket, a Prisma-brokered Mailchimp account. The test is whether something manag
 its lifecycle, not whether it's first-party.
 
 - **First-class**: Prisma **Postgres** (data, via Prisma Next contracts) —
-  MakerKit-native treatment.
+  the framework-native treatment.
 - **BYO**: any Alchemy resource (object storage, cache, queue, provisioned
-  third-party) exposed through a capability Layer. The Hex depends on the
+  third-party) exposed through a capability Layer. The System depends on the
   capability, not the vendor — swap R2 for S3 by swapping the Layer.
 
 Not Resources: **Compute** is what a Service lowers to (one per deployment target
@@ -82,11 +83,11 @@ See `layering.md` → Resources: first-class vs BYO.
 
 Per-environment values a node needs at runtime but that are **not themselves
 nodes**: injected at the boundary (no-globals — user code never reads the
-environment; MakerKit injects), supplied per environment. Two kinds, distinguished
+environment; the framework injects), supplied per environment. Two kinds, distinguished
 by sensitivity (the `secret` flag on a config param):
 
 **Config** (non-secret) — endpoints, ports, feature flags, plain settings. Most of
-what MakerKit writes is **graph-materialized**: a connection or resource address it
+what the framework writes is **graph-materialized**: a connection or resource address it
 computes from the topology and writes to the platform. The "env vars" a service
 boots with are mostly these **wires**, not user input; a wire's change is a graph
 event (a node rewired or re-provisioned), detected by the source's provenance,
@@ -94,11 +95,11 @@ never by inspecting the value.
 
 **Secret** — a sensitive credential (API key, token, password, a connection string
 carrying credentials). A secret is **always sourced from the platform's secret
-store**; MakerKit never computes it into the graph and never persists its value in
+store**; the framework never computes it into the graph and never persists its value in
 deployment state. The platform secret may come from the user directly or from a
-third-party manager (e.g. **Doppler**) integrated at the platform — MakerKit doesn't
-care which. MakerKit's only job is the last hop: **wire the platform secret to the
-consumer's DI**. A credential MakerKit itself provisions (a database URL) is written
+third-party manager (e.g. **Doppler**) integrated at the platform — the framework doesn't
+care which. The framework's only job is the last hop: **wire the platform secret to the
+consumer's DI**. A credential the framework itself provisions (a database URL) is written
 to the platform secret store transiently during provisioning and thereafter treated
 as a platform secret — wired by reference, its value never persisted.
 
@@ -108,8 +109,8 @@ interface.
 
 ### Topology
 
-The graph of Hexes and Resources wired together through their Inputs and Outputs.
-MakerKit infers it from TypeScript and emits it as a static artifact for the
+The graph of Systems and Resources wired together through their Inputs and Outputs.
+The framework infers it from TypeScript and emits it as a static artifact for the
 platform to provision.
 
 Every node in the topology has a managed lifecycle — which is exactly what lets the
@@ -120,10 +121,10 @@ Configuration, not a node.
 ## Connections
 
 A **connection** is an edge that wires one node's **Output** to another node's
-**Input**. Every node — Hex, Service, or Resource — carries typed Inputs and
+**Input**. Every node — System, Service, or Resource — carries typed Inputs and
 Outputs, and the wiring rule is uniform at every level: an Input must be connected
 to something that satisfies it — a sibling's Output, a Resource's Output, or the
-enclosing Hex's boundary Input. There are two families of connection.
+enclosing System's boundary Input. There are two families of connection.
 
 ### Input
 
@@ -134,11 +135,11 @@ Data Output).
 ### Output
 
 A connection point where a node **provides** something. Communication Outputs are
-served by Services and Hexes; Data Outputs are served by Resources.
+served by Services and Systems; Data Outputs are served by Resources.
 
 ### Communication connection — style: request/response | stream
 
-A Hex-to-Hex connection — or, at the boundary, public **ingress**. Its **style** is
+A System-to-System connection — or, at the boundary, public **ingress**. Its **style** is
 a property of the connection:
 
 - **request/response** — synchronous. Contract = the API/RPC signatures.
@@ -149,14 +150,14 @@ The communication style is *not* mediated by a Resource; the underlying transpor
 
 ### Data connection — method: TCP | HTTP
 
-A Hex consuming a Postgres Resource.
+A System consuming a Postgres Resource.
 
-- A **Data Input** (on a Hex) = a **connection method** (`TCP` — direct Postgres
+- A **Data Input** (on a System) = a **connection method** (`TCP` — direct Postgres
   wire; `HTTP` — PostgREST-style) plus a **Data Contract** it must satisfy.
 - A **Data Output** (on a Postgres Resource) = the set of **contract hashes** the
   Resource is provisioned (and verifiable) to satisfy.
 - The wire is valid iff the Output's offered hashes satisfy the Input's contract.
-- The concrete connection (URL) is injected when wired — never embedded in the Hex
+- The concrete connection (URL) is injected when wired — never embedded in the System
   (no-globals).
 
 ### Ingress / Egress
@@ -173,18 +174,18 @@ that external thing as a node, provision it (a Resource) or wrap it in a Service
 ### Data Contract
 
 A **Prisma Next** contract — a deterministic, hashable description of the schema
-slice a Hex may access (identified by its `storageHash`). A Hex's Data Input
-declares the contract it requires; this is also the per-Hex least-privilege scope.
+slice a System may access (identified by its `storageHash`). A System's Data Input
+declares the contract it requires; this is also the per-System least-privilege scope.
 
 Whoever **owns** a database owns the migration that makes it satisfy the contract —
-*who owns the wiring owns the migration*. A database that belongs to no Hex has no
-migration owner, which is why every database is owned by exactly one Hex (the
-implicit root Hex when it is shared; see Aggregate Contract).
+*who owns the wiring owns the migration*. A database that belongs to no System has no
+migration owner, which is why every database is owned by exactly one System (the
+implicit root System when it is shared; see Aggregate Contract).
 
 ### Aggregate Contract
 
-A database has exactly **one owning Hex** — the Hex it lives inside, or, when it is
-shared, the enclosing **implicit root Hex** that wires it to its consumers. The
+A database has exactly **one owning System** — the System it lives inside, or, when it is
+shared, the enclosing **implicit root System** that wires it to its consumers. The
 owner owns the schema and the migration; each consumer connects via a Data Input
 declaring the contract slice it needs. The owner's schema must satisfy the
 **aggregate** — the union of every consumer's contract — and consumer slices must
@@ -195,7 +196,7 @@ aggregate via the marker/ledger.
 
 ### Authoring / Provisioning / Hosting planes
 
-The three layers MakerKit spans: what you write (MakerKit), how it's wired and
+The three layers the framework spans: what you write (the framework), how it's wired and
 provisioned (Alchemy/Effect), what runs (Prisma Cloud). See `layering.md`.
 
 ### Lowering
@@ -206,7 +207,7 @@ to a plan.
 
 ### Control plane / Execution plane
 
-Two MakerKit modes. **Control plane**: import the topology, validate, build the
+Two the framework modes. **Control plane**: import the topology, validate, build the
 graph, emit the artifact, drive provisioning/inspection. **Execution plane**:
 instantiate implementations, satisfy the graph, inject dependencies, run
 entrypoints. Kept as separate import surfaces to avoid drift (and for
@@ -216,7 +217,7 @@ Refined into **four import planes** — **authoring** (write the model),
 **control** (load/interrogate/mutate it at build time), **deploy** (convert it to
 Alchemy), **execution** (run it) — mapped to concrete package entries in
 [`core-model.md`](../10-domains/core-model.md#package-and-entry-map).
-`@makerkit/core/control` is reserved as the control surface's home once it
+`@prisma/app/control` is reserved as the control surface's home once it
 outgrows the core root.
 
 ### Entrypoint
@@ -229,13 +230,13 @@ Service.
 
 How a developer actually writes the [Core nouns](#core-nouns). The concrete
 vocabulary — `compute` (a Service), `postgres` (a Resource), connection types like
-`http` — comes from a **target pack**; `@makerkit/core` is a target-agnostic router
+`http` — comes from a **target pack**; `@prisma/app` is a target-agnostic router
 beneath it. See [`core-and-targets.md`](core-and-targets.md) for that split and
 [`authoring-surface.md`](authoring-surface.md) for the full narrative.
 
 ### Target pack
 
-A pack (e.g. `@makerkit/prisma-cloud`) that supplies the concrete vocabulary for one
+A pack (e.g. `@prisma/app-cloud`) that supplies the concrete vocabulary for one
 deployment platform as **data**: `compute` (a Service), `postgres` (a Resource),
 `http` (a Connection). Each is an ergonomic constructor returning a plain object whose
 metadata routes it to an Alchemy Stack/Provider (and, for a Resource, a runtime
@@ -253,14 +254,16 @@ references the target handed it. See [`core-and-targets.md`](core-and-targets.md
 The abstract **Service** kind. The concrete constructor is target-provided —
 `compute(deps, handler)` on Prisma Cloud — and returns a plain data object (the
 manifest): inspectable (the control plane reads its ports) and runnable (the runtime
-invokes it), but importing runs nothing. The Service body is opaque to MakerKit (a
-**black box**); MakerKit sees only its ports.
+invokes it), but importing runs nothing. The Service body is opaque to the framework (a
+**black box**); the framework sees only its ports.
 
-### hex
+### system
 
-The library function that defines a **Hex** — the same wiring surface as
-`service`, but transparent (MakerKit sees the internal topology) and with
+The library function that defines a **System** — the same wiring surface as
+`service`, but transparent (the framework sees the internal topology) and with
 `provision` in scope. Its body wires the nodes it owns; it runs no code of its own.
+It is the single authoring primitive; the App is the outermost `system()`, picked
+out only by being the one you deploy.
 
 ### Port — Input / Output by position
 
@@ -269,7 +272,7 @@ ports (see [Connections](#connections)); direction is inferred from **position**
 a [connection type](#connection-type) named as a dependency is an **Input** (arrives
 hydrated as an argument), one that is returned is an **Output** (the body
 implements it). No explicit direction markers. `Input → arguments, Output → return`
-holds for both Services and Hexes.
+holds for both Services and Systems.
 
 ### Connection type
 
@@ -281,10 +284,10 @@ conform (dependency inversion).
 
 ### provision
 
-The Hex-scoped operator that turns a dependency descriptor into an **owned
+The System-scoped operator that turns a dependency descriptor into an **owned
 Resource** (`provision(postgres())`) or instantiates and wires an owned node
-(`provision(svc, { db })`). Ownership and provisioning are a Hex concern; a
-Service only *requires*. Forwarding is just passing a Hex's Inputs down and
+(`provision(svc, { db })`). Ownership and provisioning are a System concern; a
+Service only *requires*. Forwarding is just passing a System's Inputs down and
 returning owned nodes' Outputs up.
 
 ### run — the boot loop
@@ -305,7 +308,7 @@ but **terminate at hydration** — user code is dependency-injection only.
 ### Load / Hydrate
 
 The two-phase lifecycle. Running a `define` **Loads** an in-memory graph (a graph of
-streams, request/response being the bounded case) and MakerKit validates its
+streams, request/response being the bounded case) and the framework validates its
 integrity — every Input satisfied, interfaces compatible, nothing dangling — with
 nothing executed. **Hydrate** attaches adapters and pushes data through the Inputs
 and out of the Outputs. One graph serves both a test harness (a fake Output
@@ -314,12 +317,12 @@ substituted at any Input) and a real deployment.
 ## Provisioning plane — the compile target (Alchemy / Effect)
 
 The exact substrate the authoring nouns lower **down to**, grounded in what our
-providers already use (`packages/prisma-alchemy`, `alchemy@2.0.0-beta.59`,
+providers already use (`packages/alchemy`, `alchemy@2.0.0-beta.59`,
 `effect@4-beta`). Building the next layer of abstraction means defining each
 authoring noun as *the compile-target terms it emits*. Two families: Alchemy's
 IaC definition language, and the Effect primitives Alchemy is itself built on.
 
-For each term: what it is, and — where it applies — `→` the MakerKit authoring
+For each term: what it is, and — where it applies — `→` the the framework authoring
 noun that lowers onto it. The reverse table (authoring → provisioning → hosting)
 is in `layering.md`; this is the term-by-term catalogue.
 
@@ -327,9 +330,9 @@ is in `layering.md`; this is the term-by-term catalogue.
 
 - **Stack** — the root of an Alchemy program; a set of Resources deployed as a
   unit. `Alchemy.Stack(name, { providers, state }, Effect.gen(…))`. `lower()`
-  emits one Stack for the whole app; `makerkit deploy <entry>` drives it over the
+  emits one Stack for the whole app; `prisma-app deploy <entry>` drives it over the
   app module directly (no hand-written stack file, no config file — ADR-0003).
-  `→` **Topology / implicit root Hex**.
+  `→` **Topology / implicit root System**.
 - **Resource\<Type, Props, Attributes>** — a managed entity with a string type
   tag, desired-input **Props**, and cloud-returned **Attributes**. Declared, then
   `yield*`-ed. Ours: `Prisma.Project`, `Database`, `Connection`,
@@ -350,13 +353,13 @@ is in `layering.md`; this is the term-by-term catalogue.
 - **Provider** — implements a Resource type's lifecycle; an Effect `Layer`. We
   author one per Prisma resource with `Provider.effect(Resource, reconcile)`,
   bundled via `Provider.collection([…])` into a `Provider.ProviderCollection`
-  (`Prisma.providers()`). MakerKit reuses these unchanged — the next layer sits
+  (`Prisma.providers()`). The framework reuses these unchanged — the next layer sits
   *above* providers, not inside them.
 - **Stage** — an isolated instance of a Stack (`dev`, `staging`, `prod`,
   `pr-42`) with its own state and physical names. `→` **Environment**.
 - **State store** — persists each Resource's state per stack+stage so the engine
   can diff the next deploy. `prismaCloud()` defaults every deploy to a
-  Prisma-hosted, workspace-scoped store (`@makerkit/prisma-alchemy/state`); an
+  Prisma-hosted, workspace-scoped store (`@prisma/alchemy/state`); an
   explicit state layer always overrides it. Control-plane infra, never a
   topology node.
 
@@ -371,7 +374,7 @@ is in `layering.md`; this is the term-by-term catalogue.
 ### Deliberately **not** our compile target
 
 These two Alchemy concepts exist but our stack does not use them — and that gap
-is where MakerKit's own binding layer gets built.
+is where the framework's own binding layer gets built.
 
 - **Platform** — Alchemy's Resource-that-carries-runtime-code (Cloudflare
   Worker, AWS Lambda, Container). We model Prisma Compute as **ordinary
@@ -379,7 +382,7 @@ is where MakerKit's own binding layer gets built.
   Compute isn't an Alchemy-native platform.
 - **Binding** (`bind()`) — Alchemy's "the binding *is* the client" for a
   Platform: one call emits permissions + env and hands back a typed SDK client.
-  We do **not** use it. MakerKit's binding/DI (capability `Tag` + `Layer` +
+  We do **not** use it. The framework's binding/DI (capability `Tag` + `Layer` +
   execution-plane host shim) is **our own** layer precisely because our compute
   is plain Resources, not a Platform. `→` this is the seam for **binding
   injection** and the **execution-plane host**.
@@ -414,16 +417,20 @@ is where MakerKit's own binding layer gets built.
 - **Connection-method taxonomy** — only `TCP` and `HTTP` for now. "Pooled" is a
   URL param on TCP, not its own method; WebSocket and others are deferred until we
   work more examples.
-- **Encapsulation as convention** — "a Hex never exposes raw data to peers (front
+- **Encapsulation as convention** — "a System never exposes raw data to peers (front
   it behind communication)" is a *convention/policy* we may layer on, not an
-  enforced primitive. (That every database has exactly one owning Hex is now
+  enforced primitive. (That every database has exactly one owning System is now
   settled, driven by migration ownership — see Aggregate Contract.)
 - **Input/Output type set** — deliberate and curated, added consciously; not an
   open plugin surface, but not sealed forever either.
 
 ## Superseded terms
 
-- **App** → use **Topology** (the wired graph) or **Hex** (a unit).
+- **System** → use **System** (the unit of composition). "System" was the working name;
+  see [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md).
+- **App** is no longer superseded: it names the **outermost System** — the whole
+  application you build and deploy. Use **Topology** for the wired graph and
+  **System** for a unit; **App** for the composed whole.
 - **Descriptor** → an internal/substrate term; avoid in the authoring vocabulary
   (and note Prisma Next uses "Descriptor" for its own components).
 - **Durable Stream as "the backbone"** → streams are *one of two* transports

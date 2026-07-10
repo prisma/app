@@ -1,5 +1,14 @@
 # Naming the family — a proposal
 
+> **Status: superseded by [ADR-0014](../../docs/design/90-decisions/ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md).**
+> This is the original proposal that opened the naming discussion, kept as a record of
+> the strategic reasoning (one product identity; why now, with agents). The decision
+> differs in three ways: the framework is **Prisma App** — not "Prisma Compose"; the
+> building block is a **System** — not "Hex"; and the registry (proposed here as
+> "Hexicon") is **deferred**, its name reopened. **Prisma Next → Prisma Data** remains
+> proposed. Where this doc says "Prisma Compose" read "Prisma App", and where it says
+> "Hex" read "System".
+
 I'd like to propose a holistic naming scheme for the Prisma family that reorients us
 away from products with individual identities, like MakerKit, toward a single product
 identity built around the **Prisma App** — assembled from focused components that each
