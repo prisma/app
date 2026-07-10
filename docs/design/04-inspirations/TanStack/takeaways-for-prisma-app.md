@@ -1,10 +1,10 @@
-# TanStack DB → MakerKit takeaways (evolving)
+# TanStack DB → Prisma App Framework takeaways (evolving)
 
-This doc is explicitly **not** “research.” It records what we currently believe MakerKit should emulate/adapt from TanStack DB, and it is expected to change as MakerKit’s design evolves.
+This doc is explicitly **not** “research.” It records what we currently believe the Prisma App Framework should emulate/adapt from TanStack DB, and it is expected to change as the framework’s design evolves.
 
 Primary reference: [TanStack DB Overview](https://tanstack.com/db/latest/docs/overview)
 
-## The core interaction pattern to base MakerKit on
+## The core interaction pattern to base the Prisma App Framework on
 
 **Write a query → bind it → keep it live**.
 
@@ -22,10 +22,10 @@ That is the foundational shift away from:
 - **A small, stable ubiquitous language**
   - Users should spend their time in a handful of concepts (collections, live queries, mutations, sync modes).
 
-## What we likely need to adapt for MakerKit
+## What we likely need to adapt for the Prisma App Framework
 
 - **Collections backed by durable primitives**
-  - In MakerKit, the “collection” concept probably maps to:
+  - In the Prisma App Framework, the “collection” concept probably maps to:
     - durable streams as fact logs
     - materializers maintaining views
     - user-facing “collection” APIs as the ergonomic boundary
