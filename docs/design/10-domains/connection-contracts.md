@@ -50,9 +50,9 @@ export default compute({
 const { auth } = service.load()
 await auth.verify({ token })          // input {token}, output {ok}, both typed
 
-// the hex — WIRING is where the provider is checked against the consumer.
+// the system — WIRING is where the provider is checked against the consumer.
 // authRef carries auth's exposed ports; pick one for the consumer's slot.
-hex("storefront-auth", (h) => {
+system("storefront-auth", (h) => {
   const authRef = h.provision("auth", authService)
   h.provision("storefront", storefront, { auth: authRef.rpc })   // TS: rpc port must satisfy the slot
 })
@@ -71,7 +71,7 @@ Each piece carries the type that makes the wiring check itself:
 
 This is the hexagonal shape made concrete: a service has typed **input ports** (its
 deps, consumed via `load()`) and typed **output ports** (its `expose`, served via
-`serve()`); the hex connects an output port to an input port.
+`serve()`); the system connects an output port to an input port.
 
 ## What a Contract is
 
@@ -181,7 +181,7 @@ derived as a mapped type over `M`, comparing two instantiations would relate the
 `M`s covariantly — silently dropping input-contravariance and accepting a provider
 that demands an input the consumer never sends. Materialising `Cmp` as concrete
 functions in the kind's builder is what makes plain assignability sound. (See
-`@makerkit/rpc`'s `contract-satisfaction.test-d.ts` for the full accept/reject
+`@prisma/app-rpc`'s `contract-satisfaction.test-d.ts` for the full accept/reject
 matrix, typechecked in CI.)
 
 Schemas are **Standard Schema** (arktype is the canonical authoring library; any
@@ -202,8 +202,8 @@ Structural comparison earns its keep in the distributed case: when the provider 
 compatibility is checked by comparing the consumer's contract against the provider's
 **published spec** (the contract compiled to OpenAPI / JSON-RPC). That is the same
 engine as the Data Contract migration check — "a newly deployed provider must still
-satisfy every existing consumer." The in-build hex is fully covered by the three
-layers above.
+satisfy every existing consumer." The in-build System is fully covered by the
+three layers above.
 
 ## Implementing — why the handler cannot skip the contract
 
@@ -234,11 +234,11 @@ check the shape) can close that gap at runtime if a hard guarantee is ever wante
 The Contract is a standalone value; where it lives is code organisation. The
 framework owns the builder and the type, never the location:
 
-- a third-party hex ships the Contract *with* the provider; alternative
+- a third-party System ships the Contract *with* the provider; alternative
   implementations and mocks import it;
 - a first-party app puts the Contract beside the Service; mocks import it;
 - a dependency-inverted app puts the Contract with the consumer or in a central
-  package, and implementer hexes depend on it.
+  package, and implementer Systems depend on it.
 
 All three are "both sides import one Contract value," which is also why the RPC
 contract's identity-based `satisfies()` is enough today.
@@ -269,5 +269,5 @@ contract's identity-based `satisfies()` is enough today.
 ## Related
 
 - [`core-model.md`](core-model.md) — the Connection primitive (`http()`,
-  `DependencyEnd`, the hex) this types.
+  `DependencyEnd`, the System) this types.
 - [`../03-domain-model/authoring-surface.md`](../03-domain-model/authoring-surface.md) — ports, direction-from-position.

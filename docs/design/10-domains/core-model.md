@@ -1,14 +1,14 @@
 # Core model — classes and data structures
 
-The complete type-level design of `@makerkit/core` and the target-pack contract,
-with `@makerkit/prisma-cloud` as the worked instance. This is the implementation
+The complete type-level design of `@prisma/app` and the target-pack contract,
+with `@prisma/app-cloud` as the worked instance. This is the implementation
 design under [`core-and-targets.md`](../03-domain-model/core-and-targets.md): that
 doc says *what* the split is; this one says exactly *which types exist, what fields
 they carry, and who imports what*. Scope: the current model — Services declaring
 **dependency slots** (one mechanism, whoever the producer is), the minimal
-**Hex** that provisions the Resources and services and wires every slot, and
+**System** that provisions the Resources and services and wires every slot, and
 the **build adapter** that turns a service's app into a runnable artifact;
-typed interfaces and full Hex composition are named extension points.
+typed interfaces and full System composition are named extension points.
 
 ## The service is declarations; the app owns its entry
 
@@ -29,7 +29,7 @@ Two methods hang off the service node and bridge the two:
 
 Because the entry always runs inside `run()`'s process, `run()` executes first and
 `load()` reads what it left — the two never coordinate through anything the app
-author sees. MakerKit never bundles the app's code; it only produces a small
+author sees. The framework never bundles the app's code; it only produces a small
 wrapper around the app's built entry and packages it for the target.
 
 ## Package and entry map
@@ -37,7 +37,7 @@ wrapper around the app's built entry and packages it for the target.
 Six entry points, split by dependency weight. The split is enforced, not
 aspirational (see § Invariants).
 
-Entries map onto MakerKit's **four planes**. Entry names say *when you import
+Entries map onto the framework's **four planes**. Entry names say *when you import
 them*; mechanism terms stay on the functions (`lower()`/`lowering()` — the
 glossary's Lowering — live in `/deploy`):
 
@@ -51,19 +51,19 @@ glossary's Lowering — live in `/deploy`):
 **`/control` is reserved as the settled design direction**: today the control
 surface is two pure, lean functions, too little to justify its own entry — but
 the moment it grows (the queryable-topology emit, config-declaration tooling, graph
-transforms when Hexes arrive), it carves out of `.` into `@makerkit/core/control`.
+transforms when Systems arrive), it carves out of `.` into `@prisma/app/control`.
 The boundary is decided; only the carve is deferred.
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
-| `@makerkit/core` | node factories (`service`, `resource`, `dependency`, `hex`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
-| `@makerkit/core/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
-| `@makerkit/prisma-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@makerkit/core` only |
-| `@makerkit/rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@makerkit/core` + a Standard Schema validator |
-| `@makerkit/prisma-cloud/target` | `prismaCloud()` | `@makerkit/prisma-alchemy`, `alchemy`, `effect` |
-| `@makerkit/node` · `@makerkit/nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@makerkit/core` only |
-| `@makerkit/node/assemble` · `@makerkit/nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
-| `@makerkit/assemble` | `assembleServices()` — routes each service to its adapter's `/assemble` via `${build.pack}/assemble` (entry-anchored), the wrapper-inlining policy, `AssembleError` | `node:fs`/`node:module` — deploy machine only; consumed by `@makerkit/cli` and the future programmatic deploy API |
+| `@prisma/app` | node factories (`service`, `resource`, `dependency`, `system`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
+| `@prisma/app/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
+| `@prisma/app-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/app` only |
+| `@prisma/app-rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/app` + a Standard Schema validator |
+| `@prisma/app-cloud/target` | `prismaCloud()` | `@prisma/alchemy`, `alchemy`, `effect` |
+| `@prisma/app-node` · `@prisma/app-nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@prisma/app` only |
+| `@prisma/app-node/assemble` · `@prisma/app-nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
+| `@prisma/app-assemble` | `assembleServices()` — routes each service to its adapter's `/assemble` via `${build.pack}/assemble` (entry-anchored), the wrapper-inlining policy, `AssembleError` | `node:fs`/`node:module` — deploy machine only; consumed by `@prisma/app-cli` and the future programmatic deploy API |
 
 A build adapter splits exactly like a target pack: a **lean authoring descriptor**
 that the service module carries (pure data — `{ kind, pack, module, entry }`,
@@ -80,38 +80,38 @@ driver, the server API) appears only in **app files**.
 
 Who imports what, end to end:
 
-- the **user's service module** (`service.ts`) imports `@makerkit/prisma-cloud`, a
-  build-adapter descriptor (`@makerkit/node` / `@makerkit/nextjs`), and the app's
+- the **user's service module** (`service.ts`) imports `@prisma/app-cloud`, a
+  build-adapter descriptor (`@prisma/app-node` / `@prisma/app-nextjs`), and the app's
   own driver of choice (a DB client factory lives inline here). It exports the
   service node and **nothing runs on import**;
 - the **user's entrypoint** (`server.ts`, or a Next page) imports the service
   module and calls `service.load()` for typed deps. The app author writes AND
-  bundles this file (their bundler, or `next build`) — MakerKit never touches it;
+  bundles this file (their bundler, or `next build`) — the framework never touches it;
 - the **deploy entry is the app module itself** — there is no config file
-  (ADR-0003). `makerkit deploy <entry>` imports it, infers the target pack from
+  (ADR-0003). `prisma-app deploy <entry>` imports it, infers the target pack from
   the nodes, and constructs the target from the environment via the pack's
   `/target` `fromEnv()` — the only place the heavy target import happens — then
-  calls `@makerkit/core/deploy`'s `lower()` internally. The app author writes no
-  stack file and no config file — `makerkit deploy` generates one at
-  `.makerkit/alchemy.run.ts` per run and drives it; see
+  calls `@prisma/app/deploy`'s `lower()` internally. The app author writes no
+  stack file and no config file — `prisma-app deploy` generates one at
+  `.prisma-app/alchemy.run.ts` per run and drives it; see
   [`deploy-cli.md`](deploy-cli.md).
 
 At deploy, the build adapter's assembler produces a **normalized bundle dir**: the
-app's built entry, plus a MakerKit **wrapper** (the service module bundled with
-core inlined once — it carries `run`/`load`), plus any framework fixups. The
-target pack's `package` then prints the bootstrap and wraps that dir in the target
-envelope. The wrapper never contains Alchemy; the app's entry is never compiled by
-MakerKit.
+app's built entry, plus the framework's **wrapper** (the service module bundled
+with core inlined once — it carries `run`/`load`), plus any framework fixups.
+The target pack's `package` then prints the bootstrap and wraps that dir in the
+target envelope. The wrapper never contains Alchemy; the app's entry is never
+compiled by the framework.
 
 ## Decision taken: Alchemy is core's provisioning substrate
 
-`@makerkit/core/deploy` imports `alchemy`/`effect`. The architectural principle
+`@prisma/app/deploy` imports `alchemy`/`effect`. The architectural principle
 forbids core knowledge of **deployment targets** (Prisma Cloud); Alchemy is not a
 target — it is the provisioning plane [`layering.md`](../03-domain-model/layering.md)
-already commits to (claim 3: MakerKit uses Alchemy's definition language *and*
+already commits to (claim 3: the framework uses Alchemy's definition language *and*
 engine). Putting the engine in core means every target pack supplies only data
 (providers + lowerings) instead of re-implementing apply/state. The swap test still
-holds: replacing `@makerkit/prisma-cloud` with another pack changes nothing in core.
+holds: replacing `@prisma/app-cloud` with another pack changes nothing in core.
 
 ## The three execution paths
 
@@ -148,7 +148,7 @@ entry, `load()` reads the stash and hands back hydrated, typed dependencies. The
 deploy path's `serialize` and the run path's deserialize use the pack's **one
 shared serializer**, so writer and reader cannot drift.
 
-## Core model types (`@makerkit/core`)
+## Core model types (`@prisma/app`)
 
 All nodes are **plain, frozen, serializable data** — with exactly **two sanctioned
 behavior slots** hanging off the graph as data: a Connection's `hydrate` (typed
@@ -164,18 +164,18 @@ key at deploy; core never interprets it beyond lookup.
 ```ts
 // Brand — set by the factories below; how Load tells a node from junk.
 // Symbol.for so the check survives duplicated module instances in a workspace.
-const NODE: unique symbol = Symbol.for("makerkit:node") as never
+const NODE: unique symbol = Symbol.for("prisma:node") as never
 
 interface NodeBase {
   readonly [NODE]: true
   readonly kind: "service" | "resource" | "dependency"
   readonly type: string                        // the node's OWN routing key, unqualified — e.g. "postgres", "compute"
 }
-// HexNode is deliberately NOT a NodeBase: it has no routing `type` — it is
+// SystemNode is deliberately NOT a NodeBase: it has no routing `type` — it is
 // transparent wiring, not a routable thing (see § Nodes).
 
 // Shared base for pack-authored nodes (service + resource): the pack's package
-// name, e.g. "@makerkit/prisma-cloud" — deploy tooling reads it off the graph
+// name, e.g. "@prisma/app-cloud" — deploy tooling reads it off the graph
 // to resolve `${pack}/target` (ADR-0003). DependencyEnd stays pack-less.
 // Deploy tooling routes on the (pack, type) pair: `pack` selects the target,
 // `type` selects that target's lowering-table entry within it — `type` never
@@ -246,14 +246,14 @@ interface Config {
 // entry-anchored) at deploy and never ships in a bundle (§ Lowering, § Extension).
 interface BuildAdapter {
   readonly kind: string                        // "node" · "nextjs" — the resolved module's own discriminant
-  readonly pack: string                        // the adapter's package name, e.g. "@makerkit/node" — baked in by node()/nextjs(); resolves `${pack}/assemble`
+  readonly pack: string                        // the adapter's package name, e.g. "@prisma/app-node" — baked in by node()/nextjs(); resolves `${pack}/assemble`
   readonly module: string                      // the authoring module's import.meta.url — the anchor every other path resolves against
   readonly entry: string                       // built runnable, resolved relative to dirname(module) (e.g. "../dist/server.js")
 }
 
 // ——— Nodes ———
 
-// A Resource's identity: the ONE place a piece of infrastructure exists. A hex
+// A Resource's identity: the ONE place a piece of infrastructure exists. A system
 // provisions it (`h.provision("db", postgres({ name: "db" }))`) and wires the
 // returned ref into each consumer's dependency slot — a resource is never
 // created because a service mentioned it. `provides` is the Contract it offers
@@ -281,7 +281,7 @@ interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends 
 }
 
 // THE dependency slot a service declares, whoever the producer is. Nothing is
-// provisioned FOR it: at Load the enclosing hex wires a provisioned producer's
+// provisioned FOR it: at Load the enclosing system wires a provisioned producer's
 // ref into it (a service's exposed port, or a resource — the contract
 // determines validity, never the producer's kind), and at deploy it becomes an
 // EDGE from that producer to the consumer. At run it hydrates a client through
@@ -301,17 +301,17 @@ interface DependencyEnd<C = unknown, Req = unknown> extends NodeBase {
 // from each entry's hydrate return type.
 type Deps = Record<string, DependencyEnd<any, any>>
 
-// A Hex: transparent wiring, no code of its own. The body runs at Load (it is
+// A System: transparent wiring, no code of its own. The body runs at Load (it is
 // wiring, not user code) and provisions the services it owns, supplying a
 // producer for every dependency input. Minimal form — boundary ports and
-// nesting arrive with full Hex composition (see § Extension points).
-interface HexNode {
+// nesting arrive with full System composition (see § Extension points).
+interface SystemNode {
   readonly [NODE]: true
-  readonly kind: "hex"
+  readonly kind: "system"
   readonly name: string
-  body(h: HexBuilder): void
+  body(h: SystemBuilder): void
 }
-interface HexBuilder {
+interface SystemBuilder {
   // Provisions an owned resource under a stable id — the ONE place it exists.
   // Returns the ref (the provided contract, tagged with the id) a later
   // provision() wires into a consumer's dependency slot.
@@ -343,7 +343,7 @@ Target packs do not hand-roll node objects — they call core's factories, which
 validate, and freeze. This is the whole "framework provides / pack wraps" contract:
 
 ```ts
-// @makerkit/core
+// @prisma/app
 function resource<C extends Contract<any, any>>(def: {
   name: string
   pack: string
@@ -364,26 +364,26 @@ function service<D extends Deps, P extends Params>(def: {
   build: BuildAdapter
 }): ServiceNode<D, P>   // the pack wraps this and returns its runnable/loadable subclass
 
-function hex(name: string, body: (h: HexBuilder) => void): HexNode   // body runs at Load, not here
+function system(name: string, body: (h: SystemBuilder) => void): SystemNode   // body runs at Load, not here
 ```
 
 `service()` freezes `inputs`/`params`/`build`; `dependency()` freezes the
 connection's declared params; `resource()` derives `type` from `provides.kind`.
 All throw on an empty `type`; `service()` and `dependency()` also reject an
-input or param name containing `_`, and a hex's `provision()` rejects an id
+input or param name containing `_`, and a system's `provision()` rejects an id
 containing `_` or `.` — the pack's config-key serializer joins address segments
 and names with `_` (node ids join path segments with `.`), so either character
 inside a name would collide with that separator. Nothing executes: constructing
 nodes is pure. The pack's authoring factory (`compute()`) calls `service()` and
 returns a subclass carrying `run` and `load`.
 
-## Graph and Load (`@makerkit/core`)
+## Graph and Load (`@prisma/app`)
 
 ```ts
 type NodeId = string           // path-derived: root "hello", its input "hello.db"
 
 interface GraphNode { readonly id: NodeId
-                      readonly node: ServiceNode | ResourceNode | DependencyEnd | HexNode }
+                      readonly node: ServiceNode | ResourceNode | DependencyEnd | SystemNode }
 interface Edge { readonly from: NodeId; readonly to: NodeId; readonly input: string
                  readonly kind: "input" | "dependency" }
 
@@ -393,14 +393,14 @@ interface Graph {
   readonly edges: readonly Edge[]
 }
 
-function Load(root: ServiceNode | HexNode, opts?: { id?: NodeId }): Graph   // throws LoadError
+function Load(root: ServiceNode | SystemNode, opts?: { id?: NodeId }): Graph   // throws LoadError
 class LoadError extends Error {}
 ```
 
-Load accepts a service or a hex root. For a service it walks `root.inputs`, assigns
-ids, builds edges. For a hex it **executes the body** (the body is wiring, not user
+Load accepts a service or a system root. For a service it walks `root.inputs`, assigns
+ids, builds edges. For a system it **executes the body** (the body is wiring, not user
 code — running it at Load is the designed exception to imports-run-nothing) with a
-collector `HexBuilder`, producing the owned resources and services and one
+collector `SystemBuilder`, producing the owned resources and services and one
 **dependency edge** per wired slot. Edges carry a kind: `input` (a service
 consumes its own declared slot) or `dependency` (a service consumes a
 provisioned producer — a service port OR a resource, the one mechanism), the
@@ -411,19 +411,19 @@ and when the slot declares a required contract the wired ref must `satisfies()`
 it (dangling or unsatisfied = LoadError) — no producer-kind branching, a
 service ref cannot satisfy a postgres-requiring slot because no service port
 carries that contract kind; a concrete ResourceNode found inside `deps` is a
-targeted LoadError — a resource is provisioned by the composing hex, never
+targeted LoadError — a resource is provisioned by the composing system, never
 created by mention; the dependency edges form a **DAG** (a cycle is a LoadError
 with the cycle named — a consequence of address-at-deploy-time wiring: if A
 needs B's address to deploy and B needs A's, neither can go first; resources
 take no wiring, so only service-to-service edges can cycle). A service Loaded
 directly as the root may carry no dependency slot at all — nothing at the root
 wires or provisions for it — so an unwired slot is a LoadError naming the input
-and pointing at deploying the composing hex instead. Load executes nothing of the user's — the graph is data
+and pointing at deploying the composing system instead. Load executes nothing of the user's — the graph is data
 in memory to inspect or hand to `lower` (or the node's `run`). A **topology view** — nodes as `{ id, kind, type }`
 plus edges, function slots dropped — is `JSON.stringify`-able by construction; the
 serialized-artifact emit step builds on this later.
 
-## Lowering (`@makerkit/core/deploy`)
+## Lowering (`@prisma/app/deploy`)
 
 The router. Core's only job at deploy: Load, then look up each node's `type` in the
 target's lowering table and run what it finds, deps before dependents.
@@ -484,7 +484,7 @@ interface ServiceLowering {
 }
 
 // package input: the build adapter's assembled output plus the address. The
-// bootstrap the pack prints is the ONLY runnable MakerKit adds to the artifact.
+// bootstrap the pack prints is the ONLY runnable code the framework adds to the artifact.
 // It imports the wrapper and calls run with the address AND a boot thunk that
 // imports the app's built entry — a printed, literal dynamic import of a runtime
 // path (never a bundled reference, so no bundler ever follows it):
@@ -519,10 +519,10 @@ interface LoweredNode { readonly outputs: Readonly<Record<string, unknown>> }
 
 interface LowerOptions {
   readonly name: string                                  // stack name (+ Load's root id override)
-  // `makerkit deploy` runs each service's build-adapter assembler and writes
+  // `prisma-app deploy` runs each service's build-adapter assembler and writes
   // the resulting bundle dirs here, into the generated stack file it hands to
   // `lower()` — one bundle per provision id (the deploy root is always a
-  // hex). A hand-composed / mixed-stack caller (the escape hatch — see
+  // system). A hand-composed / mixed-stack caller (the escape hatch — see
   // § Lowering) supplies these itself.
   readonly bundles: Record<string, Bundle>
   readonly stage?: string
@@ -534,19 +534,19 @@ interface Artifact { readonly path: string; readonly sha256: string }       // p
 
 // Load → route each node through target.lower[node.type] → an Alchemy Stack
 // (the default export the alchemy CLI consumes). Unknown type → LowerError
-// naming the type and the target's known types. root must be a hex — a bare
+// naming the type and the target's known types. root must be a system — a bare
 // service is not independently deployable.
-function lower(root: HexNode, target: Target, opts: LowerOptions): AlchemyStack
+function lower(root: SystemNode, target: Target, opts: LowerOptions): AlchemyStack
 class LowerError extends Error {}
 
-// Composable form — for MIXED topologies: MakerKit-authored nodes beside
+// Composable form — for MIXED topologies: framework-authored nodes beside
 // hand-wired Alchemy resources in one stack. Runs the same Load → route walk
 // inside the caller's stack effect and returns the root's LoweredNode, whose
 // outputs (e.g. the deployed URL) hand-wired resources may consume.
 // Error channel: LowerError from routing, PLUS whatever a pack lowering fails
 // with (their error type is open) — a mixed-stack caller treats failures as
 // deploy-fatal or inspects; it must not assume LowerError is the only inhabitant.
-function lowering(root: HexNode, target: Target, opts: LowerOptions):
+function lowering(root: SystemNode, target: Target, opts: LowerOptions):
   Effect.Effect<LoweredNode, LowerError, unknown>
 ```
 
@@ -559,13 +559,13 @@ type-level notes the wrapper carries (both commented at the single site): a
 channel is narrowed to what `Alchemy.Stack` accepts — `lowering()` itself stays
 `unknown`-requirements for composability.
 In the mixed case the hand-written stack supplies providers itself (including the
-target's, via `target.providers()`), yields a `lowering(…)` per MakerKit-authored
+target's, via `target.providers()`), yields a `lowering(…)` per framework-authored
 service, and wires its own resources around the returned `outputs`.
 
 **Core's deploy-path sequencing** — the control flow no pack can misorder.
 First, `application.provision` runs once (the Project, with the poison
-`DATABASE_URL` variables). Then walk the graph in topological order (the hex
-body's provision order; the dependency DAG Load validated). Each hex-provisioned
+`DATABASE_URL` variables). Then walk the graph in topological order (the system
+body's provision order; the dependency DAG Load validated). Each system-provisioned
 **resource** lowers exactly once via `Target.resources` (e.g. one Database +
 Connection — outputs carry the url), no matter how many services consume it;
 dependency-slot nodes are edges only and never lower. Then for each service:
@@ -573,7 +573,7 @@ dependency-slot nodes are edges only and never lower. Then for each service:
 1. `provision` — the service now has identity (its App).
 2. core **builds the typed `Config`** — each input's declared params matched by
    name to its producer's lowered outputs through the one `dependency` edge:
-   whatever the hex wired in — a resource's lowered outputs (shared by every
+   whatever the system wired in — a resource's lowered outputs (shared by every
    consumer wired to it) or a producer service's deploy outputs (the producer,
    earlier in topo order, is already fully deployed — its URL is real, not the
    create-time placeholder) — plus service-param defaults. Leaf values are
@@ -609,7 +609,7 @@ the [config/secret glossary](../03-domain-model/glossary.md#configuration--confi
 
 **Deployment identity — address, bootstrap, and why.** A node's identity is its
 **address**: the path of provision ids from the app root, assigned by Load from
-graph position — never user-invented, so registry hexes with common internal
+graph position — never user-invented, so registry systems with common internal
 names (`db`, `service`) cannot collide; the address qualifies them. Identity
 cannot travel through the environment: every App in a Project boots a
 byte-identical env (ConfigVariables are project+branch-scoped and snapshotted at
@@ -621,7 +621,7 @@ artifact the pack assembles:
 
 ```
 server.js              ← the app's OWN built entry (Hono bundle / Next standalone). Calls service.load().
-main.js                ← MakerKit wrapper: the service module bundled, core inlined ONCE. Inert on import.
+main.js                ← framework wrapper: the service module bundled, core inlined ONCE. Inert on import.
 bootstrap.js           ← pack-printed: `import main from "./main.js"; await main.run("<address>", () => import("./server.js"))`
 compute.manifest.json  ← pack-written envelope; entrypoint = bootstrap.js
 ```
@@ -633,7 +633,7 @@ app's entry, and the artifact holds a single copy of core. There is **no import
 cycle**: the app's entry imports the service module (for `load()`), and the
 bootstrap imports the wrapper and dynamically imports the entry — nothing imports
 the bootstrap, and the serve code lives in the app's entry, never in the service
-module. Every byte is deterministic — the app's built entry, the MakerKit wrapper,
+module. Every byte is deterministic — the app's built entry, the framework's wrapper,
 the printed bootstrap — so unchanged services hash identically and noop, once the
 app's build is itself deterministic (the Next standalone case is a named
 follow-up). Because the same Load walk feeds both `serialize`'s env keys and the
@@ -647,10 +647,11 @@ Notes:
 - **Target-specific identity** (workspace id, region) never appears in
   `LowerOptions` — it is captured by the pack's target constructor
   (`prismaCloud({ workspaceId })`). Core's options are target-neutral.
-- **The app owns its entry; MakerKit owns the wrapper.** The app builds its own
+- **The app owns its entry; the framework owns the wrapper.** The app builds its own
   entry (`server.js` via its bundler; the Next standalone via `next build`); the
-  build adapter's assembler normalizes it into a bundle dir alongside the MakerKit
-  wrapper, and the pack's `package` prints the bootstrap and tars. Core still has
+  build adapter's assembler normalizes it into a bundle dir alongside the
+  framework's wrapper, and the pack's `package` prints the bootstrap and tars.
+  Core still has
   no build step — printing a bootstrap and bundling a service-module wrapper is
   assembly, not compiling app code.
 
@@ -688,7 +689,7 @@ interface ConfigDeclaration {
   readonly optional: boolean
   readonly default: string | number | undefined
 }
-function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @makerkit/core (pure)
+function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @prisma/app (pure)
 
 // Core's boot-side helper: given a service and a concrete typed Config, hydrate
 // every input (connection.hydrate with its value slice) into typed clients. No
@@ -720,7 +721,7 @@ Next page prerendered at build time, with no `run()` in the process) fails loudl
 too — pages that call `load()` opt out of build-time prerender (`force-dynamic`),
 and local dev supplies the stash through a dev harness.
 
-## The Prisma Cloud pack (`@makerkit/prisma-cloud`) — worked instance
+## The Prisma Cloud pack (`@prisma/app-cloud`) — worked instance
 
 Authoring entry — nodes carrying their connection/host knowledge; the driver is a
 **parameter**, so the pack ships none and the client type is inferred:
@@ -729,7 +730,7 @@ Authoring entry — nodes carrying their connection/host knowledge; the driver i
 import { resource, dependency, service, configOf, hydrate,
   type BuildAdapter, type Config, type ConfigDeclaration, type Connection,
   type Contract, type Deps, type DependencyEnd, type Loaded, type ResourceNode,
-  type RunnableServiceNode } from "@makerkit/core"
+  type RunnableServiceNode } from "@prisma/app"
 
 export interface PostgresConfig { readonly url: string }
 
@@ -745,7 +746,7 @@ export const postgresContract: Contract<"postgres", PostgresConfig> = Object.fre
 })
 
 // ONE postgres factory, two exclusive shapes (`?: never`, re-checked at
-// runtime). { name }: the identity a hex provisions — the ONE place the
+// runtime). { name }: the identity a system provisions — the ONE place the
 // database exists, providing postgresContract. { client }: the consumer's
 // dependency slot requiring it; the app supplies the client factory and C is
 // inferred. { name, client } and {} are compile errors and runtime throws.
@@ -754,7 +755,7 @@ export function postgres<C>(opts: { client: ClientFactory<C>; name?: never }): D
 export function postgres<C>(opts: { name?: string; client?: ClientFactory<C> }): unknown {
   const { name, client } = opts
   if (name !== undefined && client !== undefined) throw new Error("postgres() takes `name` OR `client`, not both")
-  if (name !== undefined) return resource({ name, pack: "@makerkit/prisma-cloud", provides: postgresContract })
+  if (name !== undefined) return resource({ name, pack: "@prisma/app-cloud", provides: postgresContract })
   if (client !== undefined) return dependency({
     type: "postgres",
     connection: { params: { url: { type: "string", secret: true } }, hydrate: (v) => client({ url: v.url }) },
@@ -789,7 +790,7 @@ export const compute = <D extends Deps>(def: {
   build: BuildAdapter
 }): RunnableServiceNode<D, typeof computeParams> => {
   const node = service({
-    pack: "@makerkit/prisma-cloud", type: "compute", inputs: def.deps, params: computeParams, build: def.build,
+    pack: "@prisma/app-cloud", type: "compute", inputs: def.deps, params: computeParams, build: def.build,
   })
   let loaded: Loaded<D, typeof computeParams> | undefined   // per-process memo for load()
   return Object.freeze({
@@ -830,8 +831,8 @@ Target entry — the lowering table (the only place `prisma-alchemy` is imported
 
 ```ts
 import * as Effect from "effect/Effect"
-import * as Prisma from "@makerkit/prisma-alchemy"
-import type { Target } from "@makerkit/core/deploy"
+import * as Prisma from "@prisma/alchemy"
+import type { Target } from "@prisma/app/deploy"
 
 export interface PrismaCloudOptions {
   workspaceId: string
@@ -865,7 +866,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   },
 
   resources: {
-    // One Database per hex-provisioned postgres resource — `id` is the hex
+    // One Database per system-provisioned postgres resource — `id` is the system
     // provision id (e.g. "db"), so a resource shared by several services is
     // created exactly once.
     postgres: ({ id, application }) =>
@@ -961,34 +962,34 @@ the dependency shapes of `postgres()` require `client` at compile time.)
 A build adapter is a two-piece package: a **lean authoring descriptor** carried on
 the service node, and a **heavy deploy-side assembler** invoked at `package` time.
 The assembler normalizes the app's own build output into a bundle dir with the
-MakerKit wrapper, and reports the runtime entry path.
+framework wrapper, and reports the runtime entry path.
 
 ```ts
-// @makerkit/node — the authoring descriptor (lean; rides in service.ts). `entry`
+// @prisma/app-node — the authoring descriptor (lean; rides in service.ts). `entry`
 // resolves relative to dirname(module) — exactly like an import specifier.
 // `pack` is baked in by this factory, not passed by the caller — the same
 // uniform rule a node's own `pack` follows (ADR-0003).
 export default (opts: { module: string; entry: string }): BuildAdapter =>
-  ({ kind: "node", pack: "@makerkit/node", module: opts.module, entry: opts.entry })
+  ({ kind: "node", pack: "@prisma/app-node", module: opts.module, entry: opts.entry })
 
-// @makerkit/nextjs — carries an extra `appDir` (the Next app's root, the
+// @prisma/app-nextjs — carries an extra `appDir` (the Next app's root, the
 // standalone layout root), also resolved relative to dirname(module). `entry`
 // is a bare filename inside the standalone output dir.
 export default (opts: { module: string; appDir: string; entry: string }): NextjsBuildAdapter =>
-  ({ kind: "nextjs", pack: "@makerkit/nextjs", module: opts.module, appDir: opts.appDir, entry: opts.entry })
+  ({ kind: "nextjs", pack: "@prisma/app-nextjs", module: opts.module, appDir: opts.appDir, entry: opts.entry })
 
-// @makerkit/assemble — routes each service to its adapter's `/assemble` via
+// @prisma/app-assemble — routes each service to its adapter's `/assemble` via
 // `${build.pack}/assemble` (entry-anchored, same resolver the pack CLI seam
 // uses for `${pack}/target`) — never a hardcoded kind→package map.
-// @makerkit/<adapter>/assemble — the deploy-side assembler (heavy; deploy machine)
+// @prisma/app-<adapter>/assemble — the deploy-side assembler (heavy; deploy machine)
 // Produces the normalized bundle dir + the runtime entry path for the bootstrap.
 // No serviceDir/serviceModule input: the descriptor's own `module` is the anchor.
 interface Assembler {
-  assemble(input: AssembleInput): Promise<Bundle>  // { build } → { dir, entry } — @makerkit/core/deploy's shared seam contract
+  assemble(input: AssembleInput): Promise<Bundle>  // { build } → { dir, entry } — @prisma/app/deploy's shared seam contract
 }
 ```
 
-`node`'s assembler is trivial: place the app's built entry and the MakerKit wrapper
+`node`'s assembler is trivial: place the app's built entry and the framework's wrapper
 (`service.ts` bundled to `main.mjs`, core inlined, entry left to a runtime dynamic
 import) in one dir; report the entry. `nextjs`'s assembler does the Next-standalone
 fixups — copy the hoisted `node_modules`, `.next/static`, `public`, and a
@@ -1006,10 +1007,10 @@ only; the app writes and bundles its own entry:
 ```ts
 // src/service.ts — the authored service: name + deps + build + where it lives.
 // No handler. `db` is a DEPENDENCY (a slot): `postgres({ client })` requires
-// postgresContract and never provisions anything — the composing hex owns the
+// postgresContract and never provisions anything — the composing system owns the
 // database and wires its ref in.
-import { compute, postgres } from "@makerkit/prisma-cloud"
-import node from "@makerkit/node"
+import { compute, postgres } from "@prisma/app-cloud"
+import node from "@prisma/app-node"
 import { SQL } from "bun"                       // the APP's choice of client
 
 const db = postgres({ client: ({ url }) => new SQL({ url }) })
@@ -1023,14 +1024,14 @@ export default compute({
   build: node({ module: import.meta.url, entry: "../dist/server.js" }),
 })
 
-// src/hex.ts — the app root: the hex OWNS the database. It provisions the
+// src/system.ts — the app root: the system OWNS the database. It provisions the
 // identity `postgres({ name })` and wires its ref into the service's slot (the
 // contract matches); its name names the app (ADR-0006).
-import { hex } from "@makerkit/core"
-import { postgres } from "@makerkit/prisma-cloud"
+import { system } from "@prisma/app"
+import { postgres } from "@prisma/app-cloud"
 import service from "./service.ts"
 
-export default hex("hello", (h) => {
+export default system("hello", (h) => {
   const db = h.provision("db", postgres({ name: "db" }))
   h.provision("hello", service, { db })
 })
@@ -1046,7 +1047,7 @@ Bun.serve({ port, hostname: "0.0.0.0",
 // There is no deploy config file (ADR-0003). The app builds itself first
 // (its own bundler produces dist/server.js), then:
 //
-//   makerkit deploy src/hex.ts
+//   prisma-app deploy src/system.ts
 //
 // The CLI infers the target pack from the nodes, constructs it from the
 // environment (the pack's /target fromEnv() reads PRISMA_WORKSPACE_ID), runs
@@ -1059,7 +1060,7 @@ The app never annotates a dependency type. Note where Bun appears: only in
 `service.ts` (the `new SQL` factory) and `server.ts` (`Bun.serve`, the app's own
 entry) — the app's choice, since it deploys to a Bun runtime. Switching the client
 to node-postgres, or the app to a Node platform, changes these app lines and
-nothing in MakerKit.
+nothing in the framework.
 
 And note what a test needs: build the service with fake deps and call `load()` —
 or, since `load()` reads the stash, hydrate directly against injected `Config`. No
@@ -1067,12 +1068,12 @@ environment, no cloud, no pack internals. That is the dependency inversion the
 model promises. The config round-trip is proven separately at the pack level
 (serialize → deserialize identity).
 
-### Two services, connected — the hex (a framework-hosted consumer)
+### Two services, connected — the system (a framework-hosted consumer)
 
 The storefront-auth shape: `auth` is a self-served Hono service shaped like the
 one above, except its `db` is the SPLIT form — a client-only
 `postgres({ client })` slot, because the resource is owned away from the
-consumer, by the composing hex below; `storefront` is a **framework-hosted**
+consumer, by the composing system below; `storefront` is a **framework-hosted**
 Next.js service whose page pulls the `auth`
 client via `load()`. This replaces the hand-written mixed stack — the URL plumbing,
 the `requireStringOutput` guard, and the hand-named `EnvironmentVariable` all
@@ -1080,8 +1081,8 @@ disappear into core's sequencing.
 
 ```ts
 // storefront/src/service.ts — declares the dependency; never learns how the URL arrives
-import { compute, http } from "@makerkit/prisma-cloud"
-import nextjs from "@makerkit/nextjs"
+import { compute, http } from "@prisma/app-cloud"
+import nextjs from "@prisma/app-nextjs"
 const auth = http({ name: "auth" })
 export default compute({ name: "storefront",
   deps: { auth },
@@ -1098,22 +1099,22 @@ export default async function Home() {
   return <p>Auth /verify says: {res.status} {await res.text()}</p>
 }
 
-// app.ts — the app's hex: transparent wiring, runs at Load. It owns the shared
+// app.ts — the app's system: transparent wiring, runs at Load. It owns the shared
 // Postgres — provisioned once here, wired into auth's slot. Its name becomes
 // the application (Project) name; each service's build adapter carries its own
-// authoring module (BuildAdapter.module), so a hex can compose services that
+// authoring module (BuildAdapter.module), so a system can compose services that
 // live in entirely different directories.
-import { postgres } from "@makerkit/prisma-cloud"
-import authService from "./hexes/auth/src/service"
-import storefrontService from "./hexes/storefront/src/service"
-export default hex("storefront-auth", (h) => {
+import { postgres } from "@prisma/app-cloud"
+import authService from "./systems/auth/src/service"
+import storefrontService from "./systems/storefront/src/service"
+export default system("storefront-auth", (h) => {
   const db = h.provision("db", postgres({ name: "db" }))
   const authRef = h.provision("auth", authService, { db })         // db→auth dependency edge
   h.provision("storefront", storefrontService, { auth: authRef })  // auth→storefront dependency edge
 })
 
 // No deploy config file (ADR-0003): build both apps, then
-//   makerkit deploy app.ts
+//   prisma-app deploy app.ts
 ```
 
 At deploy, core sequences: the db resource (lowered once) → auth provision →
@@ -1129,18 +1130,19 @@ entry hydrates `db`. Neither entry can tell a service producer from a resource �
 
 ## Invariants (enforced, not aspirational)
 
-1. **Core has no target dependency**: `@makerkit/core`'s `package.json` depends on
-   neither `@makerkit/prisma-alchemy` nor any `prisma-*` package — checked by a test.
-2. **Authoring imports stay lean**: bundling a module that imports `@makerkit/core`,
-   `@makerkit/prisma-cloud`, and a build-adapter descriptor (authoring entries
+1. **Core has no target dependency**: `@prisma/app`'s `package.json` depends on
+   neither `@prisma/alchemy` nor any `prisma-*` package — checked by a test.
+2. **Authoring imports stay lean**: bundling a module that imports `@prisma/app`,
+   `@prisma/app-cloud`, and a build-adapter descriptor (authoring entries
    only) contains no `alchemy`/`effect`/`prisma-alchemy`/`new SQL(`/`node:fs`
    tokens — the import-split guard test, extended to the pack and the adapters'
    descriptor entries. The adapters' `/assemble` entries are deploy-only and
    exempt.
 3. **Importing runs nothing**: constructing nodes is pure; only the node's
    `run`/`load` and the alchemy CLI execute anything. This reaches the artifact:
-   the service module is a pure declaration, the MakerKit wrapper is inert on
-   import, and the pack-printed bootstrap is the only runnable MakerKit adds.
+   the service module is a pure declaration, the framework's wrapper is inert on
+   import, and the pack-printed bootstrap is the only runnable code the
+   framework adds.
 4. **Core and user code contain zero direct environment reads.** The pack's `run`
    (deserialize + stash) and `load` (read stash) are the single sanctioned readers
    for its platform — `process.env` appears only inside the pack's config
@@ -1158,7 +1160,7 @@ entry hydrates `db`. Neither entry can tell a service producer from a resource �
 - **Build-adapter ecosystem** — `node` and `nextjs` are the first two; the
   descriptor/assembler split is the seam for community adapters (Nuxt, TanStack
   Start, a cron access-pattern, a static site). Each is a package; nothing in
-  core, the target pack, `@makerkit/assemble`, or the CLI changes to add one —
+  core, the target pack, `@prisma/app-assemble`, or the CLI changes to add one —
   the assembler seam resolves `${build.pack}/assemble` from the descriptor
   itself (deploy-cli.md § Contracts), the same way the pack CLI seam resolves
   `${pack}/target`.
@@ -1166,7 +1168,7 @@ entry hydrates `db`. Neither entry can tell a service producer from a resource �
   `service.load()`, the same mechanism the Hono entry uses. No separate `use()`
   accessor is needed; the earlier framework-DI gap is closed by `load()`.
 - **Typed connection interfaces — shipped as Contracts.** A service-to-service
-  dependency is declared against a Contract (`@makerkit/rpc`'s `contract()` +
+  dependency is declared against a Contract (`@prisma/app-rpc`'s `contract()` +
   `rpc()`), compatibility is checked at the wiring site, at Load
   (`satisfies()`), and per call, and the consumer's `load()` returns a typed
   client. `http()` remains the untyped escape hatch. The mechanism — including
@@ -1174,8 +1176,8 @@ entry hydrates `db`. Neither entry can tell a service producer from a resource �
   `serve()` — is documented in
   [`connection-contracts.md`](connection-contracts.md); this document's type
   sketches predate it and show the pre-contract shapes.
-- **Full Hex composition** — the minimal hex wires services; boundary ports
-  (a hex's own Inputs/Outputs), nesting, and forwarding per the authoring-surface
+- **Full System composition** — the minimal system wires services; boundary ports
+  (a system's own Inputs/Outputs), nesting, and forwarding per the authoring-surface
   design come next. Services stay opaque leaves.
 - **Runtime name lookup** — if the platform gains service-name resolution, the
   pack's `serialize` becomes a no-op and its connection hydrate resolves by name;

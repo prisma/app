@@ -1,14 +1,15 @@
-# The deploy CLI (`makerkit`)
+# The deploy CLI (`prisma-app`)
 
-The MakerKit-owned deploy entrypoint: what the `makerkit` command does, the
-contracts it introduces, and what stays out of its scope. The decisions it
+The Prisma App Framework's own deploy entrypoint: what the `prisma-app`
+command does, the contracts it introduces, and what stays out of its scope.
+The decisions it
 rests on are recorded in
 [ADR-0003](../90-decisions/ADR-0003-deploy-derives-everything-from-the-root-node.md)
 (no config file, everything derived from the root node),
 [ADR-0004](../90-decisions/ADR-0004-paths-resolve-relative-to-the-authoring-file.md)
 (every path is relative to the file that writes it),
-[ADR-0005](../90-decisions/ADR-0005-users-build-makerkit-assembles.md) (users
-build, MakerKit assembles),
+[ADR-0005](../90-decisions/ADR-0005-users-build-the-framework-assembles.md)
+(users build, the framework assembles),
 [ADR-0006](../90-decisions/ADR-0006-every-node-is-named.md) (node names; the
 root's name names the application),
 [ADR-0007](../90-decisions/ADR-0007-deploy-drives-alchemy-through-a-generated-stack-file.md)
@@ -20,14 +21,14 @@ root's name names the application),
 
 Two commands:
 
-- **`makerkit deploy <entry>`** — deploy the application whose root node is
+- **`prisma-app deploy <entry>`** — deploy the application whose root node is
   `entry`'s default export.
-- **`makerkit destroy <entry>`** — tear it down (same derivation, Alchemy
+- **`prisma-app destroy <entry>`** — tear it down (same derivation, Alchemy
   destroy).
 
 Flags: `--name` (override the root's name — per-run ephemeral deploys in
-shared workspaces), `--stage`. Nothing else. `makerkit build`, `makerkit dev`,
-and topology emission are out of scope (see § Out of scope).
+shared workspaces), `--stage`. Nothing else. `prisma-app build`, `prisma-app
+dev`, and topology emission are out of scope (see § Out of scope).
 
 **Runtime.** The bin is runtime-agnostic — no bun-only APIs anywhere in the
 CLI or assembly code — so it runs under both bun and node (≥ 22.18, where
@@ -37,17 +38,17 @@ loading the graph imports that module — the app's choice, not a CLI limit.
 
 ## The pipeline
 
-`makerkit deploy` is one pass from a module path to a driven Alchemy stack:
+`prisma-app deploy` is one pass from a module path to a driven Alchemy stack:
 
 1. **Import the entry module.** Its default export must be a node (service or
-   hex). No marked root exists in the model — whatever you point the CLI at
+   System). No marked root exists in the model — whatever you point the CLI at
    *is* the application, and the graph reachable from it is what deploys.
 2. **Load.** Core's `Load` walks the graph. A service with an unwired
-   dependency slot (one an enclosing hex normally wires to a provisioned
+   dependency slot (one an enclosing System normally wires to a provisioned
    producer) fails here, with an error naming the input and pointing at the
-   composing hex. The deploy root must be a hex — a bare service is not
+   composing System. The deploy root must be a System — a bare service is not
    independently deployable; the CLI errors naming the fix (wrap it:
-   `hex('name', (h) => h.provision(...))`).
+   `system('name', (h) => h.provision(...))`).
 3. **Infer the target.** Collect the pack package name each node carries.
    Exactly one pack must appear (mixed packs → error). Dynamically import that
    package's `/target` entry — resolved from the entry module's own file path,
@@ -67,7 +68,7 @@ loading the graph imports that module — the app's choice, not a CLI limit.
    "run your build" error; staleness is not detected) and produces a
    normalized bundle `{ dir, entry }`.
 6. **Lower and drive.** Write the pipeline's results as a runnable stack
-   module at `.makerkit/alchemy.run.ts` and drive the `alchemy` CLI against
+   module at `.prisma-app/alchemy.run.ts` and drive the `alchemy` CLI against
    it (ADR-0007). The generated file and Alchemy's state live in the
    process's working directory — tool state lives where you run the tool,
    like any other CLI (ADR-0004).
@@ -80,13 +81,13 @@ file, and consumed in one motion.
 ## Build ownership
 
 Per ADR-0005, the CLI initiates no user builds. The contract is that built
-output exists first — `turbo run build && makerkit deploy`, or whatever the
-user's tooling does. Assembly *consumes* that output and applies MakerKit's
-envelope:
+output exists first — `turbo run build && prisma-app deploy`, or whatever the
+user's tooling does. Assembly *consumes* that output and applies the
+framework's envelope:
 
 - **The wrapper** (all kinds): the service module bundled to `main.mjs` with a
-  fixed, internal bundler invocation — MakerKit's boot protocol, never exposed
-  to users, never part of their build.
+  fixed, internal bundler invocation — the framework's boot protocol, never
+  exposed to users, never part of their build.
 - **Framework normalization** (per kind): e.g. making a Next standalone tree
   self-contained (hoisted `node_modules`, static assets, `public/`, the
   runtime-autoinstall guard). Deterministic file-shuffling, not compilation.
@@ -108,20 +109,20 @@ changes for a new pack or adapter:
   node (`{ kind, pack, module, entry }` — where the user's build puts its
   output, never how to produce it; `entry` and any kind-specific path resolve
   relative to `dirname(module)`). `pack` is the adapter's own package name,
-  baked in by its factory (`node()` → `"@makerkit/node"`, `nextjs()` →
-  `"@makerkit/nextjs"`) — the same uniform rule as a node's own `pack`
+  baked in by its factory (`node()` → `"@prisma/app-node"`, `nextjs()` →
+  `"@prisma/app-nextjs"`) — the same uniform rule as a node's own `pack`
   (ADR-0003): a thing's `pack` names the package that gives it meaning.
-  `@makerkit/assemble` resolves `${build.pack}/assemble` through the same
+  `@prisma/app-assemble` resolves `${build.pack}/assemble` through the same
   entry-anchored resolver the pack seam uses (no hardcoded kind→package map),
   so a community build adapter works with zero changes anywhere. `kind` stays
   the descriptor's own discriminant; the resolved `/assemble` module validates
   it matches. The heavy assembly module never ships in a bundle. Its contract
   is `assemble({ build: descriptor }) → { dir, entry }`
-  (`@makerkit/core/deploy`'s `AssembleInput`/`Bundle` — defined once there,
-  imported by every adapter and by `@makerkit/assemble` itself).
-- **`@makerkit/assemble`** owns the orchestration this seam drives: routing
+  (`@prisma/app/deploy`'s `AssembleInput`/`Bundle` — defined once there,
+  imported by every adapter and by `@prisma/app-assemble` itself).
+- **`@prisma/app-assemble`** owns the orchestration this seam drives: routing
   every service node in the loaded graph to its adapter's `/assemble` entry
-  (one bundle per provision id — the root is always a hex) and the
+  (one bundle per provision id — the root is always a System) and the
   wrapper-inlining policy. The CLI is its first consumer; the future
   programmatic deploy API is its second — so its public surface carries no CLI
   concepts (no `CliError`, no argv/usage anything). It throws its own
@@ -135,8 +136,8 @@ The CLI's quality lives in its errors; each failure names its fix:
 | Failure | Error tells the user |
 | --- | --- |
 | Default export isn't a node | what the entry module must export |
-| Deploy root isn't a hex | to wrap the service in a hex |
-| Unwired dependency slot | which input, and to deploy the composing hex |
+| Deploy root isn't a System | to wrap the service in a System |
+| Unwired dependency slot | which input, and to deploy the composing System |
 | Mixed packs in one graph | the packs found; one target per application |
 | Missing target env | the exact variable(s) `fromEnv()` needed |
 | Built output missing | the expected path, and "run your build" |
@@ -144,11 +145,11 @@ The CLI's quality lives in its errors; each failure names its fix:
 
 ## Out of scope (designed around)
 
-- **`makerkit build`** — and with it any build-command convention or override.
-- **`makerkit dev`** — the local loop.
+- **`prisma-app build`** — and with it any build-command convention or override.
+- **`prisma-app dev`** — the local loop.
 - **Topology emission** — the serialized-topology artifact for agents/tooling;
   when it lands it must strip the machine-specific `build.module` (ADR-0004).
-- **Config-file escape hatch** — a `makerkit.config.ts` may exist one day as
+- **Config-file escape hatch** — a `prisma-app.config.ts` may exist one day as
   the *optional* override for multi-target or heavily parameterized setups;
   never the standard path.
 - **Freshness checks** — detecting stale (not just missing) built output.
@@ -167,7 +168,7 @@ The CLI's quality lives in its errors; each failure names its fix:
 
 ## Known limitations
 
-- **`destroy` requires built artifacts.** `makerkit destroy` evaluates the
+- **`destroy` requires built artifacts.** `prisma-app destroy` evaluates the
   same stack program as deploy, and the pack's `package()` reads the
   assembled bundle — so the app must build before it can be torn down. The
   destroy-path error says exactly that. Whether Alchemy's destroy can run
