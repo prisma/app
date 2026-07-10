@@ -283,8 +283,9 @@ describe('service()', () => {
 describe('hex()', () => {
   test('construction is INERT — the body runs only at Load', () => {
     let bodyCalls = 0;
-    const node = hex('shop', () => {
+    const node = hex('shop', {}, () => {
       bodyCalls += 1;
+      return {};
     });
 
     expect(bodyCalls).toBe(0);
@@ -295,6 +296,6 @@ describe('hex()', () => {
   });
 
   test('throws on an empty name', () => {
-    expect(() => hex('', () => {})).toThrow(/non-empty name/);
+    expect(() => hex('', {}, () => ({}))).toThrow(/non-empty name/);
   });
 });

@@ -18,7 +18,8 @@ const svc = service({
   },
 });
 
-export default hex('fixture-hex', (h) => {
+export default hex('fixture-hex', {}, ({ provision }) => {
   bodyCallCount += 1;
-  h.provision('app', svc);
+  provision('app', svc);
+  return {};
 });

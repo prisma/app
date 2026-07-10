@@ -167,17 +167,53 @@ export interface DependencyEnd<C = unknown, Req = unknown> extends NodeBase {
 }
 
 /**
- * A Hex: transparent wiring, no code of its own. The body runs at Load (it
- * is wiring, not user code) and provisions the resources and services it
- * owns, supplying a producer for every dependency input. Minimal form —
- * boundary ports and nesting arrive with full Hex composition.
+ * A Hex: the same boundary a service has — a `Deps` map of typed inputs and
+ * an `Expose` map of contract outputs (ADR-0009) — around transparent wiring
+ * instead of a black-box body. The body runs at Load (it is wiring, not user
+ * code), receives its declared inputs as forwardable wiring values plus
+ * `provision`, and returns one ref-port per declared output. `provision()`
+ * accepts a hex wherever it accepts a service, so hexes nest to any depth;
+ * a hex with an empty boundary is the closed, deploy-root form.
  */
-export interface HexNode {
+export interface HexNode<D extends Deps = Deps, E extends Expose = Expose> {
   readonly [NODE]: true;
   readonly kind: 'hex';
   readonly name: string;
-  body(h: HexBuilder): void;
+  readonly deps: D;
+  readonly expose: E;
+  body(ctx: HexContext<D>): HexOutputs<E>;
 }
+
+/**
+ * What a hex's body receives: its declared inputs as forwardable wiring
+ * values, and `provision` to register the owned services/hexes it wires them
+ * into. `inputs[K]` stands for "whatever the enclosing scope wires here" —
+ * Load resolves it, at the hex's own provision() call, to the actual producer
+ * the enclosing scope supplied.
+ */
+export interface HexContext<D extends Deps> {
+  /** The hex's declared inputs as wiring values — pass them into provision(). */
+  readonly inputs: { [K in keyof D]: InputRef<D[K]> };
+  /** Registers an owned child (service or hex) under a stable id. */
+  readonly provision: HexBuilder['provision'];
+}
+
+/**
+ * A hex's forwarded-input value: the same ref-port shape a producer's output
+ * carries, so it satisfies the identical `Wiring<D>` assignability at any
+ * nested `provision()` call — an input flows down by being indistinguishable,
+ * at the wiring site, from a sibling's exposed port. Because a dependency
+ * slot always carries a contract (resource-backed or service-backed alike —
+ * the unified model has no untyped-by-construction resource slot), a
+ * resource-backed input forwards across a hex boundary exactly like a
+ * service-backed one.
+ */
+export type InputRef<DE> =
+  // biome-ignore lint/suspicious/noExplicitAny: matches ReqOf's bound.
+  DE extends DependencyEnd<any, infer Req extends Contract<any, any>> ? RefPort<Req> : never;
+
+/** One ref-port per declared expose key, contract-checked against `E` (mirrors `Wiring`'s `NoInfer` use). */
+export type HexOutputs<E extends Expose> = { [P in keyof E]: RefPort<NoInfer<E[P]>> };
 
 /**
  * A provisioned producer's port as a wiring-time value: the port's own
@@ -250,6 +286,23 @@ export interface HexBuilder {
     id: string,
     // biome-ignore lint/suspicious/noExplicitAny: accepts any concrete service node; ServiceNode generics are invariant so `any` is required.
     service: ServiceNode<D, any, E>,
+    wiring: Wiring<D>,
+  ): ProvisionedRef<E>;
+  /**
+   * Registers an owned child hex under a stable id — the same call shape a
+   * service gets, since a `HexNode<D, E>` is wireable anywhere a
+   * `ServiceNode<D, _, E>` is (ADR-0009). Left for the runtime dangling check
+   * to catch, same as the no-wiring service overload.
+   */
+  provision<D extends Deps, E extends Expose>(id: string, child: HexNode<D, E>): ProvisionedRef<E>;
+  /**
+   * Registers an owned child hex under a stable id; `wiring` supplies a
+   * producer's ref-port for each of the hex's declared `deps` — the same
+   * `Wiring<D>` check a service's dependency inputs get.
+   */
+  provision<D extends Deps, E extends Expose>(
+    id: string,
+    child: HexNode<D, E>,
     wiring: Wiring<D>,
   ): ProvisionedRef<E>;
 }
@@ -446,14 +499,31 @@ export function dependency<P extends Params, C, Req = unknown>(def: {
 
 /**
  * Constructs a branded, frozen Hex node. Construction is INERT — the body is
- * wiring, not user code, and runs only when the hex is Loaded.
+ * wiring, not user code, and runs only when the hex is Loaded. `boundary`
+ * declares the hex's `Deps`/`Expose` the same way a service does; both are
+ * optional — an empty boundary (`hex(name, {}, body)`) is the closed,
+ * deploy-root form, not a separate shape.
  */
-export function hex(name: string, body: (h: HexBuilder) => void): HexNode {
+export function hex<D extends Deps = Record<never, never>, E extends Expose = Record<never, never>>(
+  name: string,
+  boundary: { deps?: D; expose?: E },
+  body: (ctx: HexContext<D>) => HexOutputs<E>,
+): HexNode<D, E> {
   requireName(name, 'hex');
-  const node: HexNode = {
+  const deps = blindCast<
+    D,
+    'an omitted `deps` only arises when D itself infers to the empty default'
+  >(boundary.deps ?? {});
+  const expose = blindCast<
+    E,
+    'an omitted `expose` only arises when E itself infers to the empty default'
+  >(boundary.expose ?? {});
+  const node: HexNode<D, E> = {
     [NODE]: true,
     kind: 'hex',
     name,
+    deps: frozenShallowCopy(deps),
+    expose: frozenShallowCopy(expose),
     body,
   };
   return Object.freeze(node);

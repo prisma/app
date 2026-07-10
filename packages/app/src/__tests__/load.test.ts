@@ -65,9 +65,10 @@ describe('Load', () => {
       params: {},
       build,
     });
-    const root = hex('shop', (h) => {
+    const root = hex('shop', {}, (h) => {
       const db = h.provision('db', dbResource());
       h.provision('app', svc, { db });
+      return {};
     });
 
     Load(root);
@@ -90,9 +91,10 @@ describe('Load', () => {
   test('rejects a forged input with an empty type', () => {
     // Spread copies the brand symbol but lets the type be emptied — Load must catch it.
     const forged = { ...dbDep(), type: '' };
-    const root = hex('shop', (h) => {
+    const root = hex('shop', {}, (h) => {
       const db = h.provision('db', dbResource());
       h.provision('app', app({ db: forged as never }), { db });
+      return {};
     });
 
     expect(() => Load(root)).toThrow(LoadError);

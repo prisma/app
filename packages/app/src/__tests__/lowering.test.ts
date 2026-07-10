@@ -166,9 +166,10 @@ const runError = (eff: ReturnType<typeof lowering>): LowerError =>
 describe('buildConfig', () => {
   test("matches a dependency input's params by name to the wired producer's lowered outputs, via its dependency edge", () => {
     const auth = app('fake/compute', { db: dbEnd() }, { port: { type: 'number', default: 3000 } });
-    const root = hex('shop', (h) => {
+    const root = hex('shop', {}, (h) => {
       const db = h.provision('db', dbResource());
       h.provision('auth', auth, { db });
+      return {};
     });
     const graph = Load(root);
     const lowered = new Map<string, LoweredNode>([['db', { outputs: { url: 'db://db' } }]]);
@@ -181,9 +182,10 @@ describe('buildConfig', () => {
 
   test('a param the graph declares but the lowered outputs never produced resolves to undefined', () => {
     const auth = app('fake/compute', { db: dbEnd() });
-    const root = hex('shop', (h) => {
+    const root = hex('shop', {}, (h) => {
       const db = h.provision('db', dbResource());
       h.provision('auth', auth, { db });
+      return {};
     });
     const graph = Load(root);
 
@@ -199,8 +201,9 @@ const singleServiceHex = (
   params: Record<string, { type: 'number' | 'string'; default?: unknown }> = {},
   build: BuildAdapter = defaultBuild,
 ) =>
-  hex('hello', (h) => {
+  hex('hello', {}, (h) => {
     h.provision('svc', app(type, {}, params, build));
+    return {};
   });
 
 // A single service whose one dependency is a hex-provisioned db resource â
@@ -209,9 +212,10 @@ const singleServiceHex = (
 const singleServiceWithDbHex = (
   params: Record<string, { type: 'number' | 'string'; default?: unknown }> = {},
 ) =>
-  hex('hello', (h) => {
+  hex('hello', {}, (h) => {
     const db = h.provision('db', dbResource());
     h.provision('svc', app('fake/compute', { db: dbEnd() }, params), { db });
+    return {};
   });
 
 const svcBundles = { bundles: { svc: { dir: 'dist/bundle', entry: 'server.js' } } };
@@ -337,10 +341,11 @@ describe('lowering a hex root — a provisioned resource and two connected servi
   const storefrontService = () => app('fake/compute', { auth: httpEnd() });
 
   const twoServiceHex = () =>
-    hex('shop', (h) => {
+    hex('shop', {}, (h) => {
       const db = h.provision('db', dbResource());
       const authRef = h.provision('auth', authService(), { db });
       h.provision('storefront', storefrontService(), { auth: authRef });
+      return {};
     });
 
   test("application provisions once; the resource and auth are FULLY deployed before storefront's serialize", () => {
@@ -458,12 +463,13 @@ describe('lowering a hex root — a provisioned resource and two connected servi
     // positionally, so a consumer walked before its producer saw undefined
     // outputs. With the sort, the producer is fully deployed first.
     const { target, calls } = fakeTarget();
-    const root = hex('shop', (h) => {
+    const root = hex('shop', {}, (h) => {
       const db = h.provision('db', dbResource());
       h.provision('storefront', storefrontService(), {
         auth: { id: 'auth' } as never,
       });
       h.provision('auth', authService(), { db });
+      return {};
     });
 
     run(
@@ -521,7 +527,7 @@ describe('lowering a hex root — a provisioned resource and two connected servi
 
   test('fails with LowerError naming the type and the known types on an unknown resource type', () => {
     const { target } = fakeTarget();
-    const root = hex('shop', (h) => {
+    const root = hex('shop', {}, (h) => {
       h.provision(
         'cache',
         resource({
@@ -530,6 +536,7 @@ describe('lowering a hex root — a provisioned resource and two connected servi
           provides: providerContract('fake/unknown', {}),
         }),
       );
+      return {};
     });
 
     const error = runError(lowering(root, target, { name: 'shop', bundles: {} }));
@@ -542,10 +549,11 @@ describe('lowering a hex root — a provisioned resource and two connected servi
 
 describe('lowering a hex root — one resource shared by two consumers', () => {
   const sharedHex = () =>
-    hex('shop', (h) => {
+    hex('shop', {}, (h) => {
       const db = h.provision('db', dbResource());
       h.provision('auth', app('fake/compute', { authDb: dbEnd() }), { authDb: db });
       h.provision('billing', app('fake/compute', { billingDb: dbEnd() }), { billingDb: db });
+      return {};
     });
 
   const sharedOpts = {

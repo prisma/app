@@ -56,10 +56,11 @@ const caller = service({
 const dbNode = resource({ name: 'db', pack: 'test/pack', provides: dbContract });
 
 export const graph = Load(
-  hex('probe-hex', (h) => {
-    const dbRef = h.provision('db', dbNode);
-    const ref = h.provision('app', app, { db: dbRef });
-    h.provision('caller', caller, { peer: ref });
+  hex('probe-hex', {}, ({ provision }) => {
+    const dbRef = provision('db', dbNode);
+    const ref = provision('app', app, { db: dbRef });
+    provision('caller', caller, { peer: ref });
+    return {};
   }),
   { id: 'probe' },
 );
