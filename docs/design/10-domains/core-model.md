@@ -24,7 +24,10 @@ Two methods hang off the service node and bridge the two:
   service's config from the environment, stashes it under process-local keys, then
   calls `boot()` to start the app's entry. It is what the deployed artifact runs.
 - **`load()`** — called from *inside* the app's entry (or a Next page). It reads
-  the stash and returns the service's dependencies, hydrated and **typed**. No
+  the stash and returns each dependency's **binding** — the most-derived value
+  its contract can construct (ADR-0015): a derived client for a protocol-owned
+  kind (rpc, http), the typed connection config for a resource (postgres →
+  `{ url }`, from which the app builds its own client). Typed either way. No
   address, no environment keys, no framework knowledge.
 
 Because the entry always runs inside `run()`'s process, `run()` executes first and
@@ -123,7 +126,7 @@ SPI and never see the graph, never sequence anything, never call another tool.
 | --- | --- | --- | --- |
 | **provision** | deploy machine, via Alchemy | provision the application once (Project + poison vars), then walk the DAG realizing each service's host | `Target.application.provision`, then `ServiceLowering.provision` → identity (App) |
 | **deploy** | deploy machine, via Alchemy | build each service's typed `Config`, have the pack encode it *first*, assemble via the build adapter, then ship the build | `ServiceLowering.serialize`, the **build adapter's `assemble`**, then `package` + `deploy` |
-| **run** | inside the bundle, in the VM | provide `hydrate` (typed `Config` → clients); the node's `run` resolves + stashes config and boots the entry, the node's `load` hydrates on demand | the node's `run` / `load`, each connection's `hydrate` |
+| **run** | inside the bundle, in the VM | provide `hydrate` (typed `Config` → each dependency's binding); the node's `run` resolves + stashes config and boots the entry, the node's `load` hydrates on demand | the node's `run` / `load`, each connection's `hydrate` |
 
 **provision vs deploy** is the line between "the service exists" and "its code is
 running": provision creates identity-bearing infrastructure that changes only when
@@ -144,7 +147,7 @@ The **run path** is a separate process, entirely inside the deployed artifact:
 `run(address, boot)` deserializes this service's environment into a typed `Config`
 (the pack's single sanctioned environment read), re-emits it under stable
 process-local keys, then calls `boot()` to start the app's entry. Inside that
-entry, `load()` reads the stash and hands back hydrated, typed dependencies. The
+entry, `load()` reads the stash and hands back each dependency's typed binding. The
 deploy path's `serialize` and the run path's deserialize use the pack's **one
 shared serializer**, so writer and reader cannot drift.
 
@@ -284,7 +287,7 @@ interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends 
 // provisioned FOR it: at Load the enclosing system wires a provisioned producer's
 // ref into it (a service's exposed port, or a resource — the contract
 // determines validity, never the producer's kind), and at deploy it becomes an
-// EDGE from that producer to the consumer. At run it hydrates a client through
+// EDGE from that producer to the consumer. At run it hydrates its binding through
 // the Connection machinery; the consumer never learns HOW the producer's
 // address reached it. `Req` is the required Contract — `unknown` for an untyped
 // end (`http()`, the escape hatch that accepts anything); `required` carries it
@@ -672,10 +675,12 @@ At boot, the deployed artifact runs the bootstrap, which calls the node's
   the stash into the typed `Config`, hydrates every input (`connection.hydrate`
   with its value slice) via core's `hydrate`, **memoizes** the result per process,
   and returns the merged `{ ...deps, ...params }`. No address, no framework
-  knowledge; the app entry sees typed clients. Memoization means one client set per
-  process (or per forked worker), created on first `load()`.
+  knowledge; the app entry sees each dependency's typed binding — a derived
+  client for a protocol-owned kind, or the typed config for a resource, from
+  which the app constructs its own client (ADR-0015). Memoization means one
+  binding set per process (or per forked worker), created on first `load()`.
 - **`configOf(root)`** and **core's `hydrate`** — the shape enumeration and the
-  Config→clients step both `run` and `load` build on. Pure, target-independent.
+  Config→binding step both `run` and `load` build on. Pure, target-independent.
 
 ```ts
 // The enumerable config surface of a service — derivable from the graph alone,
@@ -692,9 +697,10 @@ interface ConfigDeclaration {
 function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @prisma/app (pure)
 
 // Core's boot-side helper: given a service and a concrete typed Config, hydrate
-// every input (connection.hydrate with its value slice) into typed clients. No
+// every input (connection.hydrate with its value slice) into its binding. No
 // environment read, no strings — the pack already reversed its own encoding into
-// a typed Config. Used by the node's load().
+// a typed Config. Used by the node's load(). The binding is what the kind's
+// hydrate yields: a derived client (rpc/http) or the typed config (postgres).
 function hydrate(root: ServiceNode, config: Config): Promise<HydratedDeps<Deps>>
 
 // The pack's runnable/loadable service node (what compute() returns). run() is
@@ -723,8 +729,9 @@ and local dev supplies the stash through a dev harness.
 
 ## The Prisma Cloud pack (`@prisma/app-cloud`) — worked instance
 
-Authoring entry — nodes carrying their connection/host knowledge; the driver is a
-**parameter**, so the pack ships none and the client type is inferred:
+Authoring entry — nodes carrying their connection/host knowledge; the pack ships
+no driver, and a resource dependency's binding is its typed config (the app
+builds its own client — ADR-0015):
 
 ```ts
 import { resource, dependency, service, configOf, hydrate,
@@ -733,8 +740,6 @@ import { resource, dependency, service, configOf, hydrate,
   type RunnableServiceNode } from "@prisma/app"
 
 export interface PostgresConfig { readonly url: string }
-
-type ClientFactory<C> = (config: PostgresConfig) => C | Promise<C>
 
 // The contract a Postgres provides AND its consumers require. satisfies()
 // compares KIND, not identity — a pack module can be duplicated across a
@@ -745,37 +750,38 @@ export const postgresContract: Contract<"postgres", PostgresConfig> = Object.fre
   satisfies: (required) => required.kind === "postgres",
 })
 
-// ONE postgres factory, two exclusive shapes (`?: never`, re-checked at
-// runtime). { name }: the identity a system provisions — the ONE place the
-// database exists, providing postgresContract. { client }: the consumer's
-// dependency slot requiring it; the app supplies the client factory and C is
-// inferred. { name, client } and {} are compile errors and runtime throws.
-export function postgres(opts: { name: string; client?: never }): ResourceNode<typeof postgresContract>
-export function postgres<C>(opts: { client: ClientFactory<C>; name?: never }): DependencyEnd<C, typeof postgresContract>
-export function postgres<C>(opts: { name?: string; client?: ClientFactory<C> }): unknown {
-  const { name, client } = opts
-  if (name !== undefined && client !== undefined) throw new Error("postgres() takes `name` OR `client`, not both")
-  if (name !== undefined) return resource({ name, pack: "@prisma/app-cloud", provides: postgresContract })
-  if (client !== undefined) return dependency({
+// ONE postgres factory, two shapes. { name }: the identity a system provisions —
+// the ONE place the database exists, providing postgresContract. postgres()
+// (no args): the consumer's dependency requiring it. No client factory — the
+// dependency's BINDING is the typed config PostgresConfig itself (hydrate is
+// the identity on its values); the app builds its own client from { url } in
+// app code (ADR-0015).
+export function postgres(opts: { name: string }): ResourceNode<typeof postgresContract>
+export function postgres(): DependencyEnd<PostgresConfig, typeof postgresContract>
+export function postgres(opts?: { name: string }): unknown {
+  if (opts?.name !== undefined) return resource({ name: opts.name, pack: "@prisma/app-cloud", provides: postgresContract })
+  return dependency({
     type: "postgres",
-    connection: { params: { url: { type: "string", secret: true } }, hydrate: (v) => client({ url: v.url }) },
+    connection: { params: { url: { type: "string", secret: true } }, hydrate: (v) => v },
     required: postgresContract,
   })
-  throw new Error("postgres() requires `name` or `client`.")
 }
 
-// A service-to-service dependency. Default client is a thin URL-anchored fetch
-// wrapper (fetch is standard across runtimes — no driver, no runtime coupling);
-// an app factory can replace it. Untyped (required undefined) — the escape
-// hatch; typed generated clients arrive with the interface primitive
-// (§ Extension points).
+// A service-to-service dependency. Its binding is a DERIVED client — a thin
+// URL-anchored fetch wrapper (fetch is standard across runtimes — no driver,
+// no runtime coupling). http() is a protocol-owned kind (the framework owns the
+// transport), so the client is kind-canonical and derived from the contract,
+// with no user client in the declaration (ADR-0015). Untyped (required
+// undefined) — the escape hatch; typed generated clients arrive with the
+// interface primitive (§ Extension points).
 export interface HttpClient { readonly url: string; fetch(path: string, init?: RequestInit): Promise<Response> }
-export const http = <C = HttpClient>(opts?: { client?: (cfg: { url: string }) => C }): DependencyEnd<C> =>
+export const http = (opts: { name: string }): DependencyEnd<HttpClient> =>
   dependency({
+    name: opts.name,
     type: "http",
     connection: {
       params: { url: { type: "string" } },
-      hydrate: (v) => (opts?.client ?? defaultHttpClient)({ url: v.url }),
+      hydrate: (v) => defaultHttpClient({ url: v.url }),
     },
   })
 
@@ -1006,15 +1012,14 @@ only; the app writes and bundles its own entry:
 
 ```ts
 // src/service.ts — the authored service: name + deps + build + where it lives.
-// No handler. `db` is a DEPENDENCY (a slot): `postgres({ client })` requires
+// No handler, no driver. `db` is a DEPENDENCY (a slot): `postgres()` requires
 // postgresContract and never provisions anything — the composing system owns the
-// database and wires its ref in.
+// database and wires its ref in. Its binding is `PostgresConfig` ({ url }); the
+// app builds its own client in server.ts (ADR-0015).
 import { compute, postgres } from "@prisma/app-cloud"
 import node from "@prisma/app-node"
-import { SQL } from "bun"                       // the APP's choice of client
 
-const db = postgres({ client: ({ url }) => new SQL({ url }) })
-// typeof hydrated db = SQL — inferred from the factory, no phantom declaration
+const db = postgres()
 
 export default compute({
   name: "hello",                                // ADR-0006: every node named
@@ -1037,12 +1042,15 @@ export default system("hello", (h) => {
 })
 
 // src/server.ts — the app's OWN entrypoint. The app bundles this to dist/server.js
-// (its own bundler). It pulls typed deps from the service and serves.
+// (its own bundler). It pulls the bindings from the service and builds its
+// client from the postgres binding (ADR-0015), with its own driver.
+import { SQL } from "bun"                        // the APP's choice of client
 import service from "./service"
 
-const { db, port } = service.load()             // db: SQL, port: number — inferred
+const { db, port } = service.load()             // db: PostgresConfig ({ url }); port: number
+const sql = new SQL({ url: db.url })             // module-scoped: one pool per process
 Bun.serve({ port, hostname: "0.0.0.0",
-  fetch: async () => Response.json(await db`select 1 as ok`) })
+  fetch: async () => Response.json(await sql`select 1 as ok`) })
 
 // There is no deploy config file (ADR-0003). The app builds itself first
 // (its own bundler produces dist/server.js), then:
@@ -1054,13 +1062,13 @@ Bun.serve({ port, hostname: "0.0.0.0",
 // each service's assembly, and drives Alchemy — no bundle map, no stack file.
 ```
 
-`service.load()` is typed end to end by the chain `postgres({ client })` →
-`C = SQL` → `compute({ deps: { db } })` captures `{ db: SQL }` → `load()` returns it.
-The app never annotates a dependency type. Note where Bun appears: only in
-`service.ts` (the `new SQL` factory) and `server.ts` (`Bun.serve`, the app's own
-entry) — the app's choice, since it deploys to a Bun runtime. Switching the client
-to node-postgres, or the app to a Node platform, changes these app lines and
-nothing in the framework.
+`service.load()` is typed end to end by the chain `postgres()` →
+`PostgresConfig` → `compute({ deps: { db } })` captures `{ db: PostgresConfig }` →
+`load()` returns it, and the app types its own `sql` from `db.url`. The app never
+annotates a dependency type. Note where Bun appears: only in `server.ts` (the
+`new SQL` client and `Bun.serve`, the app's own entry) — the app's choice, since
+it deploys to a Bun runtime. Switching the client to node-postgres, or the app to
+a Node platform, changes these app lines and nothing in the framework.
 
 And note what a test needs: build the service with fake deps and call `load()` —
 or, since `load()` reads the stash, hydrate directly against injected `Config`. No
@@ -1071,9 +1079,9 @@ model promises. The config round-trip is proven separately at the pack level
 ### Two services, connected — the system (a framework-hosted consumer)
 
 The storefront-auth shape: `auth` is a self-served Hono service shaped like the
-one above, except its `db` is the SPLIT form — a client-only
-`postgres({ client })` slot, because the resource is owned away from the
-consumer, by the composing system below; `storefront` is a **framework-hosted**
+one above — its `db` is a `postgres()` dependency whose binding is the config
+its own server builds a client from, while the composing system below owns and
+provisions the database; `storefront` is a **framework-hosted**
 Next.js service whose page pulls the `auth`
 client via `load()`. This replaces the hand-written mixed stack — the URL plumbing,
 the `requireStringOutput` guard, and the hand-named `EnvironmentVariable` all
@@ -1125,8 +1133,10 @@ keys) → `nextjs` assembler → package → storefront deploy — the first VM 
 its config present. At boot, `bootstrap.js` calls `main.run(address, () =>
 import("./server.js"))`: `run` deserializes the storefront's env, re-emits it under
 address-free stash keys, then boots the Next server; the page's `service.load()`
-reads the stash and hydrates the `auth` leaf into a client exactly as the Hono
-entry hydrates `db`. Neither entry can tell a service producer from a resource — one mechanism.
+reads the stash and hydrates the `auth` leaf — a protocol-owned kind, so its
+binding IS a client (ADR-0015), unlike the Hono entry's `db`, whose binding is
+the typed config it builds its own client from. Neither entry can tell a service
+producer from a resource — one mechanism.
 
 ## Invariants (enforced, not aspirational)
 

@@ -110,10 +110,12 @@ it; an unwired slot is a LoadError pointing at deploying the composing system.
   guarantee declares one.
 - **The dependency declaration still carries the client factory.** A contract
   ideally shouldn't imply a client — the declaration ought to be pure need,
-  with the client bound elsewhere. That coupling predates this decision and is
-  accepted for now so `load()` can return ready, typed clients without the pack
-  shipping a driver; untangling it is deferred work (tracked in
-  `.drive/deferred.md`).
+  with the client bound elsewhere. That coupling predated this decision and was
+  accepted at the time; it is **resolved by
+  [ADR-0015](ADR-0015-dependencies-resolve-to-bindings-clients-are-app-side.md)**,
+  which makes `load()` return the contract-determined binding (a derived client
+  for protocol-owned kinds, the typed config for resources) and moves client
+  construction into app code.
 - **Even a single-service app with a database needs a small system** to provision
   and wire it. Dependency-less services still deploy directly.
 - **Lowering stays a graph walk.** The resource ctx `id` is the system provision

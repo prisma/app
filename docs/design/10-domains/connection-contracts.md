@@ -61,7 +61,11 @@ system("storefront-auth", (h) => {
 Each piece carries the type that makes the wiring check itself:
 
 - **`rpc(contract)`** on the consumer's dependency carries the *required* contract
-  and hydrates to `Client<C>` (`{ verify(input): Promise<output> }`).
+  and hydrates to `Client<C>` (`{ verify(input): Promise<output> }`). RPC is a
+  protocol the framework owns, so a dependency's binding IS a derived client — the
+  most-derived thing the contract can construct; a resource kind (postgres)
+  instead binds to its typed config and the app builds its own client
+  ([ADR-0015](../90-decisions/ADR-0015-dependencies-resolve-to-bindings-clients-are-app-side.md)).
 - **`expose`** on the provider service carries the *exposed* contracts, keyed by
   output-port name.
 - **`provision(id, service)`** returns a `ProvisionedRef` whose named members
