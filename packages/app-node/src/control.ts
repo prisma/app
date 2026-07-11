@@ -1,8 +1,11 @@
 /**
- * Deploy-only (ADR-0005): the user's own build produces the app's runnable;
- * this assembles Prisma App's deploy artifact from it. Validates the built
- * entry exists, bundles the service module (the Prisma App wrapper) to its own
- * output, then copies the app's entry in beside it.
+ * The extension's control entry (ADR-0017): `nodeBuild()` returns the
+ * descriptor `prisma-app.config.ts` lists — one build control, node ID
+ * "node". Deploy-only (ADR-0005): the user's own build produces the app's
+ * runnable; `assemble` builds Prisma App's deploy artifact from it —
+ * validates the built entry exists, bundles the service module (the Prisma
+ * App wrapper) to its own output, then copies the app's entry in beside it.
+ * The heavy tsdown import lives only here, never in the authoring entry.
  *
  * Two SEPARATE builds, not one multi-entry build: a single build would
  * dedupe the shared service module into a chunk both entries import — one
@@ -18,15 +21,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ExtensionDescriptor } from '@prisma/app/config';
 import type { AssembleInput, Bundle } from '@prisma/app/deploy';
 import { build } from 'tsdown';
 
 export type { AssembleInput, Bundle } from '@prisma/app/deploy';
 
 export async function assemble(input: AssembleInput): Promise<Bundle> {
-  if (input.build.kind !== 'node') {
+  if (input.build.type !== 'node') {
     throw new Error(
-      `@prisma/app-node/assemble: expected a "node" build adapter, got "${input.build.kind}".`,
+      `@prisma/app-node/control: expected a "node" build adapter, got "${input.build.type}".`,
     );
   }
 
@@ -88,3 +92,11 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
 
   return { dir: bundleDir, entry: entryFile };
 }
+
+/** The node build extension descriptor — `prisma-app.config.ts` lists it under `extensions`. */
+export const nodeBuild = (): ExtensionDescriptor => ({
+  id: '@prisma/app-node',
+  nodes: {
+    node: { kind: 'build', assemble },
+  },
+});

@@ -31,17 +31,24 @@ import { guardStateService, makePrismaStateService } from './service.ts';
  * StackServices>` contract and alchemy's own convention (e.g. a missing
  * state store is `Effect.die` in `Stack.make`).
  */
-export const prismaState = (opts: {
-  workspaceId: string;
-}): Layer.Layer<State, never, StackServices> =>
-  Layer.effect(
+export const prismaState = (
+  opts: {
+    /** Defaults to the PRISMA_WORKSPACE_ID environment variable. */
+    workspaceId?: string;
+  } = {},
+): Layer.Layer<State, never, StackServices> => {
+  const workspaceId = opts.workspaceId ?? process.env['PRISMA_WORKSPACE_ID'];
+  if (workspaceId === undefined || workspaceId.length === 0) {
+    throw new Error('prismaState(): environment variable PRISMA_WORKSPACE_ID is required.');
+  }
+  return Layer.effect(
     State,
     Effect.gen(function* () {
       const stack = yield* Stack;
       const bootstrapError = (step: string) => (cause: unknown) =>
-        hostedStateBootstrapError(opts.workspaceId, step, cause);
+        hostedStateBootstrapError(workspaceId, step, cause);
 
-      const { connectionString } = yield* bootstrapStateConnection(opts.workspaceId).pipe(
+      const { connectionString } = yield* bootstrapStateConnection(workspaceId).pipe(
         Effect.provide(client.layer().pipe(Layer.provide(credentials.fromEnv()))),
         Effect.mapError(bootstrapError('finding/creating the prisma-app-state project')),
       );
@@ -76,3 +83,4 @@ export const prismaState = (opts: {
       return Effect.succeed(service);
     }),
   ).pipe(Layer.orDie);
+};

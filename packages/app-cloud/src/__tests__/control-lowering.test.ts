@@ -57,7 +57,7 @@ mock.module('@prisma/alchemy', () => ({
   },
 }));
 
-const { prismaCloud } = await import('../target.ts');
+const { prismaCloud } = await import('../control.ts');
 const { compute, postgres } = await import('../index.ts');
 const { system } = await import('@prisma/app');
 const { lowering } = await import('@prisma/app/deploy');
@@ -65,12 +65,38 @@ const { lowering } = await import('@prisma/app/deploy');
 const run = <A>(eff: Effect.Effect<A, unknown, unknown>): A =>
   Effect.runSync(eff as Effect.Effect<A>);
 
-describe('prismaCloud().application.provision', () => {
+// Typed accessors over the kind-discriminated registry — a wrong kind here is
+// a test bug, so they throw rather than silently widen.
+type Descriptor = ReturnType<typeof prismaCloud>;
+function applicationOf(descriptor: Descriptor) {
+  if (descriptor.application === undefined) throw new Error('expected an application hook');
+  return descriptor.application;
+}
+function resourceControlOf(descriptor: Descriptor, type: string) {
+  const control = descriptor.nodes[type];
+  if (control === undefined || control.kind !== 'resource')
+    throw new Error(`expected a resource control for "${type}"`);
+  return control;
+}
+function serviceControlOf(descriptor: Descriptor, type: string) {
+  const control = descriptor.nodes[type];
+  if (control === undefined || control.kind !== 'service')
+    throw new Error(`expected a service control for "${type}"`);
+  return control;
+}
+const configFor = (descriptor: Descriptor) => ({
+  extensions: [descriptor],
+  state: () => {
+    throw new Error('state() must not be called by lowering()');
+  },
+});
+
+describe('prismaCloud().application.provision (once-per-lowering hook)', () => {
   test('provisions one Project and poisons DATABASE_URL + DATABASE_URL_POOLED with "-"', () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
 
     const result = run<LoweredNode>(
-      target.application.provision({ opts: { name: 'shop' } } as unknown as LowerContext),
+      applicationOf(target).provision({ opts: { name: 'shop' } } as unknown as LowerContext),
     );
 
     expect(result.outputs).toEqual({ projectId: 'shop-project#cloud-id' });
@@ -99,7 +125,7 @@ describe('prismaCloud().application.provision', () => {
   });
 });
 
-describe("prismaCloud().resources['postgres']", () => {
+describe("prismaCloud().nodes['postgres'] — the resource control", () => {
   test("creates a Database + Connection in the application's project; url unwraps the Redacted connection string", () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     // ctx.id is the system provision id — one Database per provisioned resource.
@@ -108,7 +134,7 @@ describe("prismaCloud().resources['postgres']", () => {
       application: { outputs: { projectId: 'shop-project#cloud-id' } },
     } as unknown as LowerContext;
 
-    const result = run<LoweredNode>(target.resources['postgres']!(ctx));
+    const result = run<LoweredNode>(resourceControlOf(target, 'postgres')(ctx));
 
     expect(result.outputs).toEqual({ url: 'postgres://data-conn' });
     expect(recorded.db).toEqual([
@@ -120,7 +146,7 @@ describe("prismaCloud().resources['postgres']", () => {
   });
 });
 
-describe("prismaCloud().services['compute']", () => {
+describe("prismaCloud().nodes['compute'] — the service control", () => {
   test("provision creates a ComputeService inside the application's project", () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const ctx = {
@@ -128,7 +154,7 @@ describe("prismaCloud().services['compute']", () => {
       application: { outputs: { projectId: 'shop-project#cloud-id' } },
     } as unknown as LowerContext;
 
-    const result = run<LoweredNode>(target.services['compute']!.provision(ctx));
+    const result = run<LoweredNode>(serviceControlOf(target, 'compute').provision(ctx));
 
     expect(result.outputs).toEqual({
       serviceId: 'auth-svc#cloud-id',
@@ -147,8 +173,8 @@ describe("prismaCloud().services['compute']", () => {
         db: postgres(),
       },
       build: {
-        kind: 'node',
-        assembler: '@prisma/app-node/assemble',
+        extension: '@prisma/app-node',
+        type: 'node',
         module: 'file:///test/service.ts',
         entry: 'server.js',
       },
@@ -160,7 +186,7 @@ describe("prismaCloud().services['compute']", () => {
     const config = { service: { port: 3000 }, inputs: { db: { url: 'postgres://real-db' } } };
 
     const result = run<LoweredNode>(
-      target.services['compute']!.serialize(ctx, provisioned, config),
+      serviceControlOf(target, 'compute').serialize(ctx, provisioned, config),
     );
 
     expect(recorded.envVar.slice(-2)).toEqual([
@@ -201,8 +227,8 @@ describe("prismaCloud().services['compute']", () => {
       name: 'test-service',
       deps: {},
       build: {
-        kind: 'node',
-        assembler: '@prisma/app-node/assemble',
+        extension: '@prisma/app-node',
+        type: 'node',
         module: 'file:///test/service.ts',
         entry: 'server.js',
       },
@@ -214,7 +240,7 @@ describe("prismaCloud().services['compute']", () => {
     const config = { service: { port: 8080 }, inputs: {} };
 
     const result = run<LoweredNode>(
-      target.services['compute']!.serialize(ctx, provisioned, config),
+      serviceControlOf(target, 'compute').serialize(ctx, provisioned, config),
     );
 
     expect(result.outputs['port']).toBe(8080);
@@ -225,7 +251,7 @@ describe("prismaCloud().services['compute']", () => {
     const ctx = { id: 'auth' } as unknown as LowerContext;
 
     const result = run(
-      target.services['compute']!.package(ctx, {
+      serviceControlOf(target, 'compute').package(ctx, {
         assembled: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
         address: 'auth',
       }),
@@ -260,7 +286,7 @@ describe("prismaCloud().services['compute']", () => {
     };
 
     const result = run<LoweredNode>(
-      target.services['compute']!.deploy(ctx, provisioned, artifact, serialized),
+      serviceControlOf(target, 'compute').deploy(ctx, provisioned, artifact, serialized),
     );
 
     expect(recorded.deploy).toEqual([
@@ -286,8 +312,8 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
   test("ONE Database + Connection; both services' env writes carry its url under their own keys", () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const build = {
-      kind: 'node',
-      assembler: '@prisma/app-node/assemble',
+      extension: '@prisma/app-node',
+      type: 'node',
       module: 'file:///test/service.ts',
       entry: 'server.js',
     };
@@ -308,7 +334,7 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
     };
 
     run<LoweredNode>(
-      lowering(root, target, {
+      lowering(root, configFor(target), {
         name: 'shop',
         bundles: {
           auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
@@ -342,8 +368,8 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
 
 describe('name validation — fail fast on Prisma name constraints, before creating anything', () => {
   const build = {
-    kind: 'node',
-    assembler: '@prisma/app-node/assemble',
+    extension: '@prisma/app-node',
+    type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',
   };
@@ -372,7 +398,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     });
     const before = recorded.db.length;
 
-    const error = lowerError(lowering(root, target, { name: 'shop', bundles }));
+    const error = lowerError(lowering(root, configFor(target), { name: 'shop', bundles }));
 
     // A framework authoring error naming the id and the constraint — not a raw PrismaApiError.
     expect(error).toBeInstanceOf(Error);
@@ -392,7 +418,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     const before = recorded.svc.length;
 
     const error = lowerError(
-      lowering(root, target, { name: 'shop', bundles: { a: bundles.auth } }),
+      lowering(root, configFor(target), { name: 'shop', bundles: { a: bundles.auth } }),
     );
 
     expect(error.message).toContain('service name (from provision id) "a"');
@@ -411,7 +437,9 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     });
     const before = recorded.db.length;
 
-    expect(() => run<LoweredNode>(lowering(root, target, { name: 'shop', bundles }))).not.toThrow();
+    expect(() =>
+      run<LoweredNode>(lowering(root, configFor(target), { name: 'shop', bundles })),
+    ).not.toThrow();
     expect(recorded.db.length).toBe(before + 1);
   });
 });

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assemble } from '../assemble.ts';
+import { assemble } from '../control.ts';
 
 const tmpDirs: string[] = [];
 
@@ -33,8 +33,8 @@ describe('assemble()', () => {
     await expect(
       assemble({
         build: {
-          kind: 'nextjs',
-          assembler: '@prisma/app-nextjs/assemble',
+          extension: '@prisma/app-nextjs',
+          type: 'nextjs',
           module: moduleUrl(serviceDir),
           entry: 'server.js',
         },
@@ -47,8 +47,8 @@ describe('assemble()', () => {
     await expect(
       assemble({
         build: {
-          kind: 'node',
-          assembler: '@prisma/app-node/assemble',
+          extension: '@prisma/app-node',
+          type: 'node',
           module: moduleUrl(serviceDir),
           entry: '../dist/server.js',
         },
@@ -63,8 +63,8 @@ describe('assemble()', () => {
     await expect(
       assemble({
         build: {
-          kind: 'node',
-          assembler: '@prisma/app-node/assemble',
+          extension: '@prisma/app-node',
+          type: 'node',
           module: moduleUrl(serviceDir),
           entry: '../dist/main.js',
         },
@@ -84,8 +84,8 @@ describe('assemble()', () => {
     await expect(
       assemble({
         build: {
-          kind: 'node',
-          assembler: '@prisma/app-node/assemble',
+          extension: '@prisma/app-node',
+          type: 'node',
           module: moduleUrl(serviceDir),
           entry: '../dist/bundle',
         },
@@ -104,8 +104,8 @@ describe('assemble()', () => {
 
     const result = await assemble({
       build: {
-        kind: 'node',
-        assembler: '@prisma/app-node/assemble',
+        extension: '@prisma/app-node',
+        type: 'node',
         module: moduleUrl(serviceDir),
         entry: '../dist/server.js',
       },

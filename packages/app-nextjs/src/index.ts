@@ -4,22 +4,22 @@
  * is the Next app's root (the standalone layout root), resolved relative to
  * `dirname(module)` — exactly like an import specifier (ADR-0004); `entry` is
  * the built standalone server's filename, relative to `appDir`'s standalone
- * output. Returns plain data — nothing runs on import. `assembler` is this
- * pack's own `/assemble` module — baked in here so
- * `ServiceNode.loadAssembler()`/`assemble()` can import it directly at
- * deploy time (node-owned loads; no framework-constructed specifier).
+ * output. Returns plain data — nothing runs on import. `extension` + `type`
+ * are the control-plane registry key: deploy tooling routes assembly through
+ * the app's `prisma-app.config.ts` to this package's `/control` descriptor
+ * (ADR-0017) — no module loading here.
  */
 import type { BuildAdapter } from '@prisma/app';
 
-/** The nextjs build adapter's descriptor — `appDir` is this kind's own extra path input, beyond the shared `{ kind, module, entry }`. */
+/** The nextjs build adapter's descriptor — `appDir` is this kind's own extra path input, beyond the shared `{ extension, type, module, entry }`. */
 export interface NextjsBuildAdapter extends BuildAdapter {
-  readonly kind: 'nextjs';
+  readonly type: 'nextjs';
   readonly appDir: string;
 }
 
 export default (opts: { module: string; appDir: string; entry: string }): NextjsBuildAdapter => ({
-  kind: 'nextjs',
-  assembler: '@prisma/app-nextjs/assemble',
+  extension: '@prisma/app-nextjs',
+  type: 'nextjs',
   module: opts.module,
   appDir: opts.appDir,
   entry: opts.entry,

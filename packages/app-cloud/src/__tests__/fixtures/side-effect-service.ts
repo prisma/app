@@ -12,8 +12,8 @@ export default compute({
     db: postgres(),
   },
   build: {
-    kind: 'node',
-    assembler: '@prisma/app-node/assemble',
+    extension: '@prisma/app-node',
+    type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',
   },

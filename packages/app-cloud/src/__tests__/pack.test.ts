@@ -5,8 +5,8 @@ import { compute, postgres, postgresContract } from '../index.ts';
 import { configKey, deserialize } from '../serializer.ts';
 
 const build = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -32,7 +32,7 @@ describe('postgres({ name })', () => {
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.type).toBe('postgres');
-    expect(node.pack).toBe('@prisma/app-cloud');
+    expect(node.extension).toBe('@prisma/app-cloud');
     expect(node.name).toBe('db');
     expect(node.provides).toBe(postgresContract);
     expect('connection' in node).toBe(false);

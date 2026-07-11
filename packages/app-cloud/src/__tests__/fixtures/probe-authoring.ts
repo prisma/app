@@ -1,5 +1,5 @@
 // Bundle probe for the import-split guard: uses BOTH authoring entries (core
-// and pack) the way a user service module would, with real value usage so
+// and extension) the way a user service module would, with real value usage so
 // nothing tree-shakes away.
 import { configOf, Load, system } from '@prisma/app';
 import { compute, postgres } from '@prisma/app-cloud';
@@ -10,8 +10,8 @@ const app = compute({
     db: postgres(),
   },
   build: {
-    kind: 'node',
-    assembler: '@prisma/app-node/assemble',
+    extension: '@prisma/app-node',
+    type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',
   },

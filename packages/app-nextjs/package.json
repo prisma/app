@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./assemble": "./src/assemble.ts"
+    "./control": "./src/control.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

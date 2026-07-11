@@ -3,7 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assemble, nextStandaloneDir } from '../assemble.ts';
+import { assemble, nextStandaloneDir } from '../control.ts';
+import nextjs from '../index.ts';
 
 const tmpDirs: string[] = [];
 
@@ -34,15 +35,15 @@ describe('assemble()', () => {
     const appDir = makeAppDir();
     await expect(
       assemble({
-        // A "node" kind reaching here at all would only happen through the
-        // untyped CLI seam (assemblerPackFor already routes by kind before
-        // calling in) — forced here to exercise the runtime guard directly.
+        // A "node" build reaching here at all would only happen through the
+        // untyped registry seam (the config routes by (extension, type)
+        // before calling in) — forced here to exercise the runtime guard.
         build: {
-          kind: 'node',
+          extension: '@prisma/app-node',
+          type: 'node',
           module: moduleUrl(appDir),
-          appDir: '..',
           entry: 'server.js',
-        } as never,
+        },
       }),
     ).rejects.toThrow(/expected a "nextjs" build adapter/);
   });
@@ -51,13 +52,7 @@ describe('assemble()', () => {
     const appDir = makeAppDir();
     await expect(
       assemble({
-        build: {
-          kind: 'nextjs',
-          assembler: '@prisma/app-nextjs/assemble',
-          module: moduleUrl(appDir),
-          appDir: '..',
-          entry: 'server.js',
-        },
+        build: nextjs({ module: moduleUrl(appDir), appDir: '..', entry: 'server.js' }),
       }),
     ).rejects.toThrow(/no standalone server\.js at .* run `next build`/);
   });
@@ -84,13 +79,7 @@ describe('assemble()', () => {
     );
 
     const result = await assemble({
-      build: {
-        kind: 'nextjs',
-        assembler: '@prisma/app-nextjs/assemble',
-        module: moduleUrl(appDir),
-        appDir: '..',
-        entry: 'server.js',
-      },
+      build: nextjs({ module: moduleUrl(appDir), appDir: '..', entry: 'server.js' }),
     });
 
     expect(result.dir).toBe(standaloneDir);

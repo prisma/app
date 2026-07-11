@@ -3,18 +3,15 @@
  * says the app's built server lives at `entry`, resolved relative to
  * `dirname(module)` — exactly like an import specifier (ADR-0004). `module`
  * is the authoring module's `import.meta.url`. Returns plain data — nothing
- * runs on import. `assembler` is this pack's own `/assemble` module —
- * baked in here so `ServiceNode.loadAssembler()`/`assemble()` can import it
- * directly at deploy time (node-owned loads; no framework-constructed
- * specifier).
+ * runs on import. `extension` + `type` are the control-plane registry key:
+ * deploy tooling routes assembly through the app's `prisma-app.config.ts` to
+ * this package's `/control` descriptor (ADR-0017) — no module loading here.
  */
 import type { BuildAdapter } from '@prisma/app';
 
-const ASSEMBLER = '@prisma/app-node/assemble';
-
 export default (opts: { module: string; entry: string }): BuildAdapter => ({
-  kind: 'node',
-  assembler: ASSEMBLER,
+  extension: '@prisma/app-node',
+  type: 'node',
   module: opts.module,
   entry: opts.entry,
 });

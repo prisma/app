@@ -1,6 +1,11 @@
 /**
- * Deploy-only (ADR-0005): assembles a Next.js `output: "standalone"` build
- * into the bundle dir the pack packages at deploy. Run `next build` first.
+ * The extension's control entry (ADR-0017): `nextjsBuild()` returns the
+ * descriptor `prisma-app.config.ts` lists — one build control, node ID
+ * "nextjs". Deploy-only (ADR-0005): assembles a Next.js `output:
+ * "standalone"` build into the bundle dir packaged at deploy. Run `next
+ * build` first. The heavy tsdown import lives only here, never in the
+ * authoring entry.
+ *
  * Next's standalone tree omits the static assets and `public/`, so this
  * copies them in. The bundle entry is NOT server.js directly: the app's
  * Prisma App wrapper (the service module — declarations only, whose node
@@ -11,7 +16,7 @@
  *
  * Prisma App ships no build step, but it does own the artifact envelope —
  * bootstrap.js + compute.manifest.json + the deterministic tar are printed
- * by the pack's `package()` at deploy, not here.
+ * by the platform extension's `package()` at deploy, not here.
  *
  * Requires a hoisted node_modules (see the repo `.npmrc`): pnpm's default
  * isolated layout hides Next's peers (e.g. styled-jsx) under `.pnpm`, and the
@@ -25,27 +30,19 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Bundle } from '@prisma/app/deploy';
+import type { BuildAdapter } from '@prisma/app';
+import type { ExtensionDescriptor } from '@prisma/app/config';
+import type { AssembleInput, Bundle } from '@prisma/app/deploy';
 import { build } from 'tsdown';
 import type { NextjsBuildAdapter } from './index.ts';
 
-export type { Bundle } from '@prisma/app/deploy';
+export type { AssembleInput, Bundle } from '@prisma/app/deploy';
 
-/**
- * Same seam-contract name as every build adapter's `/assemble` entry
- * (@prisma/app/deploy's AssembleInput) -- narrowed here to this kind's own
- * NextjsBuildAdapter (its extra appDir field), the same way the runtime
- * `kind` check below narrows at the value level.
- */
-export interface AssembleInput {
-  readonly build: NextjsBuildAdapter;
-  /**
-   * Extra patterns to inline into the wrapper besides `@prisma/*` — the
-   * service module's own imports that are neither in the assembled artifact's
-   * node_modules nor runtime built-ins (e.g. the app's workspace packages and
-   * the libraries its contracts evaluate at import time).
-   */
-  readonly wrapperNoExternal?: readonly RegExp[];
+/** Narrows the shared BuildAdapter to this extension's own descriptor — the value-level mirror of the registry routing on (extension, type). */
+function isNextjsBuild(descriptor: BuildAdapter): descriptor is NextjsBuildAdapter {
+  return (
+    descriptor.type === 'nextjs' && 'appDir' in descriptor && typeof descriptor.appDir === 'string'
+  );
 }
 
 /** Where Next's standalone build places this app, given `outputFileTracingRoot` pins the monorepo root. */
@@ -57,20 +54,21 @@ export function nextStandaloneDir(appDir: string): string {
 }
 
 export async function assemble(input: AssembleInput): Promise<Bundle> {
-  if (input.build.kind !== 'nextjs') {
+  if (!isNextjsBuild(input.build)) {
     throw new Error(
-      `@prisma/app-nextjs/assemble: expected a "nextjs" build adapter, got "${input.build.kind}".`,
+      `@prisma/app-nextjs/control: expected a "nextjs" build adapter (with appDir), got "${input.build.type}".`,
     );
   }
+  const buildDescriptor = input.build;
 
-  const serviceModule = fileURLToPath(input.build.module);
+  const serviceModule = fileURLToPath(buildDescriptor.module);
   const moduleDir = path.dirname(serviceModule);
-  const resolvedApp = path.resolve(moduleDir, input.build.appDir);
+  const resolvedApp = path.resolve(moduleDir, buildDescriptor.appDir);
   const appOut = nextStandaloneDir(resolvedApp);
-  const entryPath = path.join(appOut, input.build.entry);
+  const entryPath = path.join(appOut, buildDescriptor.entry);
   if (!fs.existsSync(entryPath)) {
     throw new Error(
-      `no standalone ${input.build.entry} at ${appOut} — run \`next build\` with output: "standalone" first`,
+      `no standalone ${buildDescriptor.entry} at ${appOut} — run \`next build\` with output: "standalone" first`,
     );
   }
 
@@ -139,5 +137,13 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
   // from the process CWD, which is the artifact root at boot.
   await fs.promises.writeFile(path.join(appOut, 'bunfig.toml'), '[install]\nauto = "disable"\n');
 
-  return { dir: appOut, entry: input.build.entry };
+  return { dir: appOut, entry: buildDescriptor.entry };
 }
+
+/** The nextjs build extension descriptor — `prisma-app.config.ts` lists it under `extensions`. */
+export const nextjsBuild = (): ExtensionDescriptor => ({
+  id: '@prisma/app-nextjs',
+  nodes: {
+    nextjs: { kind: 'build', assemble },
+  },
+});

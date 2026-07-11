@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./target": "./src/target.ts"
+    "./control": "./src/control.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
