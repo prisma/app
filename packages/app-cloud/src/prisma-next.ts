@@ -1,11 +1,11 @@
 /**
  * `pnPostgres()` is the `prisma-next` kind's single entry, overloaded by what
  * it's given — the typed sibling of bare `postgres()` (untouched in
- * `postgres.ts`). A resource end takes `{ name, config }`, where
- * `config.contract` anchors the resource's provided contract; a dependency
- * end takes that same wrapped contract value and hydrates to a typed Prisma
- * Next client, `Client<Contract>`, over the injected `{ url }` connection.
- * This amends ADR-0015 for this one dep kind (see ADR-0021): Prisma Next is
+ * `postgres.ts`). A resource end takes `{ name, contract }`, where `contract`
+ * is the consumed emitted artifact the resource provides; a dependency end
+ * takes that same wrapped contract value and hydrates to a typed Prisma Next
+ * client, `Client<Contract>`, over the injected `{ url }` connection. This
+ * amends ADR-0015 for this one dep kind (see ADR-0021): Prisma Next is
  * framework-blessed like rpc, so the binding is the typed client itself, not
  * a config the app builds its own client from.
  *
@@ -18,18 +18,11 @@
  * version-equality test, since two distinct in-memory contract values can
  * carry the same hash).
  *
- * Marker verification is warn-only by construction, not by a wrapper here:
- * Prisma Next's own `verifyMarker: 'onFirstUse'` never throws on a mismatch
- * — confirmed by reading `@prisma-next/sql-runtime`'s `verifyMarker()`
- * implementation (not just its `.d.ts`): a missing or mismatched marker logs
- * `CONTRACT.MARKER_MISSING` / `CONTRACT.MARKER_MISMATCH` and returns. The one
- * gap: `@prisma-next/postgres@0.14.0`'s public `postgres()` options don't
- * forward a `log` sink to the runtime, so that warning lands in Prisma
- * Next's internal no-op logger and isn't visible anywhere by default in this
- * version — a Prisma Next limitation, not something hydrate can route around
- * without depending on unexported internals or querying the DB at hydrate
- * (which would break the lazy-pool contract). The "never throws" half of the
- * requirement holds regardless.
+ * There is NO runtime schema verification. Schema correctness is a
+ * build/deploy-time job: the deploy migrates the database to the contract's
+ * hash and guarantees it stays there, so hydrate just builds the client (no
+ * `verifyMarker`). A running service can't be crashed by a marker check
+ * because there is no marker check (ADR-0021).
  */
 
 import type { Contract, DependencyEnd, ResourceNode } from '@prisma/app';
@@ -73,25 +66,9 @@ export type PnContractOf<Ct> = Ct extends PnPostgresContract<infer C> ? C : neve
 export type Client<Ct> = PostgresClient<PnContractOf<Ct>>;
 
 /**
- * The resource end's config — the framework's own thin wrapper carrying the
- * wrapped `prisma-next` contract this database provides. Deliberately NOT
- * `@prisma-next/postgres/config`'s own `PrismaNextConfig`: that type anchors
- * Prisma Next's OWN CLI (`contract emit` / `migrate`) to a
- * `prisma-next.config.ts` file on disk, which is a separate, parallel
- * artifact this dispatch does not read (the deploy lowering that will read
- * it is slice 2's job). `connection` is accepted only to mirror the shape
- * the design sketched and is always ignored — the framework injects the
- * connection URL at hydrate (no-globals).
- */
-export interface PnPostgresConfig<C extends PnPostgresContract = PnPostgresContract> {
-  readonly contract: C;
-  readonly connection?: unknown;
-}
-
-/**
  * Wraps a resolved Prisma Next contract value into the framework's
- * `prisma-next` Contract kind. Both the resource end's `config.contract` and
- * every dependency end reference the SAME wrapped value, the same way
+ * `prisma-next` Contract kind. Both the resource end's `contract` and every
+ * dependency end reference the SAME wrapped value, the same way
  * `@prisma/app-rpc`'s `contract()` output feeds both a service's `expose`
  * and its consumers' `rpc(contract)` deps.
  *
@@ -119,12 +96,15 @@ export function pnContract(contract: unknown): unknown {
 }
 
 /**
- * `{ name, config }` — the resource identity a system provisions: the ONE
- * place the database exists, providing `config.contract`.
+ * `{ name, contract }` — the resource identity a system provisions: the ONE
+ * place the database exists, providing `contract`. The `prisma-next.config.ts`
+ * path the deploy migration step needs is NOT declared here — it rides on the
+ * resource in slice 2, alongside the lowering that reads it (ADR-0021); the
+ * app build never imports the config.
  */
 export function pnPostgres<C extends PnPostgresContract>(opts: {
   name: string;
-  config: PnPostgresConfig<C>;
+  contract: C;
 }): ResourceNode<C>;
 /**
  * `pnPostgres(contract)` — a service's dependency on a Prisma Next-typed
@@ -133,13 +113,13 @@ export function pnPostgres<C extends PnPostgresContract>(opts: {
  */
 export function pnPostgres<C extends PnPostgresContract>(contract: C): DependencyEnd<Client<C>, C>;
 export function pnPostgres(
-  arg: { name: string; config: PnPostgresConfig } | PnPostgresContract,
+  arg: { name: string; contract: PnPostgresContract } | PnPostgresContract,
 ): unknown {
   if (!isPnPostgresContract(arg)) {
     return resource({
       name: arg.name,
       extension: '@prisma/app-cloud',
-      provides: arg.config.contract,
+      provides: arg.contract,
     });
   }
   const contract = arg;
@@ -168,7 +148,6 @@ function buildClient<C extends PnPostgresContract>(contract: C, url: string): Cl
   return pnPostgresRuntime<PnContractOf<C>>({
     contractJson: contract.__cmp.contractJson,
     url,
-    verifyMarker: 'onFirstUse',
   });
 }
 
