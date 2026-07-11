@@ -71,9 +71,10 @@ speculatively):
   (ADR-0015), the Prisma Cloud pack, and the storefront-auth example
   ([`docs/design/10-domains/core-model.md`](../../../docs/design/10-domains/core-model.md)).
 - **Depends on the in-flight system-composition work** (boundary ports,
-  nesting, forwarding — branch `claude/makerkit-cli-mvp-34302a`,
-  ADR-0016/0017): a resource-as-System *is* a nested System exposing only a
-  typed boundary. Composition is the mechanism this project dogfoods.
+  nesting, forwarding — branch `claude/system-composition`, ADR-0016/0017):
+  a resource-as-System *is* a nested System exposing only a typed boundary.
+  That seam is **owned by hex-composition**; this project consumes it (see
+  plan.md § "What we consume from hex-composition"), and does not re-derive it.
 - **Depends on the publishing setup** (PR #29): the ports live in their own
   repos and consume published `@prisma/app*` packages, which makes this
   project the first real consumer of the release pipeline.
@@ -164,4 +165,5 @@ speculatively):
 - [prisma/streams](https://github.com/prisma/streams) — the streams primitive.
 - `.drive/deferred.md` — prior-project platform asks (state API, unique names) this project may re-surface.
 - [PR #29](https://github.com/prisma/makerkit/pull/29) — publishing setup (dependency).
-- Branch `claude/makerkit-cli-mvp-34302a` — system composition (dependency).
+- Branch `claude/system-composition` (`hex-composition` project) — the
+  resource-as-System seam this project consumes (dependency).

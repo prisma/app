@@ -49,6 +49,21 @@ and cross-platform resource portability.
    publishing pipeline (PR #29) and keeps the framework repo's examples from
    becoming shadow copies of real apps.
 
+6. **The resource-as-System seam is owned by hex-composition, not this
+   project** (operator, 2026-07-11). An S0 spike to design the seam here was
+   drafted and **cancelled**: the `hex-composition` project (branch
+   `claude/system-composition`) is actively building exactly that — ADR-0016
+   (`SystemNode<Deps, Expose>`), the resource-decoupling unified model
+   (`resource()` provides a Contract; resource-backed inputs forward across a
+   system boundary), and H3 (a reusable auth system + same-contract fake proven
+   in CI = swap-the-backing-consumer-unchanged). Spiking it in parallel would
+   collide with their moving target. This project **consumes** that output; our
+   object-storage swap (S5) is a second instance of the H3 pattern. The one
+   piece hex-composition does not cover — the **cron reverse-edge** (a resource
+   that invokes the consumer on a schedule) — is resolved by a design
+   conversation *with* that session, not an independent spike. See
+   [[hex-composition-coordination]].
+
 ## Alternatives considered
 
 - **Agent service (review/triage bot) as the forcing app** — good capability

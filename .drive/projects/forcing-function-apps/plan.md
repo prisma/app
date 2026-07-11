@@ -13,9 +13,41 @@ decide whether M2 becomes a successor project instead.
 
 ## External dependencies
 
-- **Publishing pipeline** — makerkit [PR #29](https://github.com/prisma/makerkit/pull/29); blocks S2's "consume published packages" condition.
-- **System composition** — branch `claude/makerkit-cli-mvp-34302a` (boundary ports, nesting, forwarding); blocks S3.
+- **System composition (`hex-composition` project)** — branch
+  `claude/system-composition`. This delivers the resource-as-System seam our
+  resource slices consume; see § "What we consume from hex-composition" below.
+  Blocks S3 (and M2's S5).
+- **Publishing pipeline** — [PR #29](https://github.com/prisma/app/pull/29);
+  blocks S2's "consume published packages" condition.
 - Both are in flight in other sessions; neither blocks S1.
+
+## What we consume from hex-composition (do not re-derive)
+
+The resource-as-System seam is **owned by the hex-composition project**, not
+this one. We build our resource slices on its resolved model rather than
+spiking it ourselves:
+
+- **ADR-0016** — a system has the same boundary as a service
+  (`SystemNode<Deps, Expose>`); systems nest and `provision()` accepts a system
+  wherever it accepts a service.
+- **The resource-decoupling / unified model** — `resource()` takes
+  `provides: Contract`; `provision(id, resource)` flattens that contract onto
+  the ref; a resource-backed input forwards across a system boundary. This is
+  how an emulated resource presents a binding without leaking its
+  implementation.
+- **H3 (their last slice)** — a reusable auth system plus a same-contract fake,
+  proven live in CI: swap the backing, consumer unchanged. Our object-storage
+  swap (S5) is a second instance of exactly this pattern; we reuse it, we don't
+  reinvent it.
+
+**One open question is ours to coordinate, not consume:** the **cron
+reverse-edge**. hex-composition's model is consumer-calls-resource; cron
+*invokes* the consumer on a schedule. Nothing in ADR-0016's Deps/Expose/
+forwarding expresses a scheduled reverse edge. Before S3 is specced, settle
+with the hex-composition session whether this is a new composition capability
+(lives there) or something our cron System expresses on top of the existing
+primitives. This replaces the cancelled S0 spike — it is a design conversation
+with that session, not a parallel spike against their moving target.
 
 ## Milestone 1: datahub on the framework
 
@@ -42,9 +74,12 @@ Scheduling unchanged (in-process tick) for this slice.
 
 Scheduler System (compute service + postgres schedule state) invoking target
 services via their http/rpc ports, behind an implementation-blind binding
-contract. Resource-as-System ADR; contract filed as a platform ask.
+contract. Contract filed as a platform ask.
 
-- **Builds on:** system-composition landing on main.
+- **Builds on:** hex-composition's resource-as-System model (ADR-0016 +
+  resource-decoupling) landed on main, **and** the cron reverse-edge question
+  resolved (see § "What we consume from hex-composition"). If that resolution
+  adds a composition capability, S3 waits on it.
 - **Hands to:** S4 — a `cron` resource any app can consume.
 
 ### S4 — datahub on cron + cutover ([TML-3001](https://linear.app/prisma-company/issue/TML-3001))
@@ -58,18 +93,19 @@ instance cut over. Closes M1.
 
 ### Parallelisation
 
-Two independent threads until S4 joins them:
+Two independent threads join at S4:
 
-- Thread A: S1 → S2
-- Thread B: S3 (starts when composition lands)
-- Join: S4
+- Thread A: S1 → S2 (no dependency on hex-composition; can start now)
+- Thread B: S3 — starts once hex-composition lands its resource-as-System model
+  **and** the cron reverse-edge is resolved with that session
+- Join: S4 (needs S2 and S3)
 
 ## Milestone 2: open-chat + dev loop (sketch)
 
 Slices below are placeholders, firmed at the M1-close health check (also the
 decision point for splitting M2 into a successor project):
 
-- **S5 — Object storage as an emulated resource System** ([TML-3002](https://linear.app/prisma-company/issue/TML-3002)): blob contract, postgres + R2 backings, the swap demonstration.
+- **S5 — Object storage as an emulated resource System** ([TML-3002](https://linear.app/prisma-company/issue/TML-3002)): blob contract, postgres + R2 backings, the swap demonstration — a direct application of hex-composition's H3 pattern (reusable system + same-contract fake).
 - **S6 — Streams as a resource** ([TML-3003](https://linear.app/prisma-company/issue/TML-3003)): design pass first (wrapper System vs managed primitive).
 - **S7 — open-chat port** ([TML-3004](https://linear.app/prisma-company/issue/TML-3004)): builds on S5, S6 (+ S1, S3 from M1).
 - **S8 — The local dev loop** ([TML-3005](https://linear.app/prisma-company/issue/TML-3005)): builds on S7 — deliberately last, after two ports' worth of evidence.
@@ -79,6 +115,6 @@ S5 and S6 are parallel; S7 joins them; S8 closes.
 ## Close-out (required)
 
 - [ ] Verify all acceptance criteria in [spec.md](spec.md) § Project-DoD
-- [ ] Migrate long-lived docs into `docs/` (ADRs: secrets, resource-as-System, dev loop; contract specs)
+- [ ] Migrate long-lived docs into `docs/` (ADRs: secrets, cron reverse-edge if new, dev loop; cron/object-storage contract specs). The resource-as-System ADR is hex-composition's (ADR-0016), not ours.
 - [ ] Strip repo-wide references to `.drive/projects/forcing-function-apps/**`
 - [ ] Delete `.drive/projects/forcing-function-apps/`
