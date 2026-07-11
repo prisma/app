@@ -4,6 +4,9 @@
  * deploy-time only; never lands in a runtime bundle. `prismaCloud()` reads
  * and validates its own environment at construction — config evaluation —
  * so a missing variable fails before any assembly work, naming the variable.
+ * The exception is `PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID`: read here but only
+ * required at `application.provision` (lowering time), since construction
+ * also runs in the CLI parent, before the CLI has resolved them.
  */
 
 import * as Prisma from '@prisma/alchemy';
@@ -50,21 +53,32 @@ function validateName(value: string, source: string): void {
   }
 }
 
-/** Resolves the factory's env-or-option inputs, failing fast with the exact variable name (construction runs during config evaluation). */
+/**
+ * Resolves the factory's env-or-option inputs, failing fast with the exact variable name
+ * (construction runs during config evaluation). `projectId`/`branchId` are read here but not
+ * required — `prismaCloud()` is constructed once in the CLI parent (before they're set) and
+ * again in the child (where they are); the required check for `projectId` lives in
+ * `application.provision`, which only runs in the child.
+ */
 function resolveOptions(opts: PrismaCloudOptions): {
   workspaceId: string;
   region?: Prisma.ComputeRegion;
+  projectId: string | undefined;
+  branchId: string | undefined;
 } {
   const workspaceId = opts.workspaceId ?? process.env['PRISMA_WORKSPACE_ID'];
   if (workspaceId === undefined || workspaceId.length === 0) {
     throw new Error('prismaCloud(): environment variable PRISMA_WORKSPACE_ID is required.');
   }
 
-  if (opts.region !== undefined) return { workspaceId, region: opts.region };
+  const projectId = process.env['PRISMA_PROJECT_ID'] || undefined;
+  const branchId = process.env['PRISMA_BRANCH_ID'] || undefined;
+
+  if (opts.region !== undefined) return { workspaceId, region: opts.region, projectId, branchId };
 
   const region = process.env['PRISMA_REGION'];
   if (region === undefined || region.length === 0) {
-    return { workspaceId };
+    return { workspaceId, projectId, branchId };
   }
   if (!isComputeRegion(region)) {
     throw new Error(
@@ -72,7 +86,7 @@ function resolveOptions(opts: PrismaCloudOptions): {
         `(expected one of: ${Prisma.COMPUTE_REGIONS.join(', ')}).`,
     );
   }
-  return { workspaceId, region };
+  return { workspaceId, region, projectId, branchId };
 }
 
 /** The Prisma Cloud extension descriptor — `prisma-app.config.ts` lists it under `extensions`. */
@@ -91,6 +105,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
         projectId: application.outputs['projectId'] as string,
         name: id,
         region: o.region ?? 'us-east-1',
+        ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
       });
       const conn = yield* Prisma.Connection(`${id}-conn`, { databaseId: db.id, name: id });
       const url = Output.map(conn.connectionString, (value) => Redacted.value(value));
@@ -107,29 +122,32 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     // this is the one commented cast, and it lives in the extension, not core.
     providers: () => Prisma.providers() as unknown as Layer.Layer<never>,
 
-    // Runs ONCE per lowering, before any service: the application's Project,
-    // with the poison DATABASE_URL/DATABASE_URL_POOLED variables written
-    // immediately so nothing can ever rely on the platform default.
+    // Runs ONCE per lowering, before any service: references the Project the
+    // CLI already ensured (and injected via PRISMA_PROJECT_ID), with the
+    // poison DATABASE_URL/DATABASE_URL_POOLED variables written immediately
+    // so nothing can ever rely on the platform default.
     application: {
-      provision: ({ opts: lowerOpts }) =>
+      provision: () =>
         Effect.gen(function* () {
-          validateName(lowerOpts.name, 'application name');
-          const project = yield* Prisma.Project(`${lowerOpts.name}-project`, {
-            workspaceId: o.workspaceId,
-            name: lowerOpts.name,
-          });
+          const projectId = o.projectId;
+          if (projectId === undefined || projectId.length === 0) {
+            throw new Error(
+              'prismaCloud(): environment variable PRISMA_PROJECT_ID is required (the CLI sets it — deploy via `prisma-app deploy`).',
+            );
+          }
           for (const key of ['DATABASE_URL', 'DATABASE_URL_POOLED']) {
             yield* Prisma.EnvironmentVariable(`${key}-poison`, {
-              projectId: project.id,
+              projectId,
               key,
               // "-", not "": the API rejects empty env-var values with
               // "String must contain at least 1 character" (verified at the R4
               // deploy proof). Any garbage value fails a real connect loudly.
               value: '-',
-              class: 'production',
+              class: o.branchId ? 'preview' : 'production',
+              ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
             });
           }
-          return { outputs: { projectId: project.id } };
+          return { outputs: { projectId } };
         }),
     },
 
@@ -147,6 +165,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
               projectId: application.outputs['projectId'] as string,
               name: id,
               region: o.region ?? 'us-east-1',
+              ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
             });
             return {
               outputs: { serviceId: svc.id, projectId: application.outputs['projectId'] },
@@ -173,7 +192,8 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
                   projectId: provisioned.outputs['projectId'] as string,
                   key,
                   value: encode(d.owner, value),
-                  class: 'production',
+                  class: o.branchId ? 'preview' : 'production',
+                  ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
                 }),
               );
             }
