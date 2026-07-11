@@ -11,12 +11,15 @@
  * `postgres<Contract>({ contractJson })` convention (see prisma-next.ts).
  */
 import { describe, expect, test } from 'bun:test';
+import type { Contract } from '@prisma/app';
 import { isNode } from '@prisma/app';
 import { pnContract, pnPostgres } from '../prisma-next.ts';
-import type { Contract as WidgetContract } from './fixtures/widget-contract/emitted/contract.d.ts';
-import widgetContractJson from './fixtures/widget-contract/emitted/contract.json' with { type: 'json' };
 import type { Contract as GadgetContract } from './fixtures/gadget-contract/emitted/contract.d.ts';
 import gadgetContractJson from './fixtures/gadget-contract/emitted/contract.json' with {
+  type: 'json',
+};
+import type { Contract as WidgetContract } from './fixtures/widget-contract/emitted/contract.d.ts';
+import widgetContractJson from './fixtures/widget-contract/emitted/contract.json' with {
   type: 'json',
 };
 
@@ -35,6 +38,31 @@ describe('pnContract().satisfies()', () => {
     expect(gadget.satisfies(widget)).toBe(false);
   });
 
+  test('false when the required contract carries a malformed __cmp (no contractJson)', () => {
+    const widget = pnContract<WidgetContract>(widgetContractJson);
+    // A prisma-next-kinded value whose __cmp lacks contractJson entirely —
+    // storageHashOf() returns undefined, so satisfies() must be false rather
+    // than throw or spuriously match.
+    const malformed = {
+      kind: 'prisma-next',
+      __cmp: {},
+      satisfies: () => false,
+    } as Contract<'prisma-next', unknown>;
+    expect(widget.satisfies(malformed)).toBe(false);
+  });
+
+  test("false in both directions when a wrapper's contractJson lacks storage.storageHash", () => {
+    const widget = pnContract<WidgetContract>(widgetContractJson);
+    // contractJson is present but shaped wrong: no `storage.storageHash`.
+    // Both this wrapper's own hash and any comparison against it resolve to
+    // undefined, so satisfies() is false whichever side asks.
+    const hashless = pnContract<WidgetContract>({ storage: { namespaces: {} } });
+    expect(widget.satisfies(hashless)).toBe(false);
+    expect(hashless.satisfies(widget)).toBe(false);
+    // ...and a hashless wrapper does not even satisfy itself.
+    expect(hashless.satisfies(hashless)).toBe(false);
+  });
+
   test('the wrapped contract is frozen and carries the prisma-next kind', () => {
     const widget = pnContract<WidgetContract>(widgetContractJson);
     expect(widget.kind).toBe('prisma-next');
@@ -43,24 +71,15 @@ describe('pnContract().satisfies()', () => {
 });
 
 describe('pnPostgres() factory shapes', () => {
-  test('{ name, config } yields a branded ResourceNode providing config.contract', () => {
+  test('{ name, contract } yields a branded ResourceNode providing contract', () => {
     const widget = pnContract<WidgetContract>(widgetContractJson);
-    const node = pnPostgres({ name: 'database', config: { contract: widget } });
+    const node = pnPostgres({ name: 'database', contract: widget });
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.name).toBe('database');
     expect(node.extension).toBe('@prisma/app-cloud');
     expect(node.type).toBe('prisma-next');
-    expect(node.provides).toBe(widget);
-  });
-
-  test('config.connection is accepted and ignored — the framework injects the URL at hydrate', () => {
-    const widget = pnContract<WidgetContract>(widgetContractJson);
-    const node = pnPostgres({
-      name: 'database',
-      config: { contract: widget, connection: 'postgres://ignored' },
-    });
     expect(node.provides).toBe(widget);
   });
 
@@ -96,16 +115,15 @@ describe('hydrate — no live database required (lazy pool)', () => {
     expect(typeof client.close).toBe('function');
   });
 
-  test('a mismatched-marker verifyMarker setting never throws at construct time', () => {
-    // verifyMarker only runs lazily on first query (see module doc comment);
-    // this asserts hydrate itself — which sets `verifyMarker: 'onFirstUse'`
-    // — never throws just by constructing the client, regardless of what a
-    // live database's marker would say.
+  test('hydrate does no schema verification — it just builds the client', () => {
+    // There is no runtime marker check (ADR-0021): schema correctness is a
+    // deploy-time job. Constructing the client can't be crashed by a marker
+    // mismatch because hydrate sets no `verifyMarker` and reads no database.
     const widget = pnContract<WidgetContract>(widgetContractJson);
     const dep = pnPostgres(widget);
 
     expect(() =>
-      dep.connection.hydrate({ url: 'postgres://user:pass@localhost:5432/mismatched' }),
+      dep.connection.hydrate({ url: 'postgres://user:pass@localhost:5432/any-db' }),
     ).not.toThrow();
   });
 });

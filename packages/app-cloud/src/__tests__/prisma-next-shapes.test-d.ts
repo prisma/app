@@ -1,6 +1,6 @@
 /**
  * `pnPostgres()`'s two shapes, and storageHash-exact wiring compatibility.
- * `{ name, config }` is the provisionable identity; `pnPostgres(contract)` is
+ * `{ name, contract }` is the provisionable identity; `pnPostgres(contract)` is
  * the dependency, whose binding is the typed Prisma Next client. The
  * `WidgetContract`/`GadgetContract` types come from real `prisma-next
  * contract emit` output (`fixtures/{widget,gadget}-contract/emitted/contract.d.ts`)
@@ -21,8 +21,8 @@ import { service } from '@prisma/app';
 import { expectTypeOf, test } from 'vitest';
 import { postgres } from '../postgres.ts';
 import { type Client, type PnPostgresContract, pnContract, pnPostgres } from '../prisma-next.ts';
-import type { Contract as WidgetContract } from './fixtures/widget-contract/emitted/contract.d.ts';
 import type { Contract as GadgetContract } from './fixtures/gadget-contract/emitted/contract.d.ts';
+import type { Contract as WidgetContract } from './fixtures/widget-contract/emitted/contract.d.ts';
 
 declare const widgetJson: WidgetContract;
 declare const widgetJsonAgain: WidgetContract;
@@ -38,8 +38,8 @@ test('pnContract wraps an emitted contract into the prisma-next kind', () => {
   expectTypeOf(widget).toEqualTypeOf<PnPostgresContract<WidgetContract>>();
 });
 
-test('{ name, config } yields the resource identity providing config.contract', () => {
-  const identity = pnPostgres({ name: 'db', config: { contract: widget } });
+test('{ name, contract } yields the resource identity providing contract', () => {
+  const identity = pnPostgres({ name: 'db', contract: widget });
   expectTypeOf(identity).toEqualTypeOf<ResourceNode<typeof widget>>();
 });
 
@@ -68,12 +68,9 @@ const consumer = service({
 
 declare const h: SystemBuilder;
 
-const widgetRef = h.provision('db1', pnPostgres({ name: 'db', config: { contract: widget } }));
-const widgetAgainRef = h.provision(
-  'db2',
-  pnPostgres({ name: 'db', config: { contract: widgetAgain } }),
-);
-const gadgetRef = h.provision('db3', pnPostgres({ name: 'db', config: { contract: gadget } }));
+const widgetRef = h.provision('db1', pnPostgres({ name: 'db', contract: widget }));
+const widgetAgainRef = h.provision('db2', pnPostgres({ name: 'db', contract: widgetAgain }));
+const gadgetRef = h.provision('db3', pnPostgres({ name: 'db', contract: gadget }));
 
 test('a resource providing the SAME emitted contract (same storageHash) satisfies the dependency slot', () => {
   expectTypeOf(h.provision).toBeCallableWith('c1', consumer, { db: widgetRef });
