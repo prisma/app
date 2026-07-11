@@ -33,9 +33,15 @@ const leanTokens = [
 ];
 
 describe('entry map: core splits into authoring + deploy + pure utils — no runtime entry', () => {
-  test("package.json exports '.', './deploy', and the ./casts + ./assertions utilities", () => {
+  test("package.json exports '.', './deploy', './config', and the ./casts + ./assertions utilities", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
-    expect(Object.keys(pkg.exports).sort()).toEqual(['.', './assertions', './casts', './deploy']);
+    expect(Object.keys(pkg.exports).sort()).toEqual([
+      '.',
+      './assertions',
+      './casts',
+      './config',
+      './deploy',
+    ]);
   });
 });
 

@@ -13,8 +13,8 @@ import { dependency, resource, service, system } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
 const build = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -41,7 +41,7 @@ const untypedEnd = () =>
 const noOpService = () =>
   service({
     name: 'noop',
-    pack: 'test/pack',
+    extension: 'test/pack',
     type: 'fake/compute',
     inputs: {},
     params: {},
@@ -72,7 +72,7 @@ describe('a system with a declared dep that is never forwarded (Load error a)', 
     const consumer = () =>
       service({
         name: 'consumer',
-        pack: 'test/pack',
+        extension: 'test/pack',
         type: 'fake/compute',
         inputs: { in: untypedEnd() },
         params: {},
@@ -103,7 +103,7 @@ describe('a system with a declared dep that is never forwarded (Load error a)', 
     const consumer = () =>
       service({
         name: 'consumer',
-        pack: 'test/pack',
+        extension: 'test/pack',
         type: 'fake/compute',
         inputs: { one: untypedEnd(), two: untypedEnd() },
         params: {},
@@ -137,7 +137,7 @@ describe('a system expose key missing from the body return or failing satisfies 
   const contractProvider = <C extends Contract<'rpc', unknown>>(exposed: C) =>
     service({
       name: 'provider',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -213,7 +213,7 @@ describe('a forwarding cycle through a system boundary (Load error d)', () => {
   const peerService = () =>
     service({
       name: 'peer-svc',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { peer: untypedEnd() },
       params: {},
@@ -274,7 +274,7 @@ describe('3-level nesting: addresses, and forwarding down + up round trip', () =
   const configService = () =>
     service({
       name: 'config',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -285,7 +285,7 @@ describe('3-level nesting: addresses, and forwarding down + up round trip', () =
   const leafService = () =>
     service({
       name: 'leaf',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { cfg: cfgEnd() },
       params: {},
@@ -296,7 +296,7 @@ describe('3-level nesting: addresses, and forwarding down + up round trip', () =
   const sinkService = () =>
     service({
       name: 'sink',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { out: outEnd() },
       params: {},
@@ -401,7 +401,7 @@ describe('pass-through: an expose may return a boundary input directly', () => {
   const rpcProvider = () =>
     service({
       name: 'provider',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -412,7 +412,7 @@ describe('pass-through: an expose may return a boundary input directly', () => {
   const rpcConsumer = () =>
     service({
       name: 'sink',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { svc: rpcEnd() },
       params: {},
@@ -464,7 +464,7 @@ describe('untyped inputs (http() escape hatch) forward with no compile-time chec
   test("Load's satisfies() backstop still catches a contract mismatch at the consumer", () => {
     const provider = service({
       name: 'provider',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -473,7 +473,7 @@ describe('untyped inputs (http() escape hatch) forward with no compile-time chec
     });
     const typedConsumer = service({
       name: 'sink',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: {
         svc: dependency({
@@ -528,7 +528,7 @@ describe('a resource-backed input now forwards across a system boundary (unified
   const dbConsumer = () =>
     service({
       name: 'consumer',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { db: dbDep() },
       params: {},
@@ -543,7 +543,10 @@ describe('a resource-backed input now forwards across a system boundary (unified
 
   const rootWithResource = () =>
     system('shop', {}, ({ provision }) => {
-      const db = provision('db', resource({ name: 'db', pack: 'test/pack', provides: dbContract }));
+      const db = provision(
+        'db',
+        resource({ name: 'db', extension: 'test/pack', provides: dbContract }),
+      );
       provision('wrapped', dbSystem(), { db });
       return {};
     });

@@ -1,138 +1,42 @@
 /**
  * Core model: node types and the factories that construct them. All nodes are
- * frozen instances of a small class hierarchy — with two sanctioned behavior
- * slots beyond deploy-time loading: a Connection's `hydrate` (validated
- * values → client) and, on the target pack's runnable service subclass,
- * `run`/`load` (the process controller and its pull-DI). The Service node
- * carries NO handler — it is a description; the code that serves is the app's
- * own entrypoint. Config declarations are pure data; core reads no
- * environment. A node's `type` is its routing key at deploy; core never
- * interprets it beyond lookup.
- *
- * Deploy-only modules (`/target`, `/assemble`) are node-owned: the specifier
- * is author-written data (`targetModule`, `BuildAdapter.assembler`) and the
- * node's own `loadTarget()`/`loadAssembler()`/`assemble()` import it — see
- * ADR-0017. The one invariant to preserve here: every `import()` below takes
- * its specifier from a property read, never a static string literal, so the
- * bundler that inlines this module into the production wrapper cannot follow
- * it and drag the deploy-only module into the runtime artifact.
+ * plain frozen data objects — with two sanctioned behavior slots: a
+ * Connection's `hydrate` (validated values → client) and, on the extension's
+ * runnable service shape, `run`/`load` (the process controller and its
+ * pull-DI). The Service node carries NO handler — it is a description; the
+ * code that serves is the app's own entrypoint. Config declarations are pure
+ * data; core reads no environment and loads no modules. A node's `extension`
+ * + `type` form its control-plane routing key at deploy
+ * (`config.extensions[extension].nodes[type]` — see ADR-0017); core never
+ * interprets them beyond lookup.
  */
 import { blindCast } from './casts.ts';
 import type { ConfigParam, Connection, Params, Values } from './config.ts';
 import type { Contract } from './contract.ts';
-import type { AssembleInput, Bundle } from './deploy.ts';
 
 // Brand — set by the factories below; how Load tells a node from junk.
 // Symbol.for so the check survives duplicated module instances in a workspace.
 const NODE: unique symbol = Symbol.for('prisma:node') as never;
 
 /**
- * The runtimes disagree on resolution-failure codes, and agree with each
- * other only loosely: a fully absent package is "MODULE_NOT_FOUND" on bun and
- * "ERR_MODULE_NOT_FOUND" on node; a package that is present but does not
- * export the requested subpath is "ERR_PACKAGE_PATH_NOT_EXPORTED" on node,
- * still "MODULE_NOT_FOUND" on bun. Bun also throws its own ResolveMessage —
- * NOT an Error instance — so this checks `.code` directly rather than
- * narrowing via `instanceof Error` first.
- */
-const RESOLUTION_FAILURE_CODES = new Set([
-  'MODULE_NOT_FOUND',
-  'ERR_MODULE_NOT_FOUND',
-  'ERR_PACKAGE_PATH_NOT_EXPORTED',
-]);
-
-function isResolutionFailure(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return false;
-  return RESOLUTION_FAILURE_CODES.has(String(error.code));
-}
-
-/**
- * Dynamically imports `specifier` (a variable, never a literal at the call
- * site — see the module doc's firewall note), wrapping a failed resolution
- * into a message naming what was being loaded and the specifier itself,
- * instead of letting a bare ERR_MODULE_NOT_FOUND stack trace be the UX. Any
- * other failure (e.g. the resolved module itself throwing on evaluation)
- * propagates unchanged.
- */
-async function loadSpecifier(label: string, specifier: string): Promise<unknown> {
-  try {
-    return await import(specifier);
-  } catch (error) {
-    if (isResolutionFailure(error)) {
-      throw new Error(
-        `Cannot resolve the ${label} "${specifier}" — the app (or, for a node provisioned by a ` +
-          'system package, that system package) must depend on the package that provides it.',
-      );
-    }
-    throw error;
-  }
-}
-
-/**
- * The base every node shares: the brand, a diagnostic name, and — for a
- * pack-authored service or resource — the target pack's `/target` module
- * specifier plus the method that loads it. A system or a dependency end never
- * carries `targetModule` (their factories never set it); calling
- * `loadTarget()` on one is a guarded error naming the node.
- */
-export abstract class Node {
-  readonly [NODE] = true;
-  abstract readonly kind: string;
-  /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
-  readonly name: string;
-  /**
-   * The pack's deploy target, e.g. "@prisma/app-cloud/target" — a full,
-   * author-written module specifier the pack factory bakes onto the node
-   * (`service()`/`resource()`'s `targetModule` option). `undefined` on a system
-   * or a dependency end.
-   */
-  readonly targetModule?: string | undefined;
-
-  protected constructor(init: { name: string; targetModule?: string | undefined }) {
-    this.name = init.name;
-    this.targetModule = init.targetModule;
-  }
-
-  /**
-   * Imports this node's `targetModule` and returns the module namespace
-   * object, unvalidated — the caller (deploy tooling) checks it exports what
-   * it needs (e.g. `fromEnv(): Target`). Deploy-time only; never called from
-   * a running service.
-   */
-  async loadTarget(): Promise<unknown> {
-    if (this.targetModule === undefined) {
-      throw new Error(
-        `"${this.name}" (kind "${this.kind}") declares no targetModule — only a pack-authored ` +
-          'service or resource node carries one; deploy tooling only calls loadTarget() on those.',
-      );
-    }
-    return loadSpecifier('target module', this.targetModule);
-  }
-}
-
-/**
- * How a service's app becomes a runnable artifact. The DESCRIPTOR is pure data
- * the service node carries (rides in service.ts, into every bundle); it names
- * the adapter, the authoring module, and the built-entry location. `entry`
- * (and any other kind-specific path field, e.g. nextjs's `appDir`) resolves
- * RELATIVE TO `dirname(module)` — exactly like an import specifier — never an
- * absolute or machine path. `module` (the authoring module's
- * `import.meta.url`) is the one sanctioned exception to that rule (ADR-0004):
- * deploy-time metadata only, and bundlers preserve it as an expression rather
- * than a literal, so it re-evaluates inside the deploy artifact instead of
- * baking in a dev-machine path.
+ * How a service's app becomes a runnable artifact. Pure data the service node
+ * carries (rides in service.ts, into every bundle); `extension` + `type` are
+ * its control-plane routing key — assembly is
+ * `config.extensions[extension].nodes[type].assemble(...)`, exactly the
+ * lookup a service or resource node gets. `entry` (and any other
+ * kind-specific path field, e.g. nextjs's `appDir`) resolves RELATIVE TO
+ * `dirname(module)` — exactly like an import specifier — never an absolute
+ * or machine path. `module` (the authoring module's `import.meta.url`) is
+ * the one sanctioned exception to that rule (ADR-0004): deploy-time metadata
+ * only, and bundlers preserve it as an expression rather than a literal, so
+ * it re-evaluates inside the deploy artifact instead of baking in a
+ * dev-machine path.
  */
 export interface BuildAdapter {
-  /** Assembler routing key, e.g. "node" · "nextjs" — the resolved module's own discriminant, checked against this. */
-  readonly kind: string;
-  /**
-   * The build adapter's `/assemble` module — a full, author-written module
-   * specifier the adapter's own factory bakes in (`node()`, `nextjs()`), e.g.
-   * "@prisma/app-node/assemble". `ServiceNode.loadAssembler()`/`assemble()`
-   * import it directly — never a hardcoded kind→package map, so a community
-   * build adapter works with zero changes to core or the CLI.
-   */
-  readonly assembler: string;
+  /** The extension package that provides the build control, e.g. "@prisma/app-node". */
+  readonly extension: string;
+  /** The build control's node ID within its extension, e.g. "node" · "nextjs". */
+  readonly type: string;
   /**
    * The authoring module's `import.meta.url` — every other path on this
    * descriptor resolves relative to `dirname(module)`. Nothing reads it at
@@ -141,8 +45,8 @@ export interface BuildAdapter {
   readonly module: string;
   /**
    * The app's built runnable, resolved relative to `dirname(module)`. The
-   * kind's assembler interprets it. "node": a path to the built server file
-   * (e.g. "../dist/server.js"). "nextjs": a bare filename inside the
+   * type's build control interprets it. "node": a path to the built server
+   * file (e.g. "../dist/server.js"). "nextjs": a bare filename inside the
    * standalone output dir (e.g. "server.js") — see the nextjs adapter's
    * `appDir` for where that output dir itself is anchored.
    */
@@ -154,54 +58,47 @@ export interface BuildAdapter {
  * Provisioned by a system (`h.provision(id, postgres({ name }))`), never embedded
  * in a service's deps — a service declares a DependencyEnd slot instead and
  * the system wires this node's ref into it. `provides` is the Contract the
- * resource offers consumers (its one port); `type` — the routing key — is
- * derived from `provides.kind`, so wiring a slot to a resource whose contract
- * doesn't satisfy the slot's requirement fails at compile time and at Load,
- * through exactly the machinery service ports use. `pack` is diagnostic only
- * (it names the authoring pack in error messages) — deploy resolution goes
- * through `targetModule`, never `pack`.
+ * resource offers consumers (its one port); `type` — the within-extension
+ * routing key — is derived from `provides.kind`, so wiring a slot to a
+ * resource whose contract doesn't satisfy the slot's requirement fails at
+ * compile time and at Load, through exactly the machinery service ports use.
+ * `extension` names the extension package whose registry lowers this node.
  */
-// biome-ignore lint/suspicious/noExplicitAny: opaque per-contract Cmp — matches ResourceNode's own bound.
-export class ResourceNode<C extends Contract<any, any> = Contract<any, any>> extends Node {
-  readonly kind = 'resource' as const;
-  /** The pack package name that authored this node, e.g. "@prisma/app-cloud" — diagnostic only. */
-  readonly pack: string;
+// biome-ignore lint/suspicious/noExplicitAny: opaque per-contract Cmp — matches Contract's own bound.
+export interface ResourceNode<C extends Contract<any, any> = Contract<any, any>> {
+  readonly [NODE]: true;
+  readonly kind: 'resource';
+  /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
+  readonly name: string;
+  /** The extension package that authored this node, e.g. "@prisma/app-cloud" — the registry key at deploy. */
+  readonly extension: string;
   readonly type: C['kind'];
   /** The Contract this resource provides — the resource's single port. */
   readonly provides: C;
-
-  constructor(init: {
-    name: string;
-    pack: string;
-    type: C['kind'];
-    provides: C;
-    targetModule?: string | undefined;
-  }) {
-    super({ name: init.name, targetModule: init.targetModule });
-    this.pack = init.pack;
-    this.type = init.type;
-    this.provides = init.provides;
-  }
 }
 
 /**
  * A Service: inputs + its own declared params + how it is built. This IS the
  * user's default export — inspectable (inputs/type/params/build), inert until
- * run. It carries NO handler; the app's own entrypoint is the code that serves.
- * The BASE node is not runnable: booting needs a target's environment
- * knowledge, so the pack's factory returns a runnable/loadable subclass that
- * adds `run`/`load` (see RunnableServiceNode). The node is the handle. `pack`
- * is diagnostic only (error messages) — deploy resolution goes through
- * `targetModule` (the target) and `build.assembler` (the build adapter).
+ * run. It carries NO handler; the app's own entrypoint is the code that
+ * serves. The BASE node is not runnable: booting needs an extension's
+ * environment knowledge, so the extension's factory returns a
+ * runnable/loadable shape that adds `run`/`load` (see RunnableServiceNode).
+ * The node is the handle. `extension` + `type` form the control-plane
+ * registry key at deploy; `build.extension` + `build.type` do the same for
+ * assembly.
  */
-export class ServiceNode<
+export interface ServiceNode<
   D extends Deps = Deps,
   P extends Params = Params,
   E extends Expose = Expose,
-> extends Node {
-  readonly kind = 'service' as const;
-  /** The pack package name that authored this node, e.g. "@prisma/app-cloud" — diagnostic only. */
-  readonly pack: string;
+> {
+  readonly [NODE]: true;
+  readonly kind: 'service';
+  /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
+  readonly name: string;
+  /** The extension package that authored this node, e.g. "@prisma/app-cloud" — the registry key at deploy. */
+  readonly extension: string;
   readonly type: string;
   readonly inputs: D;
   /** Service-level config declarations (e.g. port). */
@@ -210,66 +107,17 @@ export class ServiceNode<
   readonly build: BuildAdapter;
   /** Named output ports this service exposes — the Contracts a consumer's `rpc(contract)` can require. `undefined` when the service exposes nothing. */
   readonly expose: E | undefined;
-
-  constructor(init: {
-    name: string;
-    pack: string;
-    type: string;
-    inputs: D;
-    params: P;
-    build: BuildAdapter;
-    expose: E | undefined;
-    targetModule?: string | undefined;
-  }) {
-    super({ name: init.name, targetModule: init.targetModule });
-    this.pack = init.pack;
-    this.type = init.type;
-    this.inputs = init.inputs;
-    this.params = init.params;
-    this.build = init.build;
-    this.expose = init.expose;
-  }
-
-  /**
-   * Imports this service's build adapter's `/assemble` module and returns the
-   * module namespace object, unvalidated. Most callers want `assemble()`
-   * instead, which also validates and invokes the export.
-   */
-  async loadAssembler(): Promise<unknown> {
-    return loadSpecifier('build assembler', this.build.assembler);
-  }
-
-  /**
-   * Loads this service's build adapter, validates it exports a callable
-   * `assemble`, and calls it with this node's own `build` plus `opts`.
-   * Deploy-time only.
-   */
-  async assemble(opts: Omit<AssembleInput, 'build'> = {}): Promise<Bundle> {
-    const mod = await this.loadAssembler();
-    const assembleFn =
-      typeof mod === 'object' && mod !== null && 'assemble' in mod ? mod.assemble : undefined;
-    if (typeof assembleFn !== 'function') {
-      throw new Error(
-        `"${this.build.assembler}" has no assemble() export — a build-adapter pack must export ` +
-          'an assemble(input): Promise<Bundle> function from its assembler entry.',
-      );
-    }
-    const result = await assembleFn({ build: this.build, ...opts });
-    return blindCast<
-      Bundle,
-      "the build adapter's own assemble() contract (AssembleInput => Promise<Bundle>) is only checked at runtime by the typeof-function guard above; the dynamically-imported module's return shape cannot be checked by the compiler"
-    >(result);
-  }
 }
 
 /**
- * The pack's runnable/loadable service node — what a pack's authoring factory
- * (e.g. `compute()`) returns. `run(address, boot)` is the process controller:
- * deserialize the platform environment (keyed off `address`, the bootstrap's
- * parameter) into a typed Config, stash it under process-local keys, then call
- * `boot()` to start the app's entry. `load()` — called from inside that entry —
- * reads the stash, hydrates + memoizes the deps, and returns them typed. Core
- * defines this shape; only a target pack instantiates it.
+ * The extension's runnable/loadable service node — what an extension's
+ * authoring factory (e.g. `compute()`) returns. `run(address, boot)` is the
+ * process controller: deserialize the platform environment (keyed off
+ * `address`, the bootstrap's parameter) into a typed Config, stash it under
+ * process-local keys, then call `boot()` to start the app's entry. `load()`
+ * — called from inside that entry — reads the stash, hydrates + memoizes the
+ * deps, and returns them typed. Core defines this shape; only an extension
+ * instantiates it.
  */
 export interface RunnableServiceNode<
   D extends Deps = Deps,
@@ -287,8 +135,8 @@ export interface RunnableServiceNode<
  * contract determines validity, never the producer's kind), and at deploy it
  * becomes an EDGE from that producer to the consumer. At run it hydrates a
  * client through the Connection machinery; the consumer never learns HOW the
- * producer's address reached it. Declares NO `targetModule` — a dependency
- * end is never provisioned, so deploy tooling never loads a target from one.
+ * producer's address reached it. Carries no `extension` — a dependency end
+ * is never provisioned, so deploy tooling never routes one to a registry.
  *
  * `Req` is the contract this end requires — `unknown` for an untyped end
  * (e.g. `http()`, the escape hatch that accepts anything). `SystemBuilder.provision`
@@ -296,24 +144,15 @@ export interface RunnableServiceNode<
  * same contract as a runtime value so Load can call its `satisfies()` as the
  * backstop.
  */
-export class DependencyEnd<C = unknown, Req = unknown> extends Node {
-  readonly kind = 'dependency' as const;
+export interface DependencyEnd<C = unknown, Req = unknown> {
+  readonly [NODE]: true;
+  readonly kind: 'dependency';
+  /** Human-readable, given at authoring — logs/diagnostics only. */
+  readonly name: string;
   readonly type: string;
   readonly connection: Connection<Params, C>;
   /** The required contract, or `undefined` for an untyped end (e.g. `http()`). */
   readonly required: Req | undefined;
-
-  constructor(init: {
-    name: string;
-    type: string;
-    connection: Connection<Params, C>;
-    required: Req | undefined;
-  }) {
-    super({ name: init.name });
-    this.type = init.type;
-    this.connection = init.connection;
-    this.required = init.required;
-  }
 }
 
 /**
@@ -323,50 +162,25 @@ export class DependencyEnd<C = unknown, Req = unknown> extends Node {
  * code), receives its declared inputs as forwardable wiring values plus
  * `provision`, and returns one ref-port per declared output. `provision()`
  * accepts a system wherever it accepts a service, so systems nest to any depth;
- * a system with an empty boundary is the closed, deploy-root form. Declares NO
- * `targetModule` — a system is never itself provisioned onto a target; its
+ * a system with an empty boundary is the closed, deploy-root form. Carries no
+ * `extension` — a system is never itself provisioned onto a platform; its
  * provisioned children are.
  *
- * `body` is declared with METHOD syntax (`body(ctx) {}`), not as a property
+ * `body` is declared with METHOD syntax (`body(ctx): ...`), not as a property
  * of function type (`body: (ctx) => ...`) — TypeScript checks a method's
  * parameters bivariantly but a function-typed property's contravariantly, so
  * a property here would make e.g. `SystemNode<{ db: DependencyEnd<...> }, E>`
  * stop being assignable to the `SystemNode<Deps, E>` shape `Load`/`provision()`
- * accept (a real regression the test suite catches). The closure itself is
- * stored under `bodyFn`, typed `unknown` rather than its real function type —
- * a typed function field would reintroduce that same contravariance in `D`
- * even though nothing external reads the field directly (structural
- * assignability between two `SystemNode<D1, E1>`/`SystemNode<D2, E2>` instances
- * still compares every field). `bodyFn` also stays a plain (non-`private`)
- * field: TypeScript's `Object.freeze<T>(o: T): Readonly<T>` produces a fresh
- * mapped type that fails a `private` field's same-declaration identity
- * check, which would break `system()`'s own return statement below.
+ * accept (a real regression the test suite catches).
  */
-export class SystemNode<D extends Deps = Deps, E extends Expose = Expose> extends Node {
-  readonly kind = 'system' as const;
+export interface SystemNode<D extends Deps = Deps, E extends Expose = Expose> {
+  readonly [NODE]: true;
+  readonly kind: 'system';
+  /** Human-readable, given at authoring — logs/diagnostics only. */
+  readonly name: string;
   readonly deps: D;
   readonly expose: E;
-  readonly bodyFn: unknown;
-
-  constructor(init: {
-    name: string;
-    deps: D;
-    expose: E;
-    body: (ctx: SystemContext<D>) => SystemOutputs<E>;
-  }) {
-    super({ name: init.name });
-    this.deps = init.deps;
-    this.expose = init.expose;
-    this.bodyFn = init.body;
-  }
-
-  body(ctx: SystemContext<D>): SystemOutputs<E> {
-    const fn = blindCast<
-      (ctx: SystemContext<D>) => SystemOutputs<E>,
-      "bodyFn is stored as unknown specifically to avoid reintroducing D's contravariance (see the class doc comment); the constructor is the only writer, and it always assigns exactly this function type"
-    >(this.bodyFn);
-    return fn(ctx);
-  }
+  body(ctx: SystemContext<D>): SystemOutputs<E>;
 }
 
 /**
@@ -532,14 +346,16 @@ function requireName(name: string, factory: string): void {
   }
 }
 
-function requirePack(pack: string, factory: string): void {
-  if (typeof pack !== 'string' || pack.length === 0) {
-    throw new Error(`${factory}() requires a non-empty pack (the authoring pack's package name).`);
+function requireExtension(extension: string, factory: string): void {
+  if (typeof extension !== 'string' || extension.length === 0) {
+    throw new Error(
+      `${factory}() requires a non-empty extension (the authoring extension's package name).`,
+    );
   }
 }
 
 /**
- * `configKey` (the pack's semantic↔physical config mapping) joins address
+ * `configKey` (the extension's semantic↔physical config mapping) joins address
  * segments, an input's name, and a param's name with "_" and uppercases the
  * result — so an underscore INSIDE a name is indistinguishable from that
  * separator. Without this check, service param "db_url" and input "db"'s
@@ -583,19 +399,18 @@ function frozenShallowCopy<T extends object>(obj: T): T {
 /**
  * Constructs a branded, frozen Resource node — an identity plus the Contract
  * it provides; the routing `type` is the contract's `kind`. Pure — nothing
- * executes; nothing is provisioned until a system provisions it. `targetModule`
- * (e.g. "@prisma/app-cloud/target") is the pack factory's own deploy
- * target — an author-written full specifier, never constructed from `pack`.
+ * executes; nothing is provisioned until a system provisions it. `extension`
+ * (e.g. "@prisma/app-cloud") keys the control-plane registry lookup at
+ * deploy — the extension itself is loaded only by `prisma-app.config.ts`.
  */
 // biome-ignore lint/suspicious/noExplicitAny: opaque per-contract Cmp — matches ResourceNode's own bound.
 export function resource<C extends Contract<any, any>>(def: {
   name: string;
-  pack: string;
+  extension: string;
   provides: C;
-  targetModule?: string | undefined;
 }): ResourceNode<C> {
   requireName(def.name, 'resource');
-  requirePack(def.pack, 'resource');
+  requireExtension(def.extension, 'resource');
   const provides = def.provides;
   if (
     typeof provides !== 'object' ||
@@ -609,22 +424,22 @@ export function resource<C extends Contract<any, any>>(def: {
         '(a non-empty `kind` plus its `satisfies()`).',
     );
   }
-  const node = new ResourceNode<C>({
+  return Object.freeze({
+    [NODE]: true as const,
+    kind: 'resource' as const,
     name: def.name,
-    pack: def.pack,
+    extension: def.extension,
     type: provides.kind,
     provides,
-    targetModule: def.targetModule,
   });
-  return Object.freeze(node);
 }
 
 /**
  * Constructs a branded, frozen Service node — declarations only (inputs, params,
  * build adapter, and the ports it exposes). Pure; carries no handler.
- * `targetModule` (e.g. "@prisma/app-cloud/target") is the pack factory's
- * own deploy target — an author-written full specifier, never constructed
- * from `pack`.
+ * `extension` (e.g. "@prisma/app-cloud") keys the control-plane registry
+ * lookup at deploy — the extension itself is loaded only by
+ * `prisma-app.config.ts`.
  */
 export function service<
   D extends Deps,
@@ -632,30 +447,29 @@ export function service<
   E extends Expose = Record<never, never>,
 >(def: {
   name: string;
-  pack: string;
+  extension: string;
   type: string;
   inputs: D;
   params: P;
   build: BuildAdapter;
   expose?: E;
-  targetModule?: string | undefined;
 }): ServiceNode<D, P, E> {
   requireName(def.name, 'service');
-  requirePack(def.pack, 'service');
+  requireExtension(def.extension, 'service');
   requireType(def.type, 'service');
   requireNoUnderscoreNames(Object.keys(def.inputs), 'input', 'service');
   requireNoUnderscoreNames(Object.keys(def.params), 'param', 'service');
-  const node = new ServiceNode<D, P, E>({
+  return Object.freeze({
+    [NODE]: true as const,
+    kind: 'service' as const,
     name: def.name,
-    pack: def.pack,
+    extension: def.extension,
     type: def.type,
     inputs: frozenShallowCopy(def.inputs),
     params: freezeParams(def.params),
     build: Object.freeze({ ...def.build }),
     expose: def.expose !== undefined ? frozenShallowCopy(def.expose) : undefined,
-    targetModule: def.targetModule,
   });
-  return Object.freeze(node);
 }
 
 /**
@@ -679,13 +493,14 @@ export function dependency<P extends Params, C, Req = unknown>(def: {
     params: freezeParams(def.connection.params),
     hydrate: def.connection.hydrate,
   });
-  const node = new DependencyEnd<C, Req>({
+  return Object.freeze({
+    [NODE]: true as const,
+    kind: 'dependency' as const,
     name: def.name !== undefined && def.name.length > 0 ? def.name : def.type,
     type: def.type,
     connection: connection as Connection<Params, C>,
     required: def.required,
   });
-  return Object.freeze(node);
 }
 
 /**
@@ -712,20 +527,21 @@ export function system<
     E,
     'an omitted `expose` only arises when E itself infers to the empty default'
   >(boundary.expose ?? {});
-  const node = new SystemNode<D, E>({
+  return Object.freeze({
+    [NODE]: true as const,
+    kind: 'system' as const,
     name,
     deps: frozenShallowCopy(deps),
     expose: frozenShallowCopy(expose),
     body,
   });
-  return Object.freeze(node);
 }
 
 /**
  * True if `value` was constructed by this module's factories. Checks the
- * brand ONLY — never `instanceof` — because a graph may mix nodes built by a
- * different installed copy of core (dual-package hazard); the classes above
- * exist for their methods, not for runtime identity.
+ * brand ONLY — never a prototype — because a graph may mix nodes built by a
+ * different installed copy of core (dual-package hazard); nodes are plain
+ * data, so the Symbol.for brand is the whole identity story.
  */
 export function isNode(
   value: unknown,

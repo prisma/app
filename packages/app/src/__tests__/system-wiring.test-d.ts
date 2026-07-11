@@ -17,8 +17,8 @@ import { dependency, resource, service } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
 const build: BuildAdapter = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -26,8 +26,8 @@ const build: BuildAdapter = {
 const pgContract = providerContract('fake/postgres', { url: '' });
 const cacheContract = providerContract('fake/cache', {});
 
-const pgNode = resource({ name: 'db', pack: 'test/pack', provides: pgContract });
-const cacheNode = resource({ name: 'cache', pack: 'test/pack', provides: cacheContract });
+const pgNode = resource({ name: 'db', extension: 'test/pack', provides: pgContract });
+const cacheNode = resource({ name: 'cache', extension: 'test/pack', provides: cacheContract });
 
 const pgDep = dependency({
   name: 'db',
@@ -43,7 +43,7 @@ const untypedDep = dependency({
 
 const consumer = service({
   name: 'test-service',
-  pack: 'test/pack',
+  extension: 'test/pack',
   type: 'fake/compute',
   inputs: { db: pgDep },
   params: {},
@@ -52,7 +52,7 @@ const consumer = service({
 
 const untypedConsumer = service({
   name: 'test-service',
-  pack: 'test/pack',
+  extension: 'test/pack',
   type: 'fake/compute',
   inputs: { anything: untypedDep },
   params: {},
@@ -61,7 +61,7 @@ const untypedConsumer = service({
 
 const producer = service({
   name: 'test-service',
-  pack: 'test/pack',
+  extension: 'test/pack',
   type: 'fake/compute',
   inputs: {},
   params: {},
@@ -98,7 +98,7 @@ test('a wrong-contract ref, a bare service ref for a typed slot, and a ResourceN
   // A concrete ResourceNode can never sit in deps — only declarations.
   service({
     name: 'test-service',
-    pack: 'test/pack',
+    extension: 'test/pack',
     type: 'fake/compute',
     // @ts-expect-error a ResourceNode is not a dependency declaration
     inputs: { db: pgNode },

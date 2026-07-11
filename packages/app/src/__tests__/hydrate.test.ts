@@ -4,8 +4,8 @@ import { dependency, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
 const build = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -27,7 +27,7 @@ describe('hydrate', () => {
     const made: unknown[] = [];
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: { db: dbEnd((v) => made.push(v)) },
       params: portParams,
@@ -46,7 +46,7 @@ describe('hydrate', () => {
   test('every dependency hydrates through identical machinery — the app cannot tell producers apart', async () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         auth: dependency({
@@ -69,7 +69,7 @@ describe('hydrate', () => {
   test('async hydrate is awaited', async () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: dependency({
@@ -93,7 +93,7 @@ describe('hydrate', () => {
   test('a dep-less service hydrates to an empty deps object', async () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {},
       params: portParams,
@@ -109,7 +109,7 @@ describe('hydrateSync', () => {
     const made: unknown[] = [];
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: { db: dbEnd((v) => made.push(v)) },
       params: portParams,
@@ -128,7 +128,7 @@ describe('hydrateSync', () => {
   test('throws, naming the input, when a connection hydrate returns a Promise', () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: dependency({

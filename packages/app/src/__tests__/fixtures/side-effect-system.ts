@@ -6,13 +6,13 @@ export let bodyCallCount = 0;
 
 const svc = service({
   name: 'test-service',
-  pack: 'test/pack',
+  extension: 'test/pack',
   type: 'fixture/app',
   inputs: {},
   params: {},
   build: {
-    kind: 'node',
-    assembler: '@prisma/app-node/assemble',
+    extension: '@prisma/app-node',
+    type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',
   },

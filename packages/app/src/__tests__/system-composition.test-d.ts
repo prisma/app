@@ -14,8 +14,8 @@ import { dependency, service, system } from '../index.ts';
 import { conn } from './helpers.ts';
 
 const build: BuildAdapter = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -74,7 +74,7 @@ system('expose-missing', { expose: { verify: verifyContract } }, () => {
 
 const chargeConsumer = service({
   name: 'consumer',
-  pack: 'test/pack',
+  extension: 'test/pack',
   type: 'fake/compute',
   inputs: { pay: chargeEnd() },
   params: {},
@@ -123,7 +123,7 @@ system('untyped-forward', { deps: { anything: untypedEnd() } }, ({ inputs, provi
 const verifyProvider = () =>
   service({
     name: 'provider',
-    pack: 'test/pack',
+    extension: 'test/pack',
     type: 'fake/compute',
     inputs: {},
     params: {},
@@ -134,7 +134,7 @@ const verifyProvider = () =>
 const verifyConsumer = () =>
   service({
     name: 'sink',
-    pack: 'test/pack',
+    extension: 'test/pack',
     type: 'fake/compute',
     inputs: { verify: verifyEnd() },
     params: {},

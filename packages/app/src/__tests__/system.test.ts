@@ -6,15 +6,15 @@ import { dependency, resource, service, system } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
 const build = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
 
 const dbContract = () => providerContract('fake/db', { url: '' });
 
-const dbResource = () => resource({ name: 'db', pack: 'test/pack', provides: dbContract() });
+const dbResource = () => resource({ name: 'db', extension: 'test/pack', provides: dbContract() });
 
 const dbDep = () =>
   dependency({
@@ -33,7 +33,7 @@ const httpDep = () =>
 const makeAuthService = () =>
   service({
     name: 'test-service',
-    pack: 'test/pack',
+    extension: 'test/pack',
     type: 'fake/compute',
     inputs: { db: dbDep() },
     params: {},
@@ -43,7 +43,7 @@ const makeAuthService = () =>
 const makeStorefrontService = () =>
   service({
     name: 'test-service',
-    pack: 'test/pack',
+    extension: 'test/pack',
     type: 'fake/compute',
     inputs: { auth: httpDep() },
     params: {},
@@ -94,7 +94,7 @@ describe('Load of a system root', () => {
     let bodyCalls = 0;
     const svc = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -191,7 +191,7 @@ describe('Load of a system root', () => {
   test('graph layer: a 2-cycle (forged refs) is a LoadError naming both nodes', () => {
     const a = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { peer: httpDep() },
       params: {},
@@ -199,7 +199,7 @@ describe('Load of a system root', () => {
     });
     const b = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { peer: httpDep() },
       params: {},
@@ -299,7 +299,7 @@ describe('Load of a system root — provisioned resources', () => {
   test('wiring a slot to a resource whose contract has another kind is a LoadError', () => {
     const cache = resource({
       name: 'cache',
-      pack: 'test/pack',
+      extension: 'test/pack',
       provides: providerContract('fake/cache', {}),
     });
     const root = system('shop', {}, (h) => {
@@ -408,7 +408,7 @@ describe('Load of a system root — typed wiring (the satisfies() backstop)', ()
   const makeContractProvider = <C extends Contract<'rpc', unknown>>(exposed: C) =>
     service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: {},
       params: {},
@@ -419,7 +419,7 @@ describe('Load of a system root — typed wiring (the satisfies() backstop)', ()
   const makeTypedStorefrontService = () =>
     service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/compute',
       inputs: { auth: typedAuthDep() },
       params: {},

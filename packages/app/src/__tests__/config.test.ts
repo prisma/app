@@ -4,8 +4,8 @@ import { dependency, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
 const build = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -14,7 +14,7 @@ describe('configOf', () => {
   test('enumerates input params then service params — semantic, no platform keys', () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: dependency({
@@ -61,7 +61,7 @@ describe('configOf', () => {
   test('owner discriminates service vs input params — same name cannot collide', () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         cache: dependency({
@@ -84,7 +84,7 @@ describe('configOf', () => {
   test('a dep-less service enumerates only its own params', () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {},
       params: { port: { type: 'number', default: 3000 } },
@@ -107,7 +107,7 @@ describe('configOf', () => {
     let hydrateCalls = 0;
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: dependency({
@@ -133,7 +133,7 @@ describe('configOf over dependency inputs', () => {
   test('every dependency input appears with owner { input }, whatever it will be wired to', () => {
     const root = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: dependency({

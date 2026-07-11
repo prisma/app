@@ -4,8 +4,8 @@ import { dependency, resource, service, system } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
 const build = {
-  kind: 'node',
-  assembler: '@prisma/app-node/assemble',
+  extension: '@prisma/app-node',
+  type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
 };
@@ -18,11 +18,15 @@ const dbDep = () =>
     required: providerContract('fake/db', { url: '' }),
   });
 const dbResource = () =>
-  resource({ name: 'db', pack: 'test/pack', provides: providerContract('fake/db', { url: '' }) });
+  resource({
+    name: 'db',
+    extension: 'test/pack',
+    provides: providerContract('fake/db', { url: '' }),
+  });
 const app = (inputs: Record<string, ReturnType<typeof dbDep>>) =>
   service({
     name: 'test-service',
-    pack: 'test/pack',
+    extension: 'test/pack',
     type: 'fake/app',
     inputs,
     params: {},
@@ -50,7 +54,7 @@ describe('Load', () => {
     let calls = 0;
     const svc = service({
       name: 'test-service',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: {
         db: dependency({
@@ -109,7 +113,7 @@ describe('Load', () => {
     });
     const root = service({
       name: 'storefront',
-      pack: 'test/pack',
+      extension: 'test/pack',
       type: 'fake/app',
       inputs: { auth },
       params: {},
