@@ -63,6 +63,7 @@ The boundary is decided; only the carve is deferred.
 | `@prisma/app/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
 | `@prisma/app-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/app` only |
 | `@prisma/app-rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/app` + a Standard Schema validator |
+| `@prisma/app-cron` | cron as a driver (see [ADR-0020](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)) — `defineSchedule`, `serveSchedule`, `cronScheduler`, `cron()`, `triggerContract` | `@prisma/app` + `app-cloud` + `app-node` + `app-rpc` |
 | `@prisma/app-cloud/target` | `prismaCloud()` | `@prisma/alchemy`, `alchemy`, `effect` |
 | `@prisma/app-node` · `@prisma/app-nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@prisma/app` only |
 | `@prisma/app-node/assemble` · `@prisma/app-nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |

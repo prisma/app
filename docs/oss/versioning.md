@@ -28,8 +28,8 @@ same `version`. One read of root `package.json` answers "what version is this co
 for the entire repository.
 
 - The published packages (`@prisma/app`, `@prisma/app-nextjs`, `@prisma/app-node`,
-  `@prisma/app-cloud`, `@prisma/app-rpc`, `@prisma/app-assemble`, `@prisma/app-cli`,
-  `@prisma/alchemy`, and the unscoped `prisma-app` CLI) all publish at the same
+  `@prisma/app-cloud`, `@prisma/app-rpc`, `@prisma/app-cron`, `@prisma/app-assemble`,
+  `@prisma/app-cli`, `@prisma/alchemy`, and the unscoped `prisma-app` CLI) all publish at the same
   version, and each pins its workspace siblings to that **exact** version.
 - Private packages (build config, examples, tests) are never published but still
   version in lockstep, so a contributor cloning any commit sees one consistent answer.
