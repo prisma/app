@@ -87,3 +87,64 @@ jobs:
         if: always() && steps.deploy.outcome != 'skipped'
         working-directory: examples/storefront-auth
         run: bash ../scripts/destroy-guard.sh "" system.ts "$STOREFRONT_STACK_NAME"
+
+  deploy-pn-widgets:
+    name: Deploy, verify, destroy (pn-widgets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Secrets aren't available to forked-PR workflow runs; skip rather than
+    # fail loudly on a run that could never have them.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      PRISMA_SERVICE_TOKEN: ${{ secrets.PRISMA_SERVICE_TOKEN }}
+      # A workspace id is an identifier, not a credential, so it lives as a
+      # repo variable (vars.*), not a secret.
+      PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
+      # The stack name becomes the PDP Project name. A per-run name keeps this
+      # ephemeral CI deploy from colliding with — or destroying — a standing
+      # demo in the shared workspace. Passed as `prisma-app`'s `--name` override
+      # (deploy-cli.md) — system.ts's own name is the local-dev default.
+      PN_WIDGETS_STACK_NAME: pn-widgets-ci-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # pn-widgets builds its own server bundle (src/server.ts -> dist/server.mjs);
+      # run it through turbo so the app-cloud/app-node deps build first.
+      - name: Build
+        working-directory: examples/pn-widgets
+        run: pnpm turbo run build --filter @prisma/example-pn-widgets...
+
+      - name: Deploy
+        id: deploy
+        # Do not use the package's `deploy` script: it sources ../../.env,
+        # which doesn't exist in CI; env vars are already set on this job.
+        # The CLI must run under BUN: Load imports the app's service modules,
+        # and server.ts uses Bun.serve; under node that would throw.
+        # `bun node_modules/.bin/prisma-app` also sets npm_config_user_agent=bun,
+        # which the spawned `alchemy` launcher uses to re-exec itself under bun
+        # when it evaluates the generated stack (which imports system.ts again).
+        working-directory: examples/pn-widgets
+        run: bun node_modules/.bin/prisma-app deploy system.ts --name "$PN_WIDGETS_STACK_NAME"
+
+      - name: Verify the round trip (pnPostgres typed client)
+        working-directory: examples/pn-widgets
+        run: bash scripts/e2e-verify.sh
+
+      - name: Destroy
+        # Runs whenever the Deploy step actually started (success or failure) —
+        # even on failure above, so a failed run doesn't leave orphaned cloud
+        # resources nobody else can clean up. Deploy state is hosted by default
+        # (the workspace's `prisma-app-state` project, via PRISMA_SERVICE_TOKEN +
+        # PRISMA_WORKSPACE_ID — both already set on this job), not local to the
+        # runner, so `.alchemy/` presence is not a reliable signal of whether a
+        # deploy ran; gate on the Deploy step's own outcome instead (`skipped`
+        # only when Deploy itself never ran, e.g. Build failed first).
+        if: always() && steps.deploy.outcome != 'skipped'
+        working-directory: examples/pn-widgets
+        run: bash ../scripts/destroy-guard.sh "pn-widgets " system.ts "$PN_WIDGETS_STACK_NAME"
