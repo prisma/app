@@ -4,9 +4,8 @@
  * one place the extensions' /control entries (provisioning, bundlers,
  * alchemy) enter the deploy; they resolve from this app's own dependencies.
  */
-import { prismaState } from '@prisma/alchemy/state';
 import { defineConfig } from '@prisma/app/config';
-import { prismaCloud } from '@prisma/app-cloud/control';
+import { prismaCloud, prismaState } from '@prisma/app-cloud/control';
 import { nextjsBuild } from '@prisma/app-nextjs/control';
 import { nodeBuild } from '@prisma/app-node/control';
 

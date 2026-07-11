@@ -13,13 +13,12 @@ package the app deploys with — and declares the deploy's one state store:
 ```ts
 // prisma-app.config.ts — loaded by the CLI, never imported by app code
 import { defineConfig } from "@prisma/app/config";
-import { prismaCloud } from "@prisma/app-cloud/control";
+import { prismaCloud, prismaState } from "@prisma/app-cloud/control";
 import { nodeBuild } from "@prisma/app-node/control";
-import { prismaState } from "@prisma/alchemy/state";
 
 export default defineConfig({
   extensions: [prismaCloud(), nodeBuild()],
-  state: prismaState(),
+  state: () => prismaState(),
 });
 ```
 
@@ -76,9 +75,14 @@ There is no one blessed platform per application: each node's control entry
 knows how to provision, serialize, package, and deploy *that node*, alchemy
 composes the used extensions' provider layers into one stack, and nodes on
 different platforms coexist in one graph. What remains singular is the
-**state store** — one deploy writes one ledger — and the ledger is
-platform-agnostic (it records resource state regardless of which provider
-made it), so the config declares it once, explicitly.
+**state store** — one deploy writes one ledger. The store's *contract* is
+platform-agnostic (it records resource state regardless of which provider made
+it), so the config declares it once, explicitly; the concrete provider is not.
+`prismaState` is a Prisma Cloud store — a hosted Postgres in the workspace,
+provisioned by the same Management API as `prismaCloud()` — so it ships from
+`@prisma/app-cloud/control` alongside `prismaCloud()`, not from the private
+`@prisma/alchemy` package the extension is built on. Another platform would
+supply its own state provider through its own extension.
 
 Environment validation keeps its fail-fast shape without a framework
 contract: an extension factory (`prismaCloud()`) reads and validates its own

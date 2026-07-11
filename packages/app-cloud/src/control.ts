@@ -17,6 +17,9 @@ import type * as Layer from 'effect/Layer';
 import * as Redacted from 'effect/Redacted';
 import { configKey } from './serializer.ts';
 
+/** The Prisma Cloud–hosted deploy state store; its implementation lives in @prisma/alchemy. */
+export { prismaState } from '@prisma/alchemy/state';
+
 export interface PrismaCloudOptions {
   /** Defaults to the PRISMA_WORKSPACE_ID environment variable. */
   workspaceId?: string;

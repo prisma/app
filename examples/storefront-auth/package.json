@@ -14,7 +14,6 @@
     "@prisma/app": "workspace:*",
     "@prisma/app-nextjs": "workspace:*",
     "@prisma/app-node": "workspace:*",
-    "@prisma/alchemy": "workspace:*",
     "@prisma/app-cloud": "workspace:*",
     "@prisma/app-rpc": "workspace:*",
     "@storefront-auth/auth": "workspace:*",

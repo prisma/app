@@ -36,13 +36,12 @@ exactly this. The fix is structural, not another anchor.
 ```ts
 // examples/storefront-auth/prisma-app.config.ts — CLI-only, never imported by app code
 import { defineConfig } from '@prisma/app/config';
-import { prismaCloud } from '@prisma/app-cloud/control';
+import { prismaCloud, prismaState } from '@prisma/app-cloud/control';
 import { nodeBuild } from '@prisma/app-node/control';
-import { prismaState } from '@prisma/alchemy/state';
 
 export default defineConfig({
   extensions: [prismaCloud(), nodeBuild()],
-  state: prismaState(), // ONE state store per deploy; the ledger is platform-agnostic
+  state: () => prismaState(), // ONE state store per deploy
 });
 ```
 
@@ -121,11 +120,13 @@ path and drives `lower()` with its registries + state) → drive alchemy.
    descriptor's `application` hook — same shape, same once-per-lowering timing,
    same threading into that extension's service controls as today's target
    `application`.
-3. **State**: `PrismaAppConfig.state` is REQUIRED, type `() => <the exact type
-   Target.state returned>`. `@prisma/alchemy` exposes
-   `prismaState(opts?: { workspaceId?: string })` — omitted opts read
-   `PRISMA_WORKSPACE_ID`, error names the variable. Wrap the existing state
-   export if its signature differs; do not redesign it.
+3. **State**: `PrismaAppConfig.state` is REQUIRED, a thunk `() => <the state
+   layer type>`. `prismaState(opts?: { workspaceId?: string })` — omitted opts
+   read `PRISMA_WORKSPACE_ID`, error names the variable — is implemented in
+   `@prisma/alchemy` but RE-EXPORTED from `@prisma/app-cloud/control`; the
+   config imports it from the extension, never from `@prisma/alchemy` directly
+   (that package is the extension's private implementation). Do not redesign
+   the layer itself.
 4. **Config type + loading**: `PrismaAppConfig { extensions: ExtensionDescriptor[]; state: ... }`;
    `defineConfig` is a typed identity function. Loading mirrors prisma-next's
    `config-loader/src/load.ts` EXACTLY: manual walk-up from the entry file's

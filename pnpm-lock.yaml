@@ -32,9 +32,6 @@ importers:
       '@effect/platform-bun':
         specifier: 4.0.0-beta.92
         version: 4.0.0-beta.92(effect@4.0.0-beta.92)
-      '@prisma/alchemy':
-        specifier: workspace:*
-        version: link:../../packages/alchemy
       '@prisma/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -322,9 +319,6 @@ importers:
 
   test/integration:
     devDependencies:
-      '@prisma/alchemy':
-        specifier: workspace:*
-        version: link:../../packages/alchemy
       '@prisma/app':
         specifier: workspace:*
         version: link:../../packages/app

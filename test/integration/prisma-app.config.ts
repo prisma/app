@@ -5,9 +5,8 @@
  * user's app. `prisma-app deploy` discovers this file by walking up from the
  * fixture entry (test/fixtures/extension-config/service.ts).
  */
-import { prismaState } from '@prisma/alchemy/state';
 import { defineConfig } from '@prisma/app/config';
-import { prismaCloud } from '@prisma/app-cloud/control';
+import { prismaCloud, prismaState } from '@prisma/app-cloud/control';
 import { nodeBuild } from '@prisma/app-node/control';
 
 export default defineConfig({
