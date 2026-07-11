@@ -1,0 +1,80 @@
+# Design notes — Forcing-function apps
+
+Running design record for the project. Decisions that outlive the project get
+promoted to ADRs at close-out; findings accumulate here per slice.
+
+## Principles inherited
+
+- Users build, the framework assembles (ADR-0005).
+- Resources are provisioned by Systems; dependencies are declarations
+  (ADR-0013).
+- Dependencies resolve to bindings; clients are app-side (ADR-0015).
+- Targets are extension packs; core stays target-agnostic (goals.md).
+
+## The model this exercises
+
+A **forcing-function app** is a real application, in daily use, ported onto
+the framework so that its concrete needs pull capabilities into existence.
+The pull ordering is the roadmap; nothing is built ahead of a consumer.
+
+An **emulated resource System** is a resource type the platform doesn't offer,
+implemented as a System composed from primitives it does offer (compute +
+postgres), exposed to consumers only through a binding contract. The contract
+is the product; the emulation is scaffolding. The seam it proves — swap the
+backing, consumer unchanged — is the same seam as native-primitive adoption
+and cross-platform resource portability.
+
+## Key decisions
+
+1. **Real apps over hypotheticals** (operator, 2026-07-11). A hypothetical
+   (README storefront, invented agent-bot) exerts pressure once and decays;
+   apps the team depends on keep exerting it. Candidates assessed: agent
+   review-bot (invented), README storefront (toy), datahub, open-chat.
+2. **datahub first, open-chat second** (operator + agent, 2026-07-11).
+   datahub's topology (2 services + postgres + cron + secrets) is a strict
+   subset of open-chat's (+ streams + object storage + Stripe webhooks +
+   hard local-first pressure). Sequencing cheapest-superset-first derisks the
+   port mechanics before the resource surface widens.
+3. **Emulate cron + object storage rather than wait for the platform**
+   (operator, 2026-07-11). Decouples the framework roadmap from the platform
+   team's; makes composition (ADR-0016/0017 branch) the mechanism for
+   building resources, not just app code; hands the platform team a
+   ready-made contract spec.
+4. **No second target pack yet** (agent proposal, operator direction
+   pending nothing — accepted in discussion). R2 as an object-storage backing
+   exercises cross-platform at the resource level for a fraction of the cost
+   of a Vercel/Supabase pack.
+5. **Ports consume published packages from their own repos** (default,
+   confirmed at slice time). Makes the project the first real consumer of the
+   publishing pipeline (PR #29) and keeps the framework repo's examples from
+   becoming shadow copies of real apps.
+
+## Alternatives considered
+
+- **Agent service (review/triage bot) as the forcing app** — good capability
+  coverage (queue, secrets, cron, storage) but had to be invented; rejected
+  in favor of preexisting apps with real users.
+- **README storefront built for real** — makes the pitch honest but nobody
+  depends on it; pressure decays after first build.
+- **Second platform (Vercel/Supabase) as the next move** — forces
+  cross-platform immediately but doubles pack surface before composition,
+  secrets, and the resource contracts have settled. Staged instead: resource
+  backing on another platform now (R2), target pack later.
+- **Building a second resource type as a goal in itself** — rejected framing
+  (operator): resources arrive only when an app needs them. The abstraction
+  still gets its stress test — streams and cron are maximally unlike
+  postgres (they invoke the service rather than being called by it).
+
+## Open questions
+
+Tracked in [spec.md](spec.md) § Open questions: port location, oss.chat
+cutover, streams integration shape, secrets backing, dev-loop architecture.
+
+## References
+
+- [spec.md](spec.md), [plan.md](plan.md)
+- Prior project artifacts: `.drive/projects/mvp-example-app/`,
+  `.drive/deferred.md`
+- [prisma/datahub](https://github.com/prisma/datahub),
+  [prisma/open-chat](https://github.com/prisma/open-chat),
+  [prisma/streams](https://github.com/prisma/streams)
