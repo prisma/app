@@ -8,12 +8,17 @@
 
 import * as Prisma from '@prisma/alchemy';
 import type { ServiceNode } from '@prisma/app';
+import { blindCast } from '@prisma/app/casts';
 import type { ExtensionDescriptor } from '@prisma/app/config';
 import type { Lowering } from '@prisma/app/deploy';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
-import type * as Layer from 'effect/Layer';
+import * as Layer from 'effect/Layer';
 import * as Redacted from 'effect/Redacted';
+import { resolveMigrationsDir } from './pn-config.ts';
+import { PnMigration, PnMigrationProvider } from './pn-migration-resource.ts';
+import { isPnPostgresResourceNode } from './prisma-next.ts';
+import { targetStorageHash } from './prisma-next-migrate.ts';
 import { configKey, encode, paramEntries } from './serializer.ts';
 
 /** The Prisma Cloud–hosted deploy state store; its implementation lives in @prisma/alchemy. */
@@ -49,6 +54,18 @@ function validateName(value: string, source: string): void {
     );
   }
 }
+
+/**
+ * The application/provisioned hook's `projectId` output — a provisioning string
+ * ref. `LoweredNode.outputs` is typed `unknown` (core never inspects an
+ * extension's outputs), so this is the one asserted read, named once here
+ * instead of a bare cast per call site.
+ */
+const projectIdOf = (hook: { readonly outputs: Readonly<Record<string, unknown>> }): string =>
+  blindCast<
+    string,
+    'the projectId output is a provisioning string ref the application hook produced; LoweredNode.outputs is typed unknown'
+  >(hook.outputs['projectId']);
 
 /** Resolves the factory's env-or-option inputs, failing fast with the exact variable name (construction runs during config evaluation). */
 function resolveOptions(opts: PrismaCloudOptions): {
@@ -88,12 +105,46 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     Effect.gen(function* () {
       validateName(id, 'resource name (from provision id)');
       const db = yield* Prisma.Database(`${id}-db`, {
-        projectId: application.outputs['projectId'] as string,
+        projectId: projectIdOf(application),
         name: id,
         region: o.region ?? 'us-east-1',
       });
       const conn = yield* Prisma.Connection(`${id}-conn`, { databaseId: db.id, name: id });
       const url = Output.map(conn.connectionString, (value) => Redacted.value(value));
+      return { outputs: { url } };
+    });
+
+  // A prisma-next resource is a Prisma Postgres DB (provisioned exactly like
+  // `postgres`) PLUS a migration step that brings the live DB to the contract's
+  // storageHash. The migration is a tracked `PnMigration` Alchemy resource keyed
+  // on the target hash, so it participates in deploy state: unchanged redeploy is
+  // a no-op, a contract change re-migrates, a failed apply leaves the DB
+  // unchanged. `node` carries the config path (D1's `isPnPostgresResourceNode`)
+  // and the contract (`provides`); the config is read at deploy-time only.
+  const prismaNextLowering: Lowering = ({ id, node, application }) =>
+    Effect.gen(function* () {
+      validateName(id, 'resource name (from provision id)');
+      const db = yield* Prisma.Database(`${id}-db`, {
+        projectId: projectIdOf(application),
+        name: id,
+        region: o.region ?? 'us-east-1',
+      });
+      const conn = yield* Prisma.Connection(`${id}-conn`, { databaseId: db.id, name: id });
+      const url = Output.map(conn.connectionString, (value) => Redacted.value(value));
+
+      if (!isPnPostgresResourceNode(node)) {
+        // The registry routes 'prisma-next'-typed resource nodes here, so this
+        // is unreachable — but narrow explicitly rather than cast to read config.
+        throw new Error(`prisma-next lowering received a non-prisma-next node (${id}).`);
+      }
+      const contractJson = node.provides.__cmp.contractJson;
+      const targetHash = targetStorageHash(contractJson);
+      const migrationsDir = yield* Effect.promise(() => resolveMigrationsDir(node.config));
+
+      // Register the migration as a tracked resource — its provider's reconcile
+      // receives the RESOLVED url at apply-time and runs the authored migration.
+      yield* PnMigration(`${id}-migrate`, { url, contractJson, migrationsDir, targetHash });
+
       return { outputs: { url } };
     });
 
@@ -105,7 +156,8 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     // returned by Prisma.providers() does not structurally unify with — a
     // pre-existing typings gap in @prisma/alchemy. It satisfies them at runtime;
     // this is the one commented cast, and it lives in the extension, not core.
-    providers: () => Prisma.providers() as unknown as Layer.Layer<never>,
+    providers: () =>
+      Layer.merge(Prisma.providers(), PnMigrationProvider()) as unknown as Layer.Layer<never>,
 
     // Runs ONCE per lowering, before any service: the application's Project,
     // with the poison DATABASE_URL/DATABASE_URL_POOLED variables written
@@ -136,6 +188,8 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     nodes: {
       postgres: Object.assign(postgresLowering, { kind: 'resource' as const }),
 
+      'prisma-next': Object.assign(prismaNextLowering, { kind: 'resource' as const }),
+
       compute: {
         kind: 'service' as const,
         // The service as a PLACE inside the application's Project: the App,
@@ -144,7 +198,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
           Effect.gen(function* () {
             validateName(id, 'service name (from provision id)');
             const svc = yield* Prisma.ComputeService(`${id}-svc`, {
-              projectId: application.outputs['projectId'] as string,
+              projectId: projectIdOf(application),
               name: id,
               region: o.region ?? 'us-east-1',
             });
@@ -170,7 +224,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
               const key = configKey(address, d);
               records.push(
                 yield* Prisma.EnvironmentVariable(`${key}-var`, {
-                  projectId: provisioned.outputs['projectId'] as string,
+                  projectId: projectIdOf(provisioned),
                   key,
                   value: encode(d.owner, value),
                   class: 'production',
