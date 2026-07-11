@@ -71,5 +71,10 @@ jobs:
           echo "Packages to publish:"
           echo "$PACKAGES" | tr ' ' '\n'
 
+      # Requires the pkg.pr.new GitHub App to be installed on the repo
+      # (https://github.com/apps/pkg-pr-new). Until it is, this step errors;
+      # keep it non-blocking so it can't gate PRs. Once the app is installed,
+      # remove `continue-on-error` to make preview failures visible.
       - name: Publish to pkg.pr.new
+        continue-on-error: true
         run: pnpm exec pkg-pr-new publish --pnpm --comment=update ${{ steps.packages.outputs.list }}
