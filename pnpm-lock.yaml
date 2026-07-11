@@ -276,6 +276,9 @@ importers:
 
   packages/app-cloud:
     dependencies:
+      '@prisma-next/cli':
+        specifier: 0.14.0
+        version: 0.14.0(typanion@3.14.0)(typescript@6.0.3)
       '@prisma-next/contract':
         specifier: 0.14.0
         version: 0.14.0(typescript@6.0.3)
@@ -297,10 +300,10 @@ importers:
       effect:
         specifier: 4.0.0-beta.92
         version: 4.0.0-beta.92
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
     devDependencies:
-      '@prisma-next/cli':
-        specifier: 0.14.0
-        version: 0.14.0(typanion@3.14.0)(typescript@6.0.3)
       '@prisma-next/target-postgres':
         specifier: 0.14.0
         version: 0.14.0(typanion@3.14.0)(typescript@6.0.3)
