@@ -132,11 +132,12 @@ const notFoundResponse = () => ({
 });
 
 /**
- * A stubbed `ManagementApiClient` covering only the ComputeService provider's
- * endpoints (GET/POST for observe-or-create, PATCH for Branch attachment),
- * recording every call it receives — the container.test.ts fake-client
- * idiom. `as unknown as ManagementApiClient` is acceptable here (test file
- * — exempt from the no-bare-cast rule).
+ * A stubbed `ManagementApiClient` covering the ComputeService provider's
+ * endpoints (GET/POST for observe-or-create; PATCH is stubbed but should
+ * never be hit — reconcile no longer PATCHes), recording every call it
+ * receives — the container.test.ts fake-client idiom. `as unknown as
+ * ManagementApiClient` is acceptable here (test file — exempt from the
+ * no-bare-cast rule).
  */
 const fakeClient = (state: FakeState): ManagementApiClient => {
   const GET = (path: string) => {
@@ -186,30 +187,26 @@ const reconcile = async (
   return Effect.runPromise(svc.reconcile(input as unknown as Parameters<typeof svc.reconcile>[0]));
 };
 
-describe('ComputeService reconcile — Branch attachment via PATCH', () => {
+describe('ComputeService reconcile — Branch via the create body', () => {
   let state: FakeState;
 
   beforeEach(() => {
     state = { calls: [] };
   });
 
-  test('branchId set, no prior output: creates, then PATCHes the Branch', async () => {
+  test('branchId set, no prior output: creates on the Branch, no PATCH', async () => {
     const result = await reconcile(state, {
       news: { projectId: 'proj-1', name: 'compute', branchId: 'br-1' },
       output: undefined,
     });
 
     expect(result).toEqual({ id: 'cs-created', name: 'compute' });
-    expect(state.calls.map((c) => c.method)).toEqual(['POST', 'PATCH']);
-    expect(state.calls[0]?.body).toEqual({ displayName: 'compute' });
-    expect(state.calls[1]).toEqual({
-      method: 'PATCH',
-      path: '/v1/compute-services/{computeServiceId}',
-      body: { branchId: 'br-1' },
-    });
+    expect(state.calls.map((c) => c.method)).toEqual(['POST']);
+    expect(state.calls[0]?.body).toEqual({ displayName: 'compute', branchId: 'br-1' });
+    expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
   });
 
-  test('branchId set, prior output exists: observes, and still PATCHes (idempotent/self-healing)', async () => {
+  test('branchId set, prior output exists: observes only, no POST, no PATCH', async () => {
     state.observed = { id: 'cs-existing', name: 'compute' };
 
     const result = await reconcile(state, {
@@ -218,15 +215,12 @@ describe('ComputeService reconcile — Branch attachment via PATCH', () => {
     });
 
     expect(result).toEqual({ id: 'cs-existing', name: 'compute' });
-    expect(state.calls.map((c) => c.method)).toEqual(['GET', 'PATCH']);
-    expect(state.calls[1]).toEqual({
-      method: 'PATCH',
-      path: '/v1/compute-services/{computeServiceId}',
-      body: { branchId: 'br-1' },
-    });
+    expect(state.calls.map((c) => c.method)).toEqual(['GET']);
+    expect(state.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
   });
 
-  test('branchId unset, no prior output: creates and issues no PATCH', async () => {
+  test('branchId unset, no prior output: creates without a branchId key, no PATCH', async () => {
     const result = await reconcile(state, {
       news: { projectId: 'proj-1', name: 'compute' },
       output: undefined,
@@ -234,10 +228,11 @@ describe('ComputeService reconcile — Branch attachment via PATCH', () => {
 
     expect(result).toEqual({ id: 'cs-created', name: 'compute' });
     expect(state.calls.map((c) => c.method)).toEqual(['POST']);
+    expect(state.calls[0]?.body).toEqual({ displayName: 'compute' });
     expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
   });
 
-  test('branchId unset, prior output exists: observes and issues no PATCH', async () => {
+  test('branchId unset, prior output exists: observes only, no POST, no PATCH', async () => {
     state.observed = { id: 'cs-existing', name: 'compute' };
 
     const result = await reconcile(state, {
@@ -247,6 +242,7 @@ describe('ComputeService reconcile — Branch attachment via PATCH', () => {
 
     expect(result).toEqual({ id: 'cs-existing', name: 'compute' });
     expect(state.calls.map((c) => c.method)).toEqual(['GET']);
+    expect(state.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
   });
 });

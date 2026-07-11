@@ -80,39 +80,33 @@ export const ComputeServiceProvider = () =>
                 }),
               )
             : undefined;
-          let result: ComputeServiceAttributes;
           if (observed) {
-            result = {
+            return {
               id: observed.data.id,
               name: observed.data.name,
               endpointDomain: observed.data.serviceEndpointDomain,
             };
-          } else {
-            // Ensure — create it in the target project.
-            const created = yield* call(() =>
-              client.POST('/v1/projects/{projectId}/compute-services', {
-                params: { path: { projectId: news.projectId } },
-                body: { displayName: news.name, ...(news.region && { regionId: news.region }) },
-              }),
-            );
-            result = {
-              id: created.data.id,
-              name: created.data.name,
-              endpointDomain: created.data.serviceEndpointDomain,
-            };
           }
 
-          if (news.branchId !== undefined) {
-            const branchId = news.branchId;
-            yield* call(() =>
-              client.PATCH('/v1/compute-services/{computeServiceId}', {
-                params: { path: { computeServiceId: result.id } },
-                body: { branchId },
-              }),
-            );
-          }
-
-          return result;
+          // Create on the target Branch via the create body — NOT a later PATCH.
+          // Compute-service names are unique per Branch, so a project-scoped create
+          // lands on the default Branch and collides with the same-named production
+          // service there (a live-deploy find).
+          const created = yield* call(() =>
+            client.POST('/v1/projects/{projectId}/compute-services', {
+              params: { path: { projectId: news.projectId } },
+              body: {
+                displayName: news.name,
+                ...(news.region && { regionId: news.region }),
+                ...(news.branchId !== undefined && { branchId: news.branchId }),
+              },
+            }),
+          );
+          return {
+            id: created.data.id,
+            name: created.data.name,
+            endpointDomain: created.data.serviceEndpointDomain,
+          };
         }),
         delete: Effect.fn(function* ({ output }) {
           yield* callVoid(() =>

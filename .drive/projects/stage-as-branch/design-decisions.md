@@ -50,3 +50,29 @@ trigger, what was learned, the decision, and the affected artefacts (Drive I12).
 - **Affected:** spec §2/§5/§6/§7 (rewritten); plan D3 split into **D3a** (providers, `@prisma/
   alchemy`) → **D3b** (target, `@prisma/app-cloud`); `packages/alchemy/src/postgres/Database.ts`,
   `.../compute/ComputeService.ts`, `packages/app-cloud/src/control.ts`.
+
+## 3. Compute-service create-then-PATCH collides with production on a live deploy
+
+- **Trigger:** mid-flight obstacle, found on a real `prisma-app deploy --stage staging`.
+- **Symptom:** the create step of `ComputeService.reconcile` failed outright:
+  `compute_service:already_exists: An app named "auth" already exists on branch "main"`.
+  The PATCH that was meant to attach the service to the staging Branch never ran — the
+  preceding create was rejected.
+- **Root cause:** decision #2 above put `ComputeService` on the same project-scoped
+  create-then-PATCH mechanism as `Database`, treating the extra PATCH as "harmless." It
+  is not harmless: compute-service names are unique **per Branch**, not per project. A
+  project-scoped `POST /v1/projects/:id/compute-services` (no `branchId`) always lands on
+  the project's default (`main`) Branch. If a same-named service already exists there —
+  here, the production `auth` service — the create collides with it before the PATCH step
+  is ever reached.
+- **Decision:** `ComputeService` stops using PATCH. It passes `branchId` directly in the
+  create body (`POST /v1/projects/:id/compute-services`, body `{ displayName, regionId?,
+  branchId? }`), creating the service on the target Branch from the start — no collision,
+  no PATCH. Re-verified the create body accepts `branchId`: SDK
+  `postV1ProjectsByProjectIdCompute-services`, `index.d.ts:8628`. `Database` is unaffected
+  and stays exactly as decision #2 (create body has no `branchId`, so it must stay
+  create-then-PATCH) — this was verified working on the same live deploy.
+- **Affected:** spec §6 (rewritten — providers no longer share one PATCH mechanism);
+  `packages/alchemy/src/compute/ComputeService.ts` (`reconcile`, drops the PATCH branch);
+  `packages/alchemy/src/__tests__/ComputeService.test.ts` (reconcile tests rewritten for
+  create-body `branchId`, no PATCH).
