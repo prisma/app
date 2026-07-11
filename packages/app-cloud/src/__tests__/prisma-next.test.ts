@@ -12,8 +12,9 @@
  */
 import { describe, expect, test } from 'bun:test';
 import type { Contract } from '@prisma/app';
-import { isNode, string } from '@prisma/app';
-import { pnContract, pnPostgres } from '../prisma-next.ts';
+import { isNode, Load, string, system } from '@prisma/app';
+import { postgres } from '../postgres.ts';
+import { isPnPostgresResourceNode, pnContract, pnPostgres } from '../prisma-next.ts';
 import type { Contract as GadgetContract } from './fixtures/gadget-contract/emitted/contract.d.ts';
 import gadgetContractJson from './fixtures/gadget-contract/emitted/contract.json' with {
   type: 'json',
@@ -71,16 +72,25 @@ describe('pnContract().satisfies()', () => {
 });
 
 describe('pnPostgres() factory shapes', () => {
-  test('{ name, contract } yields a branded ResourceNode providing contract', () => {
+  test('{ name, contract, config } yields a branded resource node carrying config', () => {
     const widget = pnContract<WidgetContract>(widgetContractJson);
-    const node = pnPostgres({ name: 'database', contract: widget });
+    const node = pnPostgres({
+      name: 'database',
+      contract: widget,
+      config: './prisma-next.config.ts',
+    });
 
+    // The [NODE] Symbol.for brand survives the `{ ...resource(), config }`
+    // spread — the augmented node is still a recognized node.
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.name).toBe('database');
     expect(node.extension).toBe('@prisma/app-cloud');
     expect(node.type).toBe('prisma-next');
     expect(node.provides).toBe(widget);
+    // config rides on the node as a first-class field, sibling to provides.
+    expect(node.config).toBe('./prisma-next.config.ts');
+    expect(Object.isFrozen(node)).toBe(true);
   });
 
   test('pnPostgres(contract) yields a branded DependencyEnd requiring that contract', () => {
@@ -93,6 +103,68 @@ describe('pnPostgres() factory shapes', () => {
     expect(dep.required).toBe(widget);
     expect(Object.keys(dep.connection.params)).toEqual(['url']);
     expect(dep.connection.params['url']).toEqual(string({ secret: true }));
+  });
+});
+
+describe("isPnPostgresResourceNode (the deploy lowering's read predicate)", () => {
+  const widget = pnContract<WidgetContract>(widgetContractJson);
+
+  test('true for a pnPostgres resource node — and narrows so `.config` reads', () => {
+    const node: unknown = pnPostgres({
+      name: 'database',
+      contract: widget,
+      config: './prisma-next.config.ts',
+    });
+    expect(isPnPostgresResourceNode(node)).toBe(true);
+    if (isPnPostgresResourceNode(node)) {
+      // the narrow gives the lowering `config` without a bare cast
+      expect(node.config).toBe('./prisma-next.config.ts');
+    }
+  });
+
+  test('false for a pnPostgres dependency end (kind is dependency, no config)', () => {
+    expect(isPnPostgresResourceNode(pnPostgres(widget))).toBe(false);
+  });
+
+  test('false for a bare postgres() resource (type is postgres, not prisma-next)', () => {
+    expect(isPnPostgresResourceNode(postgres({ name: 'db' }))).toBe(false);
+  });
+
+  test('false for non-nodes and lookalikes without a string config', () => {
+    expect(isPnPostgresResourceNode(null)).toBe(false);
+    expect(isPnPostgresResourceNode(undefined)).toBe(false);
+    expect(isPnPostgresResourceNode({})).toBe(false);
+    // right kind + type but config missing / not a string → still false
+    expect(isPnPostgresResourceNode({ kind: 'resource', type: 'prisma-next' })).toBe(false);
+    expect(isPnPostgresResourceNode({ kind: 'resource', type: 'prisma-next', config: 42 })).toBe(
+      false,
+    );
+  });
+});
+
+describe('the config path rides through provisioning (brand intact)', () => {
+  test('a provisioned pnPostgres resource Loads as a resource and keeps config', () => {
+    const widget = pnContract<WidgetContract>(widgetContractJson);
+    const node = pnPostgres({
+      name: 'database',
+      contract: widget,
+      config: './prisma-next.config.ts',
+    });
+
+    const graph = Load(
+      system('pn-system', {}, ({ provision }) => {
+        provision('db', node);
+        return {};
+      }),
+      { id: 'pn' },
+    );
+
+    // Provisioned as a resource (the brand survived, so Load recognized it).
+    const db = graph.nodes.find((n) => n.id === 'db');
+    expect(db?.node.kind).toBe('resource');
+    // The exact augmented node is in the graph, config and all.
+    expect(db?.node).toBe(node);
+    expect(isPnPostgresResourceNode(db?.node)).toBe(true);
   });
 });
 
