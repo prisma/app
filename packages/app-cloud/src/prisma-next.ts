@@ -65,6 +65,38 @@ export type PnContractOf<Ct> = Ct extends PnPostgresContract<infer C> ? C : neve
 export type Client<Ct> = PostgresClient<PnContractOf<Ct>>;
 
 /**
+ * The `prisma-next` resource node: a core `ResourceNode` augmented with
+ * `config`, the `prisma-next.config.ts` path. Two doors (ADR-0022): the
+ * contract is consumed through `provides` (types + wires the resource, and
+ * gives the deploy its target `storageHash`); `config` is a deploy-only path
+ * the migration lowering loads to resolve the migrations directory — the app
+ * build never imports it. Not a core `ResourceNode` field: the path is this
+ * extension's deploy concern, so it rides on app-cloud's own node shape.
+ */
+export type PnPostgresResourceNode<C extends PnPostgresContract = PnPostgresContract> =
+  ResourceNode<C> & { readonly config: string };
+
+/**
+ * True if `node` is a `pnPostgres` resource node carrying its config path —
+ * the deploy lowering's read predicate for `ctx.node` (typed `ServiceNode |
+ * ResourceNode`), so it reads `config` without a bare cast. Checks the
+ * resource kind, the `prisma-next` routing type, and that `config` is a
+ * string.
+ */
+export function isPnPostgresResourceNode(node: unknown): node is PnPostgresResourceNode {
+  return (
+    typeof node === 'object' &&
+    node !== null &&
+    'kind' in node &&
+    node.kind === 'resource' &&
+    'type' in node &&
+    node.type === 'prisma-next' &&
+    'config' in node &&
+    typeof node.config === 'string'
+  );
+}
+
+/**
  * Wraps a resolved Prisma Next contract value into the framework's
  * `prisma-next` Contract kind. Both the resource end's `contract` and every
  * dependency end reference the SAME wrapped value, the same way
@@ -95,16 +127,19 @@ export function pnContract(contract: unknown): unknown {
 }
 
 /**
- * `{ name, contract }` — the resource identity a system provisions: the ONE
- * place the database exists, providing `contract`. The `prisma-next.config.ts`
- * path the deploy migration step needs is NOT declared here — it rides on the
- * resource in slice 2, alongside the lowering that reads it (ADR-0022); the
- * app build never imports the config.
+ * `{ name, contract, config }` — the resource identity a system provisions:
+ * the ONE place the database exists. Two doors (ADR-0022): `contract` is
+ * consumed as the provided port (`provides`), typing and wiring the resource
+ * and carrying the target `storageHash`; `config` is the `prisma-next.config.ts`
+ * PATH — deploy-only metadata the migration lowering loads to locate the
+ * migrations directory. The app build never imports the config; only the
+ * deploy lowering reads it, via `isPnPostgresResourceNode`.
  */
 export function pnPostgres<C extends PnPostgresContract>(opts: {
   name: string;
   contract: C;
-}): ResourceNode<C>;
+  config: string;
+}): PnPostgresResourceNode<C>;
 /**
  * `pnPostgres(contract)` — a service's dependency on a Prisma Next-typed
  * Postgres. Its binding is the typed Prisma Next client, constructed by the
@@ -112,13 +147,20 @@ export function pnPostgres<C extends PnPostgresContract>(opts: {
  */
 export function pnPostgres<C extends PnPostgresContract>(contract: C): DependencyEnd<Client<C>, C>;
 export function pnPostgres(
-  arg: { name: string; contract: PnPostgresContract } | PnPostgresContract,
+  arg: { name: string; contract: PnPostgresContract; config: string } | PnPostgresContract,
 ): unknown {
   if (!isPnPostgresContract(arg)) {
-    return resource({
-      name: arg.name,
-      extension: '@prisma/app-cloud',
-      provides: arg.contract,
+    // Augment the frozen core node with `config`. The `[NODE]`
+    // `Symbol.for('prisma:node')` brand is an enumerable own symbol prop, so
+    // object spread copies it — the augmented node stays a recognized node
+    // (provisions and Loads exactly like a bare resource).
+    return Object.freeze({
+      ...resource({
+        name: arg.name,
+        extension: '@prisma/app-cloud',
+        provides: arg.contract,
+      }),
+      config: arg.config,
     });
   }
   const contract = arg;
