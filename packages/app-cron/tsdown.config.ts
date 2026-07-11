@@ -8,7 +8,14 @@ import { defineConfig } from 'tsdown';
 // copies a built `entry` out of its directory by itself, with no sibling
 // chunk file, when it assembles an app that uses cronScheduler().
 export default defineConfig([
-  { ...baseConfig, entry: { index: 'src/index.ts' }, clean: true },
+  // `scheduler-node` is `cronScheduler`'s `build.module` — a module whose
+  // default export is the runnable scheduler node. The deploy re-bundles it
+  // (assemble()), so it keeps deps external like the library `index` entry.
+  {
+    ...baseConfig,
+    entry: { index: 'src/index.ts', 'scheduler-node': 'src/scheduler-node.ts' },
+    clean: true,
+  },
   {
     ...baseConfig,
     entry: { 'scheduler-entry': 'src/scheduler-entry.ts' },

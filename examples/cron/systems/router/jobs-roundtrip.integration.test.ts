@@ -26,7 +26,11 @@ describe('cronScheduler jobs param: deploy-encode -> boot-decode -> config()', (
         inputs: { trigger: { url: 'http://localhost:1/' } },
       },
       async () => {
-        const freshScheduler = cronScheduler(schedule);
+        // Read through an EMPTY-default scheduler, exactly as the real entry
+        // does (scheduler-entry.ts). A full-default node would return
+        // schedule.jobs whether or not the env was stashed, so the assertion
+        // would pass even if the roundtrip were broken.
+        const freshScheduler = cronScheduler<string>({ jobs: [] });
         jobsAfterBoot = freshScheduler.config().jobs;
         triggerFn = freshScheduler.load().trigger.trigger;
       },

@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import { runScheduler } from '../scheduler.ts';
+import { defineSchedule } from '../schedule.ts';
+import { cronScheduler, runScheduler } from '../scheduler.ts';
 
 interface FakeTimer {
   readonly fn: () => void;
@@ -102,5 +103,21 @@ describe('runScheduler()', () => {
     } finally {
       intervalSpy.mockRestore();
     }
+  });
+});
+
+describe('cronScheduler() deploy wrapper', () => {
+  // The deploy bootstrap does `import main from <build.module>; main.run(...)`,
+  // so build.module must resolve to a module whose DEFAULT is the runnable
+  // node — not the package barrel (named exports only), which would make
+  // main.run undefined at boot.
+  test('build.module targets scheduler-node, whose default export is runnable', async () => {
+    const nodeDef = cronScheduler(defineSchedule({ tick: '2s' }));
+    expect(nodeDef.build.module).toMatch(/scheduler-node\.mjs$/);
+
+    const wrapper = await import('../scheduler-node.ts');
+    expect(typeof wrapper.default.run).toBe('function');
+    expect(typeof wrapper.default.load).toBe('function');
+    expect(typeof wrapper.default.config).toBe('function');
   });
 });

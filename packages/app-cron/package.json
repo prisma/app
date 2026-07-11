@@ -5,6 +5,7 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./scheduler-entry": "./dist/scheduler-entry.mjs",
+    "./scheduler-node": "./dist/scheduler-node.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {

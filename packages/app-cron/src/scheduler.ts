@@ -26,7 +26,10 @@ export function cronScheduler<Ids extends string>(schedule: Schedule<Ids>) {
     name: 'scheduler',
     deps: { trigger: rpc(triggerContract) },
     params: { jobs: param(scheduleSchema, { default: [...schedule.jobs] }) },
-    build: node({ module: import.meta.url, entry: './scheduler-entry.mjs' }),
+    build: node({
+      module: new URL('./scheduler-node.mjs', import.meta.url).href,
+      entry: './scheduler-entry.mjs',
+    }),
   });
 }
 

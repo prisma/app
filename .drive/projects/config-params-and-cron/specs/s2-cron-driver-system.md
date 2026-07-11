@@ -146,8 +146,10 @@ export function serveSchedule<S extends AnyRunnable, Ids extends string>(
   `serve()` method is (mirror `serve-handlers.test-d.ts`).
 - Returns a `(req) => Promise<Response>` built on the same routing as `serve`:
   `POST /rpc/trigger` with `{ jobId }`, dispatch to `handlers[jobId]`, `{ ok:
-  true }` on success. An unknown `jobId` at runtime is a 400/404 (it cannot
-  happen from a matched scheduler, but the wire is validated like any RPC input).
+  true }` on success. A malformed body is a 400 (arktype validates the wire like
+  any RPC input); a well-formed but unscheduled `jobId` throws inside the handler
+  and surfaces as `serve`'s 500 — unreachable from a matched scheduler, so it is
+  left on `serve`'s standard error path rather than given bespoke 4xx handling.
 - Calls `service.load()` once; passes the hydrated deps to each handler (like
   `serve`). The example's handlers close over the target client.
 
