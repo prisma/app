@@ -75,17 +75,20 @@ Scheduling unchanged (in-process tick) for this slice.
 - **Hands to:** S4 — a framework-deployed datahub verified equivalent to the
   current deployment.
 
-### S3 — Cron as an emulated resource System
+### S3 — datahub consumes cron
 
-Scheduler System (compute service + postgres schedule state) invoking target
-services via their http/rpc ports, behind an implementation-blind binding
-contract. Contract filed as a platform ask.
+The cron design and mechanism moved to its own project — **[Config Params +
+Cron](../config-params-and-cron/spec.md)** (ADR-0018/0019/0020): cron is a driver
+System (a scheduler that depends on what it calls), built on a new schema-typed,
+target-serialized config param. Designing cron for datahub is what surfaced the
+config-model change, so that foundation was carved out.
 
-- **Builds on:** hex-composition's resource-as-System model (ADR-0016 +
-  resource-decoupling) landed on main, **and** the cron reverse-edge question
-  resolved (see § "What we consume from hex-composition"). If that resolution
-  adds a composition capability, S3 waits on it.
-- **Hands to:** S4 — a `cron` resource any app can consume.
+This slice is now just the datahub side: wire datahub's `/tick` to the cron
+`cron-scheduler` + a `router`, with the schedule as a `defineSchedule` param.
+
+- **Builds on:** the Config Params + Cron project delivering a working cron; S2
+  (datahub port skeleton).
+- **Hands to:** S4 — datahub's scheduled ingest running on the framework's cron.
 
 ### S4 — datahub on cron + cutover
 

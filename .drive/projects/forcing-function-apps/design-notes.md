@@ -64,6 +64,15 @@ and cross-platform resource portability.
    conversation *with* that session, not an independent spike. See
    [[hex-composition-coordination]].
 
+7. **Cron + the config-model change became their own project** (2026-07-11).
+   Designing cron (S3) revealed that the real blocker is that config params can't
+   carry a structured value (the schedule) — a foundational config-model change
+   (schema-typed params + target-owned serialization). That foundation was carved
+   into its own project, **[config-params-and-cron](../config-params-and-cron/spec.md)**
+   (ADR-0018/0019/0020), with cron as its first consumer. This project's S3 shrinks
+   to "datahub consumes that cron," and object storage (S5) will reuse the
+   structured-param mechanism.
+
 ## Alternatives considered
 
 - **Agent service (review/triage bot) as the forcing app** — good capability
