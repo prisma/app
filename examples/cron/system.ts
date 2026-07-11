@@ -1,8 +1,8 @@
-import routerService from '@cron/router';
-import { schedule } from '@cron/router/schedule';
-import workerService from '@cron/worker';
 import { system } from '@prisma/app';
 import { cron } from '@prisma/app-cron';
+import { schedule } from './src/router/schedule.ts';
+import routerService from './src/router/service.ts';
+import workerService from './src/worker/service.ts';
 
 /**
  * The cron example: a worker (the target), a router that implements

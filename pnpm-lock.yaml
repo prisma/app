@@ -38,12 +38,6 @@ importers:
 
   examples/cron:
     dependencies:
-      '@cron/router':
-        specifier: workspace:0.2.0
-        version: link:systems/router
-      '@cron/worker':
-        specifier: workspace:0.2.0
-        version: link:systems/worker
       '@effect/platform-bun':
         specifier: 4.0.0-beta.92
         version: 4.0.0-beta.92(effect@4.0.0-beta.92)
@@ -75,65 +69,6 @@ importers:
       '@prisma/app-cli':
         specifier: workspace:0.2.0
         version: link:../../packages/app-cli
-      '@types/bun':
-        specifier: ^1.3.13
-        version: 1.3.14
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  examples/cron/systems/router:
-    dependencies:
-      '@cron/worker':
-        specifier: workspace:0.2.0
-        version: link:../worker
-      '@prisma/app-cron':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app-cron
-      arktype:
-        specifier: ^2.2.3
-        version: 2.2.3
-    devDependencies:
-      '@prisma/app':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app
-      '@prisma/app-cloud':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app-cloud
-      '@prisma/app-node':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app-node
-      '@prisma/app-rpc':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app-rpc
-      '@types/bun':
-        specifier: ^1.3.13
-        version: 1.3.14
-      tsdown:
-        specifier: ^0.22.3
-        version: 0.22.3(typescript@6.0.3)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  examples/cron/systems/worker:
-    dependencies:
-      arktype:
-        specifier: ^2.2.3
-        version: 2.2.3
-    devDependencies:
-      '@prisma/app':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app
-      '@prisma/app-cloud':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app-cloud
-      '@prisma/app-node':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app-node
-      '@prisma/app-rpc':
-        specifier: workspace:0.2.0
-        version: link:../../../../packages/app-rpc
       '@types/bun':
         specifier: ^1.3.13
         version: 1.3.14

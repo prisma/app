@@ -10,7 +10,7 @@
 import { describe, expect, test } from 'bun:test';
 import { bootstrapService } from '@prisma/app-cloud/testing';
 import { cronScheduler } from '@prisma/app-cron';
-import { schedule } from './src/schedule.ts';
+import { schedule } from '../src/router/schedule.ts';
 
 const PORT = 4501;
 

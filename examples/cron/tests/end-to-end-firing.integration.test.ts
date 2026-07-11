@@ -10,12 +10,12 @@
  * promise — never real wall-clock `setInterval`. Run via `bun test`.
  */
 import { describe, expect, test } from 'bun:test';
-import { createFakeWorker } from '@cron/worker/fake';
 import { bootstrapService } from '@prisma/app-cloud/testing';
 import { runScheduler, triggerContract } from '@prisma/app-cron';
 import { makeClient } from '@prisma/app-rpc';
-import { schedule } from './src/schedule.ts';
-import routerService from './src/service.ts';
+import { schedule } from '../src/router/schedule.ts';
+import routerService from '../src/router/service.ts';
+import { createFakeWorker } from '../src/worker/fake.ts';
 
 const ROUTER_PORT = 4502;
 

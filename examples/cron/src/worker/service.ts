@@ -5,6 +5,6 @@ import { workerContract } from './contract.ts';
 export default compute({
   name: 'worker',
   deps: {},
-  build: node({ module: import.meta.url, entry: '../dist/server.mjs' }),
+  build: node({ module: import.meta.url, entry: '../../dist/worker/server.mjs' }),
   expose: { rpc: workerContract },
 });
