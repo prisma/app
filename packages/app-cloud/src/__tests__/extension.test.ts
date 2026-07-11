@@ -345,6 +345,48 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
   });
 });
 
+describe('compute().runForTest(config, boot) — the in-process test seam', () => {
+  test("stashes the given Config address-free (like run('', ...)) and calls boot()", async () => {
+    const app = compute({ name: 'test-service', deps: { db: postgres() }, build });
+
+    let loaded: unknown;
+    await withEnv({ DB_URL: '', PORT: '' }, () =>
+      app.runForTest(
+        { service: { port: 4321 }, inputs: { db: { url: 'postgres://runfortest' } } },
+        async () => {
+          loaded = app.load();
+        },
+      ),
+    );
+
+    expect(loaded).toEqual({ db: { url: 'postgres://runfortest' }, port: 4321 });
+  });
+
+  test('needs no pre-set environment — no address, no deserialize step, unlike run()', async () => {
+    const app = compute({ name: 'test-service', deps: { db: postgres() }, build });
+
+    let loaded: unknown;
+    await withEnv({ DB_URL: 'stale', PORT: 'stale' }, () =>
+      app.runForTest(
+        { service: { port: 5555 }, inputs: { db: { url: 'postgres://fresh' } } },
+        async () => {
+          loaded = app.load();
+        },
+      ),
+    );
+
+    expect(loaded).toEqual({ db: { url: 'postgres://fresh' }, port: 5555 });
+  });
+
+  test('returns whatever boot() yields', async () => {
+    const app = compute({ name: 'test-service', deps: {}, build });
+
+    const result = await app.runForTest({ service: {}, inputs: {} }, async () => 'boot-result');
+
+    expect(result).toBe('boot-result');
+  });
+});
+
 describe('compute().load()', () => {
   test('returns the deps merged with resolved params, memoized per process (same object on re-load)', async () => {
     const app = compute({
