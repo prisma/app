@@ -24,7 +24,7 @@ import gadgetContractJson from './fixtures/gadget-contract/emitted/contract.json
 import widgetContractJson from './fixtures/widget-contract/emitted/contract.json' with {
   type: 'json',
 };
-import { startTestPostgres, type TestPostgres } from './postgres-harness.ts';
+import { resetDatabase, startTestPostgres, type TestPostgres } from './postgres-harness.ts';
 
 const pg: TestPostgres | undefined = startTestPostgres();
 
@@ -56,8 +56,11 @@ describe.skipIf(pg === undefined)('applyPnMigration — live against real Postgr
   // `migrate` (no authored packages) finds no path between unrelated hashes.
   let migrationsDir: string;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-pn-mig-'));
+    // Self-isolate: a shared CI Postgres may carry another test file's marker;
+    // start from an empty DB so the marker-is-null assertion holds in any order.
+    await resetDatabase(url);
   });
   afterAll(() => {
     pg.stop();

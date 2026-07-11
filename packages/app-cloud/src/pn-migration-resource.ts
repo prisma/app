@@ -43,30 +43,31 @@ export type PnMigration = Resource<'PrismaNext.Migration', PnMigrationProps, PnM
 export const PnMigration = Resource<PnMigration>('PrismaNext.Migration');
 
 /**
- * The `PnMigration` provider. `reconcile` runs for both create and update
- * (Alchemy's unified lifecycle); `applyPnMigration` is idempotent via the live
- * marker read, so it is safe to run for either — the marker decides no-op /
- * init / migrate. A migration has nothing to enumerate (`list` → `[]`) and
- * nothing to tear down on its own (`delete` → no-op; the DB's own deletion
- * handles teardown).
+ * The `PnMigration` provider service. `reconcile` runs for both create and
+ * update (Alchemy's unified lifecycle); `applyPnMigration` is idempotent via
+ * the live marker read, so it is safe to run for either — the marker decides
+ * no-op / init / migrate. A migration has nothing to enumerate (`list` → `[]`)
+ * and nothing to tear down on its own (`delete` → no-op; the DB's own deletion
+ * handles teardown). Exported so tests can drive `reconcile` directly, without
+ * building an Effect layer.
  */
+export const pnMigrationProviderService: Provider.ProviderService<PnMigration> = {
+  list: () => Effect.succeed([]),
+  reconcile: ({ news }) =>
+    Effect.tryPromise({
+      try: () =>
+        applyPnMigration({
+          url: news.url,
+          contractJson: news.contractJson,
+          migrationsDir: news.migrationsDir,
+        }),
+      // Surface PnMigrationError (no-path / runner / init) as-is — it fails the
+      // deploy with its clear message; nothing is swallowed.
+      catch: (error) => error,
+    }).pipe(Effect.map((outcome) => ({ storageHash: outcome.targetHash }))),
+  delete: () => Effect.void,
+};
+
+/** The `PnMigration` provider layer — merged into the extension descriptor's `providers()`. */
 export const PnMigrationProvider = () =>
-  Provider.effect(
-    PnMigration,
-    Effect.succeed<Provider.ProviderService<PnMigration>>({
-      list: () => Effect.succeed([]),
-      reconcile: ({ news }) =>
-        Effect.tryPromise({
-          try: () =>
-            applyPnMigration({
-              url: news.url,
-              contractJson: news.contractJson,
-              migrationsDir: news.migrationsDir,
-            }),
-          // Surface PnMigrationError (no-path / runner / init) as-is — it fails
-          // the deploy with its clear message; nothing is swallowed.
-          catch: (error) => error,
-        }).pipe(Effect.map((outcome) => ({ storageHash: outcome.targetHash }))),
-      delete: () => Effect.void,
-    }),
-  );
+  Provider.effect(PnMigration, Effect.succeed(pnMigrationProviderService));

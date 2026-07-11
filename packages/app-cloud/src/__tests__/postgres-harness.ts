@@ -16,10 +16,31 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import pg from 'pg';
 
 export interface TestPostgres {
   readonly url: string;
   readonly stop: () => void;
+}
+
+/**
+ * Reset the target database to empty — drop the contract's `public` schema and
+ * Prisma Next's `prisma_contract` (marker + ledger) schema, then recreate
+ * `public`. Integration tests call this in `beforeAll` so they start clean
+ * regardless of what another test file left in a SHARED Postgres (CI reuses one
+ * `STATE_TEST_DATABASE_URL` across every file; only the local ephemeral cluster
+ * is per-file). Next `dbInit` re-creates `prisma_contract`.
+ */
+export async function resetDatabase(url: string): Promise<void> {
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('DROP SCHEMA IF EXISTS public CASCADE');
+    await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
+    await client.query('CREATE SCHEMA public');
+  } finally {
+    await client.end();
+  }
 }
 
 // Some sandboxes leave LANG/LC_* unset or pointed at a locale glibc/ICU can't

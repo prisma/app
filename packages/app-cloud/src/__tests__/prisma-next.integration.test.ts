@@ -26,7 +26,7 @@ import type { Contract as WidgetContract } from './fixtures/widget-contract/emit
 import widgetContractJson from './fixtures/widget-contract/emitted/contract.json' with {
   type: 'json',
 };
-import { startTestPostgres, type TestPostgres } from './postgres-harness.ts';
+import { resetDatabase, startTestPostgres, type TestPostgres } from './postgres-harness.ts';
 
 const pg: TestPostgres | undefined = startTestPostgres();
 
@@ -56,6 +56,9 @@ describe.skipIf(pg === undefined)('pnPostgres hydrate — live round trip', () =
     // dbInit synthesizes the additive create-table plan for the single app
     // contract and signs it.
     migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-pn-mig-'));
+    // Self-isolate: reset the (possibly shared CI) DB so dbInit applies onto an
+    // empty schema and the fixed-id insert below can't collide with a prior run.
+    await resetDatabase(url);
     const control = createPostgresControlClient({ connection: url });
     await control.connect();
     const result = await control.dbInit({
