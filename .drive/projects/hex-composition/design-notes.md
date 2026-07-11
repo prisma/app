@@ -4,26 +4,22 @@ The design lives in ADR-0016 and `docs/design/10-domains/system-composition.md`.
 This file records implementation-level calls, the seams, and the points held
 for operator confirmation.
 
-## Held for operator confirmation (blocking implementation start)
+## Operator confirmations (resolved; one item open)
 
-1. **Breaking `system()` reshape, no legacy form.** `system(name, body)` is replaced
-   by `system(name, { deps?, expose? }, body)` with the new body shape
-   (`{ inputs, provision }` in, outputs returned). The two existing call
-   sites + fixtures migrate; no 2-arg overload survives. Confirm.
-2. **Load validation rule set** (system-composition.md § Load): dangling
-   declared input; missing/unsatisfied expose return; root-deployed system with
-   non-empty deps; forwarding cycles. All hard errors. Confirm the set —
-   especially that a *declared but unforwarded* input is an error rather than
-   a warning (rationale: a boundary that promises an input it ignores lies to
-   its consumers).
-3. **Auth-system v1 `db` posture.** Boundary input (needs the resource-slot work
-   landed) vs internally owned (works today, boundary is expose-only, `db`
-   input added when slots land). The plan is adaptive; confirm which to aim
-   at for H3, given the state of the resource-decoupling session.
-4. **Resource-slot seam.** The parallel resource-decoupling session defines
-   the slot type services (and therefore system boundaries) use for resource
-   inputs. Provide its shape (or its branch) when settled so H1's `Deps`
-   handling composes with it; H1 proceeds on ConnectionEnd inputs regardless.
+1. **Breaking `system()` reshape, no legacy form — CONFIRMED.** Shipped as
+   `system(name, { deps?, expose? }, body)`; no 2-arg overload survives.
+   Confirmed through the design discussion and the operator's PR review.
+2. **Load validation rule set — CONFIRMED.** The four rules are hard errors
+   (ADR-0016). The sharpest case was ruled explicitly: returning a declared
+   input as an expose output is USING it, not ignoring it (pass-through
+   legal); only an input neither forwarded nor returned errors.
+3. **Auth-system v1 `db` posture — OPEN (decide at H3 dispatch).** Boundary
+   input vs internally owned. The original blocker dissolved: the unified
+   dependency model forwards resource-backed inputs across boundaries, so
+   "boundary input" needs no further groundwork. Default recommendation:
+   boundary input (it exercises composition, which is H3's point).
+4. **Resource-slot seam — MOOT.** Resolved by the unified `DependencyEnd`
+   model (resource decoupling, merged); H1 was ported onto it.
 
 ## Implementation calls (made here, flag on divergence)
 
