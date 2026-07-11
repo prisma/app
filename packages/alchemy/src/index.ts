@@ -11,6 +11,7 @@ import { Project, ProjectProvider } from './postgres/Project.ts';
 
 export { ManagementClient } from './client.ts';
 export * from './compute/index.ts';
+export * from './container.ts';
 export * from './credentials.ts';
 export * from './postgres/index.ts';
 
