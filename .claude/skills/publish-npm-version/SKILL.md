@@ -20,7 +20,7 @@ which defeats the point of a reviewable release.
 
 ## Background reading
 
-Read [`docs/oss/versioning.md`](../../docs/oss/versioning.md) first — it is the
+Read [`docs/oss/versioning.md`](../../../docs/oss/versioning.md) first — it is the
 policy this skill mechanises: the root-`package.json` source of truth, the
 lockstep guarantee, the dist-tag convention, and the full procedure (this skill
 is the "open the bump PR" step; **merging the PR is the publish trigger** — there
