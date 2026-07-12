@@ -64,7 +64,7 @@ The boundary is decided; only the carve is deferred.
 | `@prisma/compose-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/compose` only |
 | `@prisma/compose-rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/compose` + a Standard Schema validator |
 | `@prisma/compose-cloud/cron` | cron as a driver (see [ADR-0020](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)) — `defineSchedule`, `serveSchedule`, `cronScheduler`, `cron()`, `triggerContract` | `@prisma/compose` + `app-node` + `app-rpc` |
-| `@prisma/compose-cloud/target` | `prismaCloud()` | `@prisma/alchemy`, `alchemy`, `effect` |
+| `@prisma/compose-cloud/target` | `prismaCloud()` | `@prisma/compose-alchemy`, `alchemy`, `effect` |
 | `@prisma/compose-node` · `@prisma/compose-nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@prisma/compose` only |
 | `@prisma/compose-node/assemble` · `@prisma/compose-nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
 | `@prisma/compose-assemble` | `assembleServices()` — routes each service to its adapter's `/assemble` via `${build.pack}/assemble` (entry-anchored), the wrapper-inlining policy, `AssembleError` | `node:fs`/`node:module` — deploy machine only; consumed by `@prisma/compose-cli` and the future programmatic deploy API |
@@ -840,7 +840,7 @@ Target entry — the lowering table (the only place `prisma-alchemy` is imported
 
 ```ts
 import * as Effect from "effect/Effect"
-import * as Prisma from "@prisma/alchemy"
+import * as Prisma from "@prisma/compose-alchemy"
 import type { Target } from "@prisma/compose/deploy"
 
 export interface PrismaCloudOptions {
@@ -1144,7 +1144,7 @@ producer from a resource — one mechanism.
 ## Invariants (enforced, not aspirational)
 
 1. **Core has no target dependency**: `@prisma/compose`'s `package.json` depends on
-   neither `@prisma/alchemy` nor any `prisma-*` package — checked by a test.
+   neither `@prisma/compose-alchemy` nor any `prisma-*` package — checked by a test.
 2. **Authoring imports stay lean**: bundling a module that imports `@prisma/compose`,
    `@prisma/compose-cloud`, and a build-adapter descriptor (authoring entries
    only) contains no `alchemy`/`effect`/`prisma-alchemy`/`new SQL(`/`node:fs`

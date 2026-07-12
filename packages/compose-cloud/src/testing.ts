@@ -20,7 +20,7 @@ export interface BootstrappedService {
 /**
  * Boots `service`'s real entry against `config`, in-process. By default the
  * entry is `service.build.entry` resolved against `service.build.module` —
- * exactly how the printed deploy bootstrap imports it (see `@prisma/alchemy`'s
+ * exactly how the printed deploy bootstrap imports it (see `@prisma/compose-alchemy`'s
  * artifact.ts) — which fits a build adapter whose `entry` is a plain
  * module-relative path (`@prisma/compose-node`'s). A build adapter whose bootable
  * path isn't module-relative (`@prisma/compose-nextjs`'s standalone output)

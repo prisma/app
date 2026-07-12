@@ -1,7 +1,7 @@
 /** Helpers shared by the per-node-kind descriptors under `src/descriptors/` and the extension factory in `control.ts`. */
 
-import type * as Prisma from '@prisma/alchemy';
 import { blindCast } from '@prisma/compose/casts';
+import type * as Prisma from '@prisma/compose-alchemy';
 
 /**
  * The factory's resolved options each node descriptor closes over. `projectId`

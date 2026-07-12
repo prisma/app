@@ -236,7 +236,7 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))
 
-  packages/alchemy:
+  packages/compose-alchemy:
     dependencies:
       '@prisma/compose':
         specifier: workspace:0.3.0
@@ -322,9 +322,9 @@ importers:
 
   packages/compose-cli:
     dependencies:
-      '@prisma/alchemy':
+      '@prisma/compose-alchemy':
         specifier: workspace:0.3.0
-        version: link:../alchemy
+        version: link:../compose-alchemy
       '@prisma/compose':
         specifier: workspace:0.3.0
         version: link:../compose
@@ -371,9 +371,9 @@ importers:
       '@prisma-next/sql-contract':
         specifier: 0.14.0
         version: 0.14.0(typescript@6.0.3)
-      '@prisma/alchemy':
+      '@prisma/compose-alchemy':
         specifier: workspace:0.3.0
-        version: link:../alchemy
+        version: link:../compose-alchemy
       '@prisma/compose':
         specifier: workspace:0.3.0
         version: link:../compose

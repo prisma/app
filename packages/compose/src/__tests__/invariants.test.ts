@@ -25,7 +25,7 @@ function shippedSources(): { file: string; text: string }[] {
 const leanTokens = [
   'alchemy',
   'effect',
-  '@prisma/alchemy',
+  '@prisma/compose-alchemy',
   'new SQL(',
   'ProviderCollection',
   'from "bun"',

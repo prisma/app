@@ -29,7 +29,7 @@ for the entire repository.
 
 - The published packages (`@prisma/compose`, `@prisma/compose-nextjs`, `@prisma/compose-node`,
   `@prisma/compose-cloud`, `@prisma/compose-rpc`, `@prisma/compose-assemble`,
-  `@prisma/compose-cli`, `@prisma/alchemy`, and the unscoped `prisma-compose` CLI) all publish at the same
+  `@prisma/compose-cli`, `@prisma/compose-alchemy`, and the unscoped `prisma-compose` CLI) all publish at the same
   version, and each pins its workspace siblings to that **exact** version.
 - Private packages (build config, examples, tests) are never published but still
   version in lockstep, so a contributor cloning any commit sees one consistent answer.

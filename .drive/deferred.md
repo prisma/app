@@ -78,7 +78,7 @@
 
 - **Route container resolution through the extension, not the CLI.** Today
   `@prisma/compose-cli` hard-codes the Prisma Cloud specifics of stage resolution:
-  it imports `@prisma/alchemy`'s `resolveContainer`/`deleteBranch` directly and
+  it imports `@prisma/compose-alchemy`'s `resolveContainer`/`deleteBranch` directly and
   sets the target-specific `PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID` env vars on
   the alchemy child (`run-alchemy.ts`). That is Prisma Cloud config leaking
   into the otherwise target-agnostic CLI — accepted for the first
@@ -93,7 +93,7 @@
 - **Adopt the `@prisma/cli` credential mechanism; stop rolling our own auth.**
   `@prisma/compose` authenticates the Management API with a static
   `PRISMA_SERVICE_TOKEN` read from the env and sent as a raw `Bearer` header
-  (`@prisma/alchemy` `credentials.ts` `fromEnv()` → `client.ts`
+  (`@prisma/compose-alchemy` `credentials.ts` `fromEnv()` → `client.ts`
   `createManagementApiClient({ token })`) — no login, no refresh, no stored
   credential; a long-lived plaintext token in `.env`. `@prisma/cli` already
   solves this: interactive `prisma auth login` (PKCE OAuth against

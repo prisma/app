@@ -377,7 +377,7 @@ is in `layering.md`; this is the term-by-term catalogue.
   `pr-42`) with its own state and physical names. `→` **Environment**.
 - **State store** — persists each Resource's state per stack+stage so the engine
   can diff the next deploy. `prismaCloud()` defaults every deploy to a
-  Prisma-hosted, workspace-scoped store (`@prisma/alchemy/state`); an
+  Prisma-hosted, workspace-scoped store (`@prisma/compose-alchemy/state`); an
   explicit state layer always overrides it. Control-plane infra, never a
   topology node.
 

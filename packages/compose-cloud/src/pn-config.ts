@@ -9,7 +9,7 @@
  *
  * `pathe` (not `node:path`) does the path work so the shipped source carries no
  * `node:` import — the same discipline `control.ts` already follows by
- * delegating fs/tar to `@prisma/alchemy` (invariant 5).
+ * delegating fs/tar to `@prisma/compose-alchemy` (invariant 5).
  */
 import { loadConfig } from '@prisma-next/cli/config-loader';
 import { resolve } from 'pathe';

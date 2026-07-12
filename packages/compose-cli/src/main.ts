@@ -5,9 +5,9 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { ResolvedContainer } from '@prisma/alchemy';
 import { Load } from '@prisma/compose';
 import type { PrismaAppConfig } from '@prisma/compose/config';
+import type { ResolvedContainer } from '@prisma/compose-alchemy';
 import { assembleServices, type RunAssembler } from '@prisma/compose-assemble';
 import { Cli, Command, Option, UsageError } from 'clipanion';
 import { CliError } from './cli-error.ts';

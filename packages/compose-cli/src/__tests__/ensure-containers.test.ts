@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { ManagementApiClient } from '@prisma/alchemy';
+import type { ManagementApiClient } from '@prisma/compose-alchemy';
 import { CliError } from '../cli-error.ts';
 import { deleteStageBranch, ensureContainers, validateStageName } from '../ensure-containers.ts';
 
@@ -51,7 +51,7 @@ const errorResponse = (status: number) => ({
  * A stubbed `ManagementApiClient` covering only `/v1/projects` and
  * `/v1/projects/{projectId}/branches` — everything `resolveContainer` (and
  * therefore `ensureContainers`) calls. Mirrors the fake in
- * `@prisma/alchemy`'s `container.test.ts`.
+ * `@prisma/compose-alchemy`'s `container.test.ts`.
  */
 const fakeClient = (state: FakeState): ManagementApiClient => {
   const GET = (

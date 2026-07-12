@@ -1,8 +1,8 @@
 /** The `compute` node kind's descriptor: the four service hooks — provision, serialize, package, deploy. */
 
-import * as Prisma from '@prisma/alchemy';
 import type { ServiceNode } from '@prisma/compose';
 import type { NodeDescriptor } from '@prisma/compose/config';
+import * as Prisma from '@prisma/compose-alchemy';
 import * as Effect from 'effect/Effect';
 import { configKey, encode, paramEntries } from '../serializer.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
@@ -52,7 +52,7 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
       }),
 
     // Deterministic tar.gz (fixed mtimes/ordering) so unchanged inputs hash
-    // identically; the fs/tar work itself lives in @prisma/alchemy.
+    // identically; the fs/tar work itself lives in @prisma/compose-alchemy.
     package: ({ id }, { assembled, address }) =>
       Effect.try(() =>
         Prisma.packageComputeArtifact({

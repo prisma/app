@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
+import type { LowerContext, LoweredNode } from '@prisma/compose/deploy';
 // Import the REAL modules the mocks below stub, so each mock can spread them.
 // This matters beyond convenience: `bun test` runs every test file in ONE
 // process and `mock.module` is process-global. When the real module is already
@@ -7,8 +8,7 @@ import { describe, expect, mock, test } from 'bun:test';
 // REPLACES the module and a sibling's import of an unlisted export throws.
 // Static-importing the real module here forces the survivable patch-in-place
 // mode regardless of the (filesystem-dependent) test-file order.
-import * as RealPrismaAlchemy from '@prisma/alchemy';
-import type { LowerContext, LoweredNode } from '@prisma/compose/deploy';
+import * as RealPrismaAlchemy from '@prisma/compose-alchemy';
 import * as RealOutput from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
@@ -42,7 +42,7 @@ mock.module('alchemy/Output', () => ({
   map: (output: unknown, fn: (v: unknown) => unknown) => fn(output),
 }));
 
-mock.module('@prisma/alchemy', () => ({
+mock.module('@prisma/compose-alchemy', () => ({
   ...RealPrismaAlchemy,
   providers: () => ({ stub: 'providers' }),
   EnvironmentVariable: (id: string, props: { key: string }) => {

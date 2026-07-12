@@ -32,7 +32,7 @@ dependencies-resolve-to-bindings (#26 = ADR-0015).
   lookups (in `deploy.ts`, `validate-coverage.ts`, `assemble-services.ts`) with
   one in-memory client that *performs* control-plane operations — not a state
   map. Open design; raised in the PR #39 review.
-- **Fold `@prisma/alchemy` into `@prisma/compose-cloud`.** One consumer, a
+- **Fold `@prisma/compose-alchemy` into `@prisma/compose-cloud`.** One consumer, a
   misleading generic name; the firewall that matters is a file boundary, so the
   package boundary earns nothing. Needs a slice note plus a mechanical PR.
 

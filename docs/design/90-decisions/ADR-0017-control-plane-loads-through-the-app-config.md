@@ -81,7 +81,7 @@ it), so the config declares it once, explicitly; the concrete provider is not.
 `prismaState` is a Prisma Cloud store — a hosted Postgres in the workspace,
 provisioned by the same Management API as `prismaCloud()` — so it ships from
 `@prisma/compose-cloud/control` alongside `prismaCloud()`, not from the private
-`@prisma/alchemy` package the extension is built on. Another platform would
+`@prisma/compose-alchemy` package the extension is built on. Another platform would
 supply its own state provider through its own extension.
 
 Environment validation keeps its fail-fast shape without a framework

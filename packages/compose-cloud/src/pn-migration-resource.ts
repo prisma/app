@@ -12,7 +12,7 @@
  * provider is a standalone `Provider<PnMigration>` layer; the extension
  * descriptor merges it into its `providers()` (`Layer.merge(Prisma.providers(),
  * PnMigrationProvider())`), and Alchemy resolves it at apply via a direct
- * provider-tag lookup (`tryFindProviderByType`) — no change to `@prisma/alchemy`.
+ * provider-tag lookup (`tryFindProviderByType`) — no change to `@prisma/compose-alchemy`.
  *
  * Deploy-time only: imports `@prisma-next/postgres/control` (via the helper) +
  * `alchemy`. Imported by `control.ts` and tests, never by `index.ts` / the

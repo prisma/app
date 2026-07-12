@@ -1,6 +1,6 @@
 /**
  * Pipeline pre-stack step: resolves the app's Project + (named stage) Branch
- * via `@prisma/alchemy`'s `resolveContainer`, before the generated stack file
+ * via `@prisma/compose-alchemy`'s `resolveContainer`, before the generated stack file
  * runs — `deploy` creates-if-absent, `destroy` finds only.
  */
 import { spawnSync } from 'node:child_process';
@@ -12,7 +12,7 @@ import {
   managementClientLayer,
   type ResolvedContainer,
   resolveContainer,
-} from '@prisma/alchemy';
+} from '@prisma/compose-alchemy';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import { CliError } from './cli-error.ts';

@@ -25,7 +25,7 @@
     "@prisma-next/migration-tools": "0.14.0",
     "@prisma-next/postgres": "0.14.0",
     "@prisma-next/sql-contract": "0.14.0",
-    "@prisma/alchemy": "workspace:0.3.0",
+    "@prisma/compose-alchemy": "workspace:0.3.0",
     "@prisma/compose": "workspace:0.3.0",
     "@prisma/compose-node": "workspace:0.3.0",
     "@prisma/compose-rpc": "workspace:0.3.0",

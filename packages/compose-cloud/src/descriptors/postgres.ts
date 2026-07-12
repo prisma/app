@@ -1,8 +1,8 @@
 /** The `postgres` node kind's descriptor: one Prisma Postgres Database (plus its Connection), warmed before any consumer deploys. */
 
-import * as Prisma from '@prisma/alchemy';
 import type { NodeDescriptor } from '@prisma/compose/config';
 import type { Lowering } from '@prisma/compose/deploy';
+import * as Prisma from '@prisma/compose-alchemy';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';

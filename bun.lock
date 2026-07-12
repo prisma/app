@@ -101,8 +101,8 @@
         "vitest": "^4.1.9",
       },
     },
-    "packages/alchemy": {
-      "name": "@prisma/alchemy",
+    "packages/compose-alchemy": {
+      "name": "@prisma/compose-alchemy",
       "version": "0.2.0",
       "dependencies": {
         "@prisma/compose": "workspace:0.2.0",
@@ -156,7 +156,7 @@
         "prisma-compose": "./dist/bin.mjs",
       },
       "dependencies": {
-        "@prisma/alchemy": "workspace:0.2.0",
+        "@prisma/compose-alchemy": "workspace:0.2.0",
         "@prisma/compose": "workspace:0.2.0",
         "@prisma/compose-assemble": "workspace:0.2.0",
         "c12": "^3.3.4",
@@ -179,7 +179,7 @@
         "@prisma-next/migration-tools": "0.14.0",
         "@prisma-next/postgres": "0.14.0",
         "@prisma-next/sql-contract": "0.14.0",
-        "@prisma/alchemy": "workspace:0.2.0",
+        "@prisma/compose-alchemy": "workspace:0.2.0",
         "@prisma/compose": "workspace:0.2.0",
         "alchemy": "2.0.0-beta.59",
         "effect": "4.0.0-beta.92",
@@ -679,7 +679,7 @@
 
     "@prisma-next/utils": ["@prisma-next/utils@0.14.0", "", { "optionalDependencies": { "typescript": "6.0.3" } }, "sha512-YIV6FMdKKsJqLkG2h9tQDzEoeAFjtniNXcB0XnyZyD1tkALodiWsRymuQJBGcFZB7S8icrOvRaqdSUNdrrR6yw=="],
 
-    "@prisma/alchemy": ["@prisma/alchemy@workspace:packages/alchemy"],
+    "@prisma/compose-alchemy": ["@prisma/compose-alchemy@workspace:packages/compose-alchemy"],
 
     "@prisma/compose": ["@prisma/compose@workspace:packages/app"],
 

@@ -1,10 +1,10 @@
 /**
  * The extension's control-plane entry (ADR-0017) — the only place
- * @prisma/alchemy is imported; loaded only by `prisma-compose.config.ts`.
+ * @prisma/compose-alchemy is imported; loaded only by `prisma-compose.config.ts`.
  */
 
-import * as Prisma from '@prisma/alchemy';
 import type { ExtensionDescriptor } from '@prisma/compose/config';
+import * as Prisma from '@prisma/compose-alchemy';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import { computeDescriptor } from './descriptors/compute.ts';
@@ -14,8 +14,8 @@ import type { ResolvedCloudOptions } from './descriptors/shared.ts';
 import { PgWarmProvider } from './pg-warm-resource.ts';
 import { PnMigrationProvider } from './pn-migration-resource.ts';
 
-/** The Prisma Cloud–hosted deploy state store; its implementation lives in @prisma/alchemy. */
-export { prismaState } from '@prisma/alchemy/state';
+/** The Prisma Cloud–hosted deploy state store; its implementation lives in @prisma/compose-alchemy. */
+export { prismaState } from '@prisma/compose-alchemy/state';
 
 export interface PrismaCloudOptions {
   /** Defaults to the PRISMA_WORKSPACE_ID environment variable. */
@@ -33,7 +33,7 @@ function isComputeRegion(value: string): value is Prisma.ComputeRegion {
   return KNOWN_REGION_SET.has(value);
 }
 
-/** Prisma.providers()'s ProviderCollection doesn't structurally unify with Alchemy's inferred providers Layer (a @prisma/alchemy typings gap); it satisfies it at runtime. */
+/** Prisma.providers()'s ProviderCollection doesn't structurally unify with Alchemy's inferred providers Layer (a @prisma/compose-alchemy typings gap); it satisfies it at runtime. */
 function asProvidersLayer<A, E, R>(layer: Layer.Layer<A, E, R>): Layer.Layer<never> {
   return layer as unknown as Layer.Layer<never>;
 }

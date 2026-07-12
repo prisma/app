@@ -1,8 +1,8 @@
 /** The `prisma-next` node kind's descriptor: a Postgres DB (like `postgres`) plus a migration step that brings it to the contract's storageHash (ADR-0022). */
 
-import * as Prisma from '@prisma/alchemy';
 import type { NodeDescriptor } from '@prisma/compose/config';
 import type { Lowering } from '@prisma/compose/deploy';
+import * as Prisma from '@prisma/compose-alchemy';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
