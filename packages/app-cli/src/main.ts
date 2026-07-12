@@ -212,10 +212,10 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
 
   // 3. Load — core's LoadError (unwired connection input, etc.) surfaces as-is.
   const graph = Load(entryModule.root);
-  if (graph.root.node.kind !== 'system') {
+  if (graph.root.node.kind !== 'module') {
     throw new CliError(
-      'The deploy root must be a system — wrap your service, e.g. ' +
-        "export default system('name', ({ provision }) => { provision(service); }).",
+      'The deploy root must be a module — wrap your service, e.g. ' +
+        "export default module('name', ({ provision }) => { provision(service); }).",
     );
   }
 

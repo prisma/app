@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { number, string } from '../config.ts';
 import type { Contract } from '../contract.ts';
 import { Load } from '../graph.ts';
-import { dependency, isNode, resource, service, system } from '../node.ts';
+import { dependency, isNode, module, resource, service } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
 const fakeContract = <Cmp>(cmp: Cmp): Contract<'rpc', Cmp> => ({
@@ -295,28 +295,28 @@ describe('service()', () => {
   });
 });
 
-describe('system()', () => {
+describe('module()', () => {
   test('construction is INERT — the body runs only at Load', () => {
     let bodyCalls = 0;
-    const node = system('shop', {}, () => {
+    const node = module('shop', {}, () => {
       bodyCalls += 1;
       return {};
     });
 
     expect(bodyCalls).toBe(0);
     expect(isNode(node)).toBe(true);
-    expect(node.kind).toBe('system');
+    expect(node.kind).toBe('module');
     expect(node.name).toBe('shop');
     expect(Object.isFrozen(node)).toBe(true);
   });
 
   test('throws on an empty name', () => {
-    expect(() => system('', {}, () => ({}))).toThrow(/non-empty name/);
+    expect(() => module('', {}, () => ({}))).toThrow(/non-empty name/);
   });
 
   test('closed-root overload — no boundary, no return — is empty on both sides', () => {
     let ran = false;
-    const node = system('root', (ctx) => {
+    const node = module('root', (ctx) => {
       ran = true;
       expect(ctx.provision).toBeInstanceOf(Function);
     });

@@ -1,4 +1,4 @@
-import { system } from '@prisma/app';
+import { module } from '@prisma/app';
 import { compute } from '@prisma/app-cloud';
 import node from '@prisma/app-node';
 
@@ -8,9 +8,9 @@ import node from '@prisma/app-node';
  * `prisma-app.config.ts` (found by the CLI's walk-up from this entry)
  * imports both packages' REAL `/control` entries, so `prisma-app deploy`
  * resolves them from this app's own dependency tree — see
- * `../../cli.extension-config.test.ts`. The deploy root must be a system.
+ * `../../cli.extension-config.test.ts`. The deploy root must be a module.
  */
-export default system('extension-config-fixture', {}, ({ provision }) => {
+export default module('extension-config-fixture', {}, ({ provision }) => {
   provision(
     compute({
       name: 'extension-config-fixture',

@@ -18,8 +18,8 @@ export function serviceInputs(
     if (kind === 'resource') {
       throw new LoadError(
         `Input "${input}" of "${serviceId}" is a resource node — a resource is provisioned by ` +
-          'the composing system, never created for a service that mentions it. Declare the input ' +
-          "as a dependency (the pack's dependency factory) and wire the system-provisioned " +
+          'the composing module, never created for a service that mentions it. Declare the input ' +
+          "as a dependency (the pack's dependency factory) and wire the module-provisioned " +
           "resource's ref into it.",
       );
     }
@@ -44,7 +44,7 @@ export function loadService(root: ServiceNode, rootId: NodeId): Graph {
     if (isNode(value) && value.kind === 'dependency') {
       throw new LoadError(
         `Service "${rootId}" has an unwired dependency input "${input}" — this service is composed ` +
-          `by a system; deploy the system instead of loading "${rootId}" directly.`,
+          `by a module; deploy the module instead of loading "${rootId}" directly.`,
       );
     }
   }

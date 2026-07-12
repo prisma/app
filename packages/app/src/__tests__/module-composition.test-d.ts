@@ -1,17 +1,17 @@
 import { string } from '../config.ts';
 /**
- * Type-level tests for the system boundary (ADR-0016): the body's `SystemOutputs`
+ * Type-level tests for the module boundary (ADR-0016): the body's `ModuleOutputs`
  * return type checked against `expose`, `ctx.inputs`' `InputRef` brand
  * assignable wherever a `DepBindings<D>` slot is (the same check a producer's
  * ref-port gets), and that inference survives 3 levels of nesting without
  * degrading to `any`/`unknown`. Typechecked only (this package's `typecheck`
  * script) — never executed: the reject cases are structurally valid values
- * that simply fail Load's runtime backstop (see system-composition.test.ts),
+ * that simply fail Load's runtime backstop (see module-composition.test.ts),
  * so running this file would throw. `.test-d` (not `.test`) keeps it out of
  * `bun test`, mirroring @prisma/app-rpc's contract-satisfaction.test-d.ts.
  */
 import type { BuildAdapter, Contract, InputRef } from '../index.ts';
-import { dependency, service, system } from '../index.ts';
+import { dependency, module, service } from '../index.ts';
 import { conn } from './helpers.ts';
 
 const build: BuildAdapter = {
@@ -50,15 +50,15 @@ declare const chargeRef: { readonly __providerId: string } & typeof chargeContra
 // ---- the body's return is checked against the declared `expose` ----
 
 // MUST compile: the returned port's contract matches the declared expose key.
-system('expose-ok', { expose: { verify: verifyContract } }, () => ({ verify: verifyRef }));
+module('expose-ok', { expose: { verify: verifyContract } }, () => ({ verify: verifyRef }));
 
 // @ts-expect-error the returned port is the wrong contract for "verify"
-system('expose-bad', { expose: { verify: verifyContract } }, () => {
+module('expose-bad', { expose: { verify: verifyContract } }, () => {
   return { verify: chargeRef };
 });
 
 // @ts-expect-error the declared "verify" key is missing from the return
-system('expose-missing', { expose: { verify: verifyContract } }, () => {
+module('expose-missing', { expose: { verify: verifyContract } }, () => {
   return {};
 });
 
@@ -70,7 +70,7 @@ system('expose-missing', { expose: { verify: verifyContract } }, () => {
 // equally for either case. (The old pre-unification ResourceEnd carried a
 // resource TYPE, not a Contract, so InputRef mapped it to `never` and
 // resource-backed forwarding could not compile at all — see
-// system-composition.test.ts's runtime proof that a real system-provisioned
+// module-composition.test.ts's runtime proof that a real module-provisioned
 // resource now forwards through a boundary exactly like this.)
 
 const chargeConsumer = service({
@@ -83,13 +83,13 @@ const chargeConsumer = service({
 });
 
 // MUST compile: forwarding a same-contract input into a matching slot.
-system('forward-ok', { deps: { pay: chargeEnd() } }, ({ inputs, provision }) => {
+module('forward-ok', { deps: { pay: chargeEnd() } }, ({ inputs, provision }) => {
   provision(chargeConsumer, { id: 'consumer', deps: { pay: inputs.pay } });
   return {};
 });
 
 // MUST be rejected: forwarding a wrong-contract input into a typed slot.
-system('forward-bad', { deps: { verify: verifyEnd() } }, ({ inputs, provision }) => {
+module('forward-bad', { deps: { verify: verifyEnd() } }, ({ inputs, provision }) => {
   // @ts-expect-error inputs.verify carries verifyContract, not the chargeContract "pay" requires
   provision(chargeConsumer, { id: 'consumer', deps: { pay: inputs.verify } });
   return {};
@@ -101,7 +101,7 @@ system('forward-bad', { deps: { verify: verifyEnd() } }, ({ inputs, provision })
 // `never`: the forwarded value carries NO compile-time contract, and any slot
 // accepts it. This pins current behavior; correctness for untyped inputs
 // rests entirely on Load's satisfies() backstop at the consumer (see
-// system-composition.test.ts's "untyped inputs" runtime test).
+// module-composition.test.ts's "untyped inputs" runtime test).
 const untypedEnd = () =>
   dependency({
     type: 'fake/http',
@@ -114,7 +114,7 @@ void untypedInputIsNever;
 
 // MUST compile: an untyped input forwards into ANY slot — typed or untyped —
 // with no compile-time rejection possible.
-system('untyped-forward', { deps: { anything: untypedEnd() } }, ({ inputs, provision }) => {
+module('untyped-forward', { deps: { anything: untypedEnd() } }, ({ inputs, provision }) => {
   provision(chargeConsumer, { id: 'typed', deps: { pay: inputs.anything } });
   return {};
 });
@@ -144,7 +144,7 @@ const verifyConsumer = () =>
 
 // depth 2 (leaf): forwards its own declared input straight into a service,
 // and re-exposes that service's port — no explicit type args anywhere.
-const innerSystem = system(
+const innerModule = module(
   'inner',
   { deps: { verify: verifyEnd() }, expose: { verify: verifyContract } },
   ({ inputs, provision }) => {
@@ -156,22 +156,22 @@ const innerSystem = system(
   },
 );
 
-// depth 1: the same pass-through pattern, wrapping `innerSystem`.
-const midSystem = system(
+// depth 1: the same pass-through pattern, wrapping `innerModule`.
+const midModule = module(
   'mid',
   { deps: { verify: verifyEnd() }, expose: { verify: verifyContract } },
   ({ inputs, provision }) => {
-    const inner = provision(innerSystem, { id: 'inner', deps: { verify: inputs.verify } });
+    const inner = provision(innerModule, { id: 'inner', deps: { verify: inputs.verify } });
     return { verify: inner.verify };
   },
 );
 
-// root: wires a real producer's port down through 2 boundaries of `midSystem`,
+// root: wires a real producer's port down through 2 boundaries of `midModule`,
 // then wires `mid`'s (forwarded-up) output into a plain service — MUST
 // compile with no casts, proving the 3-level chain infers end to end.
-system('root-ok', {}, ({ provision }) => {
+module('root-ok', {}, ({ provision }) => {
   const p = provision(verifyProvider(), { id: 'provider' });
-  const mid = provision(midSystem, { id: 'mid', deps: { verify: p.verify } });
+  const mid = provision(midModule, { id: 'mid', deps: { verify: p.verify } });
   provision(verifyConsumer(), { id: 'sink', deps: { verify: mid.verify } });
   return {};
 });
@@ -179,9 +179,9 @@ system('root-ok', {}, ({ provision }) => {
 // The same chain, but the final wiring requires the WRONG contract — MUST
 // still be rejected at depth 3, proving the inferred type at the far end of
 // the chain is precise (not widened to `unknown`/`any` by the 2 hops).
-system('root-bad', {}, ({ provision }) => {
+module('root-bad', {}, ({ provision }) => {
   const p = provision(verifyProvider(), { id: 'providerX' });
-  const mid = provision(midSystem, { id: 'midX', deps: { verify: p.verify } });
+  const mid = provision(midModule, { id: 'midX', deps: { verify: p.verify } });
   // @ts-expect-error mid.verify carries verifyContract; chargeConsumer's "pay" requires chargeContract
   provision(chargeConsumer, { id: 'consumerX', deps: { pay: mid.verify } });
   return {};
@@ -191,16 +191,16 @@ system('root-bad', {}, ({ provision }) => {
 
 // MUST compile: the inferred form returns the same ProvisionedRef as the
 // explicit form — the exposed port survives, and both the service+wiring and
-// system+wiring id-less overloads contract-check their wiring.
-system('inferred-ok', {}, ({ provision }) => {
+// module+wiring id-less overloads contract-check their wiring.
+module('inferred-ok', {}, ({ provision }) => {
   const provider = provision(verifyProvider());
-  const mid = provision(midSystem, { deps: { verify: provider.verify } });
+  const mid = provision(midModule, { deps: { verify: provider.verify } });
   provision(verifyConsumer(), { deps: { verify: mid.verify } });
   return {};
 });
 
 // MUST be rejected: the id-less form still contract-checks the wiring.
-system('inferred-bad', {}, ({ provision }) => {
+module('inferred-bad', {}, ({ provision }) => {
   const provider = provision(verifyProvider());
   // @ts-expect-error provider.verify carries verifyContract; chargeConsumer's "pay" requires chargeContract
   provision(chargeConsumer, { deps: { pay: provider.verify } });
@@ -210,7 +210,7 @@ system('inferred-bad', {}, ({ provision }) => {
 // Closed-root overload: no boundary argument, no return. `ctx` still carries
 // `provision`, and `inputs` is empty — the body needs nothing else. (The
 // id-defaulted ok/reject cases are already covered by inferred-ok/inferred-bad
-// above, which also exercise system-node inference.)
-system('closed-root', ({ provision }) => {
+// above, which also exercise module-node inference.)
+module('closed-root', ({ provision }) => {
   provision(verifyProvider(), { id: 'provider' });
 });

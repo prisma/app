@@ -2,7 +2,7 @@
  * A Contract is the declared interface of a service-to-service dependency: a
  * protocol brand (`kind`) plus an opaque comparison type (`Cmp`) the core
  * never inspects. Wiring compatibility is plain TypeScript assignability on
- * `Cmp`, checked at `SystemBuilder.provision`'s call site (node.ts); `satisfies`
+ * `Cmp`, checked at `ModuleBuilder.provision`'s call site (node.ts); `satisfies`
  * is its runtime mirror, called at Load (graph.ts). Correctness comes from
  * the kind's builder shaping `Cmp` so assignability means the right thing —
  * see @prisma/app-rpc's `contract()`/`rpc()`.

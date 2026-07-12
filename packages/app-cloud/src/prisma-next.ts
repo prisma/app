@@ -93,7 +93,7 @@ export function pnContract(contract: unknown): unknown {
 }
 
 /**
- * `{ name, contract, config, targetRef? }` — the resource identity a system
+ * `{ name, contract, config, targetRef? }` — the resource identity a module
  * provisions. `config` is the deploy-only `prisma-next.config.ts` path;
  * `targetRef` optionally names a ref as the migration target.
  */

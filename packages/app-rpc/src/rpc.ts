@@ -9,7 +9,7 @@
  * A Contract instead types a dependency end — the typed sibling
  * of `http()`, same `{ url }` param, hydrating to the typed client `Client<C>`
  * over the network binding in client.ts. It carries the contract as its
- * `required` value, so `SystemBuilder.provision`'s wiring is checked against it
+ * `required` value, so `ModuleBuilder.provision`'s wiring is checked against it
  * (compile time) and Load's `satisfies()` backstop re-checks it (runtime).
  */
 import type { Contract } from '@prisma/app';

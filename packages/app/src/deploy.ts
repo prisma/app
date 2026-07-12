@@ -8,7 +8,7 @@ import * as Layer from 'effect/Layer';
 import type { ExtensionDescriptor, NodeDescriptor, PrismaAppConfig } from './app-config.ts';
 import type { Config } from './config.ts';
 import { type Graph, Load, type NodeId } from './graph.ts';
-import type { BuildAdapter, ResourceNode, ServiceNode, SystemNode } from './node.ts';
+import type { BuildAdapter, ModuleNode, ResourceNode, ServiceNode } from './node.ts';
 
 /** The Layer shape every Alchemy state store must satisfy — what `LowerOptions.state` and `PrismaAppConfig.state` both traffic in. */
 export type AlchemyStateLayer = Layer.Layer<State, never, StackServices>;
@@ -246,7 +246,7 @@ export function mergedProviders(config: PrismaAppConfig): Layer.Layer<never> {
  * Fails with LowerError or whatever an extension's lowering raises — the error type is open.
  */
 export function lowering(
-  root: SystemNode,
+  root: ModuleNode,
   config: PrismaAppConfig,
   opts: LowerOptions,
 ): Effect.Effect<LoweredNode, LowerError, unknown> {
@@ -276,8 +276,8 @@ export function lowering(
     }
 
     for (const { id, node } of graph.nodes) {
-      if (node.kind === 'system') continue; // the transparent root itself — nothing to lower
-      // Dependency slots are edges only, never lowered — only system-provisioned
+      if (node.kind === 'module') continue; // the transparent root itself — nothing to lower
+      // Dependency slots are edges only, never lowered — only module-provisioned
       // resources and services are.
       if (node.kind === 'dependency') continue;
 
@@ -330,7 +330,7 @@ export function lowering(
  * extension registries → an Alchemy Stack (the default export the alchemy
  * CLI consumes).
  */
-export function lower(root: SystemNode, config: PrismaAppConfig, opts: LowerOptions) {
+export function lower(root: ModuleNode, config: PrismaAppConfig, opts: LowerOptions) {
   // A LowerError at deploy is fatal; orDie moves it off the error channel to
   // match what Alchemy.Stack accepts.
   const stackEffect = Effect.orDie(lowering(root, config, opts)) as Effect.Effect<

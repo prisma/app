@@ -44,7 +44,7 @@ describe('findConfigPathForEntry() — the walk-up', () => {
     const dir = makeTree();
     const configPath = path.join(dir, CONFIG_FILENAME);
     fs.writeFileSync(configPath, VALID_CONFIG_SOURCE);
-    const entry = path.join(dir, 'system.ts');
+    const entry = path.join(dir, 'module.ts');
 
     expect(findConfigPathForEntry(entry)).toBe(configPath);
   });
@@ -53,7 +53,7 @@ describe('findConfigPathForEntry() — the walk-up', () => {
     const dir = makeTree();
     const configPath = path.join(dir, CONFIG_FILENAME);
     fs.writeFileSync(configPath, VALID_CONFIG_SOURCE);
-    const entry = path.join(dir, 'apps', 'shop', 'src', 'system.ts');
+    const entry = path.join(dir, 'apps', 'shop', 'src', 'module.ts');
 
     expect(findConfigPathForEntry(entry)).toBe(configPath);
   });
@@ -66,12 +66,12 @@ describe('findConfigPathForEntry() — the walk-up', () => {
     const nearest = path.join(appDir, CONFIG_FILENAME);
     fs.writeFileSync(nearest, VALID_CONFIG_SOURCE);
 
-    expect(findConfigPathForEntry(path.join(appDir, 'system.ts'))).toBe(nearest);
+    expect(findConfigPathForEntry(path.join(appDir, 'module.ts'))).toBe(nearest);
   });
 
   test('returns undefined when no ancestor carries the config', () => {
     const dir = makeTree();
-    expect(findConfigPathForEntry(path.join(dir, 'system.ts'))).toBeUndefined();
+    expect(findConfigPathForEntry(path.join(dir, 'module.ts'))).toBeUndefined();
   });
 });
 

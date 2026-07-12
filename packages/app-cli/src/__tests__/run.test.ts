@@ -92,9 +92,9 @@ function makeAppDir(
   fs.writeFileSync(
     entryPath,
     [
-      `import { system, service } from ${JSON.stringify(coreIndex)};`,
+      `import { module, service } from ${JSON.stringify(coreIndex)};`,
       '',
-      `export default system(${JSON.stringify(name)}, {}, ({ provision }) => {`,
+      `export default module(${JSON.stringify(name)}, {}, ({ provision }) => {`,
       '  provision(',
       '    service({',
       `      name: ${JSON.stringify(name)},`,

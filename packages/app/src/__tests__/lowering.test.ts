@@ -19,7 +19,7 @@ import {
   resolveStateLayer,
 } from '../deploy.ts';
 import { Load } from '../graph.ts';
-import { type BuildAdapter, type Deps, dependency, resource, service, system } from '../node.ts';
+import { type BuildAdapter, type Deps, dependency, module, resource, service } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
 const dbResource = () =>
@@ -179,7 +179,7 @@ const runError = (eff: ReturnType<typeof lowering>): LowerError =>
 describe('buildConfig', () => {
   test("matches a dependency input's params by name to the wired producer's lowered outputs, via its dependency edge", () => {
     const auth = app('fake/compute', { db: dbEnd() }, { port: number({ default: 3000 }) });
-    const root = system('shop', {}, (h) => {
+    const root = module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
       h.provision(auth, { id: 'auth', deps: { db } });
       return {};
@@ -195,7 +195,7 @@ describe('buildConfig', () => {
 
   test('a param the graph declares but the lowered outputs never produced resolves to undefined', () => {
     const auth = app('fake/compute', { db: dbEnd() });
-    const root = system('shop', {}, (h) => {
+    const root = module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
       h.provision(auth, { id: 'auth', deps: { db } });
       return {};
@@ -209,21 +209,21 @@ describe('buildConfig', () => {
   });
 });
 
-const singleServiceSystem = (
+const singleServiceModule = (
   type: string,
   params: Params = {},
   build: BuildAdapter = defaultBuild,
 ) =>
-  system('hello', {}, (h) => {
+  module('hello', {}, (h) => {
     h.provision(app(type, {}, params, build), { id: 'svc' });
     return {};
   });
 
-// A single service whose one dependency is a system-provisioned db resource —
+// A single service whose one dependency is a module-provisioned db resource —
 // the resource model's minimal shape: a service never embeds a resource; the
-// system provisions it and wires the slot.
-const singleServiceWithDbSystem = (params: Params = {}) =>
-  system('hello', {}, (h) => {
+// module provisions it and wires the slot.
+const singleServiceWithDbModule = (params: Params = {}) =>
+  module('hello', {}, (h) => {
     const db = h.provision(dbResource(), { id: 'db' });
     h.provision(app('fake/compute', { db: dbEnd() }, params), { id: 'svc', deps: { db } });
     return {};
@@ -231,10 +231,10 @@ const singleServiceWithDbSystem = (params: Params = {}) =>
 
 const svcBundles = { bundles: { svc: { dir: 'dist/bundle', entry: 'server.js' } } };
 
-describe('lowering a system root — a single service', () => {
+describe('lowering a module root — a single service', () => {
   test('a dependency-less service sequences application → provision → serialize → package → deploy; nothing is auto-provisioned', () => {
     const { config, calls } = fakeExtension();
-    const root = singleServiceSystem('fake/compute');
+    const root = singleServiceModule('fake/compute');
 
     const result = run(lowering(root, config, opts(svcBundles)));
 
@@ -245,14 +245,14 @@ describe('lowering a system root — a single service', () => {
       'package',
       'deploy',
     ]);
-    // The root is always a system — its own lowering has no outputs yet
+    // The root is always a module — its own lowering has no outputs yet
     // (boundary ports are future work); see the two-service suite below.
     expect(result).toEqual({ outputs: {} });
   });
 
-  test('a system-provisioned resource lowers before the service that consumes it', () => {
+  test('a module-provisioned resource lowers before the service that consumes it', () => {
     const { config, calls } = fakeExtension();
-    const root = singleServiceWithDbSystem();
+    const root = singleServiceWithDbModule();
 
     run(lowering(root, config, opts(svcBundles)));
 
@@ -268,7 +268,7 @@ describe('lowering a system root — a single service', () => {
 
   test("buildConfig is fed to serialize with the resource's real lowered output", () => {
     const { config, calls } = fakeExtension();
-    const root = singleServiceWithDbSystem({ port: number({ default: 3000 }) });
+    const root = singleServiceWithDbModule({ port: number({ default: 3000 }) });
 
     run(lowering(root, config, opts(svcBundles)));
 
@@ -280,7 +280,7 @@ describe('lowering a system root — a single service', () => {
 
   test('package receives the build adapter output dir/entry and the same address serialize used', () => {
     const { config, calls } = fakeExtension();
-    const root = singleServiceSystem('fake/compute');
+    const root = singleServiceModule('fake/compute');
     const bundle: Bundle = { dir: 'dist/bundle', entry: 'main.mjs' };
 
     run(lowering(root, config, opts({ bundles: { svc: bundle } })));
@@ -291,7 +291,7 @@ describe('lowering a system root — a single service', () => {
 
   test("the environment edge: deploy's `environment` IS serialize's returned records (by recording, not order)", () => {
     const { config, calls } = fakeExtension();
-    const root = singleServiceWithDbSystem();
+    const root = singleServiceWithDbModule();
 
     run(lowering(root, config, opts(svcBundles)));
 
@@ -310,7 +310,7 @@ describe('lowering a system root — a single service', () => {
 
   test('the build descriptor is inert to lowering — any build extension/type/entry lowers identically', () => {
     const { config } = fakeExtension();
-    const root = singleServiceSystem(
+    const root = singleServiceModule(
       'fake/compute',
       {},
       {
@@ -326,9 +326,9 @@ describe('lowering a system root — a single service', () => {
     expect(result).toEqual({ outputs: {} });
   });
 
-  test('missing a bundle for a single-service system is a LowerError naming it', () => {
+  test('missing a bundle for a single-service module is a LowerError naming it', () => {
     const { config } = fakeExtension();
-    const root = singleServiceSystem('fake/compute');
+    const root = singleServiceModule('fake/compute');
 
     const error = runError(lowering(root, config, opts()));
 
@@ -338,7 +338,7 @@ describe('lowering a system root — a single service', () => {
 
   test('fails with LowerError naming the type and the known types on an unknown service type', () => {
     const { config } = fakeExtension();
-    const root = singleServiceSystem('fake/other-compute');
+    const root = singleServiceModule('fake/other-compute');
 
     const error = runError(lowering(root, config, opts(svcBundles)));
 
@@ -349,7 +349,7 @@ describe('lowering a system root — a single service', () => {
 
   test('fails with LowerError naming the extension and the config fix when no configured extension matches', () => {
     const { config } = fakeExtension();
-    const root = system('hello', {}, (h) => {
+    const root = module('hello', {}, (h) => {
       h.provision(
         service({
           name: 'other',
@@ -373,7 +373,7 @@ describe('lowering a system root — a single service', () => {
 
   test('a resource node routed to a service descriptor is a LowerError naming (extension, type, expected kind)', () => {
     const { config } = fakeExtension();
-    const root = system('hello', {}, (h) => {
+    const root = module('hello', {}, (h) => {
       h.provision(
         resource({
           name: 'db',
@@ -395,12 +395,12 @@ describe('lowering a system root — a single service', () => {
   });
 });
 
-describe('lowering a system root — a provisioned resource and two connected services', () => {
+describe('lowering a module root — a provisioned resource and two connected services', () => {
   const authService = () => app('fake/compute', { db: dbEnd() });
   const storefrontService = () => app('fake/compute', { auth: httpEnd() });
 
-  const twoServiceSystem = () =>
-    system('shop', {}, (h) => {
+  const twoServiceModule = () =>
+    module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
       const authRef = h.provision(authService(), { id: 'auth', deps: { db } });
       h.provision(storefrontService(), { id: 'storefront', deps: { auth: authRef } });
@@ -411,11 +411,11 @@ describe('lowering a system root — a provisioned resource and two connected se
     const { config, calls } = fakeExtension();
 
     run(
-      lowering(twoServiceSystem(), config, {
+      lowering(twoServiceModule(), config, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'modules/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -437,15 +437,15 @@ describe('lowering a system root — a provisioned resource and two connected se
     ]);
   });
 
-  test("each system-provisioned service's address is its own provision id", () => {
+  test("each module-provisioned service's address is its own provision id", () => {
     const { config, calls } = fakeExtension();
 
     run(
-      lowering(twoServiceSystem(), config, {
+      lowering(twoServiceModule(), config, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'modules/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -456,15 +456,15 @@ describe('lowering a system root — a provisioned resource and two connected se
     expect(storefrontProvision).toMatchObject({ address: 'storefront' });
   });
 
-  test("auth's Config.inputs.db carries the system-provisioned resource's lowered url", () => {
+  test("auth's Config.inputs.db carries the module-provisioned resource's lowered url", () => {
     const { config, calls } = fakeExtension();
 
     run(
-      lowering(twoServiceSystem(), config, {
+      lowering(twoServiceModule(), config, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'modules/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -479,11 +479,11 @@ describe('lowering a system root — a provisioned resource and two connected se
     const { config, calls } = fakeExtension();
 
     run(
-      lowering(twoServiceSystem(), config, {
+      lowering(twoServiceModule(), config, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'modules/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -498,11 +498,11 @@ describe('lowering a system root — a provisioned resource and two connected se
     const { config, calls } = fakeExtension();
 
     run(
-      lowering(twoServiceSystem(), config, {
+      lowering(twoServiceModule(), config, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'modules/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -517,13 +517,13 @@ describe('lowering a system root — a provisioned resource and two connected se
     // argument.
   });
 
-  test('topo sort: a system authored consumer-before-producer (forged ref) still resolves real producer outputs at deploy', () => {
-    // Mirrors the system.test.ts graph-layer topo-sort test, but exercises the
+  test('topo sort: a module authored consumer-before-producer (forged ref) still resolves real producer outputs at deploy', () => {
+    // Mirrors the module.test.ts graph-layer topo-sort test, but exercises the
     // consequence: before the sort, buildConfig read `lowered.get(edge.from)`
     // positionally, so a consumer walked before its producer saw undefined
     // outputs. With the sort, the producer is fully deployed first.
     const { config, calls } = fakeExtension();
-    const root = system('shop', {}, (h) => {
+    const root = module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
       h.provision(storefrontService(), {
         id: 'storefront',
@@ -539,8 +539,8 @@ describe('lowering a system root — a provisioned resource and two connected se
       lowering(root, config, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'modules/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -558,13 +558,13 @@ describe('lowering a system root — a provisioned resource and two connected se
     });
   });
 
-  test('missing a bundle entry for one system-provisioned service is a LowerError naming it', () => {
+  test('missing a bundle entry for one module-provisioned service is a LowerError naming it', () => {
     const { config } = fakeExtension();
 
     const error = runError(
-      lowering(twoServiceSystem(), config, {
+      lowering(twoServiceModule(), config, {
         name: 'shop',
-        bundles: { auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' } },
+        bundles: { auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' } },
       }),
     );
 
@@ -572,15 +572,15 @@ describe('lowering a system root — a provisioned resource and two connected se
     expect(error.message).toContain('opts.bundles["storefront"]');
   });
 
-  test("a system root's own lowering has no outputs yet (boundary ports are future work)", () => {
+  test("a module root's own lowering has no outputs yet (boundary ports are future work)", () => {
     const { config } = fakeExtension();
 
     const result = run(
-      lowering(twoServiceSystem(), config, {
+      lowering(twoServiceModule(), config, {
         name: 'shop',
         bundles: {
-          auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: 'systems/storefront/dist/bundle', entry: 'server.js' },
+          auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: 'modules/storefront/dist/bundle', entry: 'server.js' },
         },
       }),
     );
@@ -590,7 +590,7 @@ describe('lowering a system root — a provisioned resource and two connected se
 
   test('fails with LowerError naming the type and the known types on an unknown resource type', () => {
     const { config } = fakeExtension();
-    const root = system('shop', {}, (h) => {
+    const root = module('shop', {}, (h) => {
       h.provision(
         resource({
           name: 'cache',
@@ -610,9 +610,9 @@ describe('lowering a system root — a provisioned resource and two connected se
   });
 });
 
-describe('lowering a system root — one resource shared by two consumers', () => {
-  const sharedSystem = () =>
-    system('shop', {}, (h) => {
+describe('lowering a module root — one resource shared by two consumers', () => {
+  const sharedModule = () =>
+    module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
       h.provision(app('fake/compute', { authDb: dbEnd() }), { id: 'auth', deps: { authDb: db } });
       h.provision(app('fake/compute', { billingDb: dbEnd() }), {
@@ -625,15 +625,15 @@ describe('lowering a system root — one resource shared by two consumers', () =
   const sharedOpts = {
     name: 'shop',
     bundles: {
-      auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-      billing: { dir: 'systems/billing/dist/bundle', entry: 'server.js' },
+      auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+      billing: { dir: 'modules/billing/dist/bundle', entry: 'server.js' },
     },
   };
 
   test('the resource is lowered exactly once, regardless of consumer count', () => {
     const { config, calls } = fakeExtension();
 
-    run(lowering(sharedSystem(), config, sharedOpts));
+    run(lowering(sharedModule(), config, sharedOpts));
 
     expect(calls.filter((c) => c.phase === 'resource')).toEqual([
       { phase: 'resource', id: 'db', type: 'fake/db' },
@@ -643,7 +643,7 @@ describe('lowering a system root — one resource shared by two consumers', () =
   test("both consumers' Configs receive the ONE resource's outputs, each under its own dep key", () => {
     const { config, calls } = fakeExtension();
 
-    run(lowering(sharedSystem(), config, sharedOpts));
+    run(lowering(sharedModule(), config, sharedOpts));
 
     const authSerialize = calls.find((c) => c.phase === 'serialize' && c.id === 'auth');
     const billingSerialize = calls.find((c) => c.phase === 'serialize' && c.id === 'billing');
@@ -666,7 +666,7 @@ describe('lower()', () => {
       extensions: [{ ...descriptor, providers: () => Layer.empty }],
       state: () => stateSentinel('config-default'),
     };
-    const root = singleServiceSystem('fake/compute', {});
+    const root = singleServiceModule('fake/compute', {});
 
     const stack = lower(
       root,
@@ -678,14 +678,14 @@ describe('lower()', () => {
   });
 });
 
-describe('lowering a nested system — dotted addresses (H1: system-composition)', () => {
-  test('a service provisioned by a system nested inside another system gets a dotted address, and lowering() finds its bundle by that full id', () => {
+describe('lowering a nested module — dotted addresses (H1: module-composition)', () => {
+  test('a service provisioned by a module nested inside another module gets a dotted address, and lowering() finds its bundle by that full id', () => {
     const { config } = fakeExtension();
-    const inner = system('auth', {}, (h) => {
+    const inner = module('auth', {}, (h) => {
       h.provision(app('fake/compute', {}), { id: 'api' });
       return {};
     });
-    const root = system('shop', {}, (h) => {
+    const root = module('shop', {}, (h) => {
       h.provision(inner, { id: 'auth' });
       return {};
     });

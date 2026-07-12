@@ -21,7 +21,7 @@ export const postgresContract: Contract<'postgres', PostgresConfig> = Object.fre
 /**
  * The one Postgres factory; the argument shape picks the role.
  *
- * `{ name }` — the resource identity a system provisions: the ONE place the
+ * `{ name }` — the resource identity a module provisions: the ONE place the
  * database exists, providing `postgresContract`. Return type declared
  * explicitly so nothing widens.
  */

@@ -1,15 +1,15 @@
 /**
  * The accept/reject matrix for contract compatibility, checked on the real
- * system: `SystemBuilder.provision` wiring a ref-port into a consumer's
+ * module: `ModuleBuilder.provision` wiring a ref-port into a consumer's
  * `rpc(contract)` slot, using this package's real `contract()`/`rpc()`.
  *
  * Type-only (vitest `--typecheck`, never executed): the reject cases are
  * structurally valid providers that simply fail Load's nominal `satisfies()`
- * check (see rpc-connection.test.ts and @prisma/app's system.test.ts), so
+ * check (see rpc-connection.test.ts and @prisma/app's module.test.ts), so
  * running the calls would throw. Positive cases use `expectTypeOf` matchers;
  * the negative wirings keep a `// @ts-expect-error` on the offending line.
  */
-import type { BuildAdapter, Contract, SystemBuilder } from '@prisma/app';
+import type { BuildAdapter, Contract, ModuleBuilder } from '@prisma/app';
 import { dependency, service, string } from '@prisma/app';
 import { type } from 'arktype';
 import { expectTypeOf, test } from 'vitest';
@@ -88,7 +88,7 @@ const storefront = service({
   build,
 });
 
-declare const h: SystemBuilder;
+declare const h: ModuleBuilder;
 
 const exactRef = h.provision(provider(exact), { id: 's1' });
 const extraOutRef = h.provision(provider(extraOut), { id: 's2' });

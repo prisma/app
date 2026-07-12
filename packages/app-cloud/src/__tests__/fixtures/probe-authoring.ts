@@ -1,7 +1,7 @@
 // Bundle probe for the import-split guard: uses BOTH authoring entries (core
 // and extension) the way a user service module would, with real value usage so
 // nothing tree-shakes away.
-import { configOf, Load, system } from '@prisma/app';
+import { configOf, Load, module } from '@prisma/app';
 import { compute, postgres } from '@prisma/app-cloud';
 
 const app = compute({
@@ -18,7 +18,7 @@ const app = compute({
 });
 
 export const graph = Load(
-  system('probe-system', {}, ({ provision }) => {
+  module('probe-module', {}, ({ provision }) => {
     const db = provision(postgres({ name: 'db' }), { id: 'db' });
     provision(app, { id: 'app', deps: { db } });
     return {};

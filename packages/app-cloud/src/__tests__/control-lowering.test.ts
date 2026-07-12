@@ -88,7 +88,7 @@ mock.module('../pg-warm-resource.ts', () => ({
 
 const { prismaCloud } = await import('../control.ts');
 const { compute, postgres } = await import('../index.ts');
-const { system } = await import('@prisma/app');
+const { module } = await import('@prisma/app');
 const { lowering } = await import('@prisma/app/deploy');
 
 const run = <A>(eff: Effect.Effect<A, unknown, unknown>): A =>
@@ -222,7 +222,7 @@ describe("prismaCloud().nodes['postgres'] — the resource descriptor", () => {
   test("creates a Database + Connection in the application's project; url unwraps the Redacted connection string", async () => {
     await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
-      // ctx.id is the system provision id — one Database per provisioned resource.
+      // ctx.id is the module provision id — one Database per provisioned resource.
       const ctx = {
         id: 'data',
         application: { outputs: { projectId: 'shop-project#cloud-id' } },
@@ -438,7 +438,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
 
     const result = run(
       serviceDescriptorOf(target, 'compute').package(ctx, {
-        assembled: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
+        assembled: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
         address: 'auth',
       }),
     );
@@ -447,7 +447,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
       [
         {
           id: 'auth',
-          bundleDir: 'systems/auth/dist/bundle',
+          bundleDir: 'modules/auth/dist/bundle',
           appEntry: 'server.js',
           address: 'auth',
         },
@@ -494,7 +494,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
   });
 });
 
-describe('sharing: one system-provisioned postgres, two compute consumers — through core lowering()', () => {
+describe('sharing: one module-provisioned postgres, two compute consumers — through core lowering()', () => {
   test("ONE Database + Connection; both services' env writes carry its url under their own keys", async () => {
     await withEnv(
       { PRISMA_PROJECT_ID: 'shop-project#cloud-id', PRISMA_BRANCH_ID: undefined },
@@ -506,7 +506,7 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
           module: 'file:///test/service.ts',
           entry: 'server.js',
         };
-        const root = system('shop', {}, ({ provision }) => {
+        const root = module('shop', {}, ({ provision }) => {
           const db = provision(postgres({ name: 'data' }), { id: 'data' });
           provision(compute({ name: 'auth', deps: { main: postgres() }, build }), {
             id: 'auth',
@@ -532,8 +532,8 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
           lowering(root, configFor(target), {
             name: 'shop',
             bundles: {
-              auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
-              billing: { dir: 'systems/billing/dist/bundle', entry: 'server.js' },
+              auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' },
+              billing: { dir: 'modules/billing/dist/bundle', entry: 'server.js' },
             },
           }),
         );
@@ -570,7 +570,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     module: 'file:///test/service.ts',
     entry: 'server.js',
   };
-  const bundles = { auth: { dir: 'systems/auth/dist/bundle', entry: 'server.js' } };
+  const bundles = { auth: { dir: 'modules/auth/dist/bundle', entry: 'server.js' } };
 
   // The plain throw validateName raises becomes an Effect defect; run() (runSync)
   // re-raises it synchronously — exactly what `lower()`'s Effect.orDie surfaces
@@ -587,7 +587,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
   test('a too-short postgres provision id throws the framework error at lower time, before any Database is recorded', async () => {
     await withEnv({ PRISMA_PROJECT_ID: 'shop-project#cloud-id' }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
-      const root = system('shop', {}, ({ provision }) => {
+      const root = module('shop', {}, ({ provision }) => {
         const db = provision(postgres({ name: 'db' }), { id: 'db' });
         provision(compute({ name: 'auth', deps: { main: postgres() }, build }), {
           id: 'auth',
@@ -614,7 +614,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
   test('a too-short service provision id throws the framework error naming the service name', async () => {
     await withEnv({ PRISMA_PROJECT_ID: 'shop-project#cloud-id' }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
-      const root = system('shop', {}, ({ provision }) => {
+      const root = module('shop', {}, ({ provision }) => {
         provision(compute({ name: 'a', deps: {}, build }), { id: 'a' });
         return {};
       });
@@ -630,10 +630,10 @@ describe('name validation — fail fast on Prisma name constraints, before creat
     });
   });
 
-  test('a valid-name system lowers unchanged — no throw, the Database is created', async () => {
+  test('a valid-name module lowers unchanged — no throw, the Database is created', async () => {
     await withEnv({ PRISMA_PROJECT_ID: 'shop-project#cloud-id' }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
-      const root = system('shop', {}, ({ provision }) => {
+      const root = module('shop', {}, ({ provision }) => {
         const db = provision(postgres({ name: 'data' }), { id: 'data' });
         provision(compute({ name: 'auth', deps: { main: postgres() }, build }), {
           id: 'auth',

@@ -10,7 +10,7 @@
  * the returned role and the binding via `expectTypeOf`; the wiring reject
  * case keeps a `// @ts-expect-error`.
  */
-import type { BuildAdapter, DependencyEnd, Hydrated, SystemBuilder } from '@prisma/app';
+import type { BuildAdapter, DependencyEnd, Hydrated, ModuleBuilder } from '@prisma/app';
 import { service } from '@prisma/app';
 import { expectTypeOf, test } from 'vitest';
 import { postgres } from '../postgres.ts';
@@ -68,7 +68,7 @@ const consumer = service({
   build,
 });
 
-declare const h: SystemBuilder;
+declare const h: ModuleBuilder;
 
 const widgetRef = h.provision(
   pnPostgres({ name: 'db', contract: widget, config: './prisma-next.config.ts' }),

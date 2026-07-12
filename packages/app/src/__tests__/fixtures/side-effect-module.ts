@@ -1,7 +1,7 @@
-import { service, system } from '../../index.ts';
+import { module, service } from '../../index.ts';
 
 // Importing this module must not increment this counter — only Loading the
-// system may run the body (the service node itself carries no behavior to run).
+// module may run the body (the service node itself carries no behavior to run).
 export let bodyCallCount = 0;
 
 const svc = service({
@@ -18,7 +18,7 @@ const svc = service({
   },
 });
 
-export default system('fixture-system', {}, ({ provision }) => {
+export default module('fixture-module', {}, ({ provision }) => {
   bodyCallCount += 1;
   provision(svc, { id: 'app' });
   return {};

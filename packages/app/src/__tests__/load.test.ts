@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { string } from '../config.ts';
 import { Load, LoadError } from '../graph.ts';
-import { dependency, resource, service, system } from '../node.ts';
+import { dependency, module, resource, service } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
 const build = {
@@ -70,7 +70,7 @@ describe('Load', () => {
       params: {},
       build,
     });
-    const root = system('shop', {}, (h) => {
+    const root = module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
       h.provision(svc, { id: 'app', deps: { db } });
       return {};
@@ -81,7 +81,7 @@ describe('Load', () => {
     expect(calls).toBe(0);
   });
 
-  test('rejects a root that is not a branded service or system node', () => {
+  test('rejects a root that is not a branded service or module node', () => {
     expect(() => Load({} as never)).toThrow(LoadError);
     expect(() => Load(dbResource() as never)).toThrow(LoadError);
   });
@@ -96,7 +96,7 @@ describe('Load', () => {
   test('rejects a forged input with an empty type', () => {
     // Spread copies the brand symbol but lets the type be emptied — Load must catch it.
     const forged = { ...dbDep(), type: '' };
-    const root = system('shop', {}, (h) => {
+    const root = module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
       h.provision(app({ db: forged as never }), { id: 'app', deps: { db } });
       return {};
@@ -106,7 +106,7 @@ describe('Load', () => {
     expect(() => Load(root)).toThrow(/empty node type/);
   });
 
-  test('rejects a root service with an unwired dependency input, naming the input and pointing at the composing system (ADR-0003)', () => {
+  test('rejects a root service with an unwired dependency input, naming the input and pointing at the composing module (ADR-0003)', () => {
     const auth = dependency({
       name: 'auth',
       type: 'fake/http',
@@ -123,7 +123,7 @@ describe('Load', () => {
 
     expect(() => Load(root, { id: 'storefront' })).toThrow(LoadError);
     expect(() => Load(root, { id: 'storefront' })).toThrow(
-      /Service "storefront" has an unwired dependency input "auth" — this service is composed by a system; deploy the system instead of loading "storefront" directly\./,
+      /Service "storefront" has an unwired dependency input "auth" — this service is composed by a module; deploy the module instead of loading "storefront" directly\./,
     );
   });
 
@@ -132,16 +132,16 @@ describe('Load', () => {
 
     expect(() => Load(root, { id: 'hello' })).toThrow(LoadError);
     expect(() => Load(root, { id: 'hello' })).toThrow(
-      /Service "hello" has an unwired dependency input "db" — this service is composed by a system; deploy the system instead of loading "hello" directly\./,
+      /Service "hello" has an unwired dependency input "db" — this service is composed by a module; deploy the module instead of loading "hello" directly\./,
     );
   });
 
-  test('rejects a concrete ResourceNode found in deps — a resource is provisioned by the composing system, never by mention', () => {
+  test('rejects a concrete ResourceNode found in deps — a resource is provisioned by the composing module, never by mention', () => {
     const root = app({ db: dbResource() as never });
 
     expect(() => Load(root, { id: 'hello' })).toThrow(LoadError);
     expect(() => Load(root, { id: 'hello' })).toThrow(
-      /Input "db" of "hello" is a resource node — a resource is provisioned by the composing system, never created for a service that mentions it\./,
+      /Input "db" of "hello" is a resource node — a resource is provisioned by the composing module, never created for a service that mentions it\./,
     );
   });
 });
