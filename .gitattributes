@@ -1,0 +1,12 @@
+# Emitted Prisma Next artifacts (contract emit / migration plan outputs) —
+# mark as generated so GitHub collapses them in diffs and they don't inflate
+# PR stats. Mirrors prisma-next's own .gitattributes.
+**/contract.d.ts linguist-generated
+**/contract.json linguist-generated
+**/end-contract.d.ts linguist-generated
+**/end-contract.json linguist-generated
+**/start-contract.d.ts linguist-generated
+**/start-contract.json linguist-generated
+**/ops.json linguist-generated
+**/migration.json linguist-generated
+**/refs/head.json linguist-generated
