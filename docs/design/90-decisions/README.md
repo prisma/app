@@ -29,7 +29,7 @@ _Earlier drafts (ADR-0001, ADR-0002) were retired as the high-level design settl
 - [ADR-0011](ADR-0011-targets-supply-the-deploy-state-layer.md) — Targets supply the deploy state layer; core owns no default.
 - [ADR-0012](ADR-0012-the-state-store-speaks-sql-directly.md) — The state store speaks SQL directly; Prisma Next adoption is deferred.
 - [ADR-0013](ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md) — Resources are provisioned by modules; dependencies are uniform contract-checked slots.
-- [ADR-0014](ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md) — Name the framework "Prisma App" (`@prisma/app`), the CLI `prisma-app`, and one authoring primitive with no separate `app()`; its unit noun is superseded by ADR-0025 → **Module** (`module()`).
+- [ADR-0014](ADR-0014-name-the-framework-prisma-app.md) — Name the framework "Prisma App" (`@prisma/app`), the CLI `prisma-app`, and one authoring primitive with no separate `app()`; its unit noun is superseded by ADR-0025 → **Module** (`module()`).
 - [ADR-0015](ADR-0015-dependencies-resolve-to-bindings-clients-are-app-side.md) — Dependencies resolve to bindings (a client for protocol-owned kinds, typed config for resources); clients are constructed app-side.
 - [ADR-0016](ADR-0016-a-module-has-the-same-boundary-as-a-service.md) — A module has the same boundary as a service: deps in, expose out, forwarding as data flow; reusable modules follow.
 - [ADR-0017](ADR-0017-control-plane-loads-through-the-app-config.md) — Control-plane code loads through `prisma-app.config.ts`: the config statically imports extension descriptors; registries are keyed by (extension ID, node ID); nodes are pure data; one explicit state store per deploy.

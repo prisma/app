@@ -10,7 +10,7 @@ This is the same shape as Prisma Next: an authored data contract lowers to an IR
 resource graph, which deploys to the cloud.
 
 > Naming: the grouping unit is called a **Module** (see
-> [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md)
+> [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app.md)
 > for the settled name). "Module" thereafter.
 
 ## The three planes
