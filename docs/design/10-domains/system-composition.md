@@ -37,9 +37,10 @@ type SystemOutputs<E extends Expose> = { [P in keyof E]: RefPort<E[P]> };
   checks the return against `E` (each returned `RefPort`'s contract must be
   assignable to the declared output contract); Load re-checks via
   `satisfies()` — the same two-layer check all wiring uses.
-- A system with an empty boundary — `system(name, {}, body)` — is the closed,
-  deploy-root form; it is the degenerate case of one shape, not a separate
-  shape.
+- A system with an empty boundary is the closed, deploy-root form; it is the
+  degenerate case of one shape, not a separate shape. Omitting the boundary
+  argument — `system(name, body)`, where the body provisions and returns
+  nothing — is the closed-root spelling of exactly that empty boundary.
 
 ## Forwarding
 

@@ -186,3 +186,9 @@ system('root-bad', {}, ({ provision }) => {
   provision('consumerX', chargeConsumer, { pay: mid.verify });
   return {};
 });
+
+// Closed-root overload: no boundary argument, no return. `ctx` still carries
+// `provision`, and `inputs` is empty — the body needs nothing else.
+system('closed-root', ({ provision }) => {
+  provision('provider', verifyProvider());
+});
