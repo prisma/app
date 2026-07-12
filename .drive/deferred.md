@@ -108,3 +108,15 @@
   and the token-based state-store bootstrap (`state/bootstrap.ts`). Origin: auth
   review 2026-07-12 (during stage-as-branch); operator directive not to roll our
   own auth.
+
+# Prisma Next data contract — deferred at project close (2026-07-12)
+
+- **Multi-contract / contract-space extension** — full design preserved in
+  ADR-0022 §Alternatives ("Deferred, not rejected"). Prerequisite spike before
+  pickup: confirm PN handles multiple peer app-authored spaces in one database
+  end-to-end (PN ADR 212's monorepo-aggregator case).
+- **Dev-time story** — parked sketch: `prisma dev` serves identical local
+  copies of the management API; Alchemy treats the local machine as one more
+  deploy target, lowering unchanged.
+- **Factory name** — `pnPostgres` is a placeholder; Prisma Next → Prisma Data
+  rename incoming at GA. Rename the factory when the product name lands.
