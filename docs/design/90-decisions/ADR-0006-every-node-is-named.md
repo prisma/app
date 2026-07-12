@@ -6,7 +6,7 @@ Accepted
 
 ## Decision
 
-Every node — system, service, or resource — carries an explicit,
+Every node — module, service, or resource — carries an explicit,
 human-readable name, given at authoring. When a node is deployed as the root,
 its name becomes the application's name (on Prisma Cloud: the Project name).
 `prisma-app deploy --name` overrides it for a single run. Nothing derives a
@@ -21,10 +21,10 @@ lowering postgres         # the node's type
 lowering invoices-db      # the node's name
 ```
 
-A system with three Postgres resources produces three identical lines of the
+A module with three Postgres resources produces three identical lines of the
 first kind and three self-describing lines of the second. That contrast is
 the first job names do: **diagnostics**. Every node already has an identity —
-its deploy address, the graph-position identifier a system assigns at
+its deploy address, the graph-position identifier a module assigns at
 `provision`, which drives config namespacing and provisioning-resource ids —
 but addresses are positional and mechanical. A human-chosen name on every
 node makes every log line, progress message, and error self-describing

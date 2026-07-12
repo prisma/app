@@ -46,14 +46,14 @@ loading the graph imports that module — the app's choice, not a CLI limit.
 `prisma-app deploy` is one pass from a module path to a driven Alchemy stack:
 
 1. **Import the entry module.** Its default export must be a node (service or
-   System). No marked root exists in the model — whatever you point the CLI at
+   Module). No marked root exists in the model — whatever you point the CLI at
    *is* the application, and the graph reachable from it is what deploys.
 2. **Load.** Core's `Load` walks the graph. A service with an unwired
-   dependency slot (one an enclosing System normally wires to a provisioned
+   dependency slot (one an enclosing Module normally wires to a provisioned
    producer) fails here, with an error naming the input and pointing at the
-   composing System. The deploy root must be a System — a bare service is not
+   composing Module. The deploy root must be a Module — a bare service is not
    independently deployable; the CLI errors naming the fix (wrap it:
-   `system('name', ({ provision }) => { provision(...); })`).
+   `module('name', ({ provision }) => { provision(...); })`).
 3. **Load the config + validate coverage.** `prisma-app.config.ts` — found by
    walking up from the deploy entry, loaded with c12, never imported by app
    code — supplies the extension registries and the deploy's one state store
@@ -168,7 +168,7 @@ every node already carries:
   imported by every adapter and by `@prisma/app-assemble` itself).
 - **`@prisma/app-assemble`** owns the orchestration this seam drives: routing
   every service node in the loaded graph to its registry's assemble entry
-  (one bundle per full address — the root is always a System) and the
+  (one bundle per full address — the root is always a Module) and the
   wrapper-inlining policy. The CLI is its first consumer; the future
   programmatic deploy API is its second — so its public surface carries no CLI
   concepts (no `CliError`, no argv/usage anything). It throws its own
@@ -182,8 +182,8 @@ The CLI's quality lives in its errors; each failure names its fix:
 | Failure | Error tells the user |
 | --- | --- |
 | Default export isn't a node | what the entry module must export |
-| Deploy root isn't a System | to wrap the service in a System |
-| Unwired dependency slot | which input, and to deploy the composing System |
+| Deploy root isn't a Module | to wrap the service in a Module |
+| Unwired dependency slot | which input, and to deploy the composing Module |
 | Missing `prisma-app.config.ts` | the expected filename, where the walk-up looked, and what it must export |
 | Node `(extension, type)` not covered | the extension to add to `prisma-app.config.ts` |
 | Missing extension env | the exact variable(s) the extension factory needed |

@@ -99,7 +99,7 @@ Passing the config as a path rather than an import is what keeps Prisma Next's
 CLI and migration engine out of the user's bundle while still giving the
 deploy lowering what it needs. A single contract is Prisma Next's mainline
 single-space model — no dependency on multi-space edge cases — and the user is
-responsible for authoring one contract that serves all consuming systems.
+responsible for authoring one contract that serves all consuming modules.
 Every consumer sees the full contract type; least-privilege slices are
 deferred (see Alternatives).
 
@@ -168,7 +168,7 @@ connection URL at hydrate (no-globals).
 
 - [ADR-0015](ADR-0015-dependencies-resolve-to-bindings-clients-are-app-side.md) —
   amended: Prisma Next joins the protocol-owned kinds whose binding is a client.
-- [ADR-0013](ADR-0013-resources-are-provisioned-by-systems-deps-are-declarations.md) —
+- [ADR-0013](ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md) —
   the slot model this plugs into.
 - [ADR-0012](ADR-0012-the-state-store-speaks-sql-directly.md) — unaffected;
   the state store's deferral stands.

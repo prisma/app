@@ -9,7 +9,7 @@ durable in the ADRs, the domain docs, and the code; this workspace's scratch
 
 - **A System has a service's typed boundary** — `system(name, { deps?, expose? },
   body)`, nesting, forwarding as data flow across the boundary.
-  **ADR-0016**; `docs/design/10-domains/system-composition.md`.
+  **ADR-0016**; `docs/design/10-domains/module-composition.md`.
 - **The control plane loads through `prisma-app.config.ts`** — the config
   statically imports extension descriptors; registries are keyed by
   `(extension, node type)`; nodes are pure data; one explicit state store per

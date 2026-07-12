@@ -10,15 +10,15 @@ An app is deployed to a named **stage** — an environment. The topology is
 authored stage-neutral; the stage is chosen on the command line:
 
 ```sh
-prisma-app deploy system.ts                  # the production environment
-prisma-app deploy system.ts --stage staging  # an isolated "staging" environment
-prisma-app deploy system.ts --stage pr-42    # one isolated environment per PR
+prisma-app deploy module.ts                  # the production environment
+prisma-app deploy module.ts --stage staging  # an isolated "staging" environment
+prisma-app deploy module.ts --stage pr-42    # one isolated environment per PR
 ```
 
 Every deploy runs in **two phases**:
 
 ```
-prisma-app deploy system.ts --stage staging
+prisma-app deploy module.ts --stage staging
 │
 │  Phase 1 — the CLI, against the Management API
 │    ensure Project "storefront-auth"    find by app name, create if absent
@@ -44,7 +44,7 @@ environment is a Branch of the app's single Project, so "deploy to staging"
 means: provision the whole topology into the `staging` Branch.
 
 **The environment axis enters at the deploy plane, not authoring.** A
-`system()` graph has no notion of environment; the same graph becomes
+`module()` graph has no notion of environment; the same graph becomes
 production or a preview depending only on where it is deployed. So the stage is
 a deploy-time input, threaded through lowering — it never appears in the
 authored topology.
@@ -67,7 +67,7 @@ some stage's state namespace:
 Both containers therefore live *above* the per-stage deploy: the CLI resolves
 them first, then hands Alchemy their ids.
 
-**App identity is the root system's name.** `system('storefront-auth', …)`
+**App identity is the root module's name.** `module('storefront-auth', …)`
 names the Project, so identity travels with the code: a fresh checkout with
 only a service token deploys — the CLI finds the `storefront-auth` Project or
 creates it. When several Projects share the name, the oldest is adopted, so

@@ -69,7 +69,7 @@ Same service id (created explicitly in `us-east-1`), different region subdomain 
 **Filed upstream:** [PRO-201](https://linear.app/prisma-company/issue/PRO-201/app-build-build-type-nextjs-yields-a-boot-crashing-standalone-for-pnpm) — _"app build --build-type nextjs yields a boot-crashing standalone for pnpm projects"_
 **Product:** Prisma Compute
 **Version:** `@prisma/cli` app build (via `bunx @prisma/cli@latest`); Next.js 15.5.19; pnpm 10.27.0; bun 1.3.13
-**First hit:** `examples/storefront-auth/systems/storefront` — deploying the Next.js Storefront System to Compute
+**First hit:** `examples/storefront-auth/modules/storefront` — deploying the Next.js Storefront Module to Compute
 **Cost:** ~1 hour of iteration before landing the hoisted + direct-`next build` approach
 
 **Symptom.** The deployed Next.js standalone crashes at boot with `Cannot find module 'styled-jsx/package.json'` (from `next/dist/server/require-hook.js`). The compute version reports `status: running`, but the endpoint serves a 404 "There is no service on this URL". Fails identically under `bun` and `node`.
@@ -98,7 +98,7 @@ Same service id (created explicitly in `us-east-1`), different region subdomain 
 **Filed upstream:** [FT-5219](https://linear.app/prisma-company/issue/FT-5219/idle-direct-connection-close-crashes-a-persistent-bunsql-client-into-a) — _"Idle direct-connection close crashes a persistent Bun.SQL client into a 502 loop on scale-to-zero Compute"_
 **Product:** Prisma Postgres (surfaced on Prisma Compute)
 **Version:** Bun 1.3.13 (`Bun.SQL`); Prisma Postgres direct connection; Prisma Compute (scale-to-zero)
-**First hit:** `examples/storefront-auth/systems/auth` — the Auth System after it sat idle
+**First hit:** `examples/storefront-auth/modules/auth` — the Auth Module after it sat idle
 **Cost:** ~1 hour; first presented as "the Storefront renders 500"
 
 **Symptom.** A Bun/Hono + `Bun.SQL` service worked right after deploy, then after idle returned 500 on its DB routes and then 502 in a restart loop. Logs: `PostgresError: Connection closed` (`ERR_POSTGRES_CONNECTION_CLOSED`) from `handleClose`, with `auth listening on 0.0.0.0:3000` reprinted on each restart.
@@ -123,7 +123,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **References.**
 
 - Upstream: [FT-5219](https://linear.app/prisma-company/issue/FT-5219/idle-direct-connection-close-crashes-a-persistent-bunsql-client-into-a)
-- Workaround source: [`examples/storefront-auth/systems/auth/src/index.ts`](examples/storefront-auth/systems/auth/src/index.ts)
+- Workaround source: [`examples/storefront-auth/modules/auth/src/index.ts`](examples/storefront-auth/modules/auth/src/index.ts)
 - Related: PRO-200, PRO-201 (Compute Gotchas); [`dogfood-report.md`](dogfood-report.md)
 
 ---
@@ -159,7 +159,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **Filed upstream:** [PRO-202](https://linear.app/prisma-company/issue/PRO-202/nextjs-on-compute-ignores-runtime-env-vars-unless-the-route-is-force) — _"Next.js on Compute ignores runtime env vars unless the route is force-dynamic"_
 **Product:** Prisma Compute (Next.js interaction)
 **Version:** Next 15.5.19 on Prisma Compute
-**First hit:** `examples/storefront-auth/systems/storefront` — wiring `AUTH_URL` into the Storefront
+**First hit:** `examples/storefront-auth/modules/storefront` — wiring `AUTH_URL` into the Storefront
 **Cost:** ~30 min ("Storefront renders AUTH_URL not set" despite the env being set)
 
 **Symptom.** A Next.js app on Compute reads `process.env` at build time and serves that value forever; Compute's runtime-injected env (`DATABASE_URL`, `AUTH_URL`, …) is never read. Headers: `cache-control: s-maxage=31536000`, `x-nextjs-prerender: 1`.
@@ -177,7 +177,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **References.**
 
 - Upstream: [PRO-202](https://linear.app/prisma-company/issue/PRO-202/nextjs-on-compute-ignores-runtime-env-vars-unless-the-route-is-force)
-- Workaround source: [`examples/storefront-auth/systems/storefront/app/page.tsx`](examples/storefront-auth/systems/storefront/app/page.tsx)
+- Workaround source: [`examples/storefront-auth/modules/storefront/app/page.tsx`](examples/storefront-auth/modules/storefront/app/page.tsx)
 - Related: [`dogfood-report.md`](dogfood-report.md)
 
 ---
@@ -187,7 +187,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **Filed upstream:** [PRO-211](https://linear.app/prisma-company/issue/PRO-211/compute-fresh-deploys-race-env-var-creation-against-first-version) — _"Compute: fresh deploys race env-var creation against first version start (no ordering primitive, no restart on config change)"_
 **Product:** Prisma Compute (deploy orchestration / environment variables)
 **Version:** Management API v1, `alchemy@2.0.0-beta.59` client
-**First hit:** `examples/storefront-auth` R2 migration — fresh deploy of the two-service system
+**First hit:** `examples/storefront-auth` R2 migration — fresh deploy of the two-service module
 **Cost:** ~20 min (plus a review round establishing the old stack never had the ordering either)
 
 **Symptom.** Deploying producer service + consumer service + an env var derived from the producer's URL in one apply: on a fresh deploy the consumer's version is created before the env-var row lands, and it serves "AUTH_URL not set".
@@ -215,7 +215,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **Filed upstream:** [PRO-212](https://linear.app/prisma-company/issue/PRO-212/connection-createread-response-buries-the-real-postgres-dsn-url-is-an) — _"Connection create/read response buries the real Postgres DSN — `url` is an API self-link, top-level `connectionString` is deprecated"_
 **Product:** Prisma Postgres / Management API
 **Version:** `@prisma/management-api-sdk` · Management API `https://api.prisma.io/v1`
-**First hit:** `examples/storefront-auth/systems/auth` — the auth service's DB connection at the R4 deploy proof
+**First hit:** `examples/storefront-auth/modules/auth` — the auth service's DB connection at the R4 deploy proof
 **Cost:** ~1.5 hours — every DB query 30s-timed-out on a deployed, healthy-looking service.
 
 **Symptom.** `POST /v1/databases/{databaseId}/connections` returns `data.url = https://api.prisma.io/v1/connections/con_…` — the connection resource's **API self-link**, not a Postgres DSN. A consumer that wires `data.url` into a Postgres client gets `ERR_POSTGRES_CONNECTION_TIMEOUT` after 30s (the driver dials an HTTPS host as if it were Postgres) → 502 on every query, while `status: running` and env vars are all present.
@@ -236,7 +236,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **Filed upstream:** [PRO-213](https://linear.app/prisma-company/issue/PRO-213/compute-runs-bun-with-runtime-auto-install-on-masks-incomplete) — _"Compute runs `bun` with runtime auto-install ON — masks incomplete artifacts and cross-platform native-binary gaps as an ENOSPC crash loop"_
 **Product:** Prisma Compute (bun runtime)
 **Version:** Bun on Compute; Next.js 15.5.19 `output: "standalone"`; build darwin-arm64 → Compute linux-x64
-**First hit:** `examples/storefront-auth/systems/storefront` — the Next System at the R4 deploy proof
+**First hit:** `examples/storefront-auth/modules/storefront` — the Next Module at the R4 deploy proof
 **Cost:** ~3 hours, chasing a symptom several layers from the cause.
 
 **Symptom.** Crash loop: `starting bun with entrypoint: bootstrap.js` → `🚚 @next/swc-linux-x64-gnu [139/139] error: ENOSPC extracting tarball` → `Application exited with 0x0` → `reboot`, repeating. Endpoint serves `404 "There is no service on this URL"`; `status: running` throughout.
@@ -248,7 +248,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **References.**
 
 - Upstream: [PRO-213](https://linear.app/prisma-company/issue/PRO-213/compute-runs-bun-with-runtime-auto-install-on-masks-incomplete)
-- Fix: [`packages/app-nextjs/src/assemble.ts`](packages/app-nextjs/src/assemble.ts), [`examples/storefront-auth/systems/storefront/next.config.ts`](examples/storefront-auth/systems/storefront/next.config.ts)
+- Fix: [`packages/app-nextjs/src/assemble.ts`](packages/app-nextjs/src/assemble.ts), [`examples/storefront-auth/modules/storefront/next.config.ts`](examples/storefront-auth/modules/storefront/next.config.ts)
 - Related: PRO-201 (Next standalone packaging), FT-5219 (Bun.SQL scale-to-zero)
 
 ---

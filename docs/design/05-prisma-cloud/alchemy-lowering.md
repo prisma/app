@@ -11,7 +11,7 @@ A PDP Project is a **shared config namespace** (every App on a branch snapshots
 the same variable set into its versions) and a **shared lifecycle** (deletion
 cascades). The Prisma App Framework's placement rule: **one Project per
 Prisma App Framework application** — all of an application's services are
-Apps in that one Project, with the System-provisioned Databases beside them.
+Apps in that one Project, with the Module-provisioned Databases beside them.
 Consequences, stated plainly:
 
 - Config keys are namespaced per service by the pack's mapping (e.g.
@@ -62,7 +62,7 @@ it manages whatever a provider package registers).
 | Our resource | PDP entity it manages | Props (in) | Outputs (out) | Notes |
 | --- | --- | --- | --- | --- |
 | `Project` | Project | workspaceId, name | id | **one per Prisma App Framework application**; the poison `DATABASE_URL` variables are written at provision (see above) |
-| `Database` | Database | projectId, name | id, connection info | one per System-provisioned postgres resource; never the project default; created project-scoped, then attached to a named stage's Branch by a follow-up `PATCH` (the create body doesn't accept `branchId`) |
+| `Database` | Database | projectId, name | id, connection info | one per Module-provisioned postgres resource; never the project default; created project-scoped, then attached to a named stage's Branch by a follow-up `PATCH` (the create body doesn't accept `branchId`) |
 | `Connection` | database connection info | databaseId | url | direct/pooled endpoints; the url is written as the service's own named variable via the pack's `serialize` |
 | `ComputeService` | App | projectId, name, region, branchId? | id | `branchId` in the create body targets a named stage's Branch directly; omitted, PDP attaches it to the Project's default (production) Branch |
 | `EnvironmentVariable` | ConfigVariable | projectId, class, key, value, branchId? | id | production-class with no `branchId` on the default stage; preview-class with `branchId` on a named stage |

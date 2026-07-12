@@ -15,41 +15,41 @@ Alchemy research write-up lives in `../04-inspirations/Alchemy/glossary.md`.
 Every element the framework provisions carries a **managed lifecycle** — it can be
 recreated in a fresh environment and stood up in the local emulator. Two kinds
 carry that lifecycle: **Services** (your code) and **Resources** (managed
-dependencies); **Systems** group them into bounded contexts. Anything without a
+dependencies); **Modules** group them into bounded contexts. Anything without a
 lifecycle — an API key, an external URL — is **Configuration**, not a node.
 
-### System
+### Module
 
 The unit of composition: a **bounded context** that wraps some Services,
-Resources, and other Systems, exposes **Inputs** and **Outputs**, and is connected to
-other Systems only through them. A System runs **no code of its own** — its behaviour is
+Resources, and other Modules, exposes **Inputs** and **Outputs**, and is connected to
+other Modules only through them. A Module runs **no code of its own** — its behaviour is
 the composition of what it wraps.
 
-A System **behaves like a Service**: stateless, reprovisionable, and equivalent to its
+A Module **behaves like a Service**: stateless, reprovisionable, and equivalent to its
 past incarnations, with typed Inputs and Outputs. That shared behaviour is what
-makes nesting work — a nested System is wired exactly as a Service is. It stays a
+makes nesting work — a nested Module is wired exactly as a Service is. It stays a
 distinct type, with composition behaviours a Service doesn't have.
 
-- A System is an *authoring/reasoning* unit. It is not a single deployed object — it
+- A Module is an *authoring/reasoning* unit. It is not a single deployed object — it
   lowers to a subgraph of hosting primitives (see `layering.md`).
-- **Nesting.** A wrapped node's Inputs/Outputs connect either to the parent System's
-  Inputs/Outputs or to a sibling (Service, Resource, or System) inside the same System; a
-  wrapped node reaches outside the System only through the parent's boundary.
-- **Composite, not atomic.** Where a Service is a leaf (opaque), a System is
+- **Nesting.** A wrapped node's Inputs/Outputs connect either to the parent Module's
+  Inputs/Outputs or to a sibling (Service, Resource, or Module) inside the same Module; a
+  wrapped node reaches outside the Module only through the parent's boundary.
+- **Composite, not atomic.** Where a Service is a leaf (opaque), a Module is
   transparent: the framework sees its ports *and* the internal topology it owns. The
-  System decides how the Services, Resources, and Systems it wraps connect; its
+  Module decides how the Services, Resources, and Modules it wraps connect; its
   knowledge ends at its boundary.
-- **The App is the outermost System.** The whole application is itself a System —
+- **The App is the outermost Module.** The whole application is itself a Module —
   the outermost one, and what you deploy — owning the top-level topology: the
-  System-to-System wiring and any shared Resources. A shared database, for instance,
-  is owned by the outermost System, which wires it to each consumer's Data Input (and
+  Module-to-Module wiring and any shared Resources. A shared database, for instance,
+  is owned by the outermost Module, which wires it to each consumer's Data Input (and
   owns its migration — see Aggregate Contract). There is no separate root construct;
-  "App" names the outermost System, it is not a distinct kind of node.
+  "App" names the outermost Module, it is not a distinct kind of node.
 
 ### Service
 
 A **provisioned compute unit that runs your code** — an HTTP API, a web app, a
-worker. It exposes typed **Inputs** and **Outputs** — the same ports a System has —
+worker. It exposes typed **Inputs** and **Outputs** — the same ports a Module has —
 but it is **atomic**: the framework sees those ports and nothing inside. Lowers to a
 compute unit on the chosen deployment target — Prisma Compute on Prisma Cloud, or
 another target's equivalent (Alchemy calls it a Platform).
@@ -59,7 +59,7 @@ another target's equivalent (Alchemy calls it a Platform).
 A **provisioned dependency with a managed lifecycle** — the framework, through a
 provider, can create, update, and delete it. Its defining characteristic is the
 **state** it holds: a database, a bucket, a cache. Surfaced as a typed
-**capability** (via an Alchemy Layer): a Resource's Output provides it, a System's
+**capability** (via an Alchemy Layer): a Resource's Output provides it, a Module's
 Input requires one, and the wire is valid iff provided satisfies required.
 
 The lifecycle can be implemented by cloud APIs *or* third-party/partner APIs, so a
@@ -70,7 +70,7 @@ its lifecycle, not whether it's first-party.
 - **First-class**: Prisma **Postgres** (data, via Prisma Next contracts) —
   the framework-native treatment.
 - **BYO**: any Alchemy resource (object storage, cache, queue, provisioned
-  third-party) exposed through a capability Layer. The System depends on the
+  third-party) exposed through a capability Layer. The Module depends on the
   capability, not the vendor — swap R2 for S3 by swapping the Layer.
 
 Not Resources: **Compute** is what a Service lowers to (one per deployment target
@@ -109,7 +109,7 @@ interface.
 
 ### Topology
 
-The graph of Systems and Resources wired together through their Inputs and Outputs.
+The graph of Modules and Resources wired together through their Inputs and Outputs.
 The framework infers it from TypeScript and emits it as a static artifact for the
 platform to provision.
 
@@ -121,10 +121,10 @@ Configuration, not a node.
 ## Connections
 
 A **connection** is an edge that wires one node's **Output** to another node's
-**Input**. Every node — System, Service, or Resource — carries typed Inputs and
+**Input**. Every node — Module, Service, or Resource — carries typed Inputs and
 Outputs, and the wiring rule is uniform at every level: an Input must be connected
 to something that satisfies it — a sibling's Output, a Resource's Output, or the
-enclosing System's boundary Input. There are two families of connection.
+enclosing Module's boundary Input. There are two families of connection.
 
 ### Input
 
@@ -135,11 +135,11 @@ Data Output).
 ### Output
 
 A connection point where a node **provides** something. Communication Outputs are
-served by Services and Systems; Data Outputs are served by Resources.
+served by Services and Modules; Data Outputs are served by Resources.
 
 ### Communication connection — style: request/response | stream
 
-A System-to-System connection — or, at the boundary, public **ingress**. Its **style** is
+A Module-to-Module connection — or, at the boundary, public **ingress**. Its **style** is
 a property of the connection:
 
 - **request/response** — synchronous. Contract = the API/RPC signatures.
@@ -150,14 +150,14 @@ The communication style is *not* mediated by a Resource; the underlying transpor
 
 ### Data connection — method: TCP | HTTP
 
-A System consuming a Postgres Resource.
+A Module consuming a Postgres Resource.
 
-- A **Data Input** (on a System) = a **connection method** (`TCP` — direct Postgres
+- A **Data Input** (on a Module) = a **connection method** (`TCP` — direct Postgres
   wire; `HTTP` — PostgREST-style) plus a **Data Contract** it must satisfy.
 - A **Data Output** (on a Postgres Resource) = the set of **contract hashes** the
   Resource is provisioned (and verifiable) to satisfy.
 - The wire is valid iff the Output's offered hashes satisfy the Input's contract.
-- The concrete connection (URL) is injected when wired — never embedded in the System
+- The concrete connection (URL) is injected when wired — never embedded in the Module
   (no-globals).
 
 ### Ingress / Egress
@@ -174,18 +174,18 @@ that external thing as a node, provision it (a Resource) or wrap it in a Service
 ### Data Contract
 
 A **Prisma Next** contract — a deterministic, hashable description of the schema
-slice a System may access (identified by its `storageHash`). A System's Data Input
-declares the contract it requires; this is also the per-System least-privilege scope.
+slice a Module may access (identified by its `storageHash`). A Module's Data Input
+declares the contract it requires; this is also the per-Module least-privilege scope.
 
 Whoever **owns** a database owns the migration that makes it satisfy the contract —
-*who owns the wiring owns the migration*. A database that belongs to no System has no
-migration owner, which is why every database is owned by exactly one System (the
-implicit root System when it is shared; see Aggregate Contract).
+*who owns the wiring owns the migration*. A database that belongs to no Module has no
+migration owner, which is why every database is owned by exactly one Module (the
+implicit root Module when it is shared; see Aggregate Contract).
 
 ### Aggregate Contract
 
-A database has exactly **one owning System** — the System it lives inside, or, when it is
-shared, the enclosing **implicit root System** that wires it to its consumers. The
+A database has exactly **one owning Module** — the Module it lives inside, or, when it is
+shared, the enclosing **implicit root Module** that wires it to its consumers. The
 owner owns the schema and the migration; each consumer connects via a Data Input
 declaring the contract slice it needs. The owner's schema must satisfy the
 **aggregate** — the union of every consumer's contract — and consumer slices must
@@ -275,12 +275,12 @@ manifest): inspectable (the control plane reads its ports) and runnable (the run
 invokes it), but importing runs nothing. The Service body is opaque to the framework (a
 **black box**); the framework sees only its ports.
 
-### system
+### module
 
-The library function that defines a **System** — the same wiring surface as
+The library function that defines a **Module** — the same wiring surface as
 `service`, but transparent (the framework sees the internal topology) and with
 `provision` in scope. Its body wires the nodes it owns; it runs no code of its own.
-It is the single authoring primitive; the App is the outermost `system()`, picked
+It is the single authoring primitive; the App is the outermost `module()`, picked
 out only by being the one you deploy.
 
 ### Port — Input / Output by position
@@ -290,7 +290,7 @@ ports (see [Connections](#connections)); direction is inferred from **position**
 a [connection type](#connection-type) named as a dependency is an **Input** (arrives
 hydrated as an argument), one that is returned is an **Output** (the body
 implements it). No explicit direction markers. `Input → arguments, Output → return`
-holds for both Services and Systems.
+holds for both Services and Modules.
 
 ### Connection type
 
@@ -302,10 +302,10 @@ conform (dependency inversion).
 
 ### provision
 
-The System-scoped operator that turns a dependency descriptor into an **owned
+The Module-scoped operator that turns a dependency descriptor into an **owned
 Resource** (`provision(postgres())`) or instantiates and wires an owned node
-(`provision(svc, { db })`). Ownership and provisioning are a System concern; a
-Service only *requires*. Forwarding is just passing a System's Inputs down and
+(`provision(svc, { db })`). Ownership and provisioning are a Module concern; a
+Service only *requires*. Forwarding is just passing a Module's Inputs down and
 returning owned nodes' Outputs up.
 
 ### run — the boot loop
@@ -350,7 +350,7 @@ is in `layering.md`; this is the term-by-term catalogue.
   unit. `Alchemy.Stack(name, { providers, state }, Effect.gen(…))`. `lower()`
   emits one Stack for the whole app; `prisma-app deploy <entry>` drives it over the
   app module directly (no hand-written stack file, no config file — ADR-0003).
-  `→` **Topology / implicit root System**.
+  `→` **Topology / implicit root Module**.
 - **Resource\<Type, Props, Attributes>** — a managed entity with a string type
   tag, desired-input **Props**, and cloud-returned **Attributes**. Declared, then
   `yield*`-ed. Ours: `Prisma.Project`, `Database`, `Connection`,
@@ -435,20 +435,23 @@ is where the framework's own binding layer gets built.
 - **Connection-method taxonomy** — only `TCP` and `HTTP` for now. "Pooled" is a
   URL param on TCP, not its own method; WebSocket and others are deferred until we
   work more examples.
-- **Encapsulation as convention** — "a System never exposes raw data to peers (front
+- **Encapsulation as convention** — "a Module never exposes raw data to peers (front
   it behind communication)" is a *convention/policy* we may layer on, not an
-  enforced primitive. (That every database has exactly one owning System is now
+  enforced primitive. (That every database has exactly one owning Module is now
   settled, driven by migration ownership — see Aggregate Contract.)
 - **Input/Output type set** — deliberate and curated, added consciously; not an
   open plugin surface, but not sealed forever either.
 
 ## Superseded terms
 
-- **System** → use **System** (the unit of composition). "System" was the working name;
-  see [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md).
-- **App** is no longer superseded: it names the **outermost System** — the whole
+- **System** (and its predecessor **Hex**) → use **Module** (the unit of
+  composition). "System" and "Hex" were earlier working names; see
+  [ADR-0025](../90-decisions/ADR-0025-name-the-unit-of-composition-module.md),
+  which supersedes the unit noun in
+  [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md).
+- **App** is no longer superseded: it names the **outermost Module** — the whole
   application you build and deploy. Use **Topology** for the wired graph and
-  **System** for a unit; **App** for the composed whole.
+  **Module** for a unit; **App** for the composed whole.
 - **Descriptor** → an internal/substrate term; avoid in the authoring vocabulary
   (and note Prisma Next uses "Descriptor" for its own components).
 - **Durable Stream as "the backbone"** → streams are *one of two* transports

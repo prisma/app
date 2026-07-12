@@ -5,7 +5,7 @@ Structural rules that shape the Prisma App Framework's architecture and package 
 ## No globals — all dependencies are injected
 
 Application code never reads global configuration or looks up a service by name —
-no `process.env`, no discovery, no magic. Every resource a System uses is handed to
+no `process.env`, no discovery, no magic. Every resource a Module uses is handed to
 it as a typed dependency. Configuration still reaches a compute unit as environment
 variables, but that channel **terminates at the framework's host shim**, which
 hydrates it and injects typed clients; user code — including framework-hosted
@@ -16,10 +16,10 @@ dependency injection. See
 
 ## Wiring precedes execution — Load, then Hydrate
 
-A Service or System is *wired* and then *run*; it never runs itself. Executing its
+A Service or Module is *wired* and then *run*; it never runs itself. Executing its
 `define` Loads an in-memory graph that the framework validates for integrity
 before anything executes; only then is the graph Hydrated — adapters attached,
-data pushed through. This holds symmetrically for Services and Systems, so an
+data pushed through. This holds symmetrically for Services and Modules, so an
 integrity error
 surfaces at Load, a test can trust nothing ran until the graph was whole, and the
 topology can be inspected without a deploy. See
@@ -40,7 +40,7 @@ of the framework.
 Your topology is *inferred* from your application code — type-checked, and living in
 your TypeScript, not a separate manifest you maintain by hand. The structure you
 write is the structure that deploys; the two can't silently drift. The node
-constructor's declaration (`compute(…)`, `system(…)`) *is* the manifest: one live value
+constructor's declaration (`compute(…)`, `module(…)`) *is* the manifest: one live value
 read by the control plane at deploy and by the runtime host at boot, so there is
 nothing to keep in sync.
 
@@ -52,13 +52,13 @@ lands in your application bundle. You ship only what runs.
 
 ## The framework has no knowledge of specific deployment targets
 
-The core deals only in the abstract model — Systems, inputs, outputs, resources — and
+The core deals only in the abstract model — Modules, inputs, outputs, resources — and
 never branches on where you're deploying. Everything a given target needs (Prisma
 Cloud's resource types, or another's) arrives as an extension pack.
 
 ## Data contracts are the interface for data resources
 
-A data contract names exactly what a System may read and write; a resource plugs in
+A data contract names exactly what a Module may read and write; a resource plugs in
 only if it satisfies that contract. It's the data-world version of an Alchemy
 Layer: the consumer depends on a typed interface (`Context.Service`), and any
 implementation that satisfies it can be swapped in.

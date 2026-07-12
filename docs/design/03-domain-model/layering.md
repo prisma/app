@@ -9,14 +9,14 @@ This is the same shape as Prisma Next: an authored data contract lowers to an IR
 / plan, which executes against a database. Here, an authored topology lowers to a
 resource graph, which deploys to the cloud.
 
-> Naming: the grouping unit is called a **System** (see
+> Naming: the grouping unit is called a **Module** (see
 > [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md)
-> for the settled name). "System" thereafter.
+> for the settled name). "Module" thereafter.
 
 ## The three planes
 
 - **Authoring plane (Prisma App Framework)** — what the developer writes.
-  Nouns: **System**, **Service**, **Resource**, **Input**, **Output**,
+  Nouns: **Module**, **Service**, **Resource**, **Input**, **Output**,
   **Data Contract**, **Topology**. Statically analyzable; this is the
   ubiquitous language (see `glossary.md`).
 - **Provisioning plane (Alchemy / Effect)** — how the framework represents,
@@ -32,21 +32,21 @@ resource graph, which deploys to the cloud.
 
 | Authoring (Prisma App Framework) | Provisioning (Alchemy/Effect) | Hosting (Prisma Cloud) |
 | --- | --- | --- |
-| **System** (bounded context) | a subgraph: Resources/Platforms + a Layer exposing its ports | **no single object** — spans Compute services + a DB schema slice + streams + endpoints |
+| **Module** (bounded context) | a subgraph: Resources/Platforms + a Layer exposing its ports | **no single object** — spans Compute services + a DB schema slice + streams + endpoints |
 | **Service** (your code; entrypoint + ingress) | Platform (compute Resource running the bundle) | ComputeService → ComputeVersion (tar.gz bundle + manifest + endpoint) |
 | **Resource** (managed lifecycle, state-first) | Alchemy Resource + Provider (`reconcile`/`delete`/…); Postgres via the Prisma Postgres provider | a Database (1:1 in an Environment), bucket, cache, or provisioned third-party |
 | **Input/Output — communication** (request/response, stream) | Binding (RPC/HTTP client; stream pub/sub) | endpoint URL + injected client; stream |
 | **Data Input** (method TCP/HTTP + contract) | data binding to a Postgres Resource | connection injected, scoped by contract |
 | **Data Output** (offered contract hashes) | the Postgres Resource's provided data | the DB schema satisfying the aggregate contract |
 | **Configuration** (per-env values, secrets) | `effect/Config` (`Config.redacted`), bound to the Platform env | env var / secret on the running compute — not a node |
-| **Topology** (graph of Systems/Resources) | Stack(s) **+ the framework's emit step** (which Alchemy lacks) | the provisioned set + injected wiring |
+| **Topology** (graph of Modules/Resources) | Stack(s) **+ the framework's emit step** (which Alchemy lacks) | the provisioned set + injected wiring |
 
 ## Structural claims
 
-1. **A System is an authoring/reasoning unit, not a hosting unit.** It lowers to a
+1. **A Module is an authoring/reasoning unit, not a hosting unit.** It lowers to a
    *subgraph* of hosting primitives — its Services become Compute services, its
    data becomes a schema slice in a Database, its streams become Stream instances.
-   The hosting plane can still co-locate (several Systems sharing one Environment
+   The hosting plane can still co-locate (several Modules sharing one Environment
    Database, carved by the aggregate contract). Boundaries and isolation live at
    the *authoring* plane, not the hosting plane.
 
@@ -79,14 +79,14 @@ resource graph, which deploys to the cloud.
 
 Notes: there is no general Prisma provisioning orchestrator (Foundry deploys
 Compute only) — the framework provisions via Alchemy's engine instead (see
-below). Prisma offers no first-party object/file storage; a System that needs
+below). Prisma offers no first-party object/file storage; a Module that needs
 storage uses a **BYO Alchemy resource** (R2, S3, …). Accelerate and Pulse are
 discontinued.
 
 ## Resources: first-class vs BYO
 
 In the Prisma App Framework, a Resource is an Alchemy resource surfaced as a
-typed **capability**. A System's Input requires a capability; a Resource's
+typed **capability**. A Module's Input requires a capability; a Resource's
 Output provides one (via an Alchemy
 Layer); the wire is valid iff the provided capability satisfies the required one —
 Alchemy type-checks it.
@@ -95,9 +95,9 @@ Alchemy type-checks it.
   Prisma Next data contracts (hashed, verifiable). (Compute is a Service's target,
   not a Resource; a stream is a connection style.)
 - **BYO** (object storage, cache, queues, third-party): *any* Alchemy resource,
-  exposed through a capability Layer. The System depends on the capability, not
-  the vendor — swap R2 for S3 by swapping the Layer; the System is unchanged.
-  This is how a System uses, e.g., file storage today.
+  exposed through a capability Layer. The Module depends on the capability, not
+  the vendor — swap R2 for S3 by swapping the Layer; the Module is unchanged.
+  This is how a Module uses, e.g., file storage today.
 
 Openness is delegated to Alchemy's resource/Layer ecosystem, not added as a
 framework plugin enum. First-class resources lower to the Prisma plane; BYO
@@ -134,9 +134,9 @@ local, to workspace-hosted, to eventually platform-run:
   deployer needs nothing beyond the service token and workspace id it already
   has. Concurrency is a per-`(stack, stage)` advisory lock, so two deployers
   can never race the same stack. `prismaCloud()` supplies this as the default
-  deploy state for every service and System; an explicit state layer always
+  deploy state for every service and Module; an explicit state layer always
   overrides it. This is framework-owned operational infrastructure, not a
-  user-topology Resource — ambient per project, never declared by a System
+  user-topology Resource — ambient per project, never declared by a Module
   (which also sidesteps the chicken-and-egg of provisioning the store
   itself). Like hosted-state backends generally, it also holds state for the
   user's BYO resources in other clouds.

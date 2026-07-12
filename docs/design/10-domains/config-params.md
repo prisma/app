@@ -83,7 +83,7 @@ Follow `jobs` from the declaration to a firing timer, deployed through
 variables. (The scalar params `port` and the dependency `url` travel the same
 path; the structured one just exercises more of it.)
 
-**Deploy — build the Config.** The deploy loads the root system into the graph
+**Deploy — build the Config.** The deploy loads the root module into the graph
 and, per service node, assembles its typed `Config`: the service's own params from
 their declared values, each dependency input's params from its producer's lowered
 outputs (the runner's URL, a database's connection string). `Config` values are

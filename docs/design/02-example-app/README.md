@@ -1,10 +1,10 @@
 # Example app (anchor)
 
 A fictional e-commerce app, used to keep design discussions concrete. It exercises
-every core piece of the model: **Systems** wrapping **Services** and
+every core piece of the model: **Modules** wrapping **Services** and
 **Resources**, both connection styles (request/response and stream), a Postgres
-shared across Systems and carved by data contracts, private Resources owned
-inside a System, and an external dependency that lives as **Configuration**
+shared across Modules and carved by data contracts, private Resources owned
+inside a Module, and an external dependency that lives as **Configuration**
 rather than a node.
 
 ## The app
@@ -24,20 +24,20 @@ rather than a node.
 flowchart TB
   User((User))
 
-  subgraph Storefront["System: Storefront"]
+  subgraph Storefront["Module: Storefront"]
     SF["Next.js · Compute Service"]
   end
-  subgraph Sales["System: Sales & Billing"]
+  subgraph Sales["Module: Sales & Billing"]
     SA["Sales API · Compute Service"]
     INV[("Invoices · object storage")]
     SA --- INV
   end
-  subgraph Delivery["System: Delivery"]
+  subgraph Delivery["Module: Delivery"]
     DE["Delivery · Compute Service"]
     RD[("Updates · Redis")]
     DE --- RD
   end
-  subgraph Auth["System: Auth"]
+  subgraph Auth["Module: Auth"]
     AU["Auth API · Compute Service"]
   end
   PG[("Postgres — shared Resource")]
@@ -59,18 +59,18 @@ node.
 
 ## Decomposition
 
-Each System is a bounded context wrapping a Service (its code) plus any private
-Resources. Storefront and Auth are single-Service Systems; Sales and Delivery each
+Each Module is a bounded context wrapping a Service (its code) plus any private
+Resources. Storefront and Auth are single-Service Modules; Sales and Delivery each
 own a private Resource alongside their Service.
 
-| System | Services | Private Resources | Inputs | Outputs |
+| Module | Services | Private Resources | Inputs | Outputs |
 | --- | --- | --- | --- | --- |
 | **Storefront** | Next.js | — | `sales` (r/r), `auth` (r/r) | `site` (r/r · **ingress**) |
 | **Sales & Billing** | Sales API | Invoices (object storage) | `data` (TCP · *sales* contract); `email` (**egress** → Configuration) | `sales` API (r/r); `order-placed` (stream) |
 | **Delivery** | Delivery API | Redis (live updates) | `data` (TCP · *delivery* contract); `order-placed` (stream) | `delivery` API (r/r · internal) |
 | **Auth** | Auth API | — | `data` (TCP · *auth* contract) | `auth` API (r/r) |
 
-Plus one shared **Resource**, owned by the outermost System (not by any of the four):
+Plus one shared **Resource**, owned by the outermost Module (not by any of the four):
 
 | Resource | Output |
 | --- | --- |
@@ -78,40 +78,40 @@ Plus one shared **Resource**, owned by the outermost System (not by any of the f
 
 ## What the example demonstrates
 
-- **All the node types.** Four **Systems** (the bounded contexts) wrap **Services**
+- **All the node types.** Four **Modules** (the bounded contexts) wrap **Services**
   (the code) and **Resources** (the shared Postgres, the invoices bucket, the
   Redis). **Configuration** — the email key — is not a node.
 - **Both connection styles.** Storefront → Sales and Storefront → Auth are
   **request/response**; Sales → Delivery (*order-placed*) is a **stream**. Not
   everything is a stream.
-- **The shared Postgres has one owner — the outermost System.** It isn't owned by
-  Sales, Delivery, or Auth; it's owned by the **outermost System** (the system
+- **The shared Postgres has one owner — the outermost Module.** It isn't owned by
+  Sales, Delivery, or Auth; it's owned by the **outermost Module** (the module
   topology), which wires it to each consumer's Data Input and owns its migration. Sales,
   Delivery, and Auth each declare only the contract slice they need; the owner's
   schema satisfies the **aggregate** (the union), and consumer slices don't overlap.
   Shared instance, single migration owner, every data dependency still a visible edge.
 - **Private Resources stay inside.** The invoices bucket and the Redis are owned
-  within their System, so they never become cross-System edges — only the
+  within their Module, so they never become cross-Module edges — only the
   shared Postgres does. Boundaries live at the authoring plane.
 - **Configuration leaves the graph.** Sales emails receipts through a provider it
   doesn't provision — an **egress** backed by an API key. That's Configuration on
   the Sales Service, so it's neither a node nor a topology edge; hence the dashed
-  arrow, drawn outside every System.
+  arrow, drawn outside every Module.
 - **Ingress vs internal.** Only Storefront's `site` Output is public ingress; the
   sales/auth/delivery APIs are internal request/response Outputs consumed by other
-  Systems.
-- **Encapsulation by convention.** No System reads another's tables; cross-System needs go
+  Modules.
+- **Encapsulation by convention.** No Module reads another's tables; cross-Module needs go
   through an Output (an API, the *order-placed* stream), never the database. The
   recommended convention, not (yet) an enforced rule.
-- **A System behaves like a Service.** Each is stateless and reprovisionable
+- **A Module behaves like a Service.** Each is stateless and reprovisionable
   with typed I/O, so if Delivery grew enough to split internally, a nested
-  System would wire exactly like the Service it replaced.
+  Module would wire exactly like the Service it replaced.
 
 ## How it lowers (sketch)
 
 Per `layering.md`: each Service → a Compute service (bundle + manifest, an Alchemy
 Platform); the shared Postgres → one Database (Environment:Database is 1:1) owned
-and migrated by the outermost System, its schema satisfying the aggregate contract; the
+and migrated by the outermost Module, its schema satisfying the aggregate contract; the
 invoices bucket and the Redis → their
 own Alchemy Resources (provider create/update/delete), provisioned per environment;
 the `order-placed` stream → a Stream; each request/response edge → an endpoint +
@@ -125,7 +125,7 @@ not nodes.
 
 - Whether Delivery needs a request/response Output at all, or is purely
   stream-driven — depends on the product.
-- **Auth: System or external?** As modelled, Auth is a **System** that owns its
+- **Auth: Module or external?** As modelled, Auth is a **Module** that owns its
   tables. If instead you used a hosted BetterAuth you don't provision, it wouldn't be an
   external *node* — it'd be **Configuration** (an API key) as an egress on whatever
   Service calls it, or a thin Auth **Service** wrapping it. Which fits BetterAuth is

@@ -16,13 +16,13 @@ drives
 ## Reasoning
 
 Here is the file the CLI generates for a single-service app (the deploy root
-is always a system — see ADR-0003):
+is always a module — see ADR-0003):
 
 ```ts
 // .prisma-app/alchemy.run.ts — generated; do not edit
 import { lower } from '@prisma/app/deploy';
 import { fromEnv } from "@prisma/app-cloud/target";
-import app from "../src/system.ts";
+import app from "../src/module.ts";
 
 export default lower(app, fromEnv(), {
   name: "hello",
@@ -43,7 +43,7 @@ runnable module, that product becomes inspectable — a failing deploy prints
 the file's path, and running `alchemy deploy .prisma-app/alchemy.run.ts`
 directly bisects the failure into "the framework computed the wrong thing" versus
 "Alchemy/the platform rejected the right thing". No debugger, no verbose
-mode: the artifact between the two systems is a file you can read.
+mode: the artifact between the two modules is a file you can read.
 
 Two properties of the file matter. It carries the *computed* values as
 literals (the bundle directories, the name) so what you read is exactly what

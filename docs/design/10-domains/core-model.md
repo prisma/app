@@ -6,9 +6,9 @@ design under [`core-and-targets.md`](../03-domain-model/core-and-targets.md): th
 doc says *what* the split is; this one says exactly *which types exist, what fields
 they carry, and who imports what*. Scope: the current model — Services declaring
 **dependency slots** (one mechanism, whoever the producer is), the minimal
-**System** that provisions the Resources and services and wires every slot, and
+**Module** that provisions the Resources and services and wires every slot, and
 the **build adapter** that turns a service's app into a runnable artifact;
-typed interfaces and full System composition are named extension points.
+typed interfaces and full Module composition are named extension points.
 
 ## The service is declarations; the app owns its entry
 
@@ -54,12 +54,12 @@ glossary's Lowering — live in `/deploy`):
 **`/control` is reserved as the settled design direction**: today the control
 surface is two pure, lean functions, too little to justify its own entry — but
 the moment it grows (the queryable-topology emit, config-declaration tooling, graph
-transforms when Systems arrive), it carves out of `.` into `@prisma/app/control`.
+transforms when Modules arrive), it carves out of `.` into `@prisma/app/control`.
 The boundary is decided; only the carve is deferred.
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
-| `@prisma/app` | node factories (`service`, `resource`, `dependency`, `system`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
+| `@prisma/app` | node factories (`service`, `resource`, `dependency`, `module`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
 | `@prisma/app/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
 | `@prisma/app-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/app` only |
 | `@prisma/app-rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/app` + a Standard Schema validator |
@@ -77,7 +77,7 @@ resolved from `pack` (`${build.pack}/assemble`) the same entry-anchored way a
 target pack's `/target` is. The descriptor rides into every bundle that
 imports `service.ts`; the assembler never does.
 
-`@prisma/app-cloud/cron` is a **subpath**, not its own package: Prisma Cloud's common Systems each get one entry point under `@prisma/app-cloud` (`/cron` today, more later), so an app that never imports `/cron` never bundles it (tree-shakable by subpath). A System's runnable entries (`scheduler-service.mjs`, `scheduler-entrypoint.mjs`) ship as self-contained dist files that only its own build descriptors reference by path — never imported by the subpath's own authoring barrel.
+`@prisma/app-cloud/cron` is a **subpath**, not its own package: Prisma Cloud's common Modules each get one entry point under `@prisma/app-cloud` (`/cron` today, more later), so an app that never imports `/cron` never bundles it (tree-shakable by subpath). A Module's runnable entries (`scheduler-service.mjs`, `scheduler-entrypoint.mjs`) ship as self-contained dist files that only its own build descriptors reference by path — never imported by the subpath's own authoring barrel.
 
 Per the [runtime-agnostic
 principle](../01-principles/architectural-principles.md), no execution-plane entry
@@ -121,7 +121,7 @@ holds: replacing `@prisma/app-cloud` with another pack changes nothing in core.
 
 ## The three execution paths
 
-Everything the system does happens on one of three paths. On every path **core is
+Everything the module does happens on one of three paths. On every path **core is
 the only actor**; the pack and the build adapter contribute tools that satisfy an
 SPI and never see the graph, never sequence anything, never call another tool.
 
@@ -177,7 +177,7 @@ interface NodeBase {
   readonly kind: "service" | "resource" | "dependency"
   readonly type: string                        // the node's OWN routing key, unqualified — e.g. "postgres", "compute"
 }
-// SystemNode is deliberately NOT a NodeBase: it has no routing `type` — it is
+// ModuleNode is deliberately NOT a NodeBase: it has no routing `type` — it is
 // transparent wiring, not a routable thing (see § Nodes).
 
 // Shared base for pack-authored nodes (service + resource): the pack's package
@@ -259,7 +259,7 @@ interface BuildAdapter {
 
 // ——— Nodes ———
 
-// A Resource's identity: the ONE place a piece of infrastructure exists. A system
+// A Resource's identity: the ONE place a piece of infrastructure exists. A module
 // provisions it (`h.provision("db", postgres({ name: "db" }))`) and wires the
 // returned ref into each consumer's dependency slot — a resource is never
 // created because a service mentioned it. `provides` is the Contract it offers
@@ -287,7 +287,7 @@ interface ServiceNode<D extends Deps = Deps, P extends Params = Params> extends 
 }
 
 // THE dependency slot a service declares, whoever the producer is. Nothing is
-// provisioned FOR it: at Load the enclosing system wires a provisioned producer's
+// provisioned FOR it: at Load the enclosing module wires a provisioned producer's
 // ref into it (a service's exposed port, or a resource — the contract
 // determines validity, never the producer's kind), and at deploy it becomes an
 // EDGE from that producer to the consumer. At run it hydrates its binding through
@@ -307,17 +307,17 @@ interface DependencyEnd<C = unknown, Req = unknown> extends NodeBase {
 // from each entry's hydrate return type.
 type Deps = Record<string, DependencyEnd<any, any>>
 
-// A System: transparent wiring, no code of its own. The body runs at Load (it is
+// A Module: transparent wiring, no code of its own. The body runs at Load (it is
 // wiring, not user code) and provisions the services it owns, supplying a
 // producer for every dependency input. Minimal form — boundary ports and
-// nesting arrive with full System composition (see § Extension points).
-interface SystemNode {
+// nesting arrive with full Module composition (see § Extension points).
+interface ModuleNode {
   readonly [NODE]: true
-  readonly kind: "system"
+  readonly kind: "module"
   readonly name: string
-  body(h: SystemBuilder): void
+  body(h: ModuleBuilder): void
 }
-interface SystemBuilder {
+interface ModuleBuilder {
   // Provisions an owned resource under a stable id — the ONE place it exists.
   // Returns the ref (the provided contract, tagged with the id) a later
   // provision() wires into a consumer's dependency slot.
@@ -370,13 +370,13 @@ function service<D extends Deps, P extends Params>(def: {
   build: BuildAdapter
 }): ServiceNode<D, P>   // the pack wraps this and returns its runnable/loadable subclass
 
-function system(name: string, body: (h: SystemBuilder) => void): SystemNode   // body runs at Load, not here
+function module(name: string, body: (h: ModuleBuilder) => void): ModuleNode   // body runs at Load, not here
 ```
 
 `service()` freezes `inputs`/`params`/`build`; `dependency()` freezes the
 connection's declared params; `resource()` derives `type` from `provides.kind`.
 All throw on an empty `type`; `service()` and `dependency()` also reject an
-input or param name containing `_`, and a system's `provision()` rejects an id
+input or param name containing `_`, and a module's `provision()` rejects an id
 containing `_` or `.` — the pack's config-key serializer joins address segments
 and names with `_` (node ids join path segments with `.`), so either character
 inside a name would collide with that separator. Nothing executes: constructing
@@ -389,7 +389,7 @@ returns a subclass carrying `run` and `load`.
 type NodeId = string           // path-derived: root "hello", its input "hello.db"
 
 interface GraphNode { readonly id: NodeId
-                      readonly node: ServiceNode | ResourceNode | DependencyEnd | SystemNode }
+                      readonly node: ServiceNode | ResourceNode | DependencyEnd | ModuleNode }
 interface Edge { readonly from: NodeId; readonly to: NodeId; readonly input: string
                  readonly kind: "input" | "dependency" }
 
@@ -399,14 +399,14 @@ interface Graph {
   readonly edges: readonly Edge[]
 }
 
-function Load(root: ServiceNode | SystemNode, opts?: { id?: NodeId }): Graph   // throws LoadError
+function Load(root: ServiceNode | ModuleNode, opts?: { id?: NodeId }): Graph   // throws LoadError
 class LoadError extends Error {}
 ```
 
-Load accepts a service or a system root. For a service it walks `root.inputs`, assigns
-ids, builds edges. For a system it **executes the body** (the body is wiring, not user
+Load accepts a service or a module root. For a service it walks `root.inputs`, assigns
+ids, builds edges. For a module it **executes the body** (the body is wiring, not user
 code — running it at Load is the designed exception to imports-run-nothing) with a
-collector `SystemBuilder`, producing the owned resources and services and one
+collector `ModuleBuilder`, producing the owned resources and services and one
 **dependency edge** per wired slot. Edges carry a kind: `input` (a service
 consumes its own declared slot) or `dependency` (a service consumes a
 provisioned producer — a service port OR a resource, the one mechanism), the
@@ -417,14 +417,14 @@ and when the slot declares a required contract the wired ref must `satisfies()`
 it (dangling or unsatisfied = LoadError) — no producer-kind branching, a
 service ref cannot satisfy a postgres-requiring slot because no service port
 carries that contract kind; a concrete ResourceNode found inside `deps` is a
-targeted LoadError — a resource is provisioned by the composing system, never
+targeted LoadError — a resource is provisioned by the composing module, never
 created by mention; the dependency edges form a **DAG** (a cycle is a LoadError
 with the cycle named — a consequence of address-at-deploy-time wiring: if A
 needs B's address to deploy and B needs A's, neither can go first; resources
 take no wiring, so only service-to-service edges can cycle). A service Loaded
 directly as the root may carry no dependency slot at all — nothing at the root
 wires or provisions for it — so an unwired slot is a LoadError naming the input
-and pointing at deploying the composing system instead. Load executes nothing of the user's — the graph is data
+and pointing at deploying the composing module instead. Load executes nothing of the user's — the graph is data
 in memory to inspect or hand to `lower` (or the node's `run`). A **topology view** — nodes as `{ id, kind, type }`
 plus edges, function slots dropped — is `JSON.stringify`-able by construction; the
 serialized-artifact emit step builds on this later.
@@ -528,7 +528,7 @@ interface LowerOptions {
   // `prisma-app deploy` runs each service's build-adapter assembler and writes
   // the resulting bundle dirs here, into the generated stack file it hands to
   // `lower()` — one bundle per provision id (the deploy root is always a
-  // system). A hand-composed / mixed-stack caller (the escape hatch — see
+  // module). A hand-composed / mixed-stack caller (the escape hatch — see
   // § Lowering) supplies these itself.
   readonly bundles: Record<string, Bundle>
   readonly stage?: string
@@ -540,9 +540,9 @@ interface Artifact { readonly path: string; readonly sha256: string }       // p
 
 // Load → route each node through target.lower[node.type] → an Alchemy Stack
 // (the default export the alchemy CLI consumes). Unknown type → LowerError
-// naming the type and the target's known types. root must be a system — a bare
+// naming the type and the target's known types. root must be a module — a bare
 // service is not independently deployable.
-function lower(root: SystemNode, target: Target, opts: LowerOptions): AlchemyStack
+function lower(root: ModuleNode, target: Target, opts: LowerOptions): AlchemyStack
 class LowerError extends Error {}
 
 // Composable form — for MIXED topologies: framework-authored nodes beside
@@ -552,7 +552,7 @@ class LowerError extends Error {}
 // Error channel: LowerError from routing, PLUS whatever a pack lowering fails
 // with (their error type is open) — a mixed-stack caller treats failures as
 // deploy-fatal or inspects; it must not assume LowerError is the only inhabitant.
-function lowering(root: SystemNode, target: Target, opts: LowerOptions):
+function lowering(root: ModuleNode, target: Target, opts: LowerOptions):
   Effect.Effect<LoweredNode, LowerError, unknown>
 ```
 
@@ -570,8 +570,8 @@ service, and wires its own resources around the returned `outputs`.
 
 **Core's deploy-path sequencing** — the control flow no pack can misorder.
 First, `application.provision` runs once (the Project, with the poison
-`DATABASE_URL` variables). Then walk the graph in topological order (the system
-body's provision order; the dependency DAG Load validated). Each system-provisioned
+`DATABASE_URL` variables). Then walk the graph in topological order (the module
+body's provision order; the dependency DAG Load validated). Each module-provisioned
 **resource** lowers exactly once via `Target.resources` (e.g. one Database +
 Connection — outputs carry the url), no matter how many services consume it;
 dependency-slot nodes are edges only and never lower. Then for each service:
@@ -579,7 +579,7 @@ dependency-slot nodes are edges only and never lower. Then for each service:
 1. `provision` — the service now has identity (its App).
 2. core **builds the typed `Config`** — each input's declared params matched by
    name to its producer's lowered outputs through the one `dependency` edge:
-   whatever the system wired in — a resource's lowered outputs (shared by every
+   whatever the module wired in — a resource's lowered outputs (shared by every
    consumer wired to it) or a producer service's deploy outputs (the producer,
    earlier in topo order, is already fully deployed — its URL is real, not the
    create-time placeholder) — plus service-param defaults. Leaf values are
@@ -615,7 +615,7 @@ the [config/secret glossary](../03-domain-model/glossary.md#configuration--confi
 
 **Deployment identity — address, bootstrap, and why.** A node's identity is its
 **address**: the path of provision ids from the app root, assigned by Load from
-graph position — never user-invented, so registry systems with common internal
+graph position — never user-invented, so registry modules with common internal
 names (`db`, `service`) cannot collide; the address qualifies them. Identity
 cannot travel through the environment: every App in a Project boots a
 byte-identical env (ConfigVariables are project+branch-scoped and snapshotted at
@@ -753,7 +753,7 @@ export const postgresContract: Contract<"postgres", PostgresConfig> = Object.fre
   satisfies: (required) => required.kind === "postgres",
 })
 
-// ONE postgres factory, two shapes. { name }: the identity a system provisions —
+// ONE postgres factory, two shapes. { name }: the identity a module provisions —
 // the ONE place the database exists, providing postgresContract. postgres()
 // (no args): the consumer's dependency requiring it. No client factory — the
 // dependency's BINDING is the typed config PostgresConfig itself (hydrate is
@@ -875,7 +875,7 @@ export const prismaCloud = (o: PrismaCloudOptions): Target => ({
   },
 
   resources: {
-    // One Database per system-provisioned postgres resource — `id` is the system
+    // One Database per module-provisioned postgres resource — `id` is the module
     // provision id (e.g. "db"), so a resource shared by several services is
     // created exactly once.
     postgres: ({ id, application }) =>
@@ -1016,7 +1016,7 @@ only; the app writes and bundles its own entry:
 ```ts
 // src/service.ts — the authored service: name + deps + build + where it lives.
 // No handler, no driver. `db` is a DEPENDENCY (a slot): `postgres()` requires
-// postgresContract and never provisions anything — the composing system owns the
+// postgresContract and never provisions anything — the composing module owns the
 // database and wires its ref in. Its binding is `PostgresConfig` ({ url }); the
 // app builds its own client in server.ts (ADR-0015).
 import { compute, postgres } from "@prisma/app-cloud"
@@ -1032,14 +1032,14 @@ export default compute({
   build: node({ module: import.meta.url, entry: "../dist/server.js" }),
 })
 
-// src/system.ts — the app root: the system OWNS the database. It provisions the
+// src/module.ts — the app root: the module OWNS the database. It provisions the
 // identity `postgres({ name })` and wires its ref into the service's slot (the
 // contract matches); its name names the app (ADR-0006).
-import { system } from "@prisma/app"
+import { module } from "@prisma/app"
 import { postgres } from "@prisma/app-cloud"
 import service from "./service.ts"
 
-export default system("hello", (h) => {
+export default module("hello", (h) => {
   const db = h.provision("db", postgres({ name: "db" }))
   h.provision("hello", service, { db })
 })
@@ -1058,7 +1058,7 @@ Bun.serve({ port, hostname: "0.0.0.0",
 // There is no deploy config file (ADR-0003). The app builds itself first
 // (its own bundler produces dist/server.js), then:
 //
-//   prisma-app deploy src/system.ts
+//   prisma-app deploy src/module.ts
 //
 // The CLI infers the target pack from the nodes, constructs it from the
 // environment (the pack's /target fromEnv() reads PRISMA_WORKSPACE_ID), runs
@@ -1079,11 +1079,11 @@ environment, no cloud, no pack internals. That is the dependency inversion the
 model promises. The config round-trip is proven separately at the pack level
 (serialize → deserialize identity).
 
-### Two services, connected — the system (a framework-hosted consumer)
+### Two services, connected — the module (a framework-hosted consumer)
 
 The storefront-auth shape: `auth` is a self-served Hono service shaped like the
 one above — its `db` is a `postgres()` dependency whose binding is the config
-its own server builds a client from, while the composing system below owns and
+its own server builds a client from, while the composing module below owns and
 provisions the database; `storefront` is a **framework-hosted**
 Next.js service whose page pulls the `auth`
 client via `load()`. This replaces the hand-written mixed stack — the URL plumbing,
@@ -1110,15 +1110,15 @@ export default async function Home() {
   return <p>Auth /verify says: {res.status} {await res.text()}</p>
 }
 
-// app.ts — the app's system: transparent wiring, runs at Load. It owns the shared
+// app.ts — the app's module: transparent wiring, runs at Load. It owns the shared
 // Postgres — provisioned once here, wired into auth's slot. Its name becomes
 // the application (Project) name; each service's build adapter carries its own
-// authoring module (BuildAdapter.module), so a system can compose services that
+// authoring module (BuildAdapter.module), so a module can compose services that
 // live in entirely different directories.
 import { postgres } from "@prisma/app-cloud"
-import authService from "./systems/auth/src/service"
-import storefrontService from "./systems/storefront/src/service"
-export default system("storefront-auth", (h) => {
+import authService from "./modules/auth/src/service"
+import storefrontService from "./modules/storefront/src/service"
+export default module("storefront-auth", (h) => {
   const db = h.provision("db", postgres({ name: "db" }))
   const authRef = h.provision("auth", authService, { db })         // db→auth dependency edge
   h.provision("storefront", storefrontService, { auth: authRef })  // auth→storefront dependency edge
@@ -1189,8 +1189,8 @@ producer from a resource — one mechanism.
   `serve()` — is documented in
   [`connection-contracts.md`](connection-contracts.md); this document's type
   sketches predate it and show the pre-contract shapes.
-- **Full System composition** — the minimal system wires services; boundary ports
-  (a system's own Inputs/Outputs), nesting, and forwarding per the authoring-surface
+- **Full Module composition** — the minimal module wires services; boundary ports
+  (a module's own Inputs/Outputs), nesting, and forwarding per the authoring-surface
   design come next. Services stay opaque leaves.
 - **Runtime name lookup** — if the platform gains service-name resolution, the
   pack's `serialize` becomes a no-op and its connection hydrate resolves by name;

@@ -43,7 +43,7 @@ mid-flight) — and per-app stores would fragment the workspace view (listing
 stacks, cross-stack references, and the fresh-machine bootstrap all need one
 place to look). So the store gets a dedicated project outside any user
 topology: framework-owned operational infrastructure, never declared by a
-system, never destroyed by a stack.
+module, never destroyed by a stack.
 
 That project is discovered by name — and the platform allows several projects
 to share a name, so a name match alone proves nothing. Bootstrap therefore

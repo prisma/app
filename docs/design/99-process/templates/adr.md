@@ -16,8 +16,8 @@ for a reader a year from now:
 - Put alternatives last, once the decision is understood — not up front, where the
   options you're discarding are just noise.
 - Keep it timeless. No links to tickets or milestones, no recounting the states the
-  system passed through during the change; those disappear, the ADR remains. Write
-  about the decision and the system, not the project that produced them.
+  module passed through during the change; those disappear, the ADR remains. Write
+  about the decision and the module, not the project that produced them.
 -->
 
 ## Status
