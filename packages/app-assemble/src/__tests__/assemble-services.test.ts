@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { ServiceNode } from '@prisma/app';
-import { Load, service, system } from '@prisma/app';
+import { Load, module, service } from '@prisma/app';
 import type { PrismaAppConfig } from '@prisma/app/config';
 import { AssembleError } from '../assemble-error.ts';
 import { assembleServices } from '../assemble-services.ts';
@@ -34,8 +34,8 @@ const makeService = (name: string, build: Partial<ServiceNode['build']> = {}) =>
   });
 
 describe('assembleServices()', () => {
-  test('a system root produces `bundles` keyed by each service’s full hierarchical address', async () => {
-    const root = system('fixture-system', {}, ({ provision }) => {
+  test('a module root produces `bundles` keyed by each service’s full hierarchical address', async () => {
+    const root = module('fixture-module', {}, ({ provision }) => {
       provision(makeService('auth'), { id: 'auth' });
       provision(makeService('storefront'), { id: 'storefront' });
       return {};
@@ -50,12 +50,12 @@ describe('assembleServices()', () => {
     });
   });
 
-  test('a service provisioned by a NESTED system keys its bundle by the dotted address (H1)', async () => {
-    const inner = system('auth', {}, ({ provision }) => {
+  test('a service provisioned by a NESTED module keys its bundle by the dotted address (H1)', async () => {
+    const inner = module('auth', {}, ({ provision }) => {
       provision(makeService('auth-api'), { id: 'api' });
       return {};
     });
-    const root = system('shop', {}, ({ provision }) => {
+    const root = module('shop', {}, ({ provision }) => {
       provision(inner, { id: 'auth' });
       return {};
     });
@@ -66,8 +66,8 @@ describe('assembleServices()', () => {
     expect(Object.keys(assembled.bundles)).toEqual(['auth.api']);
   });
 
-  test('a system with no provisioned services throws AssembleError', async () => {
-    const root = system('empty-system', {}, () => ({}));
+  test('a module with no provisioned services throws AssembleError', async () => {
+    const root = module('empty-module', {}, () => ({}));
     const graph = Load(root);
 
     await expect(assembleServices(graph, emptyConfig, fakeRun)).rejects.toThrow(AssembleError);
@@ -95,7 +95,7 @@ describe('assembleServices()', () => {
       ],
       state: emptyConfig.state,
     };
-    const root = system('fixture-system', {}, ({ provision }) => {
+    const root = module('fixture-module', {}, ({ provision }) => {
       provision(
         makeService('svc', { extension: '@community/cron-adapter', type: 'cron', entry: 'x' }),
         { id: 'svc' },
@@ -111,7 +111,7 @@ describe('assembleServices()', () => {
   });
 
   test("a build whose extension isn't configured throws AssembleError naming it and the config fix", async () => {
-    const root = system('fixture-system', {}, ({ provision }) => {
+    const root = module('fixture-module', {}, ({ provision }) => {
       provision(makeService('svc'), { id: 'svc' });
       return {};
     });
@@ -133,7 +133,7 @@ describe('assembleServices()', () => {
       extensions: [{ id: '@fixture/node-adapter', nodes: { node: resourceControl } }],
       state: emptyConfig.state,
     };
-    const root = system('fixture-system', {}, ({ provision }) => {
+    const root = module('fixture-module', {}, ({ provision }) => {
       provision(makeService('svc'), { id: 'svc' });
       return {};
     });

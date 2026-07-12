@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["bun"]
   },
-  "include": ["system.ts", "src", "testing", "tests"]
+  "include": ["module.ts", "src", "testing", "tests"]
 }

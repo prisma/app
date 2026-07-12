@@ -48,7 +48,7 @@ Edge semantics, with the properties that matter to us:
   a Branch before creating a deployment").
 - **Project → ConfigVariable (template), Branch → ConfigVariable (override).**
   `ConfigVariable` = `{ projectId, branchId?, class: production|preview, key,
-  encryptedValue (AES-GCM under the project DEK), isManagedBySystem }`, unique on
+  encryptedValue (AES-GCM under the project DEK), isManagedByModule }`, unique on
   `(project, branch, class, key)`. `branchId NULL` is a project-level template;
   a set `branchId` is a branch-scoped override, **allowed only for the preview
   class** (CHECK constraint).
@@ -85,7 +85,7 @@ Consequences the Prisma App Framework designs around:
    producer's new URL) into a consumer therefore means creating a new consumer
    version — which the Alchemy graph does via a property diff (see
    [alchemy-lowering.md](alchemy-lowering.md)).
-3. **`DATABASE_URL` is not a separate mechanism.** It is a system-written
+3. **`DATABASE_URL` is not a separate mechanism.** It is a module-written
    template flowing through the same materialization as user variables — a
    convenience for hand-provisioned single services. The Prisma App Framework
    forbids its use and poisons it at project provision (see

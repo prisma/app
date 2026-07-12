@@ -1,21 +1,21 @@
 /**
  * Type-level tests for cron() (ADR-0020, S2 dispatch 3): the returned
- * system's boundary deps are exactly the runner's own deps, a runner that
+ * module's boundary deps are exactly the runner's own deps, a runner that
  * doesn't expose `{ trigger: triggerContract }` is rejected at compile time,
  * and a runner exposing extra ports beyond `trigger` still type-checks.
  *
  * Type-only (vitest --typecheck, never executed) — mirrors
  * serve-schedule.test-d.ts.
  */
-import type { SystemNode } from '@prisma/app';
+import type { ModuleNode } from '@prisma/app';
 import node from '@prisma/app-node';
 import { contract, rpc } from '@prisma/app-rpc';
 import { type } from 'arktype';
 import { test } from 'vitest';
 import { compute } from '../../compute.ts';
 import { triggerContract } from '../contract.ts';
+import { cron } from '../module.ts';
 import { defineSchedule } from '../schedule.ts';
-import { cron } from '../system.ts';
 
 const build = node({ module: import.meta.url, entry: '../dist/service.mjs' });
 
@@ -46,10 +46,10 @@ const notARunner = compute({
 
 const schedule = defineSchedule({ tick: '2s' });
 
-test("cron() yields a SystemNode whose boundary deps are exactly the runner's own deps", () => {
-  const cronSystem = cron({ schedule, runner });
+test("cron() yields a ModuleNode whose boundary deps are exactly the runner's own deps", () => {
+  const cronModule = cron({ schedule, runner });
   // Fails to compile unless cron()'s inferred RD is exactly typeof runner.inputs.
-  const asRunnerDeps: SystemNode<typeof runner.inputs, Record<never, never>> = cronSystem;
+  const asRunnerDeps: ModuleNode<typeof runner.inputs, Record<never, never>> = cronModule;
   void asRunnerDeps;
 });
 

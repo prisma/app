@@ -1,35 +1,35 @@
 import { describe, expect, test } from 'bun:test';
 import * as path from 'node:path';
-import { Load, service, system } from '@prisma/app';
+import { Load, module, service } from '@prisma/app';
 import { renderStackFile } from '../generate-stack.ts';
 import { loadEntry } from '../load-entry.ts';
 
-describe('renderStackFile() — a system root', () => {
+describe('renderStackFile() — a module root', () => {
   test('renders the config + app imports (relative), the name literal, and the bundles dir/entry literals', () => {
     const content = renderStackFile({
-      entryPath: '/repo/app/system.ts',
+      entryPath: '/repo/app/module.ts',
       cwd: '/repo/app',
       configPath: '/repo/app/prisma-app.config.ts',
       name: 'app',
       assembled: {
         bundles: {
-          auth: { dir: '/repo/app/systems/auth/dist/bundle', entry: 'server.js' },
-          storefront: { dir: '/repo/app/systems/storefront/standalone', entry: 'server.js' },
+          auth: { dir: '/repo/app/modules/auth/dist/bundle', entry: 'server.js' },
+          storefront: { dir: '/repo/app/modules/storefront/standalone', entry: 'server.js' },
         },
       },
     });
 
     expect(content).toContain("import { lower } from '@prisma/app/deploy';");
     expect(content).toContain('import config from "../prisma-app.config.ts";');
-    expect(content).toContain('import app from "../system.ts";');
+    expect(content).toContain('import app from "../module.ts";');
     expect(content).toContain('lower(app, config, {');
     expect(content).toContain('name: "app"');
     expect(content).toContain('bundles: {');
     expect(content).toContain(
-      '"auth": { dir: "/repo/app/systems/auth/dist/bundle", entry: "server.js" }',
+      '"auth": { dir: "/repo/app/modules/auth/dist/bundle", entry: "server.js" }',
     );
     expect(content).toContain(
-      '"storefront": { dir: "/repo/app/systems/storefront/standalone", entry: "server.js" }',
+      '"storefront": { dir: "/repo/app/modules/storefront/standalone", entry: "server.js" }',
     );
     // No `stage:` in the generated LowerOptions — core's lower() never reads
     // it; the stage rides on the `alchemy --stage` flag instead.
@@ -38,7 +38,7 @@ describe('renderStackFile() — a system root', () => {
 
   test('a config discovered ABOVE the app dir renders with the deeper relative path', () => {
     const content = renderStackFile({
-      entryPath: '/repo/apps/shop/system.ts',
+      entryPath: '/repo/apps/shop/module.ts',
       cwd: '/repo/apps/shop',
       configPath: '/repo/prisma-app.config.ts',
       name: 'app',
@@ -55,7 +55,7 @@ describe('renderStackFile() — a system root', () => {
     // broken file; the header must survive it regardless.
     const cwd = '/repo/examples/foo*/app';
     const content = renderStackFile({
-      entryPath: '/repo/examples/foo*/app/system.ts',
+      entryPath: '/repo/examples/foo*/app/module.ts',
       cwd,
       configPath: '/repo/examples/foo*/app/prisma-app.config.ts',
       name: 'app',
@@ -74,13 +74,13 @@ describe('renderStackFile() — a system root', () => {
   });
 });
 
-describe('the generated stack file for a real system entry (no alchemy run)', () => {
+describe('the generated stack file for a real module entry (no alchemy run)', () => {
   test('matches the pipeline’s Load → render sequence', async () => {
     const fixtureDir = path.join(import.meta.dir, 'fixtures');
-    const entry = await loadEntry('valid-system.ts', fixtureDir);
+    const entry = await loadEntry('valid-module.ts', fixtureDir);
 
-    expect(entry.root.kind).toBe('system');
-    expect(entry.root.name).toBe('fixture-system');
+    expect(entry.root.kind).toBe('module');
+    expect(entry.root.name).toBe('fixture-module');
 
     Load(entry.root);
 
@@ -98,8 +98,8 @@ describe('the generated stack file for a real system entry (no alchemy run)', ()
     });
 
     expect(content).toContain('import config from "../prisma-app.config.ts";');
-    expect(content).toContain('import app from "../valid-system.ts";');
-    expect(content).toContain('name: "fixture-system"');
+    expect(content).toContain('import app from "../valid-module.ts";');
+    expect(content).toContain('name: "fixture-module"');
     expect(content).toContain(
       `"one": { dir: ${JSON.stringify(path.join(fixtureDir, 'one', 'dist', 'bundle'))}, entry: "server.js" }`,
     );
@@ -110,8 +110,8 @@ describe('the generated stack file for a real system entry (no alchemy run)', ()
   });
 });
 
-describe('nested-system proof (H1: system-composition) — dotted addresses survive renderStackFile', () => {
-  test('a service provisioned by a system nested inside another system renders with its dotted address as the bundle key', () => {
+describe('nested-module proof (H1: module-composition) — dotted addresses survive renderStackFile', () => {
+  test('a service provisioned by a module nested inside another module renders with its dotted address as the bundle key', () => {
     const innerService = () =>
       service({
         name: 'auth-api',
@@ -126,11 +126,11 @@ describe('nested-system proof (H1: system-composition) — dotted addresses surv
           entry: 'server.js',
         },
       });
-    const inner = system('auth', {}, ({ provision }) => {
+    const inner = module('auth', {}, ({ provision }) => {
       provision(innerService(), { id: 'api' });
       return {};
     });
-    const root = system('shop', {}, ({ provision }) => {
+    const root = module('shop', {}, ({ provision }) => {
       provision(inner, { id: 'auth' });
       return {};
     });
@@ -140,7 +140,7 @@ describe('nested-system proof (H1: system-composition) — dotted addresses surv
     expect(graph.nodes.some((n) => n.id === 'auth.api')).toBe(true);
 
     const content = renderStackFile({
-      entryPath: '/repo/app/system.ts',
+      entryPath: '/repo/app/module.ts',
       cwd: '/repo/app',
       configPath: '/repo/app/prisma-app.config.ts',
       name: 'shop',

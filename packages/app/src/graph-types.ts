@@ -1,11 +1,11 @@
-import type { DependencyEnd, ResourceNode, ServiceNode, SystemNode } from './node.ts';
+import type { DependencyEnd, ModuleNode, ResourceNode, ServiceNode } from './node.ts';
 
-/** Path-derived: root-scope children are bare ids ("auth", "db"); a nested system's own children dot-join under its address ("auth.db"). */
+/** Path-derived: root-scope children are bare ids ("auth", "db"); a nested module's own children dot-join under its address ("auth.db"). */
 export type NodeId = string;
 
 export interface GraphNode {
   readonly id: NodeId;
-  readonly node: ServiceNode | ResourceNode | DependencyEnd | SystemNode;
+  readonly node: ServiceNode | ResourceNode | DependencyEnd | ModuleNode;
 }
 
 /**
@@ -13,7 +13,7 @@ export interface GraphNode {
  * slot node to the service. `dependency`: a service consumes a provisioned
  * producer (a service or a resource — the one wiring mechanism) — from the
  * producer to the consumer, labeled with the consumer's input name (from the
- * system wiring).
+ * module wiring).
  */
 export interface Edge {
   readonly from: NodeId;

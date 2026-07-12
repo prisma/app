@@ -159,7 +159,7 @@ speculatively):
 
 - [`docs/design/00-purpose/goals.md`](../../../docs/design/00-purpose/goals.md) — framework goals this project advances (dev emulator, managed lifecycles).
 - [`docs/design/10-domains/core-model.md`](../../../docs/design/10-domains/core-model.md) — the core model the ports consume; § "Extension points" names the seams this project exercises.
-- [`docs/design/90-decisions/ADR-0013-resources-are-provisioned-by-systems-deps-are-declarations.md`](../../../docs/design/90-decisions/ADR-0013-resources-are-provisioned-by-systems-deps-are-declarations.md) and [ADR-0015](../../../docs/design/90-decisions/ADR-0015-dependencies-resolve-to-bindings-clients-are-app-side.md) — the resource/binding model emulated resources must fit.
+- [`docs/design/90-decisions/ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md`](../../../docs/design/90-decisions/ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md) and [ADR-0015](../../../docs/design/90-decisions/ADR-0015-dependencies-resolve-to-bindings-clients-are-app-side.md) — the resource/binding model emulated resources must fit.
 - [prisma/datahub](https://github.com/prisma/datahub) — first port target.
 - [prisma/open-chat](https://github.com/prisma/open-chat) — second port target; [docs/architecture.md](https://github.com/prisma/open-chat/blob/main/docs/architecture.md).
 - [prisma/streams](https://github.com/prisma/streams) — the streams primitive.

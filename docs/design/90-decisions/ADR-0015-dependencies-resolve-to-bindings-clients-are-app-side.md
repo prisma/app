@@ -60,7 +60,7 @@ Postgres is different. Its wire protocol is not ours, and the client is a driver
 separate things: *what the service requires* (a Postgres speaking this contract)
 and *how this app consumes it* (this driver, these pool settings). The requirement
 is provider-independent; the consumption is an app decision. Fold the second into
-the first and the declaration — the thing the system wires against — carries
+the first and the declaration — the thing the module wires against — carries
 app-specific mechanics it has no business knowing, and the pack is pushed toward
 blessing or shipping a driver it cannot choose correctly for every app.
 
@@ -134,8 +134,8 @@ decision stops short of it.
   — every Next page, `serve()` — so per-call factories are either duplicated
   across those sites or order-dependent on a first "binding" call. The binding
   must be determined by the declaration and resolved once.
-- **The system supplies the client.** Infeasible: the client factory must ship in
-  the *consumer's* deployed bundle (it runs at that service's boot), and system
+- **The module supplies the client.** Infeasible: the client factory must ship in
+  the *consumer's* deployed bundle (it runs at that service's boot), and module
   wiring code does not travel into a service's bundle.
 - **A kind-derived client for postgres** (the pack ships or blesses a driver, as
   it legitimately does for http). Rejected: unlike http, postgres's protocol is
@@ -149,5 +149,5 @@ decision stops short of it.
   runtime path; the binding is what `load()` returns.
 - [`connection-contracts.md`](../10-domains/connection-contracts.md) — the
   Contract that types each binding.
-- [`ADR-0013`](ADR-0013-resources-are-provisioned-by-systems-deps-are-declarations.md)
+- [`ADR-0013`](ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md)
   — the uniform dependency model this builds on.

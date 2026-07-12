@@ -37,7 +37,7 @@ runs:
 
     - name: Build
       # The package's own `build` script is a no-op; turbo's ^build (from
-      # its workspace deps) is what actually builds the systems.
+      # its workspace deps) is what actually builds the modules.
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: pnpm turbo run build --filter '${{ inputs.build-filter }}'
@@ -48,7 +48,7 @@ runs:
       # or use Bun.serve, which throw under node.
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: bun node_modules/.bin/prisma-app deploy system.ts --name "${{ inputs.stack-name }}"
+      run: bun node_modules/.bin/prisma-app deploy module.ts --name "${{ inputs.stack-name }}"
 
     - name: Verify the round trip
       shell: bash
@@ -63,7 +63,7 @@ runs:
       if: always() && steps.deploy.outcome != 'skipped'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: bash ../scripts/destroy-guard.sh "${{ inputs.destroy-label }}" system.ts "${{ inputs.stack-name }}"
+      run: bash ../scripts/destroy-guard.sh "${{ inputs.destroy-label }}" module.ts "${{ inputs.stack-name }}"
 
     - name: Sweep leaked per-run projects
       # Must run under always(): the CLI creates the per-run project outside

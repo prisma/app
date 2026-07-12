@@ -2,7 +2,7 @@ import { number, string } from '../../config.ts';
 // Bundle probe for the import-split guard: uses core's authoring entry the way
 // a user service module would, with real value usage so nothing tree-shakes away.
 import type { Contract } from '../../index.ts';
-import { configOf, dependency, hydrate, Load, resource, service, system } from '../../index.ts';
+import { configOf, dependency, hydrate, Load, module, resource, service } from '../../index.ts';
 
 // A pack-shaped provider contract: kind-satisfies, like postgresContract.
 const dbContract: Contract<'probe/db', { url: string }> = Object.freeze({
@@ -57,7 +57,7 @@ const caller = service({
 const dbNode = resource({ name: 'db', extension: 'test/pack', provides: dbContract });
 
 export const graph = Load(
-  system('probe-system', {}, ({ provision }) => {
+  module('probe-module', {}, ({ provision }) => {
     const dbRef = provision(dbNode, { id: 'db' });
     const ref = provision(app, { id: 'app', deps: { db: dbRef } });
     provision(caller, { id: 'caller', deps: { peer: ref } });

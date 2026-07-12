@@ -5,12 +5,12 @@ import {
   type DependencyEnd,
   type Deps,
   isNode,
+  type ModuleBuilder,
+  type ModuleContext,
+  type ModuleNode,
   type ProvisionedRef,
   type ResourceNode,
   type ServiceNode,
-  type SystemBuilder,
-  type SystemContext,
-  type SystemNode,
 } from './node.ts';
 import { topoSort } from './toposort.ts';
 
@@ -57,7 +57,7 @@ function producerIdOf(ref: unknown): string | undefined {
  * flatten): diagnostic only — usage attribution relies on the per-key object
  * identity the branding copy creates, never on reading this back.
  */
-const SYSTEM_INPUT_KEY = Symbol('prisma:system-input-key');
+const MODULE_INPUT_KEY = Symbol('prisma:module-input-key');
 
 /** Whether `ref` carries a callable `satisfies` that accepts `required` truthily. */
 function satisfiesRequired(ref: unknown, required: unknown): boolean {
@@ -72,7 +72,7 @@ function satisfiesRequired(ref: unknown, required: unknown): boolean {
 
 /**
  * A `wiring` object recorded against the Deps of whatever it wired (a
- * service's `.inputs` or a system's `.deps` — the same shape either way),
+ * service's `.inputs` or a module's `.deps` — the same shape either way),
  * checked once the whole graph is known (see `validateWiring`). Recorded
  * immediately at provision() time so the same call order that already gives
  * the graph its topological order also gives this list its natural order;
@@ -85,8 +85,8 @@ interface PendingWiring {
   readonly deps: Deps;
   readonly wiring: Record<string, unknown>;
   readonly targetId: string;
-  readonly targetKind: 'service' | 'system';
-  readonly enclosingSystemName: string;
+  readonly targetKind: 'service' | 'module';
+  readonly enclosingModuleName: string;
 }
 
 /**
@@ -96,16 +96,16 @@ interface PendingWiring {
  * slot declares a required contract must satisfy() it — no producer-kind
  * branching, the contract alone determines validity, whether the producer is
  * a service port or a resource. Shared by both provisioned kinds so a
- * system-as-child gets exactly the checks a service gets, and run once per
+ * module-as-child gets exactly the checks a service gets, and run once per
  * entry against the one `byId` shared by the whole recursive flatten, so a
  * forwarded ref resolves through to its real producer address regardless of
  * which ancestor scope provisioned it.
  */
 function validateWiring(
   pending: PendingWiring,
-  byId: ReadonlyMap<string, ServiceNode | ResourceNode | SystemNode>,
+  byId: ReadonlyMap<string, ServiceNode | ResourceNode | ModuleNode>,
 ): void {
-  const { deps, wiring, targetId, targetKind, enclosingSystemName } = pending;
+  const { deps, wiring, targetId, targetKind, enclosingModuleName } = pending;
 
   for (const [input, ref] of Object.entries(wiring)) {
     // Cast to the slot's DEFAULT type arguments: the `any`-instantiated union
@@ -128,7 +128,7 @@ function validateWiring(
     if (producerId === undefined || producer === undefined) {
       throw new LoadError(
         `The deps for "${targetId}.${input}" reference "${String(producerId)}", which is not ` +
-          `provisioned in system "${enclosingSystemName}".`,
+          `provisioned in module "${enclosingModuleName}".`,
       );
     }
 
@@ -149,7 +149,7 @@ function validateWiring(
     if (value.kind === 'dependency') {
       throw new LoadError(
         `Dependency input "${input}" of provisioned ${targetKind} "${targetId}" is not wired to a ` +
-          `producer (system "${enclosingSystemName}").`,
+          `producer (module "${enclosingModuleName}").`,
       );
     }
   }
@@ -166,27 +166,27 @@ function wiringEdges(wiring: Record<string, unknown>, targetId: string): Edge[] 
 }
 
 /**
- * Recursively flattens one system's body into the shared graph state and
- * returns its resolved SystemOutputs (one ref-port per expose key) for the
+ * Recursively flattens one module's body into the shared graph state and
+ * returns its resolved ModuleOutputs (one ref-port per expose key) for the
  * caller (the enclosing provision() call, or Load itself for the root) to
- * use. `address` is this system's OWN full address, or `undefined` for the root
+ * use. `address` is this module's OWN full address, or `undefined` for the root
  * scope — its direct children then get bare (unprefixed) addresses, keeping
- * a single-level system identical to before nesting existed. `wiring` supplies a
- * resolved producer ref-port for each of this system's OWN declared deps (empty
+ * a single-level module identical to before nesting existed. `wiring` supplies a
+ * resolved producer ref-port for each of this module's OWN declared deps (empty
  * for the root, which may not declare any — see the root non-empty-deps
- * check in loadSystem). `nodes`, `edges`, `pending`, and `byId` are shared
- * across the ENTIRE recursive flatten, not per scope — a nested system may
+ * check in loadModule). `nodes`, `edges`, `pending`, and `byId` are shared
+ * across the ENTIRE recursive flatten, not per scope — a nested module may
  * forward in a producer provisioned by an ancestor scope, and it is the
  * shared `byId` (keyed by full address) that lets that resolve.
  */
 function flatten(
-  systemNode: SystemNode,
+  moduleNode: ModuleNode,
   address: string | undefined,
   wiring: Record<string, unknown>,
   nodes: GraphNode[],
   edges: Edge[],
   pending: PendingWiring[],
-  byId: Map<string, ServiceNode | ResourceNode | SystemNode>,
+  byId: Map<string, ServiceNode | ResourceNode | ModuleNode>,
 ): Record<string, unknown> {
   const localIds = new Set<string>();
   const used = new Set<string>();
@@ -199,10 +199,10 @@ function flatten(
   // `__providerId`, `satisfies`, and edge construction all see the original
   // ref's own fields — so edges keep carrying the REAL producer address.
   const ctxInputs: Record<string, unknown> = {};
-  for (const key of Object.keys(systemNode.deps)) {
+  for (const key of Object.keys(moduleNode.deps)) {
     const wired = wiring[key];
     ctxInputs[key] =
-      typeof wired === 'object' && wired !== null ? { ...wired, [SYSTEM_INPUT_KEY]: key } : wired;
+      typeof wired === 'object' && wired !== null ? { ...wired, [MODULE_INPUT_KEY]: key } : wired;
   }
 
   // An input counts as USED when its per-key ctx.inputs value shows up in a
@@ -218,9 +218,9 @@ function flatten(
   };
 
   const provision = (
-    child: ServiceNode | ResourceNode | SystemNode,
+    child: ServiceNode | ResourceNode | ModuleNode,
     opts?: { id?: string; deps?: Record<string, unknown> },
-    // biome-ignore lint/suspicious/noExplicitAny: SystemBuilder's real overload set is checked at the call site; the collector implementation is untyped by design.
+    // biome-ignore lint/suspicious/noExplicitAny: ModuleBuilder's real overload set is checked at the call site; the collector implementation is untyped by design.
   ): any => {
     // The id defaults to the node's own `name`; `opts.deps` carries the
     // producers that satisfy its dependency slots. The "_"/"." and duplicate-id
@@ -229,7 +229,7 @@ function flatten(
     const id = opts?.id ?? child.name;
     const provisionWiring = opts?.deps;
     if (typeof id !== 'string' || id.length === 0) {
-      throw new LoadError(`provision() requires a non-empty id (system "${systemNode.name}").`);
+      throw new LoadError(`provision() requires a non-empty id (module "${moduleNode.name}").`);
     }
     // The id becomes the node's address segment: configKey joins it with "_"
     // (id "auth_db" + param "url" would collide with id "auth" + input "db" +
@@ -237,13 +237,13 @@ function flatten(
     // "." — so neither may appear inside an id.
     if (id.includes('_') || id.includes('.')) {
       throw new LoadError(
-        `provision() id "${id}" (system "${systemNode.name}") may not contain "_" or "." — ` +
+        `provision() id "${id}" (module "${moduleNode.name}") may not contain "_" or "." — ` +
           '"_" is the config-key separator and "." the node-id path separator; either ' +
           'inside an id collides with the joined form of other names.',
       );
     }
     if (localIds.has(id)) {
-      throw new LoadError(`Duplicate provision id "${id}" in system "${systemNode.name}".`);
+      throw new LoadError(`Duplicate provision id "${id}" in module "${moduleNode.name}".`);
     }
     // Brand-check on a widened alias: predicate-narrowing the declared union
     // drops the `any`-instantiated ResourceNode member (the same quirk
@@ -251,11 +251,11 @@ function flatten(
     const untrusted: unknown = child;
     if (
       !isNode(untrusted) ||
-      (untrusted.kind !== 'service' && untrusted.kind !== 'resource' && untrusted.kind !== 'system')
+      (untrusted.kind !== 'service' && untrusted.kind !== 'resource' && untrusted.kind !== 'module')
     ) {
       throw new LoadError(
-        `provision("${id}") expects a branded service, resource, or system node (construct it with ` +
-          "the service()/resource()/system() factories or a pack's own).",
+        `provision("${id}") expects a branded service, resource, or module node (construct it with ` +
+          "the service()/resource()/module() factories or a pack's own).",
       );
     }
     localIds.add(id);
@@ -287,7 +287,7 @@ function flatten(
         wiring: localWiring,
         targetId: fullAddress,
         targetKind: 'service',
-        enclosingSystemName: systemNode.name,
+        enclosingModuleName: moduleNode.name,
       });
       byId.set(fullAddress, child);
       return refFor(fullAddress, child);
@@ -298,58 +298,58 @@ function flatten(
       deps: child.deps,
       wiring: localWiring,
       targetId: fullAddress,
-      targetKind: 'system',
-      enclosingSystemName: systemNode.name,
+      targetKind: 'module',
+      enclosingModuleName: moduleNode.name,
     });
     const childOutputs = flatten(child, fullAddress, localWiring, nodes, edges, pending, byId);
     nodes.push({ id: fullAddress, node: child });
     byId.set(fullAddress, child);
     return blindCast<
       ProvisionedRef,
-      "a nested system's ProvisionedRef is its own id plus its already-validated SystemOutputs, matching ProvisionedRef's mapped shape"
+      "a nested module's ProvisionedRef is its own id plus its already-validated ModuleOutputs, matching ProvisionedRef's mapped shape"
     >({ id: fullAddress, ...childOutputs });
   };
 
   const ctx = blindCast<
-    SystemContext<Deps>,
-    "ctxInputs holds one resolved InputRef per systemNode.deps key (built above from wiring, the same ref-port shape a producer's port has), and provision is exactly SystemBuilder['provision'] — together they satisfy SystemContext<D> structurally for whatever D this systemNode declares"
+    ModuleContext<Deps>,
+    "ctxInputs holds one resolved InputRef per moduleNode.deps key (built above from wiring, the same ref-port shape a producer's port has), and provision is exactly ModuleBuilder['provision'] — together they satisfy ModuleContext<D> structurally for whatever D this moduleNode declares"
   >({
     inputs: ctxInputs,
     provision: blindCast<
-      SystemBuilder['provision'],
-      'single implementation behind the provision() overloads — returns the contract-carrying ref for a resource, a ProvisionedRef for a service, and a ProvisionedRef for a nested system, exactly what each overload pins, but an object property cannot carry an overloaded implementation signature'
+      ModuleBuilder['provision'],
+      'single implementation behind the provision() overloads — returns the contract-carrying ref for a resource, a ProvisionedRef for a service, and a ProvisionedRef for a nested module, exactly what each overload pins, but an object property cannot carry an overloaded implementation signature'
     >(provision),
   });
 
   const outputs = blindCast<
     Record<string, unknown>,
-    'SystemOutputs<E> is a mapped type over the declared expose keys; the loop below reads it by key, which is all a Record<string, unknown> view needs'
-  >(systemNode.body(ctx));
+    'ModuleOutputs<E> is a mapped type over the declared expose keys; the loop below reads it by key, which is all a Record<string, unknown> view needs'
+  >(moduleNode.body(ctx));
 
   // Pass-through: returning an input as an expose port re-offers it to the
-  // enclosing scope — that is using it, not ignoring it (system-composition.md
+  // enclosing scope — that is using it, not ignoring it (module-composition.md
   // § Forwarding). The consumer of the pass-through output still resolves to
   // the original producer, since the entry read through to its port.
   markUsed(outputs);
 
-  for (const key of Object.keys(systemNode.deps)) {
+  for (const key of Object.keys(moduleNode.deps)) {
     if (!used.has(key)) {
       throw new LoadError(
-        `System "${systemNode.name}" declares input "${key}" but never forwards it into a provision nor returns it as an output.`,
+        `Module "${moduleNode.name}" declares input "${key}" but never forwards it into a provision nor returns it as an output.`,
       );
     }
   }
 
-  for (const [key, contract] of Object.entries(systemNode.expose)) {
+  for (const [key, contract] of Object.entries(moduleNode.expose)) {
     const port = outputs[key];
     if (port === undefined) {
       throw new LoadError(
-        `System "${systemNode.name}" declares expose "${key}" but its body did not return a port for it.`,
+        `Module "${moduleNode.name}" declares expose "${key}" but its body did not return a port for it.`,
       );
     }
     if (!satisfiesRequired(port, contract)) {
       throw new LoadError(
-        `System "${systemNode.name}"'s returned port for expose "${key}" does not satisfy its declared contract.`,
+        `Module "${moduleNode.name}"'s returned port for expose "${key}" does not satisfy its declared contract.`,
       );
     }
   }
@@ -357,22 +357,22 @@ function flatten(
   return outputs;
 }
 
-export function loadSystem(root: SystemNode, opts?: { id?: NodeId }): Graph {
+export function loadModule(root: ModuleNode, opts?: { id?: NodeId }): Graph {
   const rootId = opts?.id ?? root.name;
   const rootDepKeys = Object.keys(root.deps);
   if (rootDepKeys.length > 0) {
     const names = rootDepKeys.map((k) => `"${k}"`).join(', ');
     throw new LoadError(
-      `System "${root.name}" declares input${rootDepKeys.length > 1 ? 's' : ''} ${names} but is being ` +
+      `Module "${root.name}" declares input${rootDepKeys.length > 1 ? 's' : ''} ${names} but is being ` +
         'deployed as the root — a root has no enclosing scope to wire them; compose ' +
-        `"${root.name}" from another system that provisions and wires it instead.`,
+        `"${root.name}" from another module that provisions and wires it instead.`,
     );
   }
 
   const nodes: GraphNode[] = [];
   const edges: Edge[] = [];
   const pending: PendingWiring[] = [];
-  const byId = new Map<string, ServiceNode | ResourceNode | SystemNode>();
+  const byId = new Map<string, ServiceNode | ResourceNode | ModuleNode>();
 
   flatten(root, undefined, {}, nodes, edges, pending, byId);
 
@@ -389,7 +389,7 @@ export function loadSystem(root: SystemNode, opts?: { id?: NodeId }): Graph {
 
 /**
  * The dependency edges must form a DAG — a cycle means neither producer can
- * deploy first. Resources take no wiring, so only service/system-to-service/system
+ * deploy first. Resources take no wiring, so only service/module-to-service/module
  * edges can ever participate in a cycle; no special-casing needed.
  */
 function assertDependencyDag(edges: readonly Edge[]): void {

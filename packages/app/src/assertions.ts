@@ -25,7 +25,7 @@ export function assertDefined<T>(value: T | null | undefined, message: string): 
  *
  * @example
  * ```typescript
- * invariant(edges.length > 0, 'A wired system must have at least one connection');
+ * invariant(edges.length > 0, 'A wired module must have at least one connection');
  * ```
  */
 export function invariant(condition: boolean, message: string): asserts condition {

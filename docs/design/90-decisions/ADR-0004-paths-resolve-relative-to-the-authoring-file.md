@@ -12,7 +12,7 @@ authored it. The descriptor captures that module explicitly —
 `nextjs({ module: import.meta.url, appDir: "..", entry: "server.js" })` — and
 `entry`, `appDir`, and any other kind-specific path field resolve against
 `dirname(module)`, exactly like a relative import specifier. There is no
-directory discovery anywhere in the system: no walk to a nearest
+directory discovery anywhere in the module: no walk to a nearest
 `package.json`, no inferred "service directory".
 
 The same rule holds one layer up, in the deploy tooling. Resolving a pack's

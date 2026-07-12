@@ -1,4 +1,4 @@
-import { service, system } from '@prisma/app';
+import { module, service } from '@prisma/app';
 
 const makeService = (name: string) =>
   service({
@@ -15,7 +15,7 @@ const makeService = (name: string) =>
     },
   });
 
-export default system('fixture-system', {}, ({ provision }) => {
+export default module('fixture-module', {}, ({ provision }) => {
   provision(makeService('one'), { id: 'one' });
   provision(makeService('two'), { id: 'two' });
   return {};

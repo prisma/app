@@ -42,7 +42,7 @@ reachable from deploy tooling but *unreachable from anything the app's own
 code imports*.
 
 The config file is that boundary, and it is a file boundary rather than a
-compiler trick. App code — service modules, the system entry — imports
+compiler trick. App code — service modules, the module entry — imports
 authoring factories, which are pure data. Only the CLI loads
 `prisma-app.config.ts`, and only the config imports the `/control` entries
 where the heavy code lives. A bundler walking the app's import graph never
@@ -90,9 +90,9 @@ environment when the config is evaluated, erroring with the exact variable
 name before any slow work happens.
 
 One consequence is worth stating plainly: the app's config must list every
-extension its graph uses — including extensions used internally by a system
-installed from a package. A published system documents its extensions and can
-re-export them as a config fragment (`extensions: [...authSystemExtensions,
+extension its graph uses — including extensions used internally by a module
+installed from a package. A published module documents its extensions and can
+re-export them as a config fragment (`extensions: [...authModuleExtensions,
 prismaCloud()]`), keeping the cost to one line. This is the standard plugin
 registration model, and it trades implicit resolution — which is exactly what
 kept failing — for an explicit, deterministic list.
@@ -153,8 +153,8 @@ kept failing — for an explicit, deterministic list.
   derivable (the extension list and the state store).
 - [`ADR-0008`](ADR-0008-wrapper-inlines-everything-except-runtime-builtins.md)
   — the wrapper inlining that makes the firewall necessary.
-- [`ADR-0016`](ADR-0016-a-system-has-the-same-boundary-as-a-service.md) — the
-  system boundary; a published system's extensions enter the app's config as
+- [`ADR-0016`](ADR-0016-a-module-has-the-same-boundary-as-a-service.md) — the
+  module boundary; a published module's extensions enter the app's config as
   a documented fragment.
 - [`ADR-0009`](ADR-0009-deploy-state-is-hosted-in-the-workspace.md) …
   [`ADR-0012`](ADR-0012-the-state-store-speaks-sql-directly.md) — the state

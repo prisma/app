@@ -32,7 +32,7 @@ export interface BuildAdapter {
 
 /**
  * A Resource's identity: the one place a piece of infrastructure exists.
- * Provisioned by a system, never embedded in a service's deps. `provides`
+ * Provisioned by a module, never embedded in a service's deps. `provides`
  * is the Contract the resource offers; `type` is derived from `provides.kind`.
  */
 export interface ResourceNode<C extends AnyContract = AnyContract> {
@@ -89,7 +89,7 @@ export interface RunnableServiceNode<
 }
 
 /**
- * A service's dependency slot. At Load the enclosing system wires a
+ * A service's dependency slot. At Load the enclosing module wires a
  * producer's ref into it; at run it hydrates a client via Connection. `Req`
  * is the required contract (`unknown` for an untyped end like `http()`).
  */
@@ -104,30 +104,30 @@ export interface DependencyEnd<C = unknown, Req = unknown> {
   readonly required: Req | undefined;
 }
 
-/** A System: the same Deps/Expose boundary a service has, around transparent wiring instead of a black-box body — its `body` runs at Load, not at authoring. */
-export interface SystemNode<D extends Deps = Deps, E extends Expose = Expose> {
+/** A Module: the same Deps/Expose boundary a service has, around transparent wiring instead of a black-box body — its `body` runs at Load, not at authoring. */
+export interface ModuleNode<D extends Deps = Deps, E extends Expose = Expose> {
   readonly [NODE]: true;
-  readonly kind: 'system';
+  readonly kind: 'module';
   /** Human-readable, given at authoring — logs/diagnostics only. */
   readonly name: string;
   readonly deps: D;
   readonly expose: E;
-  body(ctx: SystemContext<D>): SystemOutputs<E>;
+  body(ctx: ModuleContext<D>): ModuleOutputs<E>;
 }
 
 /**
- * What a system's body receives: its declared inputs as forwardable wiring
- * values, plus `provision` to register the owned services/systems it wires them into.
+ * What a module's body receives: its declared inputs as forwardable wiring
+ * values, plus `provision` to register the owned services/modules it wires them into.
  */
-export interface SystemContext<D extends Deps> {
-  /** The system's declared inputs as wiring values — pass them into provision(). */
+export interface ModuleContext<D extends Deps> {
+  /** The module's declared inputs as wiring values — pass them into provision(). */
   readonly inputs: { [K in keyof D]: InputRef<D[K]> };
-  /** Registers an owned child (service or system) under a stable id. */
-  readonly provision: SystemBuilder['provision'];
+  /** Registers an owned child (service or module) under a stable id. */
+  readonly provision: ModuleBuilder['provision'];
 }
 
 /**
- * A system's forwarded-input value: the same ref-port shape a producer's
+ * A module's forwarded-input value: the same ref-port shape a producer's
  * output carries, so it flows down a nested `provision()` call indistinguishably
  * from a sibling's exposed port.
  */
@@ -136,7 +136,7 @@ export type InputRef<DE> =
   DE extends DependencyEnd<any, infer Req extends AnyContract> ? RefPort<Req> : never;
 
 /** One ref-port per declared expose key, contract-checked against `E` (mirrors `Wiring`'s `NoInfer` use). */
-export type SystemOutputs<E extends Expose> = { [P in keyof E]: RefPort<NoInfer<E[P]>> };
+export type ModuleOutputs<E extends Expose> = { [P in keyof E]: RefPort<NoInfer<E[P]>> };
 
 /**
  * A provisioned producer's port as a wiring-time value: its contract, tagged
@@ -160,7 +160,7 @@ type ReqOf<DE> = DE extends DependencyEnd<any, infer Req> ? Req : never;
 /**
  * The producers that satisfy a node's declared dependency slots — one ref per
  * slot, checked against its required contract. A slot also accepts
- * `InputRef<D[K]>` so a system body can forward its own `ctx.inputs` straight
+ * `InputRef<D[K]>` so a module body can forward its own `ctx.inputs` straight
  * into a nested `provision()` call — the same value shape a producer's own
  * exposed port carries.
  */
@@ -180,7 +180,7 @@ type ProvisionArgs<D extends Deps> = [keyof D] extends [never]
   ? [opts?: { id?: string }]
   : [opts: { id?: string; deps: DepBindings<D> }];
 
-export interface SystemBuilder {
+export interface ModuleBuilder {
   /** Provisions an owned resource; its id defaults to the node's `name`. */
   provision<C extends AnyContract>(
     resource: ResourceNode<C>,
@@ -203,14 +203,14 @@ export interface SystemBuilder {
     service: ServiceNode<D, any, E>,
     opts: { id?: string; deps: DepBindings<D> },
   ): ProvisionedRef<E>;
-  /** Registers an owned child system; its id defaults to the node's `name`, and `deps` is required iff it declares dependency slots. */
+  /** Registers an owned child module; its id defaults to the node's `name`, and `deps` is required iff it declares dependency slots. */
   provision<D extends Deps, E extends Expose>(
-    child: SystemNode<D, E>,
+    child: ModuleNode<D, E>,
     ...args: ProvisionArgs<D>
   ): ProvisionedRef<E>;
-  /** The child-system call with `deps` spelled out — the same generic-wrapper escape as the service overload above. */
+  /** The child-module call with `deps` spelled out — the same generic-wrapper escape as the service overload above. */
   provision<D extends Deps, E extends Expose>(
-    child: SystemNode<D, E>,
+    child: ModuleNode<D, E>,
     opts: { id?: string; deps: DepBindings<D> },
   ): ProvisionedRef<E>;
 }
@@ -345,7 +345,7 @@ class FrozenResourceNode<C extends AnyContract> extends ResourceNodeBase<C> {
 /**
  * Constructs a branded, frozen Resource node — an identity plus the Contract
  * it provides; the routing `type` is the contract's `kind`. Pure — nothing
- * is provisioned until a system provisions it.
+ * is provisioned until a module provisions it.
  */
 export function resource<C extends AnyContract>(def: {
   name: string;
@@ -420,40 +420,40 @@ export function dependency<P extends Params, C, Req = unknown>(def: {
 /**
  * A closed root: no `deps`, no `expose`, nothing wiring in or out. The body
  * only provisions and needs no return. Omitting the boundary argument IS the
- * closed-root shape — `system(name, body)` instead of `system(name, {}, () =>
+ * closed-root shape — `module(name, body)` instead of `module(name, {}, () =>
  * ({}))`.
  */
-export function system(
+export function module(
   name: string,
-  body: (ctx: SystemContext<Record<never, never>>) => void,
-): SystemNode<Record<never, never>, Record<never, never>>;
+  body: (ctx: ModuleContext<Record<never, never>>) => void,
+): ModuleNode<Record<never, never>, Record<never, never>>;
 /**
- * A system with a boundary: `deps` and/or `expose` declare what wires in and
+ * A module with a boundary: `deps` and/or `expose` declare what wires in and
  * out, the same way a service does. The body returns one port per `expose` key.
  */
-export function system<
+export function module<
   D extends Deps = Record<never, never>,
   E extends Expose = Record<never, never>,
 >(
   name: string,
   boundary: { deps?: D; expose?: E },
-  body: (ctx: SystemContext<D>) => SystemOutputs<E>,
-): SystemNode<D, E>;
+  body: (ctx: ModuleContext<D>) => ModuleOutputs<E>,
+): ModuleNode<D, E>;
 /**
- * Constructs a branded, frozen System node. Construction is INERT — the body is
- * wiring, not user code, and runs only when the system is Loaded.
+ * Constructs a branded, frozen Module node. Construction is INERT — the body is
+ * wiring, not user code, and runs only when the module is Loaded.
  */
-export function system(
+export function module(
   name: string,
-  boundaryOrBody: { deps?: Deps; expose?: Expose } | ((ctx: SystemContext<Deps>) => void),
-  maybeBody?: (ctx: SystemContext<Deps>) => SystemOutputs<Expose>,
-): SystemNode {
-  requireName(name, 'system');
+  boundaryOrBody: { deps?: Deps; expose?: Expose } | ((ctx: ModuleContext<Deps>) => void),
+  maybeBody?: (ctx: ModuleContext<Deps>) => ModuleOutputs<Expose>,
+): ModuleNode {
+  requireName(name, 'module');
   const closedRoot = typeof boundaryOrBody === 'function';
   const boundary = closedRoot ? {} : boundaryOrBody;
   const deps = frozenShallowCopy(boundary.deps ?? {});
   const expose = frozenShallowCopy(boundary.expose ?? {});
-  const body: (ctx: SystemContext<Deps>) => SystemOutputs<Expose> = closedRoot
+  const body: (ctx: ModuleContext<Deps>) => ModuleOutputs<Expose> = closedRoot
     ? (ctx) => {
         boundaryOrBody(ctx);
         return {};
@@ -462,7 +462,7 @@ export function system(
       maybeBody!;
   return Object.freeze({
     [NODE]: true as const,
-    kind: 'system' as const,
+    kind: 'module' as const,
     name,
     deps,
     expose,
@@ -477,7 +477,7 @@ export function system(
  */
 export function isNode(
   value: unknown,
-): value is ServiceNode | ResourceNode | DependencyEnd | SystemNode {
+): value is ServiceNode | ResourceNode | DependencyEnd | ModuleNode {
   return (
     typeof value === 'object' &&
     value !== null &&

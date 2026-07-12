@@ -132,5 +132,5 @@ units fails where most of the usage is.
 - [ADR-0003](ADR-0003-deploy-derives-everything-from-the-root-node.md),
   [ADR-0006](ADR-0006-every-node-is-named.md) — the root-node mechanics "the App is
   the outermost Module" rests on.
-- [ADR-0016](ADR-0016-a-system-has-the-same-boundary-as-a-service.md) — the boundary
+- [ADR-0016](ADR-0016-a-module-has-the-same-boundary-as-a-service.md) — the boundary
   model, unchanged by the rename.

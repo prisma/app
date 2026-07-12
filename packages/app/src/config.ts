@@ -95,7 +95,7 @@ function projectSchema(schema: StandardSchemaV1): Readonly<Record<string, unknow
  * params, then the service's own params. Pure — reads `root.inputs`/`params`
  * directly, executes nothing but the (also pure) schema projection. Deliberately
  * does not go through `Load`: a service's connection-end inputs are legitimately
- * unwired from its own point of view (wiring is an enclosing system's concern),
+ * unwired from its own point of view (wiring is an enclosing module's concern),
  * and this introspects one service's declared shape regardless of how — or
  * whether — it composes into a larger graph.
  */

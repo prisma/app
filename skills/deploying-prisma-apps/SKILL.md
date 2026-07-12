@@ -27,22 +27,22 @@ a **stage** — is chosen on the command line, never in your code.
 ## The commands
 
 ```sh
-prisma-app deploy system.ts                  # production
-prisma-app deploy system.ts --stage staging  # an isolated "staging" environment
-prisma-app deploy system.ts --stage pr-42    # one isolated environment per PR
-prisma-app deploy system.ts --name demo-42   # override the app name for this run
+prisma-app deploy module.ts                  # production
+prisma-app deploy module.ts --stage staging  # an isolated "staging" environment
+prisma-app deploy module.ts --stage pr-42    # one isolated environment per PR
+prisma-app deploy module.ts --name demo-42   # override the app name for this run
 ```
 
 A deploy needs exactly two environment variables: `PRISMA_SERVICE_TOKEN` and
 `PRISMA_WORKSPACE_ID`. Nothing else — the CLI resolves the app's Project (by
-the root system's name) and, for a named stage, the stage's Branch, creating
+the root module's name) and, for a named stage, the stage's Branch, creating
 either if it doesn't exist yet. A fresh checkout with just those two variables
 set deploys successfully.
 
 Build your app first — `prisma-app deploy` does not build for you:
 
 ```sh
-turbo run build && prisma-app deploy system.ts
+turbo run build && prisma-app deploy module.ts
 ```
 
 Re-deploying the same stage is idempotent: it finds the existing Project and
@@ -65,7 +65,7 @@ normalized.
 A bare `prisma-app destroy` is an error.
 
 ```sh
-prisma-app destroy system.ts
+prisma-app destroy module.ts
 # error: `destroy` requires an explicit target: --stage <name> to tear down a
 # branch environment, or --production to tear down the production environment.
 ```
@@ -73,8 +73,8 @@ prisma-app destroy system.ts
 Name what you're tearing down:
 
 ```sh
-prisma-app destroy system.ts --stage staging     # removes staging's resources, then its Branch
-prisma-app destroy system.ts --production         # removes production's resources
+prisma-app destroy module.ts --stage staging     # removes staging's resources, then its Branch
+prisma-app destroy module.ts --production         # removes production's resources
 ```
 
 `--stage` and `--production` together is also an error — pick one. Destroying
@@ -90,10 +90,10 @@ first.
 ```sh
 cd examples/storefront-auth
 
-prisma-app deploy system.ts                  # production: its own URL, its own database
-prisma-app deploy system.ts --stage staging  # staging: a second, isolated URL and database
+prisma-app deploy module.ts                  # production: its own URL, its own database
+prisma-app deploy module.ts --stage staging  # staging: a second, isolated URL and database
 
-prisma-app destroy system.ts --stage staging # tears down staging only — production is untouched
+prisma-app destroy module.ts --stage staging # tears down staging only — production is untouched
 ```
 
 ## Full model

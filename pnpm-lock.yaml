@@ -135,10 +135,10 @@ importers:
         version: link:../../packages/app-rpc
       '@storefront-auth/auth':
         specifier: workspace:0.3.0
-        version: link:systems/auth
+        version: link:modules/auth
       '@storefront-auth/storefront':
         specifier: workspace:0.3.0
-        version: link:systems/storefront
+        version: link:modules/storefront
       alchemy:
         specifier: 2.0.0-beta.59
         version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.92(effect@4.0.0-beta.92))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.92)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.92)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.9(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.0)
@@ -159,7 +159,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  examples/storefront-auth/systems/auth:
+  examples/storefront-auth/modules/auth:
     dependencies:
       arktype:
         specifier: ^2.2.3
@@ -187,7 +187,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  examples/storefront-auth/systems/storefront:
+  examples/storefront-auth/modules/storefront:
     dependencies:
       '@prisma/app':
         specifier: workspace:0.3.0

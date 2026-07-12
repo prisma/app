@@ -11,20 +11,20 @@ describe('loadEntry()', () => {
     expect(entry.path).toBe(fixture('valid-service.ts'));
   });
 
-  test('accepts a system default export', async () => {
-    const entry = await loadEntry(fixture('valid-system.ts'), import.meta.dir);
-    expect(entry.root.kind).toBe('system');
+  test('accepts a module default export', async () => {
+    const entry = await loadEntry(fixture('valid-module.ts'), import.meta.dir);
+    expect(entry.root.kind).toBe('module');
   });
 
   test('rejects a plain-object default export — names what the module must export', async () => {
     await expect(loadEntry(fixture('non-node-export.ts'), import.meta.dir)).rejects.toThrow(
-      /must default-export a node \(a service or a system\)/,
+      /must default-export a node \(a service or a module\)/,
     );
   });
 
   test('rejects a resource default export — a resource is not a valid root', async () => {
     await expect(loadEntry(fixture('resource-export.ts'), import.meta.dir)).rejects.toThrow(
-      /must default-export a node \(a service or a system\)/,
+      /must default-export a node \(a service or a module\)/,
     );
   });
 

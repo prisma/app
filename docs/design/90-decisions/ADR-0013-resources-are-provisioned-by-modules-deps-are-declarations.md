@@ -1,4 +1,4 @@
-# ADR-0013: Resources are provisioned by systems; dependencies are uniform contract-checked slots
+# ADR-0013: Resources are provisioned by modules; dependencies are uniform contract-checked slots
 
 ## Status
 
@@ -15,7 +15,7 @@ provisioned producer carries one (a service's exposed port, or a resource's
 `provision` call site and again at Load via `satisfies()`. There is no
 service-shaped mechanism and resource-shaped mechanism; there is one.
 
-A resource exists in exactly one place: a system provisions it. `ResourceNode` is
+A resource exists in exactly one place: a module provisions it. `ResourceNode` is
 an identity that carries the `Contract` it `provides`; its routing `type` is
 derived from `provides.kind`. `h.provision(id, resource)` is the only way one
 enters the graph, and it returns the provided contract as the ref (tagged with
@@ -26,7 +26,7 @@ cause infrastructure to exist by mentioning it.
 ## Reasoning
 
 Take two services sharing one database — an ingestion service that writes
-readings into Postgres and an API service that reads them back out. The system
+readings into Postgres and an API service that reads them back out. The module
 has **one** database; that is not an optimization but the point: both services
 see the same rows.
 
@@ -48,12 +48,12 @@ the `hydrate` client factory) and the `Contract` it requires. It provisions
 nothing.
 
 What satisfies a slot is a **provisioned producer**, and provisioning is the
-system's job. A system provisions a resource — `ResourceNode`, which carries the
+module's job. A module provisions a resource — `ResourceNode`, which carries the
 `Contract` it `provides` — or a service, and wires the returned ref into each
-consumer's slot. The system body is the one place the shared database is legible:
+consumer's slot. The module body is the one place the shared database is legible:
 
 ```ts
-export default system("datahub", (h) => {
+export default module("datahub", (h) => {
   const db = h.provision("db", postgres({ name: "db" }))   // provides postgresContract
   h.provision("ingest", ingestService, { db })             // ingest.deps.db requires it
   h.provision("api", apiService, { db })                   // api.deps.db requires it
@@ -90,7 +90,7 @@ LoadError at runtime — a service cannot cause infrastructure to exist by
 mentioning it, in the same way it cannot conjure the service it calls. And the
 composition rule falls out: a service deployed directly as the root may carry
 no dependency slot at all, because nothing at the root wires or provisions for
-it; an unwired slot is a LoadError pointing at deploying the composing system.
+it; an unwired slot is a LoadError pointing at deploying the composing module.
 
 ## Consequences
 
@@ -98,7 +98,7 @@ it; an unwired slot is a LoadError pointing at deploying the composing system.
   wirings. A second database is a second `provision` call — visible in review,
   never an accident of mention counting.
 - **No implicit infrastructure.** Every stateful, billable thing traces to one
-  `h.provision` line. The system body is the inventory.
+  `h.provision` line. The module body is the inventory.
 - **One mechanism, one edge kind, one ref shape.** Wiring, the `Wiring<D>`
   type, the `dependency` edge, `buildConfig`'s edge lookup, and the DAG check
   are each a single case. Community packs implement a resource by shipping a
@@ -116,9 +116,9 @@ it; an unwired slot is a LoadError pointing at deploying the composing system.
   which makes `load()` return the contract-determined binding (a derived client
   for protocol-owned kinds, the typed config for resources) and moves client
   construction into app code.
-- **Even a single-service app with a database needs a small system** to provision
+- **Even a single-service app with a database needs a small module** to provision
   and wire it. Dependency-less services still deploy directly.
-- **Lowering stays a graph walk.** The resource ctx `id` is the system provision
+- **Lowering stays a graph walk.** The resource ctx `id` is the module provision
   id; targets need no dedup and no knowledge of consumers.
 
 ## Alternatives considered
@@ -143,8 +143,8 @@ it; an unwired slot is a LoadError pointing at deploying the composing system.
   Rejected: it added a bespoke core primitive (a conversion interface,
   `service()` input normalization, a `NormalizedDeps` type) and a spread-built
   dual object — for a convenience no example actually needed once resources are
-  system-provisioned, and the spread hack broke prototype/brand assumptions. The
-  split `{ name }`/`{ client }` shapes say the two roles plainly; the system owning
+  module-provisioned, and the spread hack broke prototype/brand assumptions. The
+  split `{ name }`/`{ client }` shapes say the two roles plainly; the module owning
   the identity is the honest picture anyway.
 - **Two factory names** (`postgres` for the identity, `postgresDep` for the
   slot). Sound, but a second exported name per resource type where one factory
@@ -154,8 +154,8 @@ it; an unwired slot is a LoadError pointing at deploying the composing system.
 
 - [`../10-domains/core-model.md`](../10-domains/core-model.md) — the type-level
   design this decision shapes (ResourceNode/`provides`, DependencyEnd, the one
-  `Wiring`, SystemBuilder, lowering).
+  `Wiring`, ModuleBuilder, lowering).
 - [`ADR-0003`](ADR-0003-deploy-derives-everything-from-the-root-node.md) — the
-  composing-system error surface this extends to dependency slots.
+  composing-module error surface this extends to dependency slots.
 - [`ADR-0006`](ADR-0006-every-node-is-named.md) — node naming; a provisioned
-  resource's address is its system provision id.
+  resource's address is its module provision id.

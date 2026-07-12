@@ -25,7 +25,7 @@ rules below belong to the core.
 
 ## One port mechanic, uniform at every level
 
-Every node — Service, System, or Resource — has typed Inputs and Outputs, and a
+Every node — Service, Module, or Resource — has typed Inputs and Outputs, and a
 connection wires one node's Output to another's Input of the same named interface.
 This rule already governs the model (see the [domain map](domain-map.md)); the point
 here is that it is also the *authoring surface*. A Service declares its ports as it
@@ -63,34 +63,34 @@ export default compute(
 )
 ```
 
-## Services and Systems are both wiring; they differ only in opacity
+## Services and Modules are both wiring; they differ only in opacity
 
-Neither a Service nor a System runs itself; each is wired and then run by the
+Neither a Service nor a Module runs itself; each is wired and then run by the
 framework. The convention is identical for both: **Inputs arrive as arguments,
 Outputs are the return.** A Service's body is opaque — it wires its ports to a
 server adapter (Next.js, Hono, a bare handler) and the framework sees only the
-boundary; it is a **black box**. A System's body is transparent — the framework
+boundary; it is a **black box**. A Module's body is transparent — the framework
 sees the topology it owns — and it additionally gets `provision()`. Forwarding
-needs no new primitive: a System passes its Inputs *down* into the nodes it owns
+needs no new primitive: a Module passes its Inputs *down* into the nodes it owns
 and returns their Outputs *up* as its own. Provisioning and ownership are a
-System concern; a Service only ever *requires*.
+Module concern; a Service only ever *requires*.
 
 ```ts
-// a system — same port mechanic for its boundary; body only wires
+// a module — same port mechanic for its boundary; body only wires
 import store, { Auth } from "./storefront-service"
-export default system("storefront",
-  { auth: Auth, web: http(StoreInterface) },   // system-level ports
+export default module("storefront",
+  { auth: Auth, web: http(StoreInterface) },   // module-level ports
   ({ auth, provision }) => {
-    const db  = provision(postgres())           // the System owns resources
-    const svc = provision(store, { db, auth })  // forward system Input → service Input
-    return { web: svc.web }                      // forward service Output → system Output
+    const db  = provision(postgres())           // the Module owns resources
+    const svc = provision(store, { db, auth })  // forward module Input → service Input
+    return { web: svc.web }                      // forward service Output → module Output
   }
 )
 ```
 
-Wiring resolves at define time for both, symmetrically — enforced for a System (the
+Wiring resolves at define time for both, symmetrically — enforced for a Module (the
 framework can see it), expected of a Service (a black box it cannot reach into).
-Keeping resolution time the same is deliberate: it makes a System behave like a
+Keeping resolution time the same is deliberate: it makes a Module behave like a
 Service, so the
 model stays predictable, and it guarantees nothing executes before the wiring is
 complete.
@@ -144,7 +144,7 @@ nothing, the topology can be interrogated and emitted for tooling independently 
 deploy. Because integrity is validated at Load before any Hydrate, an error surfaces
 before execution and a test can trust that nothing ran until the graph was whole. And
 because a fake Output can be substituted at any Input — the same dependency inversion
-— a Service or System is testable with no real infrastructure, which is the
+— a Service or Module is testable with no real infrastructure, which is the
 local-emulation story.
 
 ## Alternatives set aside
@@ -167,12 +167,12 @@ local-emulation story.
 
 - **Deploy-time URL baking vs. runtime name resolution.** Baking a consumer's
   `AUTH_URL` from a deployed URL forces the topology into a DAG with a deploy order and
-  forbids two Systems calling each other. A name-based internal registry (stable internal
+  forbids two Modules calling each other. A name-based internal registry (stable internal
   addressing resolved at runtime) would allow cycles and independent redeploys.
 - **`use(…)` scoping** in framework-hosted code — process-scoped (a module singleton,
   e.g. the database pool) vs request-scoped (via `AsyncLocalStorage`).
 - **Cross-repo contract provenance.** A monorepo type-only import of a connection type
-  is trivial; Systems in separate repos need it published as a package or generated.
+  is trivial; Modules in separate repos need it published as a package or generated.
 - The core↔target architecture's own open questions (Alchemy in core vs behind the
   target; where connection types route; a serializable plan) live in
   [core and targets](core-and-targets.md#open-questions).

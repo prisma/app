@@ -12,7 +12,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import type { Contract, ResourceNode } from '@prisma/app';
-import { isNode, Load, string, system } from '@prisma/app';
+import { isNode, Load, module, string } from '@prisma/app';
 import { blindCast } from '@prisma/app/casts';
 import { postgres } from '../postgres.ts';
 import { isPnPostgresResourceNode, pnContract, pnPostgres } from '../prisma-next.ts';
@@ -161,7 +161,7 @@ describe('the config path rides through provisioning (brand intact)', () => {
     });
 
     const graph = Load(
-      system('pn-system', {}, ({ provision }) => {
+      module('pn-module', {}, ({ provision }) => {
         provision(node, { id: 'db' });
         return {};
       }),

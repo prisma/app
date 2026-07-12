@@ -5,7 +5,7 @@ import { type Edge, type GraphNode, LoadError, type NodeId } from './graph-types
  * result. Ties (nodes with no ordering constraint between them) keep their
  * relative order from `nodes` — so a graph already authored producer-first
  * comes out byte-identical to its pre-sort layout; only a graph that
- * genuinely needs reordering (e.g. a system wired via a forged ref pointing at a
+ * genuinely needs reordering (e.g. a module wired via a forged ref pointing at a
  * not-yet-provisioned producer) actually moves. A Kahn's-algorithm variant
  * that always picks the ready node with the smallest original index. Edges
  * whose endpoint falls outside `nodes` (e.g. a service-root's input edges

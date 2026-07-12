@@ -10,17 +10,17 @@ from the purpose, not the other way around.
   connections between them — is generated from your code, not hand-authored in a
   separate config or IaC file.
 - **Provision and deploy via Alchemy — no manual wiring.** One command, or your CD
-  pipeline, provisions the infrastructure and deploys the system to a target.
+  pipeline, provisions the infrastructure and deploys the module to a target.
 - **Pluggable deployment targets.** Targets are extension packs; the framework
   ships the Prisma Cloud pack, and the core stays target-agnostic.
 - **A queryable topology.** The inferred topology is a first-class artifact you and
   your agents can interrogate from the CLI.
 - **Recreate the whole topology in a fresh environment.** Every element has a
-  managed lifecycle, so standing up a new environment provisions the entire system
+  managed lifecycle, so standing up a new environment provisions the entire module
   from nothing — no click-ops, no manually-created prerequisites.
 - **Reproduce every element in the local dev emulator.** The same topology runs
   locally: each Resource ships a local stand-in beside its real provider, so
-  `prisma dev` emulates the deployed system without touching the cloud.
+  `prisma dev` emulates the deployed module without touching the cloud.
 
 ## Non-goals
 

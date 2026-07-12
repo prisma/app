@@ -6,7 +6,7 @@ import { call, callVoid, type PrismaApiError } from './http.ts';
 export interface ResolveContainerOptions {
   /** The workspace to resolve the Project in. */
   readonly workspaceId: string;
-  /** The app's name — the root `system("<name>", …)` name, or `--name`. */
+  /** The app's name — the root `module("<name>", …)` name, or `--name`. */
   readonly appName: string;
   /** A named stage (e.g. `staging`); omit for the default (production) stage. */
   readonly stage?: string;

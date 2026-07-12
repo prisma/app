@@ -1,5 +1,5 @@
 /**
- * A dummy auth service for TESTING a system that depends on auth — inject it in
+ * A dummy auth service for TESTING a module that depends on auth — inject it in
  * place of the real one so a consumer's tests need no Postgres and no deploy.
  * It serves the real `authContract` (so its handler map is type-checked against
  * the same contract the real auth exposes) with an in-memory `verify`. A

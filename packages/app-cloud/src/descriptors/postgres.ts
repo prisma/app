@@ -10,8 +10,8 @@ import { PgWarm } from '../pg-warm-resource.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
 /**
- * One Database per system-provisioned postgres resource — `id` is the
- * system provision id, so a resource shared by several consumers is created
+ * One Database per module-provisioned postgres resource — `id` is the
+ * module provision id, so a resource shared by several consumers is created
  * exactly once.
  */
 export function postgresDescriptor(o: ResolvedCloudOptions): NodeDescriptor {

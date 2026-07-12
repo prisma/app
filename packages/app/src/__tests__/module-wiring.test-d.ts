@@ -1,11 +1,11 @@
 /**
- * The accept/reject matrix for dependency wiring, checked on the real system:
- * `SystemBuilder.provision` wiring a provisioned ref into a consumer's slot —
+ * The accept/reject matrix for dependency wiring, checked on the real module:
+ * `ModuleBuilder.provision` wiring a provisioned ref into a consumer's slot —
  * ONE mechanism, the contract determines validity — and the Deps constraint
  * that keeps bare ResourceNodes out of a service's inputs.
  *
  * Type-only (vitest `--typecheck`, never executed at runtime): the reject
- * cases are exactly what Load's runtime backstop throws on (see system.test.ts),
+ * cases are exactly what Load's runtime backstop throws on (see module.test.ts),
  * so running the calls would throw. Positive cases use `expectTypeOf`
  * matchers; the negative call/argument shapes keep a `// @ts-expect-error` on
  * the offending line — the idiomatic form for "this must not compile".
@@ -13,7 +13,7 @@
 import { expectTypeOf, test } from 'vitest';
 import { string } from '../config.ts';
 import type { Contract } from '../contract.ts';
-import type { BuildAdapter, RefPort, SystemBuilder } from '../node.ts';
+import type { BuildAdapter, ModuleBuilder, RefPort } from '../node.ts';
 import { dependency, resource, service } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
 
@@ -69,7 +69,7 @@ const producer = service({
   build,
 });
 
-declare const h: SystemBuilder;
+declare const h: ModuleBuilder;
 
 const pgRef = h.provision(pgNode, { id: 'pg' });
 const cacheRef = h.provision(cacheNode, { id: 'cache' });

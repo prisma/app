@@ -7,15 +7,15 @@ Accepted
 ## Decision
 
 The deploy entrypoint is `prisma-app deploy <entry>`, where `entry` is a module
-whose default export is a **system** — the application root. Everything about
-the *application* is derived: it is the graph reachable from that system, and
+whose default export is a **module** — the application root. Everything about
+the *application* is derived: it is the graph reachable from that module, and
 its name comes from the root node (overridable with `--name`). The one thing
 that is not derivable — which control-plane extensions exist, and the deploy's
 state store — lives in `prisma-app.config.ts` (ADR-0017). The config carries
 no application settings: no app reference, no name, no per-service options.
 
-> **Amended 2026-07:** the root must be a **system**, not "a service or a system".
-> A single service is deployed by wrapping it in a one-service system; the former
+> **Amended 2026-07:** the root must be a **module**, not "a service or a module".
+> A single service is deployed by wrapping it in a one-service module; the former
 > service-rooted deploy path (and its separate singular-`bundle` shape) was
 > removed to keep one deploy pipeline. Everything else in this decision is
 > unchanged.
@@ -39,27 +39,27 @@ export default compute({
   build: node({ module: import.meta.url, entry: "../dist/server.js" }),
 });
 
-// src/system.ts — the root: the system provisions the database and wires it in (ADR-0013).
-import { system } from "@prisma/app";
+// src/module.ts — the root: the module provisions the database and wires it in (ADR-0013).
+import { module } from "@prisma/app";
 import { postgres } from "@prisma/app-cloud";
 import service from "./service.ts";
 
-export default system("hello", {}, ({ provision }) => {
+export default module("hello", {}, ({ provision }) => {
   const db = provision("db", postgres({ name: "db" }));
   provision("hello", service, { db });
   return {};
 });
 ```
 
-The application root is a **system** — the composition unit. A single service is
-deployed by wrapping it in a one-service system:
+The application root is a **module** — the composition unit. A single service is
+deployed by wrapping it in a one-service module:
 
 ```ts
-// src/system.ts
-import { system } from "@prisma/app";
+// src/module.ts
+import { module } from "@prisma/app";
 import service from "./service.ts";
 
-export default system("hello", {}, ({ provision }) => {
+export default module("hello", {}, ({ provision }) => {
   provision("hello", service);
   return {};
 });
@@ -68,7 +68,7 @@ export default system("hello", {}, ({ provision }) => {
 Deploying it is one command:
 
 ```sh
-prisma-app deploy src/system.ts
+prisma-app deploy src/module.ts
 ```
 
 For that command to work, something has to supply each node's control-plane
@@ -104,22 +104,22 @@ immediately with an error naming the extension to add to
 `prisma-app.config.ts`.
 
 Deriving everything from the entry module also settles what "the root" means:
-**nothing marks a root in the model** beyond its kind — whatever system you point
+**nothing marks a root in the model** beyond its kind — whatever module you point
 the CLI at *is* the application, and the graph reachable from its default
-export is what deploys. The root must be a system: pointing the CLI at a bare
-service is rejected with an error telling you to wrap it in a system. This keeps
+export is what deploys. The root must be a module: pointing the CLI at a bare
+service is rejected with an error telling you to wrap it in a module. This keeps
 one deploy shape rather than a second, service-rooted pipeline path. Two things
 follow:
 
-- A **one-service system** is the standalone-deploy story: it deploys as a
+- A **one-service module** is the standalone-deploy story: it deploys as a
   complete application with its own project and its own state. Any slice of a
-  larger system can be deployed in isolation, and it cannot collide with the
+  larger module can be deployed in isolation, and it cannot collide with the
   composed application because it carries its own name and therefore its own
   project.
-- A service with **unwired dependency slots** (which an enclosing system
+- A service with **unwired dependency slots** (which an enclosing module
   normally wires to a provisioned producer — ADR-0013) fails at Load, with
   an error naming the unwired input and pointing at deploying the composing
-  system instead.
+  module instead.
 
 ## Consequences
 
@@ -167,7 +167,7 @@ follow:
   build/assembly ownership split the CLI drives.
 - [`ADR-0006`](ADR-0006-every-node-is-named.md) — where the application name
   comes from.
-- [`ADR-0013`](ADR-0013-resources-are-provisioned-by-systems-deps-are-declarations.md)
-  — why the database lives in the system, not the service's deps.
+- [`ADR-0013`](ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md)
+  — why the database lives in the module, not the service's deps.
 - [`../10-domains/deploy-cli.md`](../10-domains/deploy-cli.md) — the full
   pipeline this decision anchors.

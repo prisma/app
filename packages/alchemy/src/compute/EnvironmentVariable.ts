@@ -32,7 +32,7 @@ export type EnvironmentVariable = Resource<
 
 /**
  * A project-scoped **environment variable** that Compute injects into the
- * project's services from their attached branch (e.g. wiring one system's URL into
+ * project's services from their attached branch (e.g. wiring one module's URL into
  * another).
  */
 export const EnvironmentVariable = Resource<EnvironmentVariable>('Prisma.EnvironmentVariable');

@@ -44,7 +44,7 @@ body:
         The smaller, the better. A failing test, a tiny repo, or a self-contained code snippet is far easier to triage than a description of behaviour in a larger app.
       placeholder: |
         ```ts
-        // the system()/service definition and the command that fails
+        // the module()/service definition and the command that fails
         ```
     validations:
       required: true

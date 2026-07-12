@@ -25,7 +25,7 @@ compute({
 const runner = provision('runner', myRunner, { ingest: inputs.ingest });
 provision('scheduler', cronScheduler(schedule), { trigger: runner.trigger });
 
-// The app provisions the whole Cron system; provision() infers the id from the
+// The app provisions the whole Cron module; provision() infers the id from the
 // node's name ('cron'), so the id never has to be spelled out:
 provision(cron({ schedule, runner: myRunner }), { ingest: ingest.rpc });
 ```
@@ -103,7 +103,7 @@ Nothing the app authored moves.
 ## Consequences
 
 - **Cron composes from existing primitives.** A service depending on a
-  sibling's exposed endpoint, wrapped with a runner in a system — nothing new in
+  sibling's exposed endpoint, wrapped with a runner in a module — nothing new in
   the composition model. If an implementation reaches for a new primitive, that
   is a signal the design is being misread.
 - **The scheduler holds no state.** The schedule is config; missed ticks are
@@ -138,7 +138,7 @@ Nothing the app authored moves.
 - [`ADR-0018`](ADR-0018-config-params-carry-a-caller-owned-schema.md) /
   [`ADR-0019`](ADR-0019-the-target-owns-config-serialization.md) — the
   structured, target-serialized param the schedule rides on.
-- [`ADR-0013`](ADR-0013-resources-are-provisioned-by-systems-deps-are-declarations.md)
+- [`ADR-0013`](ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md)
   — the resource model cron deliberately is *not*.
-- [`ADR-0016`](ADR-0016-a-system-has-the-same-boundary-as-a-service.md) — the
-  system composition the Cron wrapper uses.
+- [`ADR-0016`](ADR-0016-a-module-has-the-same-boundary-as-a-service.md) — the
+  module composition the Cron wrapper uses.
