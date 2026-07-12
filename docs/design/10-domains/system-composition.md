@@ -41,6 +41,10 @@ type SystemOutputs<E extends Expose> = { [P in keyof E]: RefPort<E[P]> };
   degenerate case of one shape, not a separate shape. Omitting the boundary
   argument — `system(name, body)`, where the body provisions and returns
   nothing — is the closed-root spelling of exactly that empty boundary.
+- `provision`'s id may be omitted — `provision(node)` / `provision(node,
+  wiring)` — and defaults to the node's own `name`. Pass an explicit id only
+  when the name is not a valid id (contains `_`/`.`) or two provisioned nodes
+  share a name.
 
 ## Forwarding
 

@@ -10,6 +10,6 @@ import storefrontService from '@storefront-auth/storefront';
  * that contract.
  */
 export default system('storefront-auth', ({ provision }) => {
-  const auth = provision('auth', authSystem);
-  provision('storefront', storefrontService, { auth: auth.rpc });
+  const auth = provision(authSystem);
+  provision(storefrontService, { auth: auth.rpc });
 });
