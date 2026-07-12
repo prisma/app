@@ -33,7 +33,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/app.git",
+    "url": "https://github.com/prisma/compose.git",
     "directory": "packages/1-prisma-cloud/0-lowering/lowering"
   },
   "engines": {

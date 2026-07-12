@@ -26,7 +26,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/app.git",
+    "url": "https://github.com/prisma/compose.git",
     "directory": "packages/0-framework/3-tooling/assemble"
   },
   "engines": {

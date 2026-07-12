@@ -30,7 +30,7 @@ You need:
 ## Setup
 
 ```bash
-git clone https://github.com/prisma/app.git
+git clone https://github.com/prisma/compose.git
 cd app
 
 corepack enable                      # if you haven't already
