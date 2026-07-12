@@ -9,7 +9,10 @@ including `@prisma/compose-alchemy` as a separate package.
 
 ## Decision
 
-The framework publishes exactly two packages:
+The framework publishes exactly two **public** packages. The constraint is on the
+published surface only — the workspace may hold as many **private** packages
+(`"private": true`) as engineering convenience wants; internal seams are free,
+names users install are not. The two public packages:
 
 - **`@prisma/compose`** — the framework: core (`module()`, types, casts), the
   **`prisma-compose`** CLI as its bin, the assemble pipeline as internals, and the
@@ -67,9 +70,10 @@ family's unpublish — two names is the entire republish burden.
   `compose-node`, `compose-rpc`, `compose-nextjs`, `compose-assemble`,
   `compose-cli`, `compose-alchemy`, and `compose-cron` never exist as packages —
   they are subpaths or internals.
-- **The workspace restructure follows the packages**: the repo's `packages/`
-  directory consolidates to match, with the old package directories folded in as
-  source directories behind the two `package.json`s.
+- **The workspace restructure follows the public surface, not vice versa**: the
+  old package directories become source directories behind the two `package.json`s
+  *or* stay as private workspace packages (`"private": true`) — whichever builds
+  cleaner. Only the two public names are constrained.
 - **The registry convention must enumerate modules per package** (a manifest field
   or keywords listing each provided module and its entrypoint) — already implied by
   the register model, now load-bearing for discovery.
