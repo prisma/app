@@ -1,8 +1,18 @@
 import { describe, expect, mock, test } from 'bun:test';
+// Import the REAL modules the mocks below stub, so each mock can spread them.
+// This matters beyond convenience: `bun test` runs every test file in ONE
+// process and `mock.module` is process-global. When the real module is already
+// loaded, bun patches the listed exports in place and every other export
+// survives for sibling test files; when it is NOT yet loaded, the factory
+// REPLACES the module and a sibling's import of an unlisted export throws.
+// Static-importing the real module here forces the survivable patch-in-place
+// mode regardless of the (filesystem-dependent) test-file order.
+import * as RealPrismaAlchemy from '@prisma/alchemy';
 import type { LowerContext, LoweredNode } from '@prisma/app/deploy';
 import * as RealOutput from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
+import * as RealPgWarm from '../pg-warm-resource.ts';
 
 // Stub the provider layer AND alchemy/Output so the compute target's data
 // flow (id derivation, props threading, outputs shape) runs purely — no
@@ -25,6 +35,7 @@ mock.module('alchemy/Output', () => ({
 }));
 
 mock.module('@prisma/alchemy', () => ({
+  ...RealPrismaAlchemy,
   providers: () => ({ stub: 'providers' }),
   EnvironmentVariable: (id: string, props: { key: string }) => {
     recorded.envVar.push([id, props]);
@@ -59,6 +70,7 @@ mock.module('@prisma/alchemy', () => ({
 // lowering's data flow runs purely. `reconcile` echoes the url, so the stub
 // returns { url } — the same shape the lowering threads into outputs/migration.
 mock.module('../pg-warm-resource.ts', () => ({
+  ...RealPgWarm,
   PgWarm: (id: string, props: { url: unknown }) => {
     recorded.warm.push([id, props]);
     return Effect.succeed({ url: props.url });

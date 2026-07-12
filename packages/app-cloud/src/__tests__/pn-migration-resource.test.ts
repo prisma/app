@@ -1,14 +1,20 @@
 /**
  * The `PnMigration` Alchemy resource wiring (slice 2 D2), proven WITHOUT Prisma
  * Cloud:
- *   - the merge/lookup MECHANISM the descriptor relies on — `Layer.merge` of two
- *     `Provider.effect` layers keeps BOTH provider tags reachable by
- *     `tryFindProviderByType` (no shadowing). Exercised with two synthetic clean
- *     providers, not the real `Prisma.providers()`: that layer's sub-layers hit
- *     an environment-fragile Effect internal (`layer.build is not a function`)
- *     when built from a test, and the real `Prisma.providers()` + `PnMigration`
- *     merge is already proven end to end by the green live E2E deploy — so the
- *     test only needs the mechanism, not Prisma's provider internals;
+ *   - the merge/lookup MECHANISM the descriptor relies on — `Layer.mergeAll` of
+ *     `Provider.effect` layers keeps EVERY provider tag reachable by
+ *     `tryFindProviderByType` (no shadowing). Exercised with two synthetic
+ *     in-file providers ONLY. Deliberately imports NO provider constructor from
+ *     another module: `bun test` runs every test file in one process and
+ *     `mock.module` is process-global, so a sibling file's module mock (e.g.
+ *     control-lowering.test.ts stubbing `../pg-warm-resource.ts`) can replace
+ *     an imported constructor with a non-Layer stub — which is exactly how CI
+ *     (whose filesystem yields a different test-file order than macOS) hit
+ *     `layer.build is not a function` here. In-file values are un-mockable.
+ *   - the REAL providers' by-type reachability — asserted through alchemy's own
+ *     lookup against a directly-constructed Context (`Layer.succeed` on the
+ *     `Provider(type)` tag with the exported SERVICE values, which no sibling
+ *     mock touches) — no cross-module Layer constructors involved;
  *   - the provider's `reconcile` routes to `applyPnMigration` — driven directly
  *     against the exported provider service, proven live against a real local
  *     Postgres (empty → init, re-run → no-op, no-path → rejects).
@@ -26,8 +32,10 @@ import type * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import * as Option from 'effect/Option';
-import { PgWarmProvider } from '../pg-warm-resource.ts';
-import { PnMigrationProvider, pnMigrationProviderService } from '../pn-migration-resource.ts';
+import type { PgWarm } from '../pg-warm-resource.ts';
+import { pgWarmProviderService } from '../pg-warm-resource.ts';
+import type { PnMigration } from '../pn-migration-resource.ts';
+import { pnMigrationProviderService } from '../pn-migration-resource.ts';
 import { PnMigrationError, targetStorageHash } from '../prisma-next-migrate.ts';
 import gadgetContractJson from './fixtures/gadget-contract/emitted/contract.json' with {
   type: 'json',
@@ -42,47 +50,83 @@ import {
   type TestPostgres,
 } from './postgres-harness.ts';
 
-// A trivial second Alchemy resource + provider — a clean stand-in for "some
-// other extension's provider", so the merge mechanism is exercised without the
-// real Prisma.providers() (whose sub-layers are fragile to build from a test).
-type TestProbe = Resource<'PrismaNext.TestProbe', { readonly n: number }, { readonly n: number }>;
-const TestProbe = Resource<TestProbe>('PrismaNext.TestProbe');
-const TestProbeProvider = () =>
-  Provider.effect(
-    TestProbe,
-    Effect.succeed<Provider.ProviderService<TestProbe>>({
-      list: () => Effect.succeed([]),
-      reconcile: ({ news }) => Effect.succeed({ n: news.n }),
-      delete: () => Effect.void,
-    }),
-  );
+// Two trivial in-file Alchemy resources + providers — clean stand-ins for the
+// descriptor's providers, so the merge mechanism is exercised with values no
+// sibling test file's `mock.module` can replace (in-file consts are immune;
+// imported constructors are not — see the header).
+type ProbeA = Resource<'PrismaNext.ProbeA', { readonly n: number }, { readonly n: number }>;
+const ProbeA = Resource<ProbeA>('PrismaNext.ProbeA');
+type ProbeB = Resource<'PrismaNext.ProbeB', { readonly n: number }, { readonly n: number }>;
+const ProbeB = Resource<ProbeB>('PrismaNext.ProbeB');
+const probeAService: Provider.ProviderService<ProbeA> = {
+  list: () => Effect.succeed([]),
+  reconcile: ({ news }) => Effect.succeed({ n: news.n }),
+  delete: () => Effect.void,
+};
+const probeBService: Provider.ProviderService<ProbeB> = {
+  list: () => Effect.succeed([]),
+  reconcile: ({ news }) => Effect.succeed({ n: news.n }),
+  delete: () => Effect.void,
+};
 
-// The exact merge shape the extension descriptor uses (`Layer.merge(providerA,
-// providerB)`), with two clean providers. Resolved via a scoped `Layer.build` +
+// The exact merge shape the extension descriptor uses (`Layer.mergeAll` of
+// `Provider.effect` layers). Resolved via a scoped `Layer.build` +
 // `provideContext` (stable public Effect API), not `Effect.provide(layer)`.
-const merged = Layer.mergeAll(PnMigrationProvider(), PgWarmProvider(), TestProbeProvider());
-const resolveInMerged = <A>(lookup: Effect.Effect<A, never, never>): Promise<A> =>
+const merged = Layer.mergeAll(
+  Provider.effect(ProbeA, Effect.succeed(probeAService)),
+  Provider.effect(ProbeB, Effect.succeed(probeBService)),
+);
+const resolveIn = <A>(
+  layer: Layer.Layer<never>,
+  lookup: Effect.Effect<A, never, never>,
+): Promise<A> =>
   Effect.runPromise(
     Effect.scoped(
-      Layer.build(merged).pipe(
+      Layer.build(layer).pipe(
         Effect.flatMap((context: Context.Context<never>) => Effect.provideContext(lookup, context)),
       ),
     ),
   );
 
-describe('provider merge mechanism (Layer.merge keeps both tags reachable)', () => {
-  test('the merged layer resolves the PnMigration provider by type', async () => {
-    const resolved = await resolveInMerged(Provider.tryFindProviderByType('PrismaNext.Migration'));
+describe('provider merge mechanism (Layer.mergeAll keeps every tag reachable)', () => {
+  test('the merged layer resolves the first provider by type', async () => {
+    const resolved = await resolveIn(merged, Provider.tryFindProviderByType('PrismaNext.ProbeA'));
     expect(Option.isSome(resolved)).toBe(true);
   });
 
-  test('the merged layer resolves the PgWarm provider by type', async () => {
-    const resolved = await resolveInMerged(Provider.tryFindProviderByType('PrismaCloud.PgWarm'));
+  test('merging does not shadow the second provider', async () => {
+    const resolved = await resolveIn(merged, Provider.tryFindProviderByType('PrismaNext.ProbeB'));
+    expect(Option.isSome(resolved)).toBe(true);
+  });
+});
+
+describe("the real providers' tags resolve by type (direct context, no cross-module layers)", () => {
+  // Rebuild the tag→service pairing in-file: the Resource classes are
+  // re-declared HERE from the modules' type-only exports (type imports erase
+  // at compile time, so a leaked `mock.module` can't touch them), paired with
+  // the exported SERVICE values (which no sibling mock factory lists, so they
+  // also survive a leak) — alchemy's own lookup must find both types the
+  // descriptor registers.
+  const PnMigrationTag = Resource<PnMigration>('PrismaNext.Migration');
+  const PgWarmTag = Resource<PgWarm>('PrismaCloud.PgWarm');
+  const realTags = Layer.mergeAll(
+    Provider.effect(PnMigrationTag, Effect.succeed(pnMigrationProviderService)),
+    Provider.effect(PgWarmTag, Effect.succeed(pgWarmProviderService)),
+  );
+
+  test("tryFindProviderByType('PrismaNext.Migration') resolves", async () => {
+    const resolved = await resolveIn(
+      realTags,
+      Provider.tryFindProviderByType('PrismaNext.Migration'),
+    );
     expect(Option.isSome(resolved)).toBe(true);
   });
 
-  test('merging does not shadow the other provider (TestProbe still resolves)', async () => {
-    const resolved = await resolveInMerged(Provider.tryFindProviderByType('PrismaNext.TestProbe'));
+  test("tryFindProviderByType('PrismaCloud.PgWarm') resolves", async () => {
+    const resolved = await resolveIn(
+      realTags,
+      Provider.tryFindProviderByType('PrismaCloud.PgWarm'),
+    );
     expect(Option.isSome(resolved)).toBe(true);
   });
 });
