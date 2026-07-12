@@ -318,12 +318,18 @@ describe('sharing: one system-provisioned postgres, two compute consumers — th
       entry: 'server.js',
     };
     const root = system('shop', {}, ({ provision }) => {
-      const db = provision('data', postgres({ name: 'data' }));
-      provision('auth', compute({ name: 'auth', deps: { main: postgres() }, build }), {
-        main: db,
+      const db = provision(postgres({ name: 'data' }), { id: 'data' });
+      provision(compute({ name: 'auth', deps: { main: postgres() }, build }), {
+        id: 'auth',
+        deps: {
+          main: db,
+        },
       });
-      provision('billing', compute({ name: 'billing', deps: { store: postgres() }, build }), {
-        store: db,
+      provision(compute({ name: 'billing', deps: { store: postgres() }, build }), {
+        id: 'billing',
+        deps: {
+          store: db,
+        },
       });
       return {};
     });
@@ -390,9 +396,12 @@ describe('name validation — fail fast on Prisma name constraints, before creat
   test('a too-short postgres provision id throws the framework error at lower time, before any Database is recorded', () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const root = system('shop', {}, ({ provision }) => {
-      const db = provision('db', postgres({ name: 'db' }));
-      provision('auth', compute({ name: 'auth', deps: { main: postgres() }, build }), {
-        main: db,
+      const db = provision(postgres({ name: 'db' }), { id: 'db' });
+      provision(compute({ name: 'auth', deps: { main: postgres() }, build }), {
+        id: 'auth',
+        deps: {
+          main: db,
+        },
       });
       return {};
     });
@@ -412,7 +421,7 @@ describe('name validation — fail fast on Prisma name constraints, before creat
   test('a too-short service provision id throws the framework error naming the service name', () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const root = system('shop', {}, ({ provision }) => {
-      provision('a', compute({ name: 'a', deps: {}, build }));
+      provision(compute({ name: 'a', deps: {}, build }), { id: 'a' });
       return {};
     });
     const before = recorded.svc.length;
@@ -429,9 +438,12 @@ describe('name validation — fail fast on Prisma name constraints, before creat
   test('a valid-name system lowers unchanged — no throw, the Database is created', () => {
     const target = prismaCloud({ workspaceId: 'ws_1' });
     const root = system('shop', {}, ({ provision }) => {
-      const db = provision('data', postgres({ name: 'data' }));
-      provision('auth', compute({ name: 'auth', deps: { main: postgres() }, build }), {
-        main: db,
+      const db = provision(postgres({ name: 'data' }), { id: 'data' });
+      provision(compute({ name: 'auth', deps: { main: postgres() }, build }), {
+        id: 'auth',
+        deps: {
+          main: db,
+        },
       });
       return {};
     });

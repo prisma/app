@@ -2,7 +2,7 @@ import { string } from '../config.ts';
 /**
  * Type-level tests for the system boundary (ADR-0016): the body's `SystemOutputs`
  * return type checked against `expose`, `ctx.inputs`' `InputRef` brand
- * assignable wherever a `Wiring<D>` slot is (the same check a producer's
+ * assignable wherever a `DepBindings<D>` slot is (the same check a producer's
  * ref-port gets), and that inference survives 3 levels of nesting without
  * degrading to `any`/`unknown`. Typechecked only (this package's `typecheck`
  * script) — never executed: the reject cases are structurally valid values
@@ -62,7 +62,7 @@ system('expose-missing', { expose: { verify: verifyContract } }, () => {
   return {};
 });
 
-// ---- forwarding: ctx.inputs is a Wiring<D>-assignable value, same as a producer's ref-port ----
+// ---- forwarding: ctx.inputs is a DepBindings<D>-assignable value, same as a producer's ref-port ----
 //
 // Under the unified model (ADR-0016) EVERY dependency slot — resource-backed
 // or service-backed — is the same `DependencyEnd<C, Req>`, so there is no
@@ -84,14 +84,14 @@ const chargeConsumer = service({
 
 // MUST compile: forwarding a same-contract input into a matching slot.
 system('forward-ok', { deps: { pay: chargeEnd() } }, ({ inputs, provision }) => {
-  provision('consumer', chargeConsumer, { pay: inputs.pay });
+  provision(chargeConsumer, { id: 'consumer', deps: { pay: inputs.pay } });
   return {};
 });
 
 // MUST be rejected: forwarding a wrong-contract input into a typed slot.
 system('forward-bad', { deps: { verify: verifyEnd() } }, ({ inputs, provision }) => {
   // @ts-expect-error inputs.verify carries verifyContract, not the chargeContract "pay" requires
-  provision('consumer', chargeConsumer, { pay: inputs.verify });
+  provision(chargeConsumer, { id: 'consumer', deps: { pay: inputs.verify } });
   return {};
 });
 
@@ -115,7 +115,7 @@ void untypedInputIsNever;
 // MUST compile: an untyped input forwards into ANY slot — typed or untyped —
 // with no compile-time rejection possible.
 system('untyped-forward', { deps: { anything: untypedEnd() } }, ({ inputs, provision }) => {
-  provision('typed', chargeConsumer, { pay: inputs.anything });
+  provision(chargeConsumer, { id: 'typed', deps: { pay: inputs.anything } });
   return {};
 });
 
@@ -148,10 +148,10 @@ const innerSystem = system(
   'inner',
   { deps: { verify: verifyEnd() }, expose: { verify: verifyContract } },
   ({ inputs, provision }) => {
-    const leaf = provision('leaf', verifyConsumer(), { verify: inputs.verify });
+    const leaf = provision(verifyConsumer(), { id: 'leaf', deps: { verify: inputs.verify } });
     // leaf has no expose — prove `leaf.id` (the wholesale ref) is still usable at this depth.
     void leaf.id;
-    const producer = provision('leafProvider', verifyProvider());
+    const producer = provision(verifyProvider(), { id: 'leafProvider' });
     return { verify: producer.verify };
   },
 );
@@ -161,7 +161,7 @@ const midSystem = system(
   'mid',
   { deps: { verify: verifyEnd() }, expose: { verify: verifyContract } },
   ({ inputs, provision }) => {
-    const inner = provision('inner', innerSystem, { verify: inputs.verify });
+    const inner = provision(innerSystem, { id: 'inner', deps: { verify: inputs.verify } });
     return { verify: inner.verify };
   },
 );
@@ -170,9 +170,9 @@ const midSystem = system(
 // then wires `mid`'s (forwarded-up) output into a plain service — MUST
 // compile with no casts, proving the 3-level chain infers end to end.
 system('root-ok', {}, ({ provision }) => {
-  const p = provision('provider', verifyProvider());
-  const mid = provision('mid', midSystem, { verify: p.verify });
-  provision('sink', verifyConsumer(), { verify: mid.verify });
+  const p = provision(verifyProvider(), { id: 'provider' });
+  const mid = provision(midSystem, { id: 'mid', deps: { verify: p.verify } });
+  provision(verifyConsumer(), { id: 'sink', deps: { verify: mid.verify } });
   return {};
 });
 
@@ -180,10 +180,10 @@ system('root-ok', {}, ({ provision }) => {
 // still be rejected at depth 3, proving the inferred type at the far end of
 // the chain is precise (not widened to `unknown`/`any` by the 2 hops).
 system('root-bad', {}, ({ provision }) => {
-  const p = provision('providerX', verifyProvider());
-  const mid = provision('midX', midSystem, { verify: p.verify });
+  const p = provision(verifyProvider(), { id: 'providerX' });
+  const mid = provision(midSystem, { id: 'midX', deps: { verify: p.verify } });
   // @ts-expect-error mid.verify carries verifyContract; chargeConsumer's "pay" requires chargeContract
-  provision('consumerX', chargeConsumer, { pay: mid.verify });
+  provision(chargeConsumer, { id: 'consumerX', deps: { pay: mid.verify } });
   return {};
 });
 
@@ -194,8 +194,8 @@ system('root-bad', {}, ({ provision }) => {
 // system+wiring id-less overloads contract-check their wiring.
 system('inferred-ok', {}, ({ provision }) => {
   const provider = provision(verifyProvider());
-  const mid = provision(midSystem, { verify: provider.verify });
-  provision(verifyConsumer(), { verify: mid.verify });
+  const mid = provision(midSystem, { deps: { verify: provider.verify } });
+  provision(verifyConsumer(), { deps: { verify: mid.verify } });
   return {};
 });
 
@@ -203,6 +203,6 @@ system('inferred-ok', {}, ({ provision }) => {
 system('inferred-bad', {}, ({ provision }) => {
   const provider = provision(verifyProvider());
   // @ts-expect-error provider.verify carries verifyContract; chargeConsumer's "pay" requires chargeContract
-  provision(chargeConsumer, { pay: provider.verify });
+  provision(chargeConsumer, { deps: { pay: provider.verify } });
   return {};
 });

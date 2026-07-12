@@ -119,7 +119,7 @@ function validateWiring(
     >(deps[input]);
     if (declared === undefined || !isNode(declared) || declared.kind !== 'dependency') {
       throw new LoadError(
-        `Wiring for "${targetId}" names "${input}", which is not a dependency slot of that ${targetKind}.`,
+        `The deps for "${targetId}" name "${input}", which is not a dependency slot of that ${targetKind}.`,
       );
     }
 
@@ -127,7 +127,7 @@ function validateWiring(
     const producer = producerId !== undefined ? byId.get(producerId) : undefined;
     if (producerId === undefined || producer === undefined) {
       throw new LoadError(
-        `Wiring for "${targetId}.${input}" references "${String(producerId)}", which is not ` +
+        `The deps for "${targetId}.${input}" reference "${String(producerId)}", which is not ` +
           `provisioned in system "${enclosingSystemName}".`,
       );
     }
@@ -135,7 +135,7 @@ function validateWiring(
     const required = declared.required;
     if (required !== undefined && !satisfiesRequired(ref, required)) {
       throw new LoadError(
-        `Wiring for "${targetId}.${input}" does not satisfy its required contract.`,
+        `The deps for "${targetId}.${input}" do not satisfy the slot's required contract.`,
       );
     }
   }
@@ -218,30 +218,16 @@ function flatten(
   };
 
   const provision = (
-    arg0: string | ServiceNode | ResourceNode | SystemNode,
-    arg1?: ServiceNode | ResourceNode | SystemNode | Record<string, unknown>,
-    arg2?: Record<string, unknown>,
-    // biome-ignore lint/suspicious/noExplicitAny: SystemBuilder's real overload set is checked at the call site; the collector implementation is untyped by design (see the existing service overloads).
+    child: ServiceNode | ResourceNode | SystemNode,
+    opts?: { id?: string; deps?: Record<string, unknown> },
+    // biome-ignore lint/suspicious/noExplicitAny: SystemBuilder's real overload set is checked at the call site; the collector implementation is untyped by design.
   ): any => {
-    // Two call shapes: an explicit id string in arg0, or an id-less form where
-    // arg0 is the node and its id is inferred from `node.name`. Everything
-    // after this (the "_"/"." and duplicate-id checks, brand-check, address
-    // join) is identical — an inferred id gets validated exactly as a written one.
-    const id = typeof arg0 === 'string' ? arg0 : arg0.name;
-    const child =
-      typeof arg0 === 'string'
-        ? blindCast<
-            ServiceNode | ResourceNode | SystemNode,
-            'explicit-id form: arg1 is the node — the brand-check below rejects a non-node'
-          >(arg1)
-        : arg0;
-    const provisionWiring =
-      typeof arg0 === 'string'
-        ? arg2
-        : blindCast<
-            Record<string, unknown> | undefined,
-            'inferred-id form: arg1 is the optional wiring, not the node'
-          >(arg1);
+    // The id defaults to the node's own `name`; `opts.deps` carries the
+    // producers that satisfy its dependency slots. The "_"/"." and duplicate-id
+    // checks, brand-check and address join below are identical whether the id
+    // was written or inferred.
+    const id = opts?.id ?? child.name;
+    const provisionWiring = opts?.deps;
     if (typeof id !== 'string' || id.length === 0) {
       throw new LoadError(`provision() requires a non-empty id (system "${systemNode.name}").`);
     }
@@ -278,7 +264,7 @@ function flatten(
     if (child.kind === 'resource') {
       if (provisionWiring !== undefined) {
         throw new LoadError(
-          `provision("${id}") received wiring for a resource — a resource has no inputs to wire.`,
+          `provision("${id}") received deps for a resource — a resource has no dependency slots to satisfy.`,
         );
       }
       if (child.type.length === 0) {

@@ -71,8 +71,8 @@ describe('Load', () => {
       build,
     });
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('app', svc, { db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(svc, { id: 'app', deps: { db } });
       return {};
     });
 
@@ -97,8 +97,8 @@ describe('Load', () => {
     // Spread copies the brand symbol but lets the type be emptied — Load must catch it.
     const forged = { ...dbDep(), type: '' };
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('app', app({ db: forged as never }), { db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(app({ db: forged as never }), { id: 'app', deps: { db } });
       return {};
     });
 

@@ -90,44 +90,56 @@ const storefront = service({
 
 declare const h: SystemBuilder;
 
-const exactRef = h.provision('s1', provider(exact));
-const extraOutRef = h.provision('s2', provider(extraOut));
-const extraMethodRef = h.provision('s3', provider(extraMethod));
-const extraInputRef = h.provision('s4', provider(extraInput));
-const missingRef = h.provision('s5', provider(missing));
-const wrongKindRef = h.provision('s6', provider(wrongKind));
+const exactRef = h.provision(provider(exact), { id: 's1' });
+const extraOutRef = h.provision(provider(extraOut), { id: 's2' });
+const extraMethodRef = h.provision(provider(extraMethod), { id: 's3' });
+const extraInputRef = h.provision(provider(extraInput), { id: 's4' });
+const missingRef = h.provision(provider(missing), { id: 's5' });
+const wrongKindRef = h.provision(provider(wrongKind), { id: 's6' });
 
 test('a satisfying (or wider) ref-port fills the required rpc slot', () => {
-  expectTypeOf(h.provision).toBeCallableWith('c1', storefront, {
-    auth: exactRef.auth,
-    legacy: exactRef.auth,
+  expectTypeOf(h.provision).toBeCallableWith(storefront, {
+    id: 'c1',
+    deps: {
+      auth: exactRef.auth,
+      legacy: exactRef.auth,
+    },
   });
   // covariant output
-  expectTypeOf(h.provision).toBeCallableWith('c2', storefront, {
-    auth: extraOutRef.auth,
-    legacy: exactRef.auth,
+  expectTypeOf(h.provision).toBeCallableWith(storefront, {
+    id: 'c2',
+    deps: {
+      auth: extraOutRef.auth,
+      legacy: exactRef.auth,
+    },
   });
   // width
-  expectTypeOf(h.provision).toBeCallableWith('c3', storefront, {
-    auth: extraMethodRef.auth,
-    legacy: exactRef.auth,
+  expectTypeOf(h.provision).toBeCallableWith(storefront, {
+    id: 'c3',
+    deps: {
+      auth: extraMethodRef.auth,
+      legacy: exactRef.auth,
+    },
   });
   // untyped slot: anything
-  expectTypeOf(h.provision).toBeCallableWith('c4', storefront, {
-    auth: exactRef.auth,
-    legacy: missingRef.auth,
+  expectTypeOf(h.provision).toBeCallableWith(storefront, {
+    id: 'c4',
+    deps: {
+      auth: exactRef.auth,
+      legacy: missingRef.auth,
+    },
   });
 });
 
 test('an incompatible ref-port for a required rpc slot does not compile', () => {
   // @ts-expect-error provider requires an extra input the consumer never sends (contravariant)
-  h.provision('c5', storefront, { auth: extraInputRef.auth, legacy: exactRef.auth });
+  h.provision(storefront, { id: 'c5', deps: { auth: extraInputRef.auth, legacy: exactRef.auth } });
   // @ts-expect-error provider is missing the required method
-  h.provision('c6', storefront, { auth: missingRef.auth, legacy: exactRef.auth });
+  h.provision(storefront, { id: 'c6', deps: { auth: missingRef.auth, legacy: exactRef.auth } });
   // @ts-expect-error different protocol kind
-  h.provision('c7', storefront, { auth: wrongKindRef.auth, legacy: exactRef.auth });
+  h.provision(storefront, { id: 'c7', deps: { auth: wrongKindRef.auth, legacy: exactRef.auth } });
   // @ts-expect-error the ref exposes no such port
-  h.provision('c8', storefront, { auth: exactRef.nope, legacy: exactRef.auth });
+  h.provision(storefront, { id: 'c8', deps: { auth: exactRef.nope, legacy: exactRef.auth } });
 });
 
 test('the derived client is typed both ways', () => {

@@ -12,12 +12,12 @@ import node from '@prisma/app-node';
  */
 export default system('extension-config-fixture', {}, ({ provision }) => {
   provision(
-    'extension-config-fixture',
     compute({
       name: 'extension-config-fixture',
       deps: {},
       build: node({ module: import.meta.url, entry: 'dist/server.js' }),
     }),
+    { id: 'extension-config-fixture' },
   );
   return {};
 });

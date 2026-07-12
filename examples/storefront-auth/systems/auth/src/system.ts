@@ -17,7 +17,7 @@ import { authContract } from './contract.ts';
 import authService from './service.ts';
 
 export default system('auth', { expose: { rpc: authContract } }, ({ provision }) => {
-  const db = provision('database', postgres({ name: 'database' }));
-  const service = provision('service', authService, { db });
+  const db = provision(postgres({ name: 'database' }), { id: 'database' });
+  const service = provision(authService, { id: 'service', deps: { db } });
   return { rpc: service.rpc };
 });

@@ -24,8 +24,8 @@ export function cron<RD extends Deps, RP extends Params, Ids extends string>(opt
   name?: string;
 }): SystemNode<RD, Record<never, never>> {
   return system(opts.name ?? 'cron', { deps: opts.runner.inputs }, ({ inputs, provision }) => {
-    const runner = provision('runner', opts.runner, inputs);
-    provision('scheduler', cronScheduler(opts.schedule), { trigger: runner.trigger });
+    const runner = provision(opts.runner, { id: 'runner', deps: inputs });
+    provision(cronScheduler(opts.schedule), { id: 'scheduler', deps: { trigger: runner.trigger } });
     return {};
   });
 }

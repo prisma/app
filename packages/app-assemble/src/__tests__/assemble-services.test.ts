@@ -36,8 +36,8 @@ const makeService = (name: string, build: Partial<ServiceNode['build']> = {}) =>
 describe('assembleServices()', () => {
   test('a system root produces `bundles` keyed by each service’s full hierarchical address', async () => {
     const root = system('fixture-system', {}, ({ provision }) => {
-      provision('auth', makeService('auth'));
-      provision('storefront', makeService('storefront'));
+      provision(makeService('auth'), { id: 'auth' });
+      provision(makeService('storefront'), { id: 'storefront' });
       return {};
     });
     const graph = Load(root);
@@ -52,11 +52,11 @@ describe('assembleServices()', () => {
 
   test('a service provisioned by a NESTED system keys its bundle by the dotted address (H1)', async () => {
     const inner = system('auth', {}, ({ provision }) => {
-      provision('api', makeService('auth-api'));
+      provision(makeService('auth-api'), { id: 'api' });
       return {};
     });
     const root = system('shop', {}, ({ provision }) => {
-      provision('auth', inner);
+      provision(inner, { id: 'auth' });
       return {};
     });
     const graph = Load(root);
@@ -97,8 +97,8 @@ describe('assembleServices()', () => {
     };
     const root = system('fixture-system', {}, ({ provision }) => {
       provision(
-        'svc',
         makeService('svc', { extension: '@community/cron-adapter', type: 'cron', entry: 'x' }),
+        { id: 'svc' },
       );
       return {};
     });
@@ -112,7 +112,7 @@ describe('assembleServices()', () => {
 
   test("a build whose extension isn't configured throws AssembleError naming it and the config fix", async () => {
     const root = system('fixture-system', {}, ({ provision }) => {
-      provision('svc', makeService('svc'));
+      provision(makeService('svc'), { id: 'svc' });
       return {};
     });
     const graph = Load(root);
@@ -134,7 +134,7 @@ describe('assembleServices()', () => {
       state: emptyConfig.state,
     };
     const root = system('fixture-system', {}, ({ provision }) => {
-      provision('svc', makeService('svc'));
+      provision(makeService('svc'), { id: 'svc' });
       return {};
     });
     const graph = Load(root);

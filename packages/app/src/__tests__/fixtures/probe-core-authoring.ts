@@ -58,9 +58,9 @@ const dbNode = resource({ name: 'db', extension: 'test/pack', provides: dbContra
 
 export const graph = Load(
   system('probe-system', {}, ({ provision }) => {
-    const dbRef = provision('db', dbNode);
-    const ref = provision('app', app, { db: dbRef });
-    provision('caller', caller, { peer: ref });
+    const dbRef = provision(dbNode, { id: 'db' });
+    const ref = provision(app, { id: 'app', deps: { db: dbRef } });
+    provision(caller, { id: 'caller', deps: { peer: ref } });
     return {};
   }),
   { id: 'probe' },

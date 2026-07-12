@@ -19,8 +19,8 @@ const app = compute({
 
 export const graph = Load(
   system('probe-system', {}, ({ provision }) => {
-    const db = provision('db', postgres({ name: 'db' }));
-    provision('app', app, { db });
+    const db = provision(postgres({ name: 'db' }), { id: 'db' });
+    provision(app, { id: 'app', deps: { db } });
     return {};
   }),
   { id: 'probe' },

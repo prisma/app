@@ -127,11 +127,11 @@ describe('nested-system proof (H1: system-composition) — dotted addresses surv
         },
       });
     const inner = system('auth', {}, ({ provision }) => {
-      provision('api', innerService());
+      provision(innerService(), { id: 'api' });
       return {};
     });
     const root = system('shop', {}, ({ provision }) => {
-      provision('auth', inner);
+      provision(inner, { id: 'auth' });
       return {};
     });
     const graph = Load(root);

@@ -20,6 +20,6 @@ const svc = service({
 
 export default system('fixture-system', {}, ({ provision }) => {
   bodyCallCount += 1;
-  provision('app', svc);
+  provision(svc, { id: 'app' });
   return {};
 });

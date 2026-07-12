@@ -16,7 +16,7 @@ const makeService = (name: string) =>
   });
 
 export default system('fixture-system', {}, ({ provision }) => {
-  provision('one', makeService('one'));
-  provision('two', makeService('two'));
+  provision(makeService('one'), { id: 'one' });
+  provision(makeService('two'), { id: 'two' });
   return {};
 });

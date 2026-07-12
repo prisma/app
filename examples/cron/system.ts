@@ -15,6 +15,6 @@ import workerService from './src/worker/service.ts';
  */
 export default system('cron-example', {}, ({ provision }) => {
   const worker = provision(workerService);
-  provision(cron({ schedule, runner: runnerService }), { worker: worker.rpc });
+  provision(cron({ schedule, runner: runnerService }), { deps: { worker: worker.rpc } });
   return {};
 });

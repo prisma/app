@@ -13,7 +13,7 @@ import storefrontService from '@storefront-auth/storefront';
  * or out of this system from the outside.
  */
 export default system('storefront-auth', {}, ({ provision }) => {
-  const auth = provision('auth', authSystem);
-  provision('storefront', storefrontService, { auth: auth.rpc });
+  const auth = provision(authSystem, { id: 'auth' });
+  provision(storefrontService, { id: 'storefront', deps: { auth: auth.rpc } });
   return {};
 });

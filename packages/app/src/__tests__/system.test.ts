@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test';
+import { blindCast } from '../casts.ts';
 import { string } from '../config.ts';
 import type { Contract } from '../contract.ts';
 import { Load, LoadError } from '../graph.ts';
 import type { ProvisionedRef } from '../node.ts';
 import { dependency, resource, service, system } from '../node.ts';
 import { conn, providerContract } from './helpers.ts';
+
+// Provisions a depful node with NO deps, to drive Load's runtime dangling-dep
+// backstop — the compiler now requires deps, so this bypass is the only way to
+// reach that runtime path (mirrors the `as never` bypasses elsewhere here).
+const unwired = blindCast<never, 'deliberately unwired to exercise the runtime backstop'>({});
 
 const build = {
   extension: '@prisma/app-node',
@@ -53,9 +59,9 @@ const makeStorefrontService = () =>
 
 const twoServiceSystem = () =>
   system('shop', {}, (h) => {
-    const db = h.provision('db', dbResource());
-    const authRef = h.provision('auth', makeAuthService(), { db });
-    h.provision('storefront', makeStorefrontService(), { auth: authRef });
+    const db = h.provision(dbResource(), { id: 'db' });
+    const authRef = h.provision(makeAuthService(), { id: 'auth', deps: { db } });
+    h.provision(makeStorefrontService(), { id: 'storefront', deps: { auth: authRef } });
     return {};
   });
 
@@ -103,7 +109,7 @@ describe('Load of a system root', () => {
     });
     const root = system('shop', {}, (h) => {
       bodyCalls += 1;
-      h.provision('only', svc);
+      h.provision(svc, { id: 'only' });
       return {};
     });
 
@@ -114,9 +120,9 @@ describe('Load of a system root', () => {
 
   test('duplicate provision ids are a LoadError — resources and services share one id space', () => {
     const root = system('shop', {}, (h) => {
-      h.provision('auth', dbResource());
-      const db = h.provision('db', dbResource());
-      h.provision('auth', makeAuthService(), { db });
+      h.provision(dbResource(), { id: 'auth' });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(makeAuthService(), { id: 'auth', deps: { db } });
       return {};
     });
 
@@ -126,7 +132,7 @@ describe('Load of a system root', () => {
 
   test('a provision id containing "_" or "." is a LoadError naming the separators', () => {
     const root = system('shop', {}, (h) => {
-      h.provision('auth_db', dbResource());
+      h.provision(dbResource(), { id: 'auth_db' });
       return {};
     });
 
@@ -136,9 +142,9 @@ describe('Load of a system root', () => {
 
   test('a dangling dependency input names the service and the input', () => {
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('auth', makeAuthService(), { db });
-      h.provision('storefront', makeStorefrontService()); // auth input left unwired
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(makeAuthService(), { id: 'auth', deps: { db } });
+      h.provision(makeStorefrontService(), { id: 'storefront', deps: unwired }); // auth input left unwired
       return {};
     });
 
@@ -150,21 +156,27 @@ describe('Load of a system root', () => {
 
   test('wiring to an unknown producer id is a LoadError', () => {
     const root = system('shop', {}, (h) => {
-      h.provision('storefront', makeStorefrontService(), {
-        auth: { id: 'nope' } as ProvisionedRef,
+      h.provision(makeStorefrontService(), {
+        id: 'storefront',
+        deps: {
+          auth: { id: 'nope' } as ProvisionedRef,
+        },
       });
       return {};
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/"storefront.auth" references "nope"/);
+    expect(() => Load(root)).toThrow(/"storefront.auth" reference "nope"/);
   });
 
   test('wiring a name that is not a dependency slot of the service is a LoadError', () => {
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      const authRef = h.provision('auth', makeAuthService(), { db });
-      h.provision('other', makeStorefrontService(), { auth: authRef, extra: authRef } as never);
+      const db = h.provision(dbResource(), { id: 'db' });
+      const authRef = h.provision(makeAuthService(), { id: 'auth', deps: { db } });
+      h.provision(makeStorefrontService(), {
+        id: 'other',
+        deps: { auth: authRef, extra: authRef } as never,
+      });
       return {};
     });
 
@@ -177,10 +189,10 @@ describe('Load of a system root', () => {
     // honest body cannot express a forward reference, let alone a cycle.
     const seen: string[] = [];
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      const ref = h.provision('auth', makeAuthService(), { db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      const ref = h.provision(makeAuthService(), { id: 'auth', deps: { db } });
       seen.push(ref.id);
-      h.provision('storefront', makeStorefrontService(), { auth: ref });
+      h.provision(makeStorefrontService(), { id: 'storefront', deps: { auth: ref } });
       return {};
     });
 
@@ -208,8 +220,8 @@ describe('Load of a system root', () => {
     });
     const root = system('shop', {}, (h) => {
       // Forged ref: the builder API cannot produce this — the DAG check can.
-      h.provision('a', a, { peer: { id: 'b' } as ProvisionedRef });
-      h.provision('b', b, { peer: { id: 'a' } as ProvisionedRef });
+      h.provision(a, { id: 'a', deps: { peer: { id: 'b' } as ProvisionedRef } });
+      h.provision(b, { id: 'b', deps: { peer: { id: 'a' } as ProvisionedRef } });
       return {};
     });
 
@@ -231,11 +243,14 @@ describe('Load of a system root', () => {
     // hand-builds one pointing at "auth", which the body provisions AFTER
     // storefront, so authored order and dependency order disagree.
     const root = system('shop', {}, (h) => {
-      h.provision('storefront', makeStorefrontService(), {
-        auth: { id: 'auth' } as ProvisionedRef,
+      h.provision(makeStorefrontService(), {
+        id: 'storefront',
+        deps: {
+          auth: { id: 'auth' } as ProvisionedRef,
+        },
       });
-      const db = h.provision('db', dbResource());
-      h.provision('auth', makeAuthService(), { db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(makeAuthService(), { id: 'auth', deps: { db } });
       return {};
     });
 
@@ -267,9 +282,9 @@ describe('Load of a system root', () => {
 describe('Load of a system root — provisioned resources', () => {
   test('one provisioned resource wired to two services: exactly one resource node, one dependency edge per consumer', () => {
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('auth', makeAuthService(), { db });
-      h.provision('billing', makeAuthService(), { db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(makeAuthService(), { id: 'auth', deps: { db } });
+      h.provision(makeAuthService(), { id: 'billing', deps: { db } });
       return {};
     });
 
@@ -287,7 +302,7 @@ describe('Load of a system root — provisioned resources', () => {
     let ref: ({ id: string } & Contract<'fake/db', { url: string }>) | undefined;
     Load(
       system('shop', {}, (h) => {
-        ref = h.provision('db', dbResource());
+        ref = h.provision(dbResource(), { id: 'db' });
         return {};
       }),
     );
@@ -304,34 +319,34 @@ describe('Load of a system root — provisioned resources', () => {
       provides: providerContract('fake/cache', {}),
     });
     const root = system('shop', {}, (h) => {
-      const cacheRef = h.provision('cache', cache);
+      const cacheRef = h.provision(cache, { id: 'cache' });
       // TypeScript already rejects this wiring at the call site (see
       // system-wiring.test-d.ts) — this exercises the runtime backstop directly,
       // as if that check were bypassed by a cast.
-      h.provision('auth', makeAuthService(), { db: cacheRef as never });
+      h.provision(makeAuthService(), { id: 'auth', deps: { db: cacheRef as never } });
       return {};
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/"auth.db" does not satisfy its required contract/);
+    expect(() => Load(root)).toThrow(/"auth.db" do not satisfy the slot's required contract/);
   });
 
   test('wiring a contract-requiring slot to a bare service ref (no matching port) is a LoadError', () => {
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      const other = h.provision('other', makeAuthService(), { db });
-      h.provision('auth', makeAuthService(), { db: other as never });
+      const db = h.provision(dbResource(), { id: 'db' });
+      const other = h.provision(makeAuthService(), { id: 'other', deps: { db } });
+      h.provision(makeAuthService(), { id: 'auth', deps: { db: other as never } });
       return {};
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/"auth.db" does not satisfy its required contract/);
+    expect(() => Load(root)).toThrow(/"auth.db" do not satisfy the slot's required contract/);
   });
 
   test("an untyped slot accepts a resource ref — uniformity's escape hatch, unchecked by design", () => {
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('storefront', makeStorefrontService(), { auth: db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(makeStorefrontService(), { id: 'storefront', deps: { auth: db } });
       return {};
     });
 
@@ -344,8 +359,8 @@ describe('Load of a system root — provisioned resources', () => {
 
   test('a dangling dependency input on a resource consumer names the service and the input', () => {
     const root = system('shop', {}, (h) => {
-      h.provision('db', dbResource());
-      h.provision('auth', makeAuthService()); // db input left unwired
+      h.provision(dbResource(), { id: 'db' });
+      h.provision(makeAuthService(), { id: 'auth', deps: unwired }); // db input left unwired
       return {};
     });
 
@@ -355,17 +370,17 @@ describe('Load of a system root — provisioned resources', () => {
     );
   });
 
-  test('passing wiring to a resource provision is a LoadError — a resource has no inputs', () => {
+  test('passing deps to a resource provision is a LoadError — a resource has no dependency slots', () => {
     const root = system('shop', {}, (h) => {
-      // TypeScript's overloads reject wiring on a resource provision — forged
+      // TypeScript's overloads reject `deps` on a resource provision — forged
       // here to exercise the runtime backstop.
-      h.provision('db', dbResource() as never, {} as never);
+      h.provision(dbResource() as never, { id: 'db', deps: {} as never });
       return {};
     });
 
     expect(() => Load(root)).toThrow(LoadError);
     expect(() => Load(root)).toThrow(
-      /provision\("db"\) received wiring for a resource — a resource has no inputs to wire/,
+      /provision\("db"\) received deps for a resource — a resource has no dependency slots to satisfy/,
     );
   });
 });
@@ -429,8 +444,8 @@ describe('Load of a system root — typed wiring (the satisfies() backstop)', ()
 
   test('a ref-port whose contract satisfies the required one loads without error', () => {
     const root = system('shop', {}, (h) => {
-      const authRef = h.provision('auth', makeContractProvider(authContract));
-      h.provision('storefront', makeTypedStorefrontService(), { auth: authRef.rpc });
+      const authRef = h.provision(makeContractProvider(authContract), { id: 'auth' });
+      h.provision(makeTypedStorefrontService(), { id: 'storefront', deps: { auth: authRef.rpc } });
       return {};
     });
 
@@ -439,15 +454,20 @@ describe('Load of a system root — typed wiring (the satisfies() backstop)', ()
 
   test('a ref-port whose contract does not satisfy the required one is a LoadError', () => {
     const root = system('shop', {}, (h) => {
-      const wrongRef = h.provision('payments', makeContractProvider(wrongContract));
+      const wrongRef = h.provision(makeContractProvider(wrongContract), { id: 'payments' });
       // TypeScript already rejects this wiring at the call site — this
       // exercises the runtime backstop directly, as if that check were
       // bypassed by a cast.
-      h.provision('storefront', makeTypedStorefrontService(), { auth: wrongRef.rpc as never });
+      h.provision(makeTypedStorefrontService(), {
+        id: 'storefront',
+        deps: { auth: wrongRef.rpc as never },
+      });
       return {};
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/"storefront.auth" does not satisfy its required contract/);
+    expect(() => Load(root)).toThrow(
+      /"storefront.auth" do not satisfy the slot's required contract/,
+    );
   });
 });

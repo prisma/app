@@ -68,25 +68,27 @@ const consumer = service({
 
 declare const h: SystemBuilder;
 
-const widgetRef = h.provision('db1', pnPostgres({ name: 'db', contract: widget }));
-const widgetAgainRef = h.provision('db2', pnPostgres({ name: 'db', contract: widgetAgain }));
-const gadgetRef = h.provision('db3', pnPostgres({ name: 'db', contract: gadget }));
+const widgetRef = h.provision(pnPostgres({ name: 'db', contract: widget }), { id: 'db1' });
+const widgetAgainRef = h.provision(pnPostgres({ name: 'db', contract: widgetAgain }), {
+  id: 'db2',
+});
+const gadgetRef = h.provision(pnPostgres({ name: 'db', contract: gadget }), { id: 'db3' });
 
 test('a resource providing the SAME emitted contract (same storageHash) satisfies the dependency slot', () => {
-  expectTypeOf(h.provision).toBeCallableWith('c1', consumer, { db: widgetRef });
+  expectTypeOf(h.provision).toBeCallableWith(consumer, { id: 'c1', deps: { db: widgetRef } });
   // A different wrap of the identical emitted contract type also satisfies —
   // the lever is the type (storageHash), not which `pnContract()` call built it.
-  expectTypeOf(h.provision).toBeCallableWith('c2', consumer, { db: widgetAgainRef });
+  expectTypeOf(h.provision).toBeCallableWith(consumer, { id: 'c2', deps: { db: widgetAgainRef } });
 });
 
 test('a resource providing a DIFFERENT emitted contract (different storageHash) is a type error', () => {
   // @ts-expect-error different storageHash — not assignable to the widget-requiring slot
-  h.provision('c3', consumer, { db: gadgetRef });
+  h.provision(consumer, { id: 'c3', deps: { db: gadgetRef } });
 });
 
-const barePostgresRef = h.provision('db4', postgres({ name: 'db4' }));
+const barePostgresRef = h.provision(postgres({ name: 'db4' }), { id: 'db4' });
 
 test('a resource of a different protocol kind entirely (bare postgresContract) is a type error', () => {
   // @ts-expect-error postgresContract's kind is "postgres", not "prisma-next"
-  h.provision('c4', consumer, { db: barePostgresRef });
+  h.provision(consumer, { id: 'c4', deps: { db: barePostgresRef } });
 });

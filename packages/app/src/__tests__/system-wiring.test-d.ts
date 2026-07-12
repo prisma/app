@@ -71,9 +71,9 @@ const producer = service({
 
 declare const h: SystemBuilder;
 
-const pgRef = h.provision('pg', pgNode);
-const cacheRef = h.provision('cache', cacheNode);
-const producerRef = h.provision('producer', producer);
+const pgRef = h.provision(pgNode, { id: 'pg' });
+const cacheRef = h.provision(cacheNode, { id: 'cache' });
+const producerRef = h.provision(producer, { id: 'producer' });
 
 test('provisioning a resource returns its provided contract as the ref, tagged with the id', () => {
   expectTypeOf(pgRef).toEqualTypeOf<{ readonly id: string } & RefPort<typeof pgContract>>();
@@ -81,20 +81,26 @@ test('provisioning a resource returns its provided contract as the ref, tagged w
 });
 
 test('a ref whose contract matches the slot requirement is accepted; the untyped slot accepts any ref', () => {
-  expectTypeOf(h.provision).toBeCallableWith('c1', consumer, { db: pgRef });
+  expectTypeOf(h.provision).toBeCallableWith(consumer, { id: 'c1', deps: { db: pgRef } });
   // The untyped slot (Req = unknown) is the escape hatch — a resource ref or
   // a bare service ref both pass, uniformly.
-  expectTypeOf(h.provision).toBeCallableWith('c2', untypedConsumer, { anything: pgRef });
-  expectTypeOf(h.provision).toBeCallableWith('c3', untypedConsumer, { anything: producerRef });
+  expectTypeOf(h.provision).toBeCallableWith(untypedConsumer, {
+    id: 'c2',
+    deps: { anything: pgRef },
+  });
+  expectTypeOf(h.provision).toBeCallableWith(untypedConsumer, {
+    id: 'c3',
+    deps: { anything: producerRef },
+  });
 });
 
 test('a wrong-contract ref, a bare service ref for a typed slot, and a ResourceNode in deps are rejected', () => {
   // @ts-expect-error the cache contract's kind cannot satisfy the postgres-requiring slot
-  h.provision('c4', consumer, { db: cacheRef });
+  h.provision(consumer, { id: 'c4', deps: { db: cacheRef } });
   // @ts-expect-error a bare service ref carries no contract for a typed slot
-  h.provision('c5', consumer, { db: producerRef });
+  h.provision(consumer, { id: 'c5', deps: { db: producerRef } });
   // @ts-expect-error a dependency-only end (no identity) is not provisionable
-  h.provision('c6', pgDep);
+  h.provision(pgDep, { id: 'c6' });
 
   // A concrete ResourceNode can never sit in deps — only declarations.
   service({

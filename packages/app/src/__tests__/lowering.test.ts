@@ -180,8 +180,8 @@ describe('buildConfig', () => {
   test("matches a dependency input's params by name to the wired producer's lowered outputs, via its dependency edge", () => {
     const auth = app('fake/compute', { db: dbEnd() }, { port: number({ default: 3000 }) });
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('auth', auth, { db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(auth, { id: 'auth', deps: { db } });
       return {};
     });
     const graph = Load(root);
@@ -196,8 +196,8 @@ describe('buildConfig', () => {
   test('a param the graph declares but the lowered outputs never produced resolves to undefined', () => {
     const auth = app('fake/compute', { db: dbEnd() });
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('auth', auth, { db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(auth, { id: 'auth', deps: { db } });
       return {};
     });
     const graph = Load(root);
@@ -215,7 +215,7 @@ const singleServiceSystem = (
   build: BuildAdapter = defaultBuild,
 ) =>
   system('hello', {}, (h) => {
-    h.provision('svc', app(type, {}, params, build));
+    h.provision(app(type, {}, params, build), { id: 'svc' });
     return {};
   });
 
@@ -224,8 +224,8 @@ const singleServiceSystem = (
 // system provisions it and wires the slot.
 const singleServiceWithDbSystem = (params: Params = {}) =>
   system('hello', {}, (h) => {
-    const db = h.provision('db', dbResource());
-    h.provision('svc', app('fake/compute', { db: dbEnd() }, params), { db });
+    const db = h.provision(dbResource(), { id: 'db' });
+    h.provision(app('fake/compute', { db: dbEnd() }, params), { id: 'svc', deps: { db } });
     return {};
   });
 
@@ -351,7 +351,6 @@ describe('lowering a system root — a single service', () => {
     const { config } = fakeExtension();
     const root = system('hello', {}, (h) => {
       h.provision(
-        'svc',
         service({
           name: 'other',
           extension: '@acme/other-cloud',
@@ -360,6 +359,7 @@ describe('lowering a system root — a single service', () => {
           params: {},
           build: defaultBuild,
         }),
+        { id: 'svc' },
       );
       return {};
     });
@@ -375,13 +375,13 @@ describe('lowering a system root — a single service', () => {
     const { config } = fakeExtension();
     const root = system('hello', {}, (h) => {
       h.provision(
-        'db',
         resource({
           name: 'db',
           extension: 'test/pack',
           // The registry's 'fake/compute' entry is a service control.
           provides: providerContract('fake/compute', { url: '' }),
         }),
+        { id: 'db' },
       );
       return {};
     });
@@ -401,9 +401,9 @@ describe('lowering a system root — a provisioned resource and two connected se
 
   const twoServiceSystem = () =>
     system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      const authRef = h.provision('auth', authService(), { db });
-      h.provision('storefront', storefrontService(), { auth: authRef });
+      const db = h.provision(dbResource(), { id: 'db' });
+      const authRef = h.provision(authService(), { id: 'auth', deps: { db } });
+      h.provision(storefrontService(), { id: 'storefront', deps: { auth: authRef } });
       return {};
     });
 
@@ -524,11 +524,14 @@ describe('lowering a system root — a provisioned resource and two connected se
     // outputs. With the sort, the producer is fully deployed first.
     const { config, calls } = fakeExtension();
     const root = system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('storefront', storefrontService(), {
-        auth: { id: 'auth' } as never,
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(storefrontService(), {
+        id: 'storefront',
+        deps: {
+          auth: { id: 'auth' } as never,
+        },
       });
-      h.provision('auth', authService(), { db });
+      h.provision(authService(), { id: 'auth', deps: { db } });
       return {};
     });
 
@@ -589,12 +592,12 @@ describe('lowering a system root — a provisioned resource and two connected se
     const { config } = fakeExtension();
     const root = system('shop', {}, (h) => {
       h.provision(
-        'cache',
         resource({
           name: 'cache',
           extension: 'test/pack',
           provides: providerContract('fake/unknown', {}),
         }),
+        { id: 'cache' },
       );
       return {};
     });
@@ -610,9 +613,12 @@ describe('lowering a system root — a provisioned resource and two connected se
 describe('lowering a system root — one resource shared by two consumers', () => {
   const sharedSystem = () =>
     system('shop', {}, (h) => {
-      const db = h.provision('db', dbResource());
-      h.provision('auth', app('fake/compute', { authDb: dbEnd() }), { authDb: db });
-      h.provision('billing', app('fake/compute', { billingDb: dbEnd() }), { billingDb: db });
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(app('fake/compute', { authDb: dbEnd() }), { id: 'auth', deps: { authDb: db } });
+      h.provision(app('fake/compute', { billingDb: dbEnd() }), {
+        id: 'billing',
+        deps: { billingDb: db },
+      });
       return {};
     });
 
@@ -676,11 +682,11 @@ describe('lowering a nested system — dotted addresses (H1: system-composition)
   test('a service provisioned by a system nested inside another system gets a dotted address, and lowering() finds its bundle by that full id', () => {
     const { config } = fakeExtension();
     const inner = system('auth', {}, (h) => {
-      h.provision('api', app('fake/compute', {}));
+      h.provision(app('fake/compute', {}), { id: 'api' });
       return {};
     });
     const root = system('shop', {}, (h) => {
-      h.provision('auth', inner);
+      h.provision(inner, { id: 'auth' });
       return {};
     });
     const graph = Load(root);

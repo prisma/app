@@ -35,8 +35,8 @@ const schedule = defineSchedule({ tick: '2s' });
 describe('cron()', () => {
   test('Loads a graph with the provisioned runner and scheduler, wired to each other and to the worker', () => {
     const root = system('root', {}, ({ provision }) => {
-      const w = provision('worker', worker());
-      provision('cron', cron({ schedule, runner: runner() }), { worker: w.work });
+      const w = provision(worker(), { id: 'worker' });
+      provision(cron({ schedule, runner: runner() }), { id: 'cron', deps: { worker: w.work } });
       return {};
     });
 
@@ -61,12 +61,12 @@ describe('cron()', () => {
 
   test("an invalid wiring — the runner's own dep left unwired into the cron system — throws at Load", () => {
     const root = system('root', {}, ({ provision }) => {
-      provision('worker', worker());
+      provision(worker(), { id: 'worker' });
       // The cron system's boundary dep ("worker", mirroring the runner's own
       // dep) is never wired — bypasses the compile-time check the same way
       // system-composition.test.ts's own error-case tests do, to exercise
       // Load's runtime backstop.
-      provision('cron', cron({ schedule, runner: runner() }), {} as never);
+      provision(cron({ schedule, runner: runner() }), { id: 'cron', deps: {} as never });
       return {};
     });
 
