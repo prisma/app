@@ -2,10 +2,14 @@
 
 ## Status
 
-Accepted; the unit-noun decision ("System", `system()`) is superseded by
-[ADR-0025](ADR-0025-name-the-unit-of-composition-module.md) — the unit is a
-**Module**, authored with `module()`. The framework name, the `@prisma/app*`
-package family, the `prisma-app` CLI, and the single-primitive model all stand.
+Accepted; superseded in two halves. The unit-noun decision ("System", `system()`)
+is superseded by [ADR-0025](ADR-0025-name-the-unit-of-composition-module.md) — the
+unit is a **Module**, authored with `module()`. The framework-name decision
+("Prisma App") is superseded by
+[ADR-0026](ADR-0026-name-the-framework-prisma-compose.md) — the framework is
+**Prisma Compose**, and "Prisma App" names only the artifact. Still authoritative
+here: the single-primitive model, the `@prisma/app*` package family, and the
+`prisma-app` CLI.
 
 ## Decision
 

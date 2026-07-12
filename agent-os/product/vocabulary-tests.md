@@ -1,11 +1,20 @@
-# Vocabulary tests — naming a unit of composition
+# Vocabulary tests — spoken-sentence rubrics
 
-The tests in [naming.md](naming.md) decide **product names** (Prisma App, Prisma
-Data): name the value, not the machinery. They have no purchase on **vocabulary
-nouns** — the words for constructs and units. To the user a container noun is *all*
-machinery; the value lives in the capability (cron, auth), never in the box. So the
-box needs its own rubric, and it is a rubric of **speech**: every test below is a
-sentence said aloud to a colleague.
+Two rubrics live here, both born from names that read well and failed in speech:
+one for **units of composition** (produced by the "System" failure, resolved by
+[ADR-0025](../../docs/design/90-decisions/ADR-0025-name-the-unit-of-composition-module.md)),
+and one for **product names that must refer** (produced by the "Prisma App"
+framework-name failure, resolved by
+[ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-compose.md)).
+Every test in both is a sentence said aloud to a colleague.
+
+## Part 1 — naming a unit of composition
+
+The tests in [naming.md](naming.md) decide **product names** (Prisma Data): name
+the value, not the machinery. They have no purchase on **vocabulary nouns** — the
+words for constructs and units. To the user a container noun is *all* machinery;
+the value lives in the capability (cron, auth), never in the box. So the box needs
+its own rubric of speech.
 
 These tests exist because "System" (ADR-0014) failed them in practice the moment the
 first small shared unit (cron) landed. The ADR's case rested on one sentence at one
@@ -73,3 +82,48 @@ is a **Module**, authored with `module()`
 components — an intra-app collision); branded nouns (Prism, Shard, Facet, Lens) fell
 to the gloss test and the identity rule, with Prism moving to the registry
 shortlist.
+
+## Part 2 — product names must also refer
+
+A name has two jobs: to **describe** (what is this?) and to **refer** (which thing
+do you mean?). The value tests in [naming.md](naming.md) measure description only.
+A product that people talk *about* — above all a framework, which is a **milieu**
+developers live inside, not a component inside their app — must also pass
+referential frames:
+
+1. **The workbench frame.** "I'm working on this feature in ___." Said by a
+   contributor, understood by a stranger. The daily sentence; if it fails, the team
+   invents shorthand and the name is already dead internally.
+2. **The artifact-collision rule** (hard rule, not a scored test). The name must not
+   be the word for what users produce with the tool. A tool named after its output
+   can never be referred to separately from the output — every mention of the tool
+   parses as a mention of the artifact, and no prefix can rescue it.
+3. **The bare-token test.** People drop prefixes; does the name survive unprefixed?
+   ("Rails" yes; "App" no.)
+4. **Identity frames.** "Intro to ___" as a talk title, "___ 2.0", "does ___
+   support X?" — all sayable and unambiguous.
+
+The register distinction that decides *which* rubric applies: **components**
+(Postgres, Compute, Data) are parts inside the user's app, mentioned occasionally
+and happily prefix-qualified — the value rule names them well. A **framework** is a
+milieu, named constantly in referential frames; every durable framework name
+(Rails, Django, Next, Vite) is a distinctive token, and most name *mechanism* —
+which is the proper register for a milieu, not a violation of the value rule.
+
+### Failure record: "Prisma App" (as the framework name)
+
+| Test | Result |
+|---|---|
+| Workbench frame | Fails: "I'm working on this feature in App" refers to nothing — the sentence the team needed all week and could not say. |
+| Artifact collision | Fails the hard rule: the tool was named after its output. "App" is the user's artifact word. |
+| Bare token | Fails: "app" is ambient noise in every conversation about software. |
+| Identity frames | Fails: "App 2.0" and "Intro to Prisma App" cannot pick out the product. |
+
+**Outcome:** the framework is **Prisma Compose**
+([ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-compose.md));
+"Prisma App" is kept as the name of the *artifact*, where it was always right — you
+compose Modules with Prisma Compose into your Prisma App. Compose beat the field
+(Construct, Alloy, Assemble, Wire, Forge, Stack, Prism, and a nineteen-word synonym
+sweep) as the only candidate with no failing grade — and as the semantically correct
+verb: build/construct/make mean fabricating from raw material; *compose* means
+assembling finished parts into a whole, which is what the framework does.
