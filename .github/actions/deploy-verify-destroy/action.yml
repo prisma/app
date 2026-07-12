@@ -53,10 +53,12 @@ runs:
     - name: Verify the round trip
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        STACK_NAME: ${{ inputs.stack-name }}
       run: ${{ inputs.verify-command }}
 
     - name: Destroy
-      # Gate on the Deploy step's outcome, not `.alchemy/` presence — deploy
+      # Check the Deploy step's outcome, not `.alchemy/` presence — deploy
       # state is hosted, not local to the runner.
       if: always() && steps.deploy.outcome != 'skipped'
       shell: bash

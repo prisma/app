@@ -9,7 +9,7 @@
  * can transiently fail right after idle, recovering on the next hit.
  *
  * Run from examples/pn-widgets: `bun scripts/e2e-verify.ts`. Requires
- * PRISMA_SERVICE_TOKEN; PN_WIDGETS_STACK_NAME optionally overrides the project
+ * PRISMA_SERVICE_TOKEN; STACK_NAME optionally overrides the project
  * name (defaults to pn-widgets, matching the stack name the CLI deploys).
  */
 
@@ -25,7 +25,7 @@ if (token === undefined || token.length === 0) {
   console.error('PRISMA_SERVICE_TOKEN is required');
   process.exit(1);
 }
-const stack = process.env['PN_WIDGETS_STACK_NAME'] ?? 'pn-widgets';
+const stack = process.env['STACK_NAME'] ?? 'pn-widgets';
 
 function isRecord(value: unknown): value is { [key: string]: unknown } {
   return typeof value === 'object' && value !== null;
