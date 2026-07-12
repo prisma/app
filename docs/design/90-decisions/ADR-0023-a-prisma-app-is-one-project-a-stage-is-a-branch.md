@@ -1,4 +1,4 @@
-# ADR-0022: A Prisma App is one Project; a Stage is a Branch
+# ADR-0023: A Prisma App is one Project; a Stage is a Branch
 
 ## Status
 
@@ -42,7 +42,7 @@ Workspace
 
 One Project, many Branches; the Apps and Databases repeat per Branch. How a
 deploy names a stage and resolves it to a Branch is
-[ADR-0023](ADR-0023-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md).
+[ADR-0024](ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md).
 
 ## Rationale
 
@@ -84,7 +84,7 @@ down the environment that wrote it.
   resources *within* a (Project, Branch); it cannot create or destroy the
   Branch, because the Branch is the container its own per-stage state is scoped
   to. The deploy CLI creates the containers before Alchemy runs
-  ([ADR-0023](ADR-0023-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)).
+  ([ADR-0024](ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)).
 - **Whole-topology PR previews become a platform-native operation**, not a
   framework-orchestrated one.
 
@@ -99,7 +99,7 @@ down the environment that wrote it.
 
 ## Related
 
-- [ADR-0023](ADR-0023-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
+- [ADR-0024](ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
   — how a deploy names a stage and resolves it to this Project + Branch.
 - [ADR-0009](ADR-0009-deploy-state-is-hosted-in-the-workspace.md) — deploy state
   hosted in the workspace; its keys map to (Project, Branch).

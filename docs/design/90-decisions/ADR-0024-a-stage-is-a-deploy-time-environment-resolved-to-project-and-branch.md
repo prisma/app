@@ -1,4 +1,4 @@
-# ADR-0023: A stage is a deploy-time environment; the CLI resolves its Project and Branch before Alchemy
+# ADR-0024: A stage is a deploy-time environment; the CLI resolves its Project and Branch before Alchemy
 
 ## Status
 
@@ -39,7 +39,7 @@ is created.
 
 The need is mundane: a second environment — staging, or one per pull request —
 that mirrors production without disturbing it. Per
-[ADR-0022](ADR-0022-a-prisma-app-is-one-project-a-stage-is-a-branch.md), an
+[ADR-0023](ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md), an
 environment is a Branch of the app's single Project, so "deploy to staging"
 means: provision the whole topology into the `staging` Branch.
 
@@ -105,7 +105,7 @@ derived from Branch presence, never from a role lookup.
 - **One Project per stage.** Each environment its own Project. Rejected: no
   Project represents the app, environments share nothing, and the platform
   never sees "app X's environments" — the shape
-  [ADR-0022](ADR-0022-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
+  [ADR-0023](ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
   already rejected.
 - **Creating the Branch (and Project) inside Alchemy.** Rejected for the
   circularity above: the Branch is the container its own state is scoped to,
@@ -118,7 +118,7 @@ derived from Branch presence, never from a role lookup.
 
 ## Related
 
-- [ADR-0022](ADR-0022-a-prisma-app-is-one-project-a-stage-is-a-branch.md) —
+- [ADR-0023](ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md) —
   App = one Project, Stage = Branch; the mapping this decision operationalizes.
 - [ADR-0009](ADR-0009-deploy-state-is-hosted-in-the-workspace.md) — the
   workspace-hosted deploy state this keying lands in.
