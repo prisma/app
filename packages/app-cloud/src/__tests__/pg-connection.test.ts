@@ -1,16 +1,20 @@
 /**
- * The deploy-time connection handling for the migration step (slice 2, live-E2E
- * fix). Pure logic — no database; a live PPG deploy is the ultimate proof, but
- * these lock the two pieces the live diagnosis pinned down:
+ * The shared connection-resilience helpers (slice 3) — pure logic, no database.
+ * A live PPG deploy is the ultimate proof of the cold-start behavior, but these
+ * lock the pieces the live diagnosis pinned down:
  *   - `normalizeSslMode` — pin the deprecating `sslmode=require` (etc.) to the
- *     explicit `verify-full` it already means (warning-free, secure — PPG's cert
- *     is publicly trusted); a plain local DSN is untouched.
- *   - `withConnectionRetry` — ride out PPG's post-provision cold-start (the real
- *     failure: an `err.code`-less "upstream" reject that recovers on retry),
- *     while surfacing a real `PnMigrationError` immediately.
+ *     explicit `verify-full` it already means; a plain local DSN is untouched.
+ *   - `isTransientConnectionError` — a cold-start / network / dropped-socket
+ *     failure is retryable; a real query (SQL-state) error is not.
+ *   - `withConnectionRetry` — retries per `shouldRetry` and gives up after
+ *     `attempts`, surfacing the last error.
  */
 import { describe, expect, test } from 'bun:test';
-import { normalizeSslMode, PnMigrationError, withConnectionRetry } from '../prisma-next-migrate.ts';
+import {
+  isTransientConnectionError,
+  normalizeSslMode,
+  withConnectionRetry,
+} from '../pg-connection.ts';
 
 const noSleep = async (): Promise<void> => {};
 
@@ -19,7 +23,6 @@ describe('normalizeSslMode', () => {
     const out = normalizeSslMode('postgres://user:pass@db.prisma.io:5432/postgres?sslmode=require');
     const u = new URL(out);
     expect(u.searchParams.get('sslmode')).toBe('verify-full');
-    // credentials, host, and database are preserved.
     expect(u.username).toBe('user');
     expect(u.password).toBe('pass');
     expect(u.host).toBe('db.prisma.io:5432');
@@ -56,6 +59,42 @@ describe('normalizeSslMode', () => {
   });
 });
 
+describe('isTransientConnectionError', () => {
+  test('true for the PPG cold-start upstream reject (no err.code)', () => {
+    expect(
+      isTransientConnectionError(
+        new Error('Failed to connect to upstream database. Contact Prisma'),
+      ),
+    ).toBe(true);
+  });
+
+  test('true for network-level socket codes', () => {
+    for (const code of ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND']) {
+      expect(isTransientConnectionError(Object.assign(new Error('x'), { code }))).toBe(true);
+    }
+  });
+
+  test('true for pool/server-close transients', () => {
+    for (const msg of [
+      'Connection terminated unexpectedly',
+      'terminating connection due to idle',
+    ]) {
+      expect(isTransientConnectionError(new Error(msg))).toBe(true);
+    }
+  });
+
+  test('false for a real query error (SQL-state), and non-errors', () => {
+    expect(
+      isTransientConnectionError(
+        Object.assign(new Error('syntax error at or near "slect"'), { code: '42601' }),
+      ),
+    ).toBe(false);
+    expect(isTransientConnectionError(new Error('relation "widget" does not exist'))).toBe(false);
+    expect(isTransientConnectionError(null)).toBe(false);
+    expect(isTransientConnectionError('boom')).toBe(false);
+  });
+});
+
 describe('withConnectionRetry', () => {
   test('returns the result when the operation succeeds first try', async () => {
     let calls = 0;
@@ -70,7 +109,7 @@ describe('withConnectionRetry', () => {
     expect(calls).toBe(1);
   });
 
-  test('retries a transient (cold-start) failure and returns once it succeeds', async () => {
+  test('retries a transient failure and returns once it succeeds', async () => {
     let calls = 0;
     const result = await withConnectionRetry(
       async () => {
@@ -99,18 +138,33 @@ describe('withConnectionRetry', () => {
     expect(calls).toBe(4);
   });
 
-  test('does NOT retry a real migration failure (PnMigrationError) — surfaces it at once', async () => {
+  test('does NOT retry when shouldRetry returns false — surfaces at once', async () => {
     let calls = 0;
-    const err = new PnMigrationError('MIGRATION_PATH_NOT_FOUND', 'no authored path');
+    const err = new Error('real, non-transient failure');
     await expect(
       withConnectionRetry(
         async () => {
           calls++;
           throw err;
         },
-        { attempts: 5, sleep: noSleep },
+        { attempts: 5, sleep: noSleep, shouldRetry: () => false },
       ),
     ).rejects.toBe(err);
+    expect(calls).toBe(1);
+  });
+
+  test('honours a shouldRetry predicate (isTransientConnectionError)', async () => {
+    let calls = 0;
+    const queryError = Object.assign(new Error('syntax error'), { code: '42601' });
+    await expect(
+      withConnectionRetry(
+        async () => {
+          calls++;
+          throw queryError;
+        },
+        { attempts: 5, sleep: noSleep, shouldRetry: isTransientConnectionError },
+      ),
+    ).rejects.toBe(queryError);
     expect(calls).toBe(1);
   });
 });

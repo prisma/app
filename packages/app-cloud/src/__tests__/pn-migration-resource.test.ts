@@ -26,6 +26,7 @@ import type * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import * as Option from 'effect/Option';
+import { PgWarmProvider } from '../pg-warm-resource.ts';
 import { PnMigrationProvider, pnMigrationProviderService } from '../pn-migration-resource.ts';
 import { PnMigrationError, targetStorageHash } from '../prisma-next-migrate.ts';
 import gadgetContractJson from './fixtures/gadget-contract/emitted/contract.json' with {
@@ -59,7 +60,7 @@ const TestProbeProvider = () =>
 // The exact merge shape the extension descriptor uses (`Layer.merge(providerA,
 // providerB)`), with two clean providers. Resolved via a scoped `Layer.build` +
 // `provideContext` (stable public Effect API), not `Effect.provide(layer)`.
-const merged = Layer.merge(PnMigrationProvider(), TestProbeProvider());
+const merged = Layer.mergeAll(PnMigrationProvider(), PgWarmProvider(), TestProbeProvider());
 const resolveInMerged = <A>(lookup: Effect.Effect<A, never, never>): Promise<A> =>
   Effect.runPromise(
     Effect.scoped(
@@ -72,6 +73,11 @@ const resolveInMerged = <A>(lookup: Effect.Effect<A, never, never>): Promise<A> 
 describe('provider merge mechanism (Layer.merge keeps both tags reachable)', () => {
   test('the merged layer resolves the PnMigration provider by type', async () => {
     const resolved = await resolveInMerged(Provider.tryFindProviderByType('PrismaNext.Migration'));
+    expect(Option.isSome(resolved)).toBe(true);
+  });
+
+  test('the merged layer resolves the PgWarm provider by type', async () => {
+    const resolved = await resolveInMerged(Provider.tryFindProviderByType('PrismaCloud.PgWarm'));
     expect(Option.isSome(resolved)).toBe(true);
   });
 

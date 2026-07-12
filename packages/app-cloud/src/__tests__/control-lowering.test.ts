@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import type { LowerContext, LoweredNode } from '@prisma/app/deploy';
+import * as RealOutput from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
 
@@ -13,12 +14,14 @@ const recorded = {
   envVar: [] as unknown[][],
   db: [] as unknown[][],
   conn: [] as unknown[][],
+  warm: [] as unknown[][],
   svc: [] as unknown[][],
   deploy: [] as unknown[][],
   pkg: [] as unknown[][],
 };
 
 mock.module('alchemy/Output', () => ({
+  ...RealOutput,
   map: (output: unknown, fn: (v: unknown) => unknown) => fn(output),
 }));
 
@@ -55,6 +58,17 @@ mock.module('@prisma/alchemy', () => ({
     recorded.pkg.push([opts]);
     return { path: `/tmp/${opts.id}.tar.gz`, sha256: `sha-${opts.id}` };
   },
+}));
+
+// PgWarm is a real Alchemy Resource (needs the Stack service); stub it so the
+// lowering's data flow runs purely. `reconcile` echoes the url, so the stub
+// returns { url } — the same shape the lowering threads into outputs/migration.
+mock.module('../pg-warm-resource.ts', () => ({
+  PgWarm: (id: string, props: { url: unknown }) => {
+    recorded.warm.push([id, props]);
+    return Effect.succeed({ url: props.url });
+  },
+  PgWarmProvider: () => ({ stub: 'pg-warm-provider' }),
 }));
 
 const { prismaCloud } = await import('../control.ts');

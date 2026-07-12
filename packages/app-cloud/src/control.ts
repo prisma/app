@@ -15,6 +15,7 @@ import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import * as Redacted from 'effect/Redacted';
+import { PgWarm, PgWarmProvider } from './pg-warm-resource.ts';
 import { resolveMigrationsDir } from './pn-config.ts';
 import { PnMigration, PnMigrationProvider } from './pn-migration-resource.ts';
 import { isPnPostgresResourceNode } from './prisma-next.ts';
@@ -111,7 +112,10 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
       });
       const conn = yield* Prisma.Connection(`${id}-conn`, { databaseId: db.id, name: id });
       const url = Output.map(conn.connectionString, (value) => Redacted.value(value));
-      return { outputs: { url } };
+      // Warm the DB so a consumer's first connect doesn't eat PPG's cold-start
+      // (FT-5226). `warm.url` is the same url, so consumers depend on the warm.
+      const warm = yield* PgWarm(`${id}-warm`, { url });
+      return { outputs: { url: warm.url } };
     });
 
   // A prisma-next resource is a Prisma Postgres DB (provisioned exactly like
@@ -141,11 +145,21 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
       const targetHash = targetStorageHash(contractJson);
       const migrationsDir = yield* Effect.promise(() => resolveMigrationsDir(node.config));
 
-      // Register the migration as a tracked resource — its provider's reconcile
-      // receives the RESOLVED url at apply-time and runs the authored migration.
-      yield* PnMigration(`${id}-migrate`, { url, contractJson, migrationsDir, targetHash });
+      // Warm the DB first (FT-5226), then migrate against the now-warm url —
+      // `warm.url` threads the ordering (PgWarm → PnMigration). The migration
+      // keeps its own withConnectionRetry as a backstop.
+      const warm = yield* PgWarm(`${id}-warm`, { url });
 
-      return { outputs: { url } };
+      // Register the migration as a tracked resource — its provider's reconcile
+      // receives the RESOLVED (warm) url at apply-time and runs the migration.
+      yield* PnMigration(`${id}-migrate`, {
+        url: warm.url,
+        contractJson,
+        migrationsDir,
+        targetHash,
+      });
+
+      return { outputs: { url: warm.url } };
     });
 
   return {
@@ -157,7 +171,11 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     // pre-existing typings gap in @prisma/alchemy. It satisfies them at runtime;
     // this is the one commented cast, and it lives in the extension, not core.
     providers: () =>
-      Layer.merge(Prisma.providers(), PnMigrationProvider()) as unknown as Layer.Layer<never>,
+      Layer.mergeAll(
+        Prisma.providers(),
+        PgWarmProvider(),
+        PnMigrationProvider(),
+      ) as unknown as Layer.Layer<never>,
 
     // Runs ONCE per lowering, before any service: the application's Project,
     // with the poison DATABASE_URL/DATABASE_URL_POOLED variables written

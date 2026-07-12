@@ -226,6 +226,7 @@ describe('invariant 7 (ADR-0022): the authoring entry never reaches the prisma-n
       'pn-config',
       'pn-migration-resource',
       'prisma-next-migrate',
+      'pg-warm-resource',
     ]) {
       expect({ token, present: built.includes(token) }).toEqual({ token, present: false });
     }
