@@ -1,18 +1,13 @@
-/**
- * The `compute` node kind's control: the four service hooks — provision (the
- * service as a PLACE inside the application's Project), serialize (typed
- * Config → env vars), package (deterministic artifact), deploy. Routed here
- * by the extension's `nodes` registry; deploy-time only.
- */
+/** The `compute` node kind's handler: the four service hooks — provision, serialize, package, deploy. */
 
 import * as Prisma from '@prisma/alchemy';
 import type { ServiceNode } from '@prisma/app';
-import type { NodeControl } from '@prisma/app/config';
+import type { NodeHandler } from '@prisma/app/config';
 import * as Effect from 'effect/Effect';
 import { configKey, encode, paramEntries } from '../serializer.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
-export function computeControl(o: ResolvedCloudOptions): NodeControl {
+export function computeHandler(o: ResolvedCloudOptions): NodeHandler {
   return {
     kind: 'service' as const,
     // The service as a PLACE inside the application's Project: the App,
@@ -31,12 +26,9 @@ export function computeControl(o: ResolvedCloudOptions): NodeControl {
         };
       }),
 
-    // Encodes the typed Config into env vars, keyed by the same serializer run() reads at boot.
-    // `encode` does the typed→string mapping — LANDMINE: a dependency-input
-    // `url`'s value may be a provisioning ref at deploy, not a literal
-    // string; `encode` passes a dependency-input value through untouched
-    // (never stringified) so it keeps carrying the ordering edge. Only
-    // service-own literals (e.g. `port`) are ever actually encoded.
+    // A dependency-input value may be a provisioning ref, not a literal
+    // string — `encode` passes it through untouched so it keeps carrying the
+    // ordering edge; only service-own literals are actually stringified.
     serialize: ({ address, node }, provisioned, config) =>
       Effect.gen(function* () {
         const records = [];
@@ -59,13 +51,8 @@ export function computeControl(o: ResolvedCloudOptions): NodeControl {
         return { outputs: { environment: records, port } };
       }),
 
-    // Print the bootstrap (address + boot import baked in) and assemble the
-    // deployable artifact from the build control's normalized dir:
-    // bootstrap.js + compute.manifest.json beside the wrapper + the app's
-    // entry, deterministic tar.gz (fixed mtimes/ordering so unchanged
-    // inputs hash identically). The actual fs/tar work lives in
-    // @prisma/alchemy — this extension's shipped src imports no node:/bun
-    // API (invariant 5).
+    // Deterministic tar.gz (fixed mtimes/ordering) so unchanged inputs hash
+    // identically; the fs/tar work itself lives in @prisma/alchemy.
     package: ({ id }, { assembled, address }) =>
       Effect.try(() =>
         Prisma.packageComputeArtifact({

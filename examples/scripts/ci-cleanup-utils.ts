@@ -1,19 +1,25 @@
 /**
- * The pure logic behind `ci-cleanup.ts` — the name filter and the
+ * The pure logic behind `ci-cleanup.ts` — name filters and the
  * project-teardown sequencing — split out so both are unit-testable
  * (node:test) with a mocked HTTP function, without touching the Management
  * API.
- *
- * A project is an ephemeral CI leftover ONLY when its name is exactly
- * `<prefix>-ci-<digits>` for one of the given prefixes — the shape the E2E
- * workflow's per-run stack names use (`storefront-auth-ci-<run_id>`,
- * `pn-widgets-ci-<run_id>`). Anything else — including the hosted
- * deploy-state control plane `prisma-app-state`, which is additionally
- * hard-denied by name — must never be deleted.
  */
 
-/** Never deleted, even if a prefix argument would somehow match them. */
+/**
+ * Never deleted, no matter what a prefix or legacy-name argument would
+ * otherwise match. `prisma-app-state` is the current, in-use hosted
+ * deploy-state control plane (packages/alchemy/src/state/bootstrap.ts).
+ */
 export const PROTECTED_PROJECT_NAMES: readonly string[] = ['prisma-app-state'];
+
+/**
+ * Stale duplicates of the state-store project under its pre-rename name.
+ * `makerkit-state` was `STATE_PROJECT_NAME` before the MakerKit -> Prisma
+ * App Framework rename; the CI workspace accumulated ~20 of these before the
+ * rename to `prisma-app-state`. None of these names may ever collide with
+ * `PROTECTED_PROJECT_NAMES` — see the `LEGACY_STALE_PROJECT_NAMES` test.
+ */
+export const LEGACY_STALE_PROJECT_NAMES: readonly string[] = ['makerkit-state'];
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -25,6 +31,12 @@ export function ephemeralCiNamePattern(prefixes: readonly string[]): RegExp {
     throw new Error('ci-cleanup: at least one project-name prefix argument is required.');
   }
   return new RegExp(`^(${prefixes.map(escapeRegExp).join('|')})-ci-\\d+$`);
+}
+
+/** True only for an exact legacy stale state-store project name that is not protected. */
+export function isLegacyStaleProjectName(name: string): boolean {
+  if (PROTECTED_PROJECT_NAMES.includes(name)) return false;
+  return LEGACY_STALE_PROJECT_NAMES.includes(name);
 }
 
 /** True only for an exact ephemeral CI project name that is not protected. */
@@ -93,21 +105,9 @@ function parseServiceRows(body: string): { id: string; name: string }[] {
 }
 
 /**
- * Delete a matched project, cascading over live compute when necessary.
- *
- * `DELETE /v1/projects/{id}` refuses with `409 … active deployment` when a
- * run's destroy never completed and a compute deployment is still serving.
- * The teardown mirrors what alchemy's providers do at a real destroy: delete
- * each compute service — the platform tears the service's versions and
- * deployments down with it (alchemy's Deployment delete is a documented
- * no-op for exactly this reason) — retrying a service DELETE only while the
- * platform reports "did not reach a delete-safe state", then re-try the
- * project DELETE with a short bounded retry (deletes are eventually
- * consistent).
- *
- * Returns true when the project ends up gone (404 counts). Fail-soft: any
- * other failure is logged and yields false — the caller continues with the
- * remaining projects. Logs names and ids only, never tokens or DSNs.
+ * Delete a matched project. On a 409 "active deployment", deletes its
+ * compute services first (retrying while "not delete-safe yet"), then
+ * retries the project delete. Returns true once the project is gone (404 counts).
  */
 export async function deleteProjectDeep(
   http: HttpCall,

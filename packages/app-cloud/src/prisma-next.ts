@@ -1,28 +1,7 @@
 /**
- * `pnPostgres()` is the `prisma-next` kind's single entry, overloaded by what
- * it's given — the typed sibling of bare `postgres()` (untouched in
- * `postgres.ts`). A resource end takes `{ name, contract }`, where `contract`
- * is the consumed emitted artifact the resource provides; a dependency end
- * takes that same wrapped contract value and hydrates to a typed Prisma Next
- * client, `Client<Contract>`, over the injected `{ url }` connection. This
- * amends ADR-0015 for this one dep kind (see ADR-0022): Prisma Next is
- * framework-blessed like rpc, so the binding is the typed client itself, not
- * a config the app builds its own client from.
- *
- * `Cmp` (`PnCmp`) carries the deserialized contract data (`contractJson`,
- * read by hydrate) plus a type-only `_contract` anchor pinning the emitted
- * contract's branded `storageHash` literal — the lever that makes plain
- * TypeScript assignability between two wrapped contracts exact-version
- * equality. `satisfies()` mirrors it at Load with a real `storageHash`
- * comparison (not `rpc`'s identity check — this kind needs a genuine
- * version-equality test, since two distinct in-memory contract values can
- * carry the same hash).
- *
- * There is NO runtime schema verification. Schema correctness is a
- * build/deploy-time job: the deploy migrates the database to the contract's
- * hash and guarantees it stays there, so hydrate just builds the client (no
- * `verifyMarker`). A running service can't be crashed by a marker check
- * because there is no marker check (ADR-0022).
+ * `pnPostgres()` is the `prisma-next` kind's single entry, overloaded: a
+ * resource end takes `{ name, contract }`; a dependency end hydrates the
+ * contract into a typed Prisma Next client (ADR-0022). No runtime schema check.
  */
 
 import type { Contract, DependencyEnd, ResourceNode, ServiceNode } from '@prisma/app';
@@ -41,14 +20,9 @@ import { normalizeSslMode, retryTransientConnect } from './pg-connection.ts';
 export type AnyPnContract = import('@prisma-next/contract/types').Contract<SqlStorage>;
 
 /**
- * The comparison payload behind a `prisma-next` Contract. `contractJson` is
- * the plain, deserialized contract data hydrate hands the Prisma Next
- * runtime — the same shape as an emitted `contract.json`, or a TS-authored
- * contract's own value (both satisfy `postgres()`'s `contractJson: unknown`
- * parameter). `_contract` never exists at runtime — it is the type-only
- * anchor that carries the emitted contract's type, so plain assignability
- * between two `PnCmp`s requires `_contract`'s type to match, which for a
- * branded `storageHash` literal means the hashes must be identical.
+ * The comparison payload behind a `prisma-next` Contract. `_contract` is a
+ * type-only anchor so plain assignability between two `PnCmp`s means the
+ * branded `storageHash` literals match.
  */
 export interface PnCmp<C extends AnyPnContract = AnyPnContract> {
   readonly contractJson: unknown;
@@ -68,18 +42,9 @@ export type PnContractOf<Ct> = Ct extends PnPostgresContract<infer C> ? C : neve
 export type Client<Ct> = PostgresClient<PnContractOf<Ct>>;
 
 /**
- * The `prisma-next` resource node: a core Resource node augmented with
- * `config`, the `prisma-next.config.ts` path. Two doors (ADR-0022): the
- * contract is consumed through `provides` (types + wires the resource, and
- * gives the deploy its target `storageHash`); `config` is a deploy-only path
- * the migration lowering loads to resolve the migrations directory — the app
- * build never imports it. Not a core `ResourceNode` field: the path is this
- * extension's deploy concern, so it rides on app-cloud's own node shape — a
- * leaf of core's `ResourceNodeBase` (the frozen node-class pattern: the base
- * brands and validates without freezing; the leaf assigns its own field and
- * `freezeNode(this)` last). No methods, so an instance stays structurally a
- * plain resource node plus `config`; narrowing stays structural, never
- * `instanceof`.
+ * The `prisma-next` resource node: a core Resource node plus `config`, the
+ * `prisma-next.config.ts` path the deploy-only migration lowering loads to
+ * find the migrations directory — the app build never imports it.
  */
 export class PnPostgresResourceNode<
   C extends PnPostgresContract = PnPostgresContract,
@@ -96,13 +61,7 @@ export class PnPostgresResourceNode<
   }
 }
 
-/**
- * Narrows `ctx.node` (typed `ServiceNode | ResourceNode`) to a `pnPostgres`
- * resource node carrying its config path, so the deploy lowering reads
- * `config` without a bare cast. A downcast of a known node, not an
- * untrusted-value guard: checks the resource kind, the `prisma-next` routing
- * type, and that `config` is a string — structural, never `instanceof`.
- */
+/** Narrows `ctx.node` to a `pnPostgres` resource node so the deploy lowering reads `config` without a bare cast. Structural, never `instanceof`. */
 export function isPnPostgresResourceNode(
   node: ServiceNode | ResourceNode,
 ): node is PnPostgresResourceNode {
@@ -116,19 +75,8 @@ export function isPnPostgresResourceNode(
 
 /**
  * Wraps a resolved Prisma Next contract value into the framework's
- * `prisma-next` Contract kind. Both the resource end's `contract` and every
- * dependency end reference the SAME wrapped value, the same way
- * `@prisma/app-rpc`'s `contract()` output feeds both a service's `expose`
- * and its consumers' `rpc(contract)` deps.
- *
- * Two overloads, mirroring `@prisma-next/postgres/runtime`'s own
- * `PostgresOptionsWithContract` / `PostgresOptionsWithContractJson` split:
- * - TS-authored, no-emit (`defineContract()`'s own return value): `C` is
- *   inferred from the argument, which already carries the branded types.
- * - Emitted (a deserialized `contract.json`, e.g. via a JSON module import):
- *   the argument's inferred type is plain JSON data, not the branded
- *   `contract.d.ts` type, so `C` cannot be inferred from it — pass it
- *   explicitly: `pnContract<Contract>(contractJson)`.
+ * `prisma-next` Contract kind. Two overloads: TS-authored (`C` inferred) vs.
+ * emitted JSON (`C` passed explicitly, e.g. `pnContract<Contract>(contractJson)`).
  */
 export function pnContract<const C extends AnyPnContract>(contract: C): PnPostgresContract<C>;
 export function pnContract<C extends AnyPnContract>(contractJson: unknown): PnPostgresContract<C>;
@@ -146,20 +94,8 @@ export function pnContract(contract: unknown): unknown {
 
 /**
  * `{ name, contract, config, targetRef? }` — the resource identity a system
- * provisions: the ONE place the database exists. Two doors (ADR-0022):
- * `contract` is consumed as the provided port (`provides`), typing and wiring
- * the resource and carrying the target contract; `config` is the
- * `prisma-next.config.ts` PATH — deploy-only metadata the migration lowering
- * loads to locate the migrations directory. The app build never imports the
- * config; only the deploy lowering reads it, via `isPnPostgresResourceNode`.
- *
- * `targetRef` (optional) names a Prisma Next ref — a
- * `migrations/app/refs/<name>.json` file carrying `{ hash, invariants }` —
- * as the migration target instead of the default head (the emitted
- * contract's hash). A ref's `invariants` are named postconditions
- * established by `data`-class migration steps (e.g. a backfill); the deploy
- * migrates until the live marker is at the ref's hash AND carries every
- * ref invariant. Deploy-only, like `config`.
+ * provisions. `config` is the deploy-only `prisma-next.config.ts` path;
+ * `targetRef` optionally names a ref as the migration target.
  */
 export function pnPostgres<C extends PnPostgresContract>(opts: {
   name: string;
@@ -204,20 +140,10 @@ function isPnPostgresContract(value: unknown): value is PnPostgresContract {
 }
 
 /**
- * Builds the typed Prisma Next client over a connection pool that rides out a
- * transient cold-start (slice 3, FT-5226) — a belt to the deploy-time `PgWarm`,
- * since a Prisma Postgres database can scale to zero again after deploy and the
- * next runtime connect then eats the "Failed to connect to upstream database"
- * reject.
- *
- * We pass our OWN `pg.Pool` (via the runtime's `pg` binding) rather than a bare
- * `url`, deliberately: for a pool binding the runtime's own connect step is a
- * no-op and the real connection happens lazily at `pool.connect()` on the first
- * query, so wrapping THAT with a bounded retry is enough. The bare-`url` path
- * can't be made resilient — the runtime fires a background connect whose first
- * failure sets a permanent error the client then throws forever. `hydrate` must
- * stay synchronous (`load()` uses `hydrateSync`), and a lazily-connecting pool
- * fits: nothing connects until the first query.
+ * Builds the typed Prisma Next client over a connection pool that rides out
+ * a transient cold-start (FT-5226). We pass our own `pg.Pool` rather than a
+ * bare `url`: the runtime's bare-`url` connect is a one-shot that fails
+ * permanently, but a pool connects lazily on first query, so a bounded retry there suffices.
  */
 function buildClient<C extends PnPostgresContract>(contract: C, url: string): Client<C> {
   return pnPostgresRuntime<PnContractOf<C>>({
@@ -228,10 +154,8 @@ function buildClient<C extends PnPostgresContract>(contract: C, url: string): Cl
 
 /**
  * A `pg.Pool` whose connection acquisition retries a transient cold-start
- * (bounded ~1 min). Only `pool.connect()` is wrapped — a real query error is
- * thrown by `client.query()` after acquisition, so it still surfaces at once.
- * The pool options match the runtime's own bare-`url` defaults; `normalizeSslMode`
- * keeps a Prisma Postgres DSN warning-free.
+ * (bounded ~1 min). Only `pool.connect()` is wrapped — a real query error
+ * still surfaces at once from `client.query()`.
  */
 function resilientPool(url: string): pg.Pool {
   const pool = new pg.Pool({

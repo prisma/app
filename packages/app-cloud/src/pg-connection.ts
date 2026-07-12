@@ -1,10 +1,4 @@
-/**
- * Connection resilience helpers shared by the deploy lowerings (the migration
- * and the warm-on-provision step) and the pnPostgres runtime client (slice 3,
- * FT-5226). Deliberately lightweight — no `@prisma-next/*` / control-plane
- * import — so it is safe to bundle into BOTH the deploy-only `control.ts` and
- * the runtime `./prisma-next` entry without breaking either isolation invariant.
- */
+/** Connection resilience helpers shared by the deploy lowerings and the pnPostgres runtime client (FT-5226); no heavy imports, so it's safe in both. */
 
 /** Network-level socket failures node-postgres surfaces as `err.code`. */
 const TRANSIENT_CODES = new Set([
@@ -29,13 +23,7 @@ const TRANSIENT_MESSAGE_FRAGMENTS = [
   'timeout expired',
 ];
 
-/**
- * Whether an error is a transient *connection* failure worth retrying — a cold
- * Prisma Postgres upstream reject, a network blip, or a dropped/closed socket —
- * as opposed to a real query error (a SQL-state failure) that must surface at
- * once. Used as the retry predicate for the runtime client, where retrying a
- * syntax error would be wrong.
- */
+/** Whether an error is a transient connection failure worth retrying, as opposed to a real query error that must surface at once. */
 export function isTransientConnectionError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined;
@@ -46,20 +34,9 @@ export function isTransientConnectionError(error: unknown): boolean {
 }
 
 /**
- * Pin a deprecating TLS `sslmode` to the explicit `verify-full` so a Prisma
- * Postgres connection is warning-free and future-proof.
- *
- * PPG DSNs carry `sslmode=require`. node-postgres's `pg-connection-string`
- * (8.21) treats `require`/`prefer`/`verify-ca` as aliases for `verify-full`
- * (strict certificate + hostname verification) and emits a
- * `deprecatedSslModeWarning` warning that these will get weaker libpq semantics
- * in pg v9. PPG's certificate is publicly trusted, so `verify-full` connects
- * fine (proven live — every ssl posture connects once the DB is warm); the
- * connection failures were never TLS. Rewriting to the explicit `verify-full`
- * these already mean silences the deprecation warning and keeps full
- * verification when the pg-9 change lands. A DSN with no `sslmode`, or
- * `disable`/`no-verify`, is left untouched (a plain local Postgres still
- * connects without TLS).
+ * Rewrites a deprecating `sslmode` (`require`/`prefer`/`verify-ca`) to the
+ * explicit `verify-full` these already mean, silencing node-postgres's
+ * deprecation warning. `disable`/`no-verify`/unset are left untouched.
  */
 export function normalizeSslMode(url: string): string {
   let parsed: URL;
@@ -78,14 +55,9 @@ export function normalizeSslMode(url: string): string {
 }
 
 /**
- * Retry a connection-bearing operation past a transient connection failure —
- * Prisma Postgres's post-provision / post-scale-to-zero cold-start (a fast,
- * `err.code`-less "Failed to connect to upstream database" reject that recovers
- * on a later attempt). Bounded (default ~1 min). `shouldRetry` decides what is
- * transient — by default everything is retried (the caller's operation only
- * fails on connection issues); the migration passes a predicate that never
- * retries a real migration failure, and the runtime client passes
- * {@link isTransientConnectionError} so a real query error surfaces at once.
+ * Retries an operation past a transient connection failure, bounded (default
+ * ~1 min). `shouldRetry` decides what's transient — defaults to retrying
+ * everything; the runtime client passes {@link isTransientConnectionError}.
  */
 export async function withConnectionRetry<T>(
   operation: () => Promise<T>,
@@ -114,13 +86,7 @@ export async function withConnectionRetry<T>(
   throw lastError;
 }
 
-/**
- * Retry acquiring a database connection past a transient cold-start (bounded
- * ~1 min), surfacing a real query error at once. The runtime client's seam:
- * {@link withConnectionRetry} with {@link isTransientConnectionError} fixed as
- * the predicate, so only a connection-establishment failure retries — a
- * SQL-state error thrown by the query itself is re-thrown immediately.
- */
+/** Retries acquiring a connection past a transient cold-start; {@link withConnectionRetry} with {@link isTransientConnectionError} fixed as the predicate. */
 export function retryTransientConnect<T>(
   acquire: () => Promise<T>,
   opts: {

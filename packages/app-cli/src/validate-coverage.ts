@@ -7,7 +7,7 @@
  * backstop for programmatic callers); this check is the CLI's fail-fast UX.
  */
 import type { Graph } from '@prisma/app';
-import type { ExtensionDescriptor, NodeControl, PrismaAppConfig } from '@prisma/app/config';
+import type { ExtensionDescriptor, NodeHandler, PrismaAppConfig } from '@prisma/app/config';
 import { CliError } from './cli-error.ts';
 import { CONFIG_FILENAME } from './load-config.ts';
 
@@ -15,7 +15,7 @@ function lookup(
   extensions: ReadonlyMap<string, ExtensionDescriptor>,
   extension: string,
   type: string,
-  expectedKind: NodeControl['kind'],
+  expectedKind: NodeHandler['kind'],
   what: string,
 ): void {
   const descriptor = extensions.get(extension);
@@ -25,17 +25,17 @@ function lookup(
         `${CONFIG_FILENAME}'s \`extensions\` (import its /control entry and list its descriptor).`,
     );
   }
-  const control = descriptor.nodes[type];
-  if (control === undefined) {
+  const handler = descriptor.nodes[type];
+  if (handler === undefined) {
     throw new CliError(
-      `Extension "${extension}" has no control for node type "${type}" (needed by ${what}; ` +
+      `Extension "${extension}" has no handler for node type "${type}" (needed by ${what}; ` +
         `known: ${Object.keys(descriptor.nodes).join(', ')}).`,
     );
   }
-  if (control.kind !== expectedKind) {
+  if (handler.kind !== expectedKind) {
     throw new CliError(
-      `Extension "${extension}"'s control for node type "${type}" is a "${control.kind}" ` +
-        `control — ${what} needs a "${expectedKind}" control.`,
+      `Extension "${extension}"'s handler for node type "${type}" is a "${handler.kind}" ` +
+        `handler — ${what} needs a "${expectedKind}" handler.`,
     );
   }
 }

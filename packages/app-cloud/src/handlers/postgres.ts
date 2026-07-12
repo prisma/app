@@ -1,12 +1,7 @@
-/**
- * The `postgres` node kind's control: one Prisma Postgres Database (plus its
- * Connection) per system-provisioned resource, warmed before any consumer
- * deploys. Routed here by the extension's `nodes` registry (ADR-0017);
- * deploy-time only.
- */
+/** The `postgres` node kind's handler: one Prisma Postgres Database (plus its Connection), warmed before any consumer deploys. */
 
 import * as Prisma from '@prisma/alchemy';
-import type { NodeControl } from '@prisma/app/config';
+import type { NodeHandler } from '@prisma/app/config';
 import type { Lowering } from '@prisma/app/deploy';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
@@ -15,13 +10,11 @@ import { PgWarm } from '../pg-warm-resource.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
 /**
- * One Database per system-provisioned postgres resource, in the application's
- * project — `id` is the system provision id (e.g. "db"), so a resource shared
- * by several consumers is created exactly once. The url output fills each
- * consumer's Config leaf and is encoded by serialize under that service's
- * own named key — never the platform default.
+ * One Database per system-provisioned postgres resource — `id` is the
+ * system provision id, so a resource shared by several consumers is created
+ * exactly once.
  */
-export function postgresControl(o: ResolvedCloudOptions): NodeControl {
+export function postgresHandler(o: ResolvedCloudOptions): NodeHandler {
   const lowering: Lowering = ({ id, application }) =>
     Effect.gen(function* () {
       validateName(id, 'resource name (from provision id)');

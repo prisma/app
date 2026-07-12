@@ -6,6 +6,8 @@ import {
   type HttpCall,
   type HttpResponse,
   isEphemeralCiProjectName,
+  isLegacyStaleProjectName,
+  LEGACY_STALE_PROJECT_NAMES,
   PROTECTED_PROJECT_NAMES,
 } from './ci-cleanup-utils.ts';
 
@@ -14,7 +16,7 @@ const PREFIXES = ['storefront-auth', 'pn-widgets'];
 describe('isEphemeralCiProjectName', () => {
   it('matches exactly <prefix>-ci-<digits> for each given prefix', () => {
     assert.equal(isEphemeralCiProjectName('storefront-auth-ci-12345', PREFIXES), true);
-    assert.equal(isEphemeralCiProjectName('pn-widgets-ci-29186523608', PREFIXES), true);
+    assert.equal(isEphemeralCiProjectName('pn-widgets-ci-1234567890', PREFIXES), true);
   });
 
   it('rejects the standing (non-ci) app names', () => {
@@ -44,6 +46,24 @@ describe('isEphemeralCiProjectName', () => {
 
   it('requires at least one prefix', () => {
     assert.throws(() => isEphemeralCiProjectName('pn-widgets-ci-1', []));
+  });
+});
+
+describe('isLegacyStaleProjectName', () => {
+  it('matches the pre-rename state-store name', () => {
+    assert.equal(isLegacyStaleProjectName('makerkit-state'), true);
+  });
+
+  it('rejects the current state-store name and anything else', () => {
+    assert.equal(isLegacyStaleProjectName('prisma-app-state'), false);
+    assert.equal(isLegacyStaleProjectName('storefront-auth-ci-1'), false);
+    assert.equal(isLegacyStaleProjectName('makerkit-state-old'), false);
+  });
+
+  it('the current state project name can never be a legacy stale name', () => {
+    for (const protectedName of PROTECTED_PROJECT_NAMES) {
+      assert.ok(!LEGACY_STALE_PROJECT_NAMES.includes(protectedName));
+    }
   });
 });
 

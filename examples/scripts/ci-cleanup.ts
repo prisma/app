@@ -1,36 +1,16 @@
 #!/usr/bin/env bun
 /**
- * Sweep the CI workspace's leaked per-run projects (run under bun).
- *
- * Under stage-as-branch the CLI resolves the app's Project OUTSIDE the
- * Alchemy stack (ADR-0019: `ensureContainers` creates it before alchemy
- * runs), so `destroy --production` tears down only the stack-tracked
- * resources — the per-run Project itself, and the database the platform
- * auto-provisions with it, persist after every E2E run. This script is the
- * guaranteed teardown: list every project in the workspace (the CI log is
- * our only window into that workspace), delete the ones whose name matches
- * the strict ephemeral pattern `^(<prefix>|...)-ci-<digits>$`, and log —
- * never touch — everything else. `prisma-app-state` (the hosted deploy-state
- * control plane) is hard-denied on top of the pattern.
- *
- * Usage: `bun ci-cleanup.ts <prefix> [<prefix> ...]`, e.g.
- * `bun ci-cleanup.ts storefront-auth pn-widgets`. Requires
- * PRISMA_SERVICE_TOKEN. Logs project names and timestamps only — never
- * tokens or connection strings.
- *
- * A run whose destroy never completed leaves a LIVE compute deployment, and
- * the project DELETE then refuses with `409 … active deployment` — for a
- * matched project that hits this, the sweep tears the project's compute
- * services down first (the platform removes their versions/deployments with
- * them) and retries the project delete; see `deleteProjectDeep`.
- *
- * Failure posture: a per-project delete failure is logged and skipped
- * (cleanup must not redden a green run over one stuck project), but the run
- * exits non-zero when matches existed and NOT ONE could be deleted — and an
- * API/auth failure at listing time always surfaces.
+ * Sweeps `<prefix>-ci-<runId>` projects and legacy stale state-store
+ * projects from the CI workspace. Tears down live compute first on 409.
+ * Exits non-zero only if nothing could be deleted.
  */
 
-import { deleteProjectDeep, type HttpCall, isEphemeralCiProjectName } from './ci-cleanup-utils.ts';
+import {
+  deleteProjectDeep,
+  type HttpCall,
+  isEphemeralCiProjectName,
+  isLegacyStaleProjectName,
+} from './ci-cleanup-utils.ts';
 
 const API = 'https://api.prisma.io/v1';
 
@@ -104,13 +84,16 @@ for (const project of projects) {
   console.log(`  ${project.name}  (created ${project.createdAt})`);
 }
 
-const matches = projects.filter((p) => isEphemeralCiProjectName(p.name, prefixes));
-const skipped = projects.filter((p) => !isEphemeralCiProjectName(p.name, prefixes));
+const isSweepable = (name: string): boolean =>
+  isEphemeralCiProjectName(name, prefixes) || isLegacyStaleProjectName(name);
+
+const matches = projects.filter((p) => isSweepable(p.name));
+const skipped = projects.filter((p) => !isSweepable(p.name));
 for (const project of skipped) {
-  console.log(`Keeping "${project.name}" — not an ephemeral CI project.`);
+  console.log(`Keeping "${project.name}" — not an ephemeral CI or legacy stale project.`);
 }
 if (matches.length === 0) {
-  console.log('No ephemeral CI projects to sweep.');
+  console.log('No ephemeral CI or legacy stale projects to sweep.');
   process.exit(0);
 }
 

@@ -1,26 +1,16 @@
 /**
- * The extension's control entry (ADR-0017) — the only place @prisma/alchemy
- * is imported. Loaded ONLY by `prisma-app.config.ts` (never by app code);
- * deploy-time only; never lands in a runtime bundle. `prismaCloud()` reads
- * and validates its own environment at construction — config evaluation —
- * so a missing variable fails before any assembly work, naming the variable.
- * The exception is `PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID`: read here but only
- * required at `application.provision` (lowering time), since construction
- * also runs in the CLI parent, before the CLI has resolved them.
- *
- * Each node kind's control lives in its own module under `src/controls/`;
- * this file only resolves options, provisions the application, merges the
- * providers, and routes node types to their controls.
+ * The extension's control-plane entry (ADR-0017) — the only place
+ * @prisma/alchemy is imported; loaded only by `prisma-app.config.ts`.
  */
 
 import * as Prisma from '@prisma/alchemy';
 import type { ExtensionDescriptor } from '@prisma/app/config';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
-import { computeControl } from './controls/compute.ts';
-import { postgresControl } from './controls/postgres.ts';
-import { prismaNextControl } from './controls/prisma-next.ts';
-import type { ResolvedCloudOptions } from './controls/shared.ts';
+import { computeHandler } from './handlers/compute.ts';
+import { postgresHandler } from './handlers/postgres.ts';
+import { prismaNextHandler } from './handlers/prisma-next.ts';
+import type { ResolvedCloudOptions } from './handlers/shared.ts';
 import { PgWarmProvider } from './pg-warm-resource.ts';
 import { PnMigrationProvider } from './pn-migration-resource.ts';
 
@@ -43,12 +33,15 @@ function isComputeRegion(value: string): value is Prisma.ComputeRegion {
   return KNOWN_REGION_SET.has(value);
 }
 
+/** Prisma.providers()'s ProviderCollection doesn't structurally unify with Alchemy's inferred providers Layer (a @prisma/alchemy typings gap); it satisfies it at runtime. */
+function asProvidersLayer<A, E, R>(layer: Layer.Layer<A, E, R>): Layer.Layer<never> {
+  return layer as unknown as Layer.Layer<never>;
+}
+
 /**
- * Resolves the factory's env-or-option inputs, failing fast with the exact variable name
- * (construction runs during config evaluation). `projectId`/`branchId` are read here but not
- * required — `prismaCloud()` is constructed once in the CLI parent (before they're set) and
- * again in the child (where they are); the required check for `projectId` lives in
- * `application.provision`, which only runs in the child.
+ * Resolves the factory's env-or-option inputs, failing fast with the exact
+ * variable name. `projectId`/`branchId` aren't required here — `prismaCloud()`
+ * also runs in the CLI parent, before they're set; the required check lives in `application.provision`.
  */
 function resolveOptions(opts: PrismaCloudOptions): ResolvedCloudOptions {
   const workspaceId = opts.workspaceId ?? process.env['PRISMA_WORKSPACE_ID'];
@@ -81,22 +74,12 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
   return {
     id: '@prisma/app-cloud',
 
-    // Alchemy's Stack types its providers Layer against the per-resource
-    // requirements inferred from the stack effect, which the ProviderCollection
-    // returned by Prisma.providers() does not structurally unify with — a
-    // pre-existing typings gap in @prisma/alchemy. It satisfies them at runtime;
-    // this is the one commented cast, and it lives in the extension, not core.
     providers: () =>
-      Layer.mergeAll(
-        Prisma.providers(),
-        PgWarmProvider(),
-        PnMigrationProvider(),
-      ) as unknown as Layer.Layer<never>,
+      asProvidersLayer(Layer.mergeAll(Prisma.providers(), PgWarmProvider(), PnMigrationProvider())),
 
-    // Runs ONCE per lowering, before any service: references the Project the
-    // CLI already ensured (and injected via PRISMA_PROJECT_ID), with the
-    // poison DATABASE_URL/DATABASE_URL_POOLED variables written immediately
-    // so nothing can ever rely on the platform default.
+    // Runs once per lowering, before any service: references the CLI-ensured
+    // Project, with the poison DATABASE_URL variables written immediately so
+    // nothing can ever rely on the platform default.
     application: {
       provision: () =>
         Effect.gen(function* () {
@@ -123,9 +106,9 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     },
 
     nodes: {
-      postgres: postgresControl(o),
-      'prisma-next': prismaNextControl(o),
-      compute: computeControl(o),
+      postgres: postgresHandler(o),
+      'prisma-next': prismaNextHandler(o),
+      compute: computeHandler(o),
     },
   };
 };

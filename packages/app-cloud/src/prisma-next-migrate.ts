@@ -5,7 +5,7 @@
  *
  * Deploy-time only: this module imports `@prisma-next/postgres/control` (which
  * transitively pulls PN's control/migration machinery + `pg`). It is imported
- * by the deploy controls and this package's tests, NEVER by `index.ts` / the
+ * by the deploy handlers and this package's tests, NEVER by `index.ts` / the
  * `./prisma-next` authoring entry — so it never lands in an app runtime bundle
  * (the index-isolation invariant holds).
  *

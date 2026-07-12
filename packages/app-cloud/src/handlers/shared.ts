@@ -1,19 +1,12 @@
-/**
- * Helpers shared by the per-node-kind controls under `src/controls/` and the
- * extension factory in `control.ts`. Deploy-time only — reachable exclusively
- * through the `./control` entry, never from the authoring barrel.
- */
+/** Helpers shared by the per-node-kind handlers under `src/handlers/` and the extension factory in `control.ts`. */
 
 import type * as Prisma from '@prisma/alchemy';
 import { blindCast } from '@prisma/app/casts';
 
 /**
- * The factory's resolved options each node control closes over. `projectId`
- * and `branchId` come from the CLI via `PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID`
- * (stage-as-branch): a named stage sets `branchId`, so every branch-scoped
- * resource (Database, ComputeService, EnvironmentVariable) lands on that
- * Branch and env vars use the `preview` class; `--production` (no branchId)
- * keeps the `production` class.
+ * The factory's resolved options each node handler closes over. `projectId`
+ * and `branchId` come from the CLI (stage-as-branch): a named stage sets
+ * `branchId`, routing every branch-scoped resource there with the `preview` class.
  */
 export interface ResolvedCloudOptions {
   readonly workspaceId: string;
@@ -41,12 +34,7 @@ export function validateName(value: string, source: string): void {
   }
 }
 
-/**
- * The application/provisioned hook's `projectId` output — a provisioning string
- * ref. `LoweredNode.outputs` is typed `unknown` (core never inspects an
- * extension's outputs), so this is the one asserted read, named once here
- * instead of a bare cast per call site.
- */
+/** The application/provisioned hook's `projectId` output — `LoweredNode.outputs` is typed `unknown`, so this is the one asserted read. */
 export const projectIdOf = (hook: {
   readonly outputs: Readonly<Record<string, unknown>>;
 }): string =>

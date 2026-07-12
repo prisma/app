@@ -26,23 +26,37 @@ in `@prisma/app-cloud` behind a dedicated subpath entry.
   makes assignability version-equality, and `satisfies()` mirrors it at Load
   as a hash check.
 - The deploy lowering gains a migration step per Prisma Next postgres
-  resource. Its target is a **ref** `{ hash, invariants }` — the resource's
-  optional `targetRef` (a `migrations/app/refs/<name>.json` name), or the
-  head (the emitted contract's hash, zero invariants) by default. A ref's
-  `invariants` are named postconditions established by `data`-class migration
-  steps (e.g. a backfill), recorded monotonically on the live marker. The
-  decision: the database is AT the target when the marker's `storageHash`
-  equals the ref's hash AND every ref invariant is on the marker — then
-  no-op. A fresh database with **no** required invariants takes `dbInit`
-  (additive-only synthesis; it never runs data steps, which is exactly why
-  it's ruled out otherwise). Anything else — different hash, a missing
-  invariant (a pure data change is an A→A self-edge at the same hash), or a
-  fresh database whose ref requires invariants — walks the **authored**
-  migration graph (`migrate`). Fail the deploy if no path exists, if a step
-  is destructive without explicit opt-in, or if the runner fails. The tracked
-  migration resource is keyed on the ref identity (hash + sorted invariants),
-  so a data-only change still triggers a deploy step. Synthesized
-  diff-and-apply (`dbUpdate`) is never used against a deployed database.
+  resource.
+
+  A **ref** is the migration target: `{ hash, invariants }`. It comes from
+  the resource's optional `targetRef` (naming a
+  `migrations/app/refs/<name>.json` file), or defaults to the head — the
+  emitted contract's hash with zero invariants. `invariants` are named
+  postconditions established by `data`-class migration steps (for example a
+  backfill); each one gets recorded on the live marker once its step runs,
+  and that record only ever accumulates.
+
+  At deploy time the step compares the marker against the ref and picks one
+  of three paths:
+
+  - **No-op.** The marker's `storageHash` equals the ref's hash and every
+    invariant the ref requires is already on the marker. The database is
+    already where it needs to be.
+  - **`dbInit`.** The database is fresh and the ref requires no invariants.
+    `dbInit` does additive-only synthesis and never runs data steps, which
+    is exactly why it's unsafe to use when invariants are required — that
+    case falls through to `migrate` instead.
+  - **`migrate`.** Everything else: a different hash, a missing invariant
+    (note a pure data change with no schema change is a self-edge from a
+    hash to itself), or a fresh database whose ref does require invariants.
+    This walks the **authored** migration graph. The deploy fails if no
+    path exists, if a step is destructive without explicit opt-in, or if
+    the runner itself fails.
+
+  The tracked migration resource is keyed on the ref's identity (hash plus
+  sorted invariants), so a data-only change still produces a distinct deploy
+  step. Synthesized diff-and-apply (`dbUpdate`) is never used against a
+  deployed database — only `migrate` is.
 
 Bare `postgres()` is unchanged: the untyped escape hatch, the `any` of data
 deps, the same role `http()` plays for communication.

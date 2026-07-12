@@ -1,0 +1,72 @@
+name: Deploy, verify, destroy
+description: >
+  Build, deploy, verify, destroy, and sweep one example against real Prisma
+  Cloud. Caller must already have checked out the repo, and must set
+  PRISMA_SERVICE_TOKEN / PRISMA_WORKSPACE_ID as job env.
+
+inputs:
+  working-directory:
+    description: Example package directory, e.g. examples/storefront-auth
+    required: true
+  build-filter:
+    description: turbo --filter argument for the build step
+    required: true
+  stack-name:
+    description: Per-run stack name passed to `prisma-app deploy --name`
+    required: true
+  verify-command:
+    description: Command that verifies the deployed round trip
+    required: true
+  destroy-label:
+    description: Label prefix for destroy-guard.sh log lines
+    required: false
+    default: ''
+  sweep-prefixes:
+    description: Space-separated project-name prefixes for ci-cleanup.ts
+    required: false
+    default: storefront-auth pn-widgets hello
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Build
+      # The package's own `build` script is a no-op; turbo's ^build (from
+      # its workspace deps) is what actually builds the systems.
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: pnpm turbo run build --filter '${{ inputs.build-filter }}'
+
+    - name: Deploy
+      id: deploy
+      # Must run under bun: Load imports service modules that import `bun`
+      # or use Bun.serve, which throw under node.
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bun node_modules/.bin/prisma-app deploy system.ts --name "${{ inputs.stack-name }}"
+
+    - name: Verify the round trip
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ inputs.verify-command }}
+
+    - name: Destroy
+      # Gate on the Deploy step's outcome, not `.alchemy/` presence — deploy
+      # state is hosted, not local to the runner.
+      if: always() && steps.deploy.outcome != 'skipped'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bash ../scripts/destroy-guard.sh "${{ inputs.destroy-label }}" system.ts "${{ inputs.stack-name }}"
+
+    - name: Sweep leaked per-run projects
+      # Must run under always(): the CLI creates the per-run project outside
+      # the Alchemy stack, so destroy doesn't delete it.
+      if: always()
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bun ../scripts/ci-cleanup.ts ${{ inputs.sweep-prefixes }}
