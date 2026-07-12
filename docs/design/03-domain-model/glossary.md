@@ -448,7 +448,7 @@ is where the framework's own binding layer gets built.
   composition). "System" and "Hex" were earlier working names; see
   [ADR-0025](../90-decisions/ADR-0025-name-the-unit-of-composition-module.md),
   which supersedes the unit noun in
-  [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md).
+  [ADR-0014](../90-decisions/ADR-0014-name-the-framework-prisma-app.md).
 - **App** is no longer superseded: it names the **outermost Module** — the whole
   application you build and deploy. Use **Topology** for the wired graph and
   **Module** for a unit; **App** for the composed whole.

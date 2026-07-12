@@ -3,7 +3,7 @@
 ## Status
 
 Accepted. Supersedes the unit-noun half of
-[ADR-0014](ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md): the unit
+[ADR-0014](ADR-0014-name-the-framework-prisma-app.md): the unit
 of composition is a **Module**, not a System. ADR-0014's other decisions stand
 unchanged — the framework is Prisma App, the packages are `@prisma/app*`, the CLI is
 `prisma-app`, and there is exactly one authoring primitive with no separate `app()`
@@ -31,8 +31,8 @@ artifacts.
 
 ## Reasoning
 
-ADR-0014 chose "System" with product-name tests — name the value, not the machinery
-— but a unit-of-composition noun is not a product name. To the user a container noun
+The unit was first named "System", chosen with product-name tests — name the value,
+not the machinery — but a unit-of-composition noun is not a product name. To the user a container noun
 is *all* machinery; the value lives in the capability (cron, auth), never in the
 box. The choice was therefore carried by a single remaining criterion, the naive
 first reading, evaluated in one sentence at one grain: "the auth system." That
@@ -43,9 +43,9 @@ The first small shared unit — the cron package — exposed the failure within 
 existing. "Install the cron system" is a category error: English "system" has a size
 floor and an ownership register — a system is something you *operate*, not something
 you install. "This system uses the cron system and an image-resizer system" is
-barely sayable. And the deciding claim in ADR-0014 — that nobody says "my auth
-module" — is simply false: developers say it constantly in the ecosystems nearest to
-ours (Nest, Angular, Terraform, Go). The rubric that replaces those tests is
+barely sayable. And the deciding claim behind that first choice — that nobody says
+"my auth module" — is simply false: developers say it constantly in the ecosystems
+nearest to ours (Nest, Angular, Terraform, Go). The rubric that replaces those tests is
 recorded in `agent-os/product/vocabulary-tests.md`: every test is a sentence said
 aloud — grain sweep, repetition, install, publish, instance/artifact duality,
 adjacency, the gloss test, and a prior-art check.
@@ -59,7 +59,8 @@ duality for free. Its prior art is exactly our meaning: a Nest or Angular module
 a composable, boundary-owning unit assembled by dependency injection, and a
 Terraform module is a reusable composition with typed inputs and outputs. Notably,
 Nest's convention that the root module *is* the app corroborates "the App is the
-outermost Module" — ADR-0014 had read that same convention as a collision, inverted.
+outermost Module" — the first-round reading had taken that same convention as a
+collision, inverted.
 
 The one real adjacency is ES modules, and it is inter-register: the language's
 "module" names a file-grain unit, ours names a composition-grain unit, and no spoken
@@ -81,13 +82,13 @@ units fails where most of the usage is.
 
 ## Consequences
 
-- **A repo-wide mechanical rename**, mirroring the Hex→System sweep ADR-0014
+- **A repo-wide mechanical rename**, mirroring the earlier repo-wide rename ADR-0014
   itself performed: `system()` becomes `module()`, `SystemNode` becomes
   `ModuleNode` (and kin), `system.ts` files and `systems/` directories are renamed,
   and the README, glossary, domain docs, and earlier ADRs' prose move from "System"
   to "Module." Package names, the CLI, and `prisma-app.config.ts` are untouched.
-- **"System" must not survive as a term.** The Service/System adjacency ADR-0014
-  asked the glossary to defend disappears; Service stays, unambiguous now.
+- **"System" must not survive as a term.** The Service-vs-unit adjacency the first
+  naming asked the glossary to defend disappears; Service stays, unambiguous now.
 - **The register model is canon**: package (npm's word) / extension (toolchain slot)
   / Module (unit of composition). Docs introducing a shared capability say "the
   cron module," provided by a package, possibly alongside an extension.
@@ -101,9 +102,9 @@ units fails where most of the usage is.
 ## Alternatives considered
 
 - **Keep "System."** The failure record is in `agent-os/product/vocabulary-tests.md`:
-  fails grain sweep, repetition, install, publish, duality, adjacency (the ADR-0014
-  consequence that the glossary must "hold the line" against Service was the early
-  warning), and the gloss test — the README introduced it as "a component — a
+  fails grain sweep, repetition, install, publish, duality, adjacency (an early
+  warning was the demand that the glossary "hold the line" between Service and the
+  unit noun), and the gloss test — the README introduced it as "a component — a
   System," reaching for the better register in the very sentence that defined it.
 - **Component.** The word our own README glossed with, and C4's architecture sense
   matches ours. Disqualified by an intra-app collision: a Module *contains* React
@@ -126,7 +127,7 @@ units fails where most of the usage is.
   "System" failure record.
 - `agent-os/product/naming.md` — product-name tests and the register model's place
   in the family story.
-- [ADR-0014](ADR-0014-name-the-framework-prisma-app-and-its-unit-system.md) — the
+- [ADR-0014](ADR-0014-name-the-framework-prisma-app.md) — the
   superseded unit-noun decision; its framework, package, CLI, and single-primitive
   decisions stand.
 - [ADR-0003](ADR-0003-deploy-derives-everything-from-the-root-node.md),
