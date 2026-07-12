@@ -24,12 +24,15 @@ root's name names the application),
 Two commands:
 
 - **`prisma-app deploy <entry>`** — deploy the application whose root node is
-  `entry`'s default export.
-- **`prisma-app destroy <entry>`** — tear it down (same derivation, Alchemy
-  destroy).
+  `entry`'s default export, to a stage (default: production).
+- **`prisma-app destroy <entry>`** — tear a stage down (same derivation,
+  Alchemy destroy); the target stage is always explicit (see § Stages and
+  containers).
 
 Flags: `--name` (override the root's name — per-run ephemeral deploys in
-shared workspaces), `--stage`. Nothing else. `prisma-app build`, `prisma-app
+shared workspaces), `--stage <name>` (target a named, isolated environment
+instead of production), `--production` (destroy-only — explicitly target the
+production environment). Nothing else. `prisma-app build`, `prisma-app
 dev`, and topology emission are out of scope (see § Out of scope).
 
 **Runtime.** The bin is runtime-agnostic — no bun-only APIs anywhere in the
@@ -61,23 +64,61 @@ loading the graph imports that module — the app's choice, not a CLI limit.
 4. **Resolve the name.** The root node's name (every node is named — ADR-0006),
    unless `--name` overrides it — CI's per-run ephemeral deploys use this so a
    name never collides with a standing demo.
-5. **Assemble each service.** Look up the service's build descriptor in the
+5. **Resolve the app's containers.** Before assembling or running anything,
+   the CLI resolves two Prisma Cloud containers via the Management API: the
+   app's **Project** — found by app name, oldest match adopted, created if
+   none exist — and, for a named stage, that stage's **Branch** — found by
+   `gitName` (the stage name), created if absent. The stage name must pass
+   `git check-ref-format`; an invalid name fails outright, never silently
+   normalized. The default stage (no `--stage`) resolves the Project only —
+   no Branch, zero change to production. `destroy` resolves **find-only**: an
+   absent Project or Branch fails with "nothing deployed for `<app>`[`/<stage>`]"
+   rather than creating one. See § Stages and containers.
+6. **Assemble each service.** Look up the service's build descriptor in the
    registries — `extensions[build.extension].nodes[build.type].assemble` — and
    run it. The assembler resolves its `entry` (and any other path field)
    relative to `dirname(build.module)` — the authoring module the descriptor
    carries (ADR-0004) — no directory discovery of any kind. Assembly validates
    the user's built output exists (missing → "run your build" error; staleness
    is not detected) and produces a normalized bundle `{ dir, entry }`.
-6. **Lower and drive.** Write the pipeline's results as a runnable stack
+7. **Lower and drive.** Write the pipeline's results as a runnable stack
    module at `.prisma-app/alchemy.run.ts` and drive the `alchemy` CLI against
-   it (ADR-0007). The generated file and Alchemy's state live in the
-   process's working directory — tool state lives where you run the tool,
-   like any other CLI (ADR-0004).
+   it (ADR-0007), setting `PRISMA_PROJECT_ID` (always) and `PRISMA_BRANCH_ID`
+   (named stages only) on the `alchemy` child process — for both `deploy` and
+   `destroy`, since `alchemy destroy` re-imports and re-evaluates the same
+   stack, so its target reconstruction needs the same ids. The generated file
+   and Alchemy's state live in the process's working directory — tool state
+   lives where you run the tool, like any other CLI (ADR-0004).
 
 The pass that assembles a service is the same pass that lowers it, so the
 correlation between services and their built bundles never exists as
 user-facing configuration — it is computed, written into the generated stack
 file, and consumed in one motion.
+
+## Stages and containers
+
+An app deploys to a named **stage** — a deploy-time environment, never
+authored in the topology (ADR-0024). `prisma-app deploy` with no `--stage`
+targets **production**, at the Project level; `--stage <name>` targets a
+**named stage**, resolved to a Branch of the app's Project (ADR-0023).
+
+- **Containers.** The app's **Project** and the stage's **Branch** are
+  resolved before Alchemy runs (pipeline step 5) — Alchemy provisions only
+  the resources *within* them; it never creates or destroys a container.
+- **Id threading.** The resolved `projectId` (and, for a named stage,
+  `branchId`) are set as `PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID` on the
+  `alchemy` child process, for both `deploy` and `destroy`.
+- **Destroy is explicit.** `prisma-app destroy` requires `--stage <name>` or
+  `--production`; a bare `destroy` is an error, so an omitted or mistyped
+  stage can never silently tear down production. `destroy` resolves
+  find-only (no container is ever created); after `alchemy destroy` removes
+  a named stage's resources, the CLI soft-deletes its Branch. The production
+  Branch is never deleted.
+
+See [ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
+(App = one Project, Stage = Branch) and
+[ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
+(stage resolution mechanics).
 
 ## Build ownership
 
@@ -161,8 +202,10 @@ The CLI's quality lives in its errors; each failure names its fix:
   alchemy — the likely causes (wrong directory, nothing ever deployed) mean
   "nothing to do here", not an error; the warning makes the wrong-directory
   case visible instead of silently succeeding (see ADR-0004's state rule).
-- `--stage` passes through to the `alchemy` invocation, which owns stage
-  semantics; the generated stack file carries no stage (ADR-0007).
+- `--stage` passes through to the `alchemy` invocation, which owns Alchemy's
+  own stage/state semantics, alongside the resolved container ids
+  (`PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID`, § Stages and containers); the
+  generated stack file carries neither (ADR-0007).
 
 ## Known limitations
 
@@ -186,3 +229,6 @@ The CLI's quality lives in its errors; each failure names its fix:
 - [`../03-domain-model/core-and-targets.md`](../03-domain-model/core-and-targets.md)
   — the core/pack split the pack CLI seam extends.
 - [`../90-decisions/`](../90-decisions/) — ADR-0003 … ADR-0006.
+- [ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
+  / [ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
+  — stage, Project, and Branch semantics (§ Stages and containers).

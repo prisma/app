@@ -7,9 +7,10 @@ architecture/design phase that comes *after* the high-level model is settled.
   `@prisma/app` and the target-pack contract, with `@prisma/app-cloud` as
   the worked instance.
 - [`deploy-cli.md`](deploy-cli.md) — the Prisma App Framework's own deploy
-  entrypoint (`prisma-app deploy` / `prisma-app destroy`): the pipeline, the
-  pack CLI seam and per-kind assembly contracts, and the error surface. Rests
-  on ADR-0003 … ADR-0006.
+  entrypoint (`prisma-app deploy` / `prisma-app destroy`): the pipeline,
+  stages and container (Project/Branch) resolution, the pack CLI seam and
+  per-kind assembly contracts, and the error surface. Rests on ADR-0003 …
+  ADR-0006, ADR-0023, ADR-0024.
 - [`system-composition.md`](system-composition.md) — system boundaries
   (deps/expose), forwarding, nesting, and the packaged reusable system. Rests
   on ADR-0016.

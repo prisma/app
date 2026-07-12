@@ -5,7 +5,7 @@ The Alchemy resource types `packages/prisma-alchemy` defines over the
 lowering graphs — including the correction that makes deploy ordering a property
 of the dependency graph rather than luck.
 
-## Placement: one Project per application
+## Placement: one Project per application, one Branch per stage
 
 A PDP Project is a **shared config namespace** (every App on a branch snapshots
 the same variable set into its versions) and a **shared lifecycle** (deletion
@@ -21,6 +21,20 @@ Consequences, stated plainly:
   process env physically contains its co-located siblings' variables. One
   application = one trust domain; anything that must not be visible across
   services belongs in a different project (a different application).
+
+Every deploy environment — production, staging, a per-PR preview — is a
+**Branch** of that one Project
+([ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)).
+The default stage (no `--stage`) is production, at the Project level:
+resources carry no `branchId` and no Branch exists for it. A **named stage**
+(`--stage <name>`) is a Branch whose `gitName` is the stage name; every
+resource the target provisions for that stage carries the Branch's id.
+Resolving and creating the Branch — like the Project — happens **before**
+Alchemy runs
+([ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md));
+Alchemy only diffs and provisions the resources *inside* a (Project, Branch),
+never the container itself (see
+[§ Stages and container resolution](#stages-and-container-resolution)).
 
 ## `DATABASE_URL` is forbidden — and actively poisoned
 
@@ -48,18 +62,42 @@ it manages whatever a provider package registers).
 | Our resource | PDP entity it manages | Props (in) | Outputs (out) | Notes |
 | --- | --- | --- | --- | --- |
 | `Project` | Project | workspaceId, name | id | **one per Prisma App Framework application**; the poison `DATABASE_URL` variables are written at provision (see above) |
-| `Database` | Database | projectId, name | id, connection info | one per System-provisioned postgres resource; never the project default |
+| `Database` | Database | projectId, name | id, connection info | one per System-provisioned postgres resource; never the project default; created project-scoped, then attached to a named stage's Branch by a follow-up `PATCH` (the create body doesn't accept `branchId`) |
 | `Connection` | database connection info | databaseId | url | direct/pooled endpoints; the url is written as the service's own named variable via the pack's `serialize` |
-| `ComputeService` | App | projectId, name, region | id | PDP attaches it to the production branch implicitly |
-| `EnvironmentVariable` | ConfigVariable | projectId, class, key, value, branchId? | id | we write production-class templates only |
+| `ComputeService` | App | projectId, name, region, branchId? | id | `branchId` in the create body targets a named stage's Branch directly; omitted, PDP attaches it to the Project's default (production) Branch |
+| `EnvironmentVariable` | ConfigVariable | projectId, class, key, value, branchId? | id | production-class with no `branchId` on the default stage; preview-class with `branchId` on a named stage |
 | `Deployment` | Deployment (ComputeVersion) + Promotion | computeServiceId, artifactPath, artifactHash, port, **environment** (the env-var records the version boots with — see the graphs below) | versionId, deployedUrl | provider reconcile: create version → upload tar.gz → start → poll until running → promote; `deployedUrl` read **post-promote** (create-time domain is a placeholder — PRO-200) |
 
-What we deliberately do **not** model yet, and where it will bite: **Branch**
-(everything implicitly targets the production branch; the platform's
-preview-class + branch-override structure is unmodeled — future
-environments/stages work), **Promotion** as a standalone resource (the
-Deployment provider auto-promotes; rollback is unexpressed), and non-default
-**Databases** with contracts.
+What we deliberately do **not** model yet, and where it will bite:
+**Promotion** as a standalone resource (the Deployment provider
+auto-promotes; rollback is unexpressed), and non-default **Databases** with
+contracts. **Branch** is now resolved and threaded (see
+[§ Stages and container resolution](#stages-and-container-resolution)) — but
+only as a container id carried in providers' `branchId` props; it is never an
+Alchemy resource itself, since its lifecycle lives outside Alchemy
+(ADR-0024).
+
+## Stages and container resolution
+
+`@prisma/alchemy` also hosts the **container-resolution client**
+(`resolveContainer` / `deleteBranch`) the deploy CLI runs *before* the
+generated stack, not through an Alchemy resource: `resolveContainer`
+finds-or-creates the app's Project (oldest name match adopted) and, for a
+named stage, its Branch (found by `gitName`, created if absent); `ensure:
+false` makes it find-only, for `destroy`. It reuses the same Management API
+client and the same adopt-oldest / tolerate-a-racing-409 idiom the state
+store's own bootstrap uses
+([ADR-0009](../90-decisions/ADR-0009-deploy-state-is-hosted-in-the-workspace.md))
+— the two resolve different things (deploy containers vs. the state store's
+own project) through the same client and idiom. `deleteBranch` soft-deletes
+a stage's Branch once `destroy` has removed its members.
+
+Deploy state keeps its existing shape — keyed per Alchemy `--stage`
+(ADR-0009) — unchanged by this: under stage-as-branch, **the Project is the
+stack and the Branch is the stage**
+([ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)),
+so a stage's effective identity is the pair (Project, Branch). The state
+store's location and internal logic are untouched.
 
 ## The mapping, both directions
 
@@ -67,10 +105,13 @@ Deployment provider auto-promotes; rollback is unexpressed), and non-default
   Management API; the table above is that mapping. One resource maps to one PDP
   entity except `Deployment`, which spans version-create + upload + start +
   promote (and therefore owns the env-snapshot moment).
-- **PDP → ours**: `foundryVersionId`, `Promotion`, Foundry's version record, and
-  Branch have no resource of ours; they are internal to the `Deployment`
-  provider's behavior or unmodeled. `serviceEndpointDomain` surfaces only as
-  `Deployment.deployedUrl`.
+- **PDP → ours**: `foundryVersionId`, `Promotion`, and Foundry's version record
+  have no resource of ours; they are internal to the `Deployment` provider's
+  behavior or unmodeled. **Branch** likewise has no Alchemy resource — it is
+  resolved and its lifecycle managed by the CLI's container-resolution
+  client, outside the Alchemy graph entirely (see
+  [§ Stages and container resolution](#stages-and-container-resolution)).
+  `serviceEndpointDomain` surfaces only as `Deployment.deployedUrl`.
 
 ## The lowering graphs
 
@@ -152,5 +193,11 @@ author and no app author ever hand-wires them.
 - [`pdp-data-model.md`](pdp-data-model.md) — the platform model these resources manage.
 - [`../10-domains/core-model.md`](../10-domains/core-model.md) — the SPI that
   drives this lowering (three execution paths, phased service SPI).
+- [`../10-domains/deploy-cli.md`](../10-domains/deploy-cli.md) § Stages and
+  containers — the CLI pipeline step that drives the container resolution
+  described here.
 - [`../03-domain-model/glossary.md`](../03-domain-model/glossary.md) § compile
   target — the Alchemy substrate itself.
+- [ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
+  / [ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
+  — the decisions this section documents.

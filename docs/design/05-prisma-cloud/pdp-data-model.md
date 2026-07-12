@@ -38,8 +38,10 @@ Edge semantics, with the properties that matter to us:
 
 - **Workspace → Project.** All API access is workspace-scoped (service token).
 - **Project → Branch.** Every project has branches; one carries the production
-  role (`PRODUCTION_BRANCH_ROLE`). The Prisma App Framework today only ever
-  touches the production branch, implicitly.
+  role (`PRODUCTION_BRANCH_ROLE`), server-assigned and never asserted by the
+  framework. A deploy's default stage targets the Project level (no Branch);
+  a named stage targets a Branch the CLI resolves before Alchemy runs (see
+  [alchemy-lowering.md § Stages and container resolution](alchemy-lowering.md#stages-and-container-resolution)).
 - **Branch → App, Branch → Database.** Both are **branch-scoped** (composite FK
   `[branchId, projectId]`). An App **must be attached to a Branch to deploy** —
   version creation 422s otherwise (`resolveDeployEnvVars.ts`: "Attach the app to
@@ -90,8 +92,10 @@ Consequences the Prisma App Framework designs around:
    [alchemy-lowering.md](alchemy-lowering.md#database_url-is-forbidden--and-actively-poisoned));
    every database URL a service consumes is an explicit, service-named variable.
 4. **Branch + class is the platform's environments model** (production
-   templates vs preview templates + per-branch overrides) — the natural
-   substrate for the Prisma App Framework's future stages/environments story.
+   templates vs preview templates + per-branch overrides) — the substrate
+   [stage-as-branch](../10-domains/deploy-cli.md#stages-and-containers) is
+   built on: a named stage is a Branch, and its config is written
+   preview-class with that Branch's overrides.
 
 ## Related
 

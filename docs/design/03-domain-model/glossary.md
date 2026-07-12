@@ -226,6 +226,24 @@ An addressable unit the platform can execute (by id/kind), defined by an artifac
 reference plus its declared required Inputs. The execution-plane handle for a
 Service.
 
+### Stage
+
+A deploy-time **environment** name, chosen with `--stage` and never authored in
+the topology — the same graph deploys to any stage. The **default stage** (no
+`--stage`) is production, at the Project level; a **named stage** resolves to a
+Prisma Cloud **Branch**, its `gitName` set to the stage name. See
+[ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
+and
+[ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md).
+
+### Container — Project / Branch
+
+The two Prisma Cloud objects a stage resolves to before Alchemy runs: the
+app's **Project** (one per application, found by name or created) and, for a
+named stage, that stage's **Branch** (found by `gitName` or created). The
+deploy CLI resolves and ensures both; Alchemy provisions only the resources
+inside them and never creates or destroys a container itself.
+
 ## Authoring surface — the next layer
 
 How a developer actually writes the [Core nouns](#core-nouns). The concrete
