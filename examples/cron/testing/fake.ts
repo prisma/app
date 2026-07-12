@@ -14,7 +14,7 @@
 import { compute } from '@prisma/app-cloud';
 import node from '@prisma/app-node';
 import { serve } from '@prisma/app-rpc';
-import { workerContract } from './contract.ts';
+import { workerContract } from '../src/worker/contract.ts';
 
 const fakeWorker = compute({
   name: 'worker-fake',

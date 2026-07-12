@@ -47,21 +47,18 @@ importers:
       '@prisma/app-cloud':
         specifier: workspace:0.2.0
         version: link:../../packages/app-cloud
-      '@prisma/app-cron':
-        specifier: workspace:0.2.0
-        version: link:../../packages/app-cron
       '@prisma/app-node':
         specifier: workspace:0.2.0
         version: link:../../packages/app-node
       '@prisma/app-rpc':
         specifier: workspace:0.2.0
         version: link:../../packages/app-rpc
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
       alchemy:
         specifier: 2.0.0-beta.59
         version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.92(effect@4.0.0-beta.92))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.92)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.92)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.9(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.0)
-      arktype:
-        specifier: ^2.2.3
-        version: 2.2.3
       effect:
         specifier: 4.0.0-beta.92
         version: 4.0.0-beta.92
@@ -334,6 +331,15 @@ importers:
       '@prisma/app':
         specifier: workspace:0.2.0
         version: link:../app
+      '@prisma/app-node':
+        specifier: workspace:0.2.0
+        version: link:../app-node
+      '@prisma/app-rpc':
+        specifier: workspace:0.2.0
+        version: link:../app-rpc
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
       alchemy:
         specifier: 2.0.0-beta.59
         version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.92(effect@4.0.0-beta.92))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.92)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.92)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.9(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.0)
@@ -347,40 +353,6 @@ importers:
       '@prisma-next/target-postgres':
         specifier: 0.14.0
         version: 0.14.0(typanion@3.14.0)(typescript@6.0.3)
-      '@prisma/app-tsdown':
-        specifier: workspace:0.2.0
-        version: link:../tsdown-config
-      '@types/bun':
-        specifier: ^1.3.13
-        version: 1.3.14
-      tsdown:
-        specifier: ^0.22.3
-        version: 0.22.3(typescript@6.0.3)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.9
-        version: 4.1.9(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))
-
-  packages/app-cron:
-    dependencies:
-      '@prisma/app':
-        specifier: workspace:0.2.0
-        version: link:../app
-      '@prisma/app-cloud':
-        specifier: workspace:0.2.0
-        version: link:../app-cloud
-      '@prisma/app-node':
-        specifier: workspace:0.2.0
-        version: link:../app-node
-      '@prisma/app-rpc':
-        specifier: workspace:0.2.0
-        version: link:../app-rpc
-      arktype:
-        specifier: ^2.2.3
-        version: 2.2.3
-    devDependencies:
       '@prisma/app-tsdown':
         specifier: workspace:0.2.0
         version: link:../tsdown-config

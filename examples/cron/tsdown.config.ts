@@ -5,8 +5,8 @@ import { defineConfig } from 'tsdown';
 // the code the two entries share (workerContract) into a chunk neither
 // entry's own subdir contains, and @prisma/app-node's assemble() copies only
 // the entry file into the deployed bundle (ADR-0004). Each build here is
-// fully self-contained. @prisma/* and arktype are inlined (node_modules
-// isn't shipped); `bun` is a Compute runtime built-in.
+// fully self-contained. `@prisma/*` is inlined (node_modules isn't shipped);
+// `bun` is a Compute runtime built-in.
 export default defineConfig([
   {
     entry: { server: 'src/worker/server.ts' },
@@ -14,18 +14,18 @@ export default defineConfig([
     format: 'esm',
     platform: 'node',
     external: ['bun'],
-    noExternal: [/^@prisma\//, /^arktype/],
+    noExternal: [/^@prisma\//],
     dts: false,
     sourcemap: false,
     clean: true,
   },
   {
-    entry: { 'router-entry': 'src/router/router-entry.ts' },
+    entry: { server: 'src/router/server.ts' },
     outDir: 'dist/router',
     format: 'esm',
     platform: 'node',
     external: ['bun'],
-    noExternal: [/^@prisma\//, /^arktype/],
+    noExternal: [/^@prisma\//],
     dts: false,
     sourcemap: false,
     clean: true,

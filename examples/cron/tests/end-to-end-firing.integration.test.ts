@@ -3,19 +3,18 @@
  * Proof of firing (testing.md § Integration): the real pipeline end to end —
  * defineSchedule -> runScheduler -> the trigger contract over real HTTP ->
  * serveSchedule's jobId dispatch -> the worker. Boots the REAL router entry
- * (`dist/router-entry.mjs`, unmodified) via `bootstrapService` against a fake
+ * (`dist/router/server.mjs`, unmodified) via `bootstrapService` against a fake
  * worker on a loopback `Bun.serve`, then drives `runScheduler` with a fake
  * timer over a real trigger client pointed at the booted router. Timers are
  * deterministic — a fake `setTimer` plus awaiting each `call`'s returned
  * promise — never real wall-clock `setInterval`. Run via `bun test`.
  */
 import { describe, expect, test } from 'bun:test';
+import { runScheduler, triggerContract } from '@prisma/app-cloud/cron';
 import { bootstrapService } from '@prisma/app-cloud/testing';
-import { runScheduler, triggerContract } from '@prisma/app-cron';
 import { makeClient } from '@prisma/app-rpc';
-import { schedule } from '../src/router/schedule.ts';
-import routerService from '../src/router/service.ts';
-import { createFakeWorker } from '../src/worker/fake.ts';
+import routerService, { schedule } from '../src/router/service.ts';
+import { createFakeWorker } from '../testing/fake.ts';
 
 const ROUTER_PORT = 4502;
 

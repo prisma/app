@@ -6,15 +6,13 @@
  * tests) drive.
  */
 import { param } from '@prisma/app';
-import { compute } from '@prisma/app-cloud';
 import node from '@prisma/app-node';
 import { rpc } from '@prisma/app-rpc';
-import { type } from 'arktype';
+import { compute } from '../compute.ts';
 import { triggerContract } from './contract.ts';
 import type { Schedule } from './schedule.ts';
 import { parseEvery } from './schedule.ts';
-
-const scheduleSchema = type({ jobId: 'string', every: 'string' }).array();
+import { jobsSchema } from './standard-schema.ts';
 
 /**
  * The always-on scheduler service. `schedule` sets only the `jobs` param's
@@ -25,9 +23,9 @@ export function cronScheduler<Ids extends string>(schedule: Schedule<Ids>) {
   return compute({
     name: 'scheduler',
     deps: { trigger: rpc(triggerContract) },
-    params: { jobs: param(scheduleSchema, { default: [...schedule.jobs] }) },
+    params: { jobs: param(jobsSchema, { default: [...schedule.jobs] }) },
     build: node({
-      module: new URL('./scheduler-node.mjs', import.meta.url).href,
+      module: new URL('./scheduler-service.mjs', import.meta.url).href,
       entry: './scheduler-entry.mjs',
     }),
   });

@@ -5,10 +5,10 @@
  * single method — adding a job never adds a method, service, or port.
  */
 import { contract, rpc } from '@prisma/app-rpc';
-import { type } from 'arktype';
+import { jobIdSchema, okSchema } from './standard-schema.ts';
 
 export const triggerContract = contract({
-  trigger: rpc({ input: type({ jobId: 'string' }), output: type({ ok: 'boolean' }) }),
+  trigger: rpc({ input: jobIdSchema, output: okSchema }),
 });
 
 export type TriggerContract = typeof triggerContract;

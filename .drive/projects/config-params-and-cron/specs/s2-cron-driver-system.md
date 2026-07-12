@@ -194,6 +194,8 @@ is the implementer's call, guarded by the example type-checking.
 
 ## 6. Package shape (`packages/app-cron/`)
 
+**Superseded in review:** cron shipped as its own package briefly, then folded into `@prisma/app-cloud/cron` — a subpath of Prisma Cloud's common-Systems package rather than a standalone one (one entry point per System, tree-shakable). The package-shape details below describe the superseded standalone-package form.
+
 Model on `@prisma/app-rpc` (authoring utilities) plus a built entry like a
 compute service. `package.json` exports `.` (the authoring API) and the built
 `scheduler-entry`. `tsdown.config.ts` lists `index` and `scheduler-entry` as

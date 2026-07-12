@@ -6,22 +6,19 @@
  * exposed methods, but sourced from the schedule's job ids instead of the
  * contract's methods.
  */
-import type { RunnableServiceNode } from '@prisma/app';
+import type { Deps, HydratedDeps, Params, RunnableServiceNode } from '@prisma/app';
 import { blindCast } from '@prisma/app/casts';
 import type { Handlers } from '@prisma/app-rpc';
 import { serve } from '@prisma/app-rpc';
 import type { TriggerContract } from './contract.ts';
 import type { Schedule } from './schedule.ts';
 
-// biome-ignore lint/suspicious/noExplicitAny: accepts any concrete runnable router service — generics are invariant (mirrors @prisma/app-rpc's own serve.ts AnyRunnable).
-type AnyRunnable = RunnableServiceNode<any, any, { trigger: TriggerContract }>;
+type ScheduleHandler<D> = (deps: D) => Promise<unknown>;
 
-type ScheduleHandler<Deps> = (deps: Deps) => Promise<unknown>;
-
-export function serveSchedule<S extends AnyRunnable, Ids extends string>(
-  service: S,
+export function serveSchedule<D extends Deps, P extends Params, Ids extends string>(
+  service: RunnableServiceNode<D, P, { trigger: TriggerContract }>,
   _schedule: Schedule<Ids>,
-  handlers: { [Id in Ids]: ScheduleHandler<ReturnType<S['load']>> },
+  handlers: { [Id in Ids]: ScheduleHandler<HydratedDeps<D>> },
 ): (req: Request) => Promise<Response> {
   const byId = blindCast<
     Record<string, ScheduleHandler<unknown>>,
@@ -30,7 +27,7 @@ export function serveSchedule<S extends AnyRunnable, Ids extends string>(
 
   const triggerHandler = async (
     input: { jobId: string },
-    deps: ReturnType<S['load']>,
+    deps: HydratedDeps<D>,
   ): Promise<{ ok: boolean }> => {
     const handler = byId[input.jobId];
     if (handler === undefined) {
@@ -45,7 +42,7 @@ export function serveSchedule<S extends AnyRunnable, Ids extends string>(
   return serve(
     service,
     blindCast<
-      Handlers<S>,
+      Handlers<typeof service>,
       "Handlers<S> can't be verified against S while S stays an unresolved type parameter here (TS can't project a mapped type over an unfixed generic); triggerHandler above is hand-typed to triggerContract's exact input/output shape, and the exhaustiveness guarantee serveSchedule promises callers comes from this function's own `handlers` parameter type, not from this internal call"
     >({ trigger: { trigger: triggerHandler } }),
   );

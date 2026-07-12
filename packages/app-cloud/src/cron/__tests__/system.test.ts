@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { Load, LoadError, system } from '@prisma/app';
-import { compute } from '@prisma/app-cloud';
 import node from '@prisma/app-node';
 import { contract, rpc } from '@prisma/app-rpc';
-import { type } from 'arktype';
+import { compute } from '../../compute.ts';
 import { triggerContract } from '../contract.ts';
 import { defineSchedule } from '../schedule.ts';
+import { jobIdSchema, okSchema } from '../standard-schema.ts';
 import { cron } from '../system.ts';
 
 const build = node({ module: import.meta.url, entry: '../dist/service.mjs' });
 
 const workerContract = contract({
-  work: rpc({ input: type({ jobId: 'string' }), output: type({ ok: 'boolean' }) }),
+  work: rpc({ input: jobIdSchema, output: okSchema }),
 });
 
 const worker = () =>

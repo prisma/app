@@ -63,7 +63,7 @@ The boundary is decided; only the carve is deferred.
 | `@prisma/app/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
 | `@prisma/app-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/app` only |
 | `@prisma/app-rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/app` + a Standard Schema validator |
-| `@prisma/app-cron` | cron as a driver (see [ADR-0020](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)) — `defineSchedule`, `serveSchedule`, `cronScheduler`, `cron()`, `triggerContract` | `@prisma/app` + `app-cloud` + `app-node` + `app-rpc` |
+| `@prisma/app-cloud/cron` | cron as a driver (see [ADR-0020](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)) — `defineSchedule`, `serveSchedule`, `cronScheduler`, `cron()`, `triggerContract` | `@prisma/app` + `app-node` + `app-rpc` |
 | `@prisma/app-cloud/target` | `prismaCloud()` | `@prisma/alchemy`, `alchemy`, `effect` |
 | `@prisma/app-node` · `@prisma/app-nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@prisma/app` only |
 | `@prisma/app-node/assemble` · `@prisma/app-nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
@@ -76,6 +76,8 @@ that the service module carries (pure data — `{ kind, pack, module, entry }`,
 resolved from `pack` (`${build.pack}/assemble`) the same entry-anchored way a
 target pack's `/target` is. The descriptor rides into every bundle that
 imports `service.ts`; the assembler never does.
+
+`@prisma/app-cloud/cron` is a **subpath**, not its own package: Prisma Cloud's common Systems each get one entry point under `@prisma/app-cloud` (`/cron` today, more later), so an app that never imports `/cron` never bundles it (tree-shakable by subpath). A System's runnable entries (`scheduler-service.mjs`, `scheduler-entry.mjs`) ship as self-contained dist files that only its own build descriptors reference by path — never imported by the subpath's own authoring barrel.
 
 Per the [runtime-agnostic
 principle](../01-principles/architectural-principles.md), no execution-plane entry

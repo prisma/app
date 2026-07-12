@@ -212,8 +212,16 @@ export type ProvisionedRef<E extends Expose = Record<never, never>> = { readonly
 // biome-ignore lint/suspicious/noExplicitAny: generic DependencyEnd bound — Req is opaque here.
 type ReqOf<DE> = DE extends DependencyEnd<any, infer Req> ? Req : never;
 
-/** `provision`'s wiring argument: one producer ref per dependency slot, checked against its required contract. */
-type Wiring<D extends Deps> = { [K in keyof D]: NoInfer<ReqOf<D[K]>> };
+/**
+ * `provision`'s wiring argument: one producer ref per dependency slot,
+ * checked against its required contract. A slot also accepts `InputRef<D[K]>`
+ * so a system body can forward its own `ctx.inputs` straight into a nested
+ * `provision()` call — the same value shape a producer's own exposed port
+ * carries.
+ */
+type Wiring<D extends Deps> = {
+  [K in keyof D]: NoInfer<ReqOf<D[K]>> | InputRef<D[K]>;
+};
 
 export interface SystemBuilder {
   /** Provisions an owned resource under a stable id, returning its ref for wiring into a consumer. */

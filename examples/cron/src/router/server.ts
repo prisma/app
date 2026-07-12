@@ -3,9 +3,8 @@
 // re-keyed the platform environment address-free, so service.load()/config()
 // below read it directly, with no address.
 
-import { serveSchedule } from '@prisma/app-cron';
-import { schedule } from './schedule.ts';
-import service from './service.ts';
+import { serveSchedule } from '@prisma/app-cloud/cron';
+import service, { schedule } from './service.ts';
 
 // serveSchedule is exhaustive over the schedule's job ids at compile time —
 // omitting `tick` or `mrr` here would be a type error, the same way a

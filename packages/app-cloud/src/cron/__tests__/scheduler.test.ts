@@ -111,11 +111,11 @@ describe('cronScheduler() deploy wrapper', () => {
   // so build.module must resolve to a module whose DEFAULT is the runnable
   // node — not the package barrel (named exports only), which would make
   // main.run undefined at boot.
-  test('build.module targets scheduler-node, whose default export is runnable', async () => {
+  test('build.module targets scheduler-service, whose default export is runnable', async () => {
     const nodeDef = cronScheduler(defineSchedule({ tick: '2s' }));
-    expect(nodeDef.build.module).toMatch(/scheduler-node\.mjs$/);
+    expect(nodeDef.build.module).toMatch(/scheduler-service\.mjs$/);
 
-    const wrapper = await import('../scheduler-node.ts');
+    const wrapper = await import('../scheduler-service.ts');
     expect(typeof wrapper.default.run).toBe('function');
     expect(typeof wrapper.default.load).toBe('function');
     expect(typeof wrapper.default.config).toBe('function');

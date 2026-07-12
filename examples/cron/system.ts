@@ -1,7 +1,6 @@
 import { system } from '@prisma/app';
-import { cron } from '@prisma/app-cron';
-import { schedule } from './src/router/schedule.ts';
-import routerService from './src/router/service.ts';
+import { cron } from '@prisma/app-cloud/cron';
+import routerService, { schedule } from './src/router/service.ts';
 import workerService from './src/worker/service.ts';
 
 /**

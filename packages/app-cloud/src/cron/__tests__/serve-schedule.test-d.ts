@@ -1,7 +1,8 @@
 /**
  * serveSchedule(service, schedule, handlers) forces an exhaustive handler map
  * keyed by the schedule's own job ids — a missing job id, or a handler for a
- * job id outside the schedule, must not compile.
+ * job id outside the schedule, must not compile. A router service exposing
+ * extra ports beyond `trigger` still type-checks as the `service` argument.
  *
  * Type-only (vitest `--typecheck`, never executed) — mirrors
  * `@prisma/app-rpc`'s `serve-handlers.test-d.ts`.
@@ -43,6 +44,12 @@ declare const routerService: RunnableServiceNode<
   { trigger: typeof triggerContract }
 >;
 
+declare const routerServiceWithExtraPort: RunnableServiceNode<
+  typeof node.inputs,
+  typeof node.params,
+  { trigger: typeof triggerContract; extra: typeof triggerContract }
+>;
+
 const schedule = defineSchedule({ tick: '2s', mrr: '5s' });
 
 test('a complete handler map for every schedule job id compiles', () => {
@@ -53,6 +60,13 @@ test('a complete handler map for every schedule job id compiles', () => {
     mrr: async (deps) => {
       deps.target.calls.length;
     },
+  });
+});
+
+test('a router service exposing an extra port beyond trigger still compiles', () => {
+  serveSchedule(routerServiceWithExtraPort, schedule, {
+    tick: async () => undefined,
+    mrr: async () => undefined,
   });
 });
 

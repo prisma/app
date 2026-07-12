@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test tests",
     "dev:worker": "bun run src/worker/server.ts",
-    "dev:router": "bun run src/router/router-entry.ts",
+    "dev:router": "bun run src/router/server.ts",
     "deploy": "pnpm turbo run build --filter @prisma/example-cron... && ( set -a; . ../../.env; set +a; bun node_modules/.bin/prisma-app deploy system.ts ${CRON_STACK_NAME:+--name \"$CRON_STACK_NAME\"} )",
     "destroy": "( set -a; . ../../.env; set +a; bun node_modules/.bin/prisma-app destroy system.ts ${CRON_STACK_NAME:+--name \"$CRON_STACK_NAME\"} )"
   },
@@ -16,11 +16,10 @@
     "@effect/platform-bun": "4.0.0-beta.92",
     "@prisma/app": "workspace:0.2.0",
     "@prisma/app-cloud": "workspace:0.2.0",
-    "@prisma/app-cron": "workspace:0.2.0",
     "@prisma/app-node": "workspace:0.2.0",
     "@prisma/app-rpc": "workspace:0.2.0",
+    "@standard-schema/spec": "^1.1.0",
     "alchemy": "2.0.0-beta.59",
-    "arktype": "^2.2.3",
     "effect": "4.0.0-beta.92"
   },
   "devDependencies": {
