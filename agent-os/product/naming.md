@@ -135,7 +135,7 @@ full reasoning is in
 Vocabulary sits in three registers: a **package** is the artifact npm hosts (npm's
 word, not ours); an **extension** slots into `prisma-compose.config.ts` and extends the
 toolchain; a **Module** is what you plug together inside the app. One package may
-register an extension and provide modules — "use the cron module from the compose-cloud
+register an extension and provide modules — "use the cron module from the compose-prisma-cloud
 extension" is the model in one sentence.
 
 ## How Modules are distributed

@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted. Supersedes the framework-name, package-family, and CLI decisions of
+Accepted; the package-family enumeration below is consolidated by
+[ADR-0027](ADR-0027-two-packages-compose-and-compose-prisma-cloud.md) — two
+published packages, with the per-capability names becoming subpaths or internals
+and `compose-alchemy` folding into `compose-prisma-cloud`. Supersedes the
+framework-name, package-family, and CLI decisions of
 [ADR-0014](ADR-0014-one-authoring-primitive.md). With
 [ADR-0025](ADR-0025-name-the-unit-of-composition-module.md) having superseded the
 unit noun, ADR-0014 remains authoritative only for the single-primitive model — one
@@ -17,7 +21,7 @@ it always named best. You compose Modules with Prisma Compose into your Prisma A
 The whole surface follows the name: the package family becomes **`@prisma/compose*`**
 (`@prisma/compose`, `@prisma/compose-cloud`, `@prisma/compose-node`,
 `@prisma/compose-rpc`, `@prisma/compose-nextjs`, `@prisma/compose-assemble`,
-`@prisma/compose-cli`, `@prisma/compose-cron`). `@prisma/compose-alchemy` is renamed too —
+`@prisma/compose-cli`, `@prisma/compose-cron`). `@prisma/alchemy` is renamed too —
 **`@prisma/compose-alchemy`** — because its independence was a fiction: every
 published version depends on `@prisma/app`, so it is a member of the family and
 should say so. The CLI binary becomes **`prisma-compose`**, the config file
