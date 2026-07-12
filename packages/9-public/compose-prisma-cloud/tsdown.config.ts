@@ -34,7 +34,7 @@ const externalizeFramework = {
 // `./scheduler-service.mjs` relative to the calling code's directory);
 // 3. the standalone programs, re-emitted from @internal/cron's dist where
 // scheduler-entrypoint was already fully inlined by that package's own build.
-const cronDist = '../../1-prisma-cloud/2-modules/cron/dist';
+const cronDist = '../../1-prisma-cloud/2-shared-modules/cron/dist';
 export default defineConfig([
   {
     ...baseConfig,

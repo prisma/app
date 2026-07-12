@@ -31,24 +31,22 @@
       ],
       "@internal/lowering": ["./packages/1-prisma-cloud/0-lowering/lowering/src/index.ts"],
       "@internal/prisma-cloud/control": [
-        "./packages/1-prisma-cloud/1-extensions/prisma-cloud/src/control.ts"
+        "./packages/1-prisma-cloud/1-extensions/target/src/control.ts"
       ],
       "@internal/prisma-cloud/prisma-next": [
-        "./packages/1-prisma-cloud/1-extensions/prisma-cloud/src/prisma-next.ts"
+        "./packages/1-prisma-cloud/1-extensions/target/src/prisma-next.ts"
       ],
       "@internal/prisma-cloud/testing": [
-        "./packages/1-prisma-cloud/1-extensions/prisma-cloud/src/testing.ts"
+        "./packages/1-prisma-cloud/1-extensions/target/src/testing.ts"
       ],
-      "@internal/prisma-cloud": [
-        "./packages/1-prisma-cloud/1-extensions/prisma-cloud/src/index.ts"
-      ],
+      "@internal/prisma-cloud": ["./packages/1-prisma-cloud/1-extensions/target/src/index.ts"],
       "@internal/cron/scheduler-service": [
-        "./packages/1-prisma-cloud/2-modules/cron/src/scheduler-service.ts"
+        "./packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-service.ts"
       ],
       "@internal/cron/scheduler-entrypoint": [
-        "./packages/1-prisma-cloud/2-modules/cron/src/scheduler-entrypoint.ts"
+        "./packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-entrypoint.ts"
       ],
-      "@internal/cron": ["./packages/1-prisma-cloud/2-modules/cron/src/index.ts"],
+      "@internal/cron": ["./packages/1-prisma-cloud/2-shared-modules/cron/src/index.ts"],
       "@prisma/compose/config": ["./packages/9-public/compose/src/config.ts"],
       "@prisma/compose/deploy": ["./packages/9-public/compose/src/deploy.ts"],
       "@prisma/compose/testing": ["./packages/9-public/compose/src/testing.ts"],
@@ -69,7 +67,7 @@
         "./packages/9-public/compose-prisma-cloud/src/testing.ts"
       ],
       "@prisma/compose-prisma-cloud/cron/scheduler-entrypoint": [
-        "./packages/1-prisma-cloud/2-modules/cron/src/scheduler-entrypoint.ts"
+        "./packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-entrypoint.ts"
       ],
       "@prisma/compose-prisma-cloud/cron": ["./packages/9-public/compose-prisma-cloud/src/cron.ts"],
       "@prisma/compose-prisma-cloud": ["./packages/9-public/compose-prisma-cloud/src/index.ts"],

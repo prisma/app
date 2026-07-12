@@ -22,7 +22,7 @@ packages/
   1-prisma-cloud/         # the Prisma Cloud target; may import 0-framework
     0-lowering/           #   the Alchemy provider
     1-extensions/         #   compute(), postgres(), the target descriptor
-    2-modules/            #   first-party modules realized on this target (cron)
+    2-shared-modules/            #   first-party modules realized on this target (cron)
   9-public/               # the ONLY publishable packages; imports both domains
     compose/              #   → @prisma/compose (bin + curated re-exports + subpaths)
     compose-prisma-cloud/ #   → @prisma/compose-prisma-cloud (+ /cron)

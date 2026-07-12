@@ -423,7 +423,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/1-prisma-cloud/1-extensions/prisma-cloud:
+  packages/1-prisma-cloud/1-extensions/target:
     dependencies:
       '@internal/core':
         specifier: workspace:0.1.0
@@ -493,7 +493,7 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))
 
-  packages/1-prisma-cloud/2-modules/cron:
+  packages/1-prisma-cloud/2-shared-modules/cron:
     dependencies:
       '@internal/core':
         specifier: workspace:0.1.0
@@ -506,7 +506,7 @@ importers:
         version: link:../../../0-framework/2-authoring/node
       '@internal/prisma-cloud':
         specifier: workspace:0.1.0
-        version: link:../../1-extensions/prisma-cloud
+        version: link:../../1-extensions/target
       '@internal/rpc':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/2-authoring/rpc
@@ -644,7 +644,7 @@ importers:
         version: link:../../0-framework/1-core/core
       '@internal/cron':
         specifier: workspace:0.1.0
-        version: link:../../1-prisma-cloud/2-modules/cron
+        version: link:../../1-prisma-cloud/2-shared-modules/cron
       '@internal/foundation':
         specifier: workspace:0.1.0
         version: link:../../0-framework/0-foundation/foundation
@@ -659,7 +659,7 @@ importers:
         version: link:../../0-framework/2-authoring/node
       '@internal/prisma-cloud':
         specifier: workspace:0.1.0
-        version: link:../../1-prisma-cloud/1-extensions/prisma-cloud
+        version: link:../../1-prisma-cloud/1-extensions/target
       '@internal/rpc':
         specifier: workspace:0.1.0
         version: link:../../0-framework/2-authoring/rpc

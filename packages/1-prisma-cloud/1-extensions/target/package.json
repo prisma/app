@@ -59,7 +59,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/app.git",
-    "directory": "packages/compose-cloud"
+    "directory": "packages/1-prisma-cloud/1-extensions/target"
   },
   "engines": {
     "node": ">=24"
