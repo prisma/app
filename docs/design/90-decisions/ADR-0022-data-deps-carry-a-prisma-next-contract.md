@@ -1,4 +1,4 @@
-# ADR-0022: Data deps carry a Prisma Next contract; deploys migrate to its hash
+# ADR-0022: Data deps carry a Prisma Next contract; deploys migrate to its ref
 
 ## Status
 
@@ -26,12 +26,37 @@ in `@prisma/app-cloud` behind a dedicated subpath entry.
   makes assignability version-equality, and `satisfies()` mirrors it at Load
   as a hash check.
 - The deploy lowering gains a migration step per Prisma Next postgres
-  resource: read the live database's contract marker; if its `storageHash`
-  differs from the contract's, walk the **authored** migration graph
-  (`migrate`) to the target hash; fail the deploy if no path exists, if a
-  step is destructive without explicit opt-in, or if the runner fails.
-  Synthesized diff-and-apply (`dbUpdate`) is never used against a deployed
-  database.
+  resource.
+
+  A **ref** is the migration target: `{ hash, invariants }`. It comes from
+  the resource's optional `targetRef` (naming a
+  `migrations/app/refs/<name>.json` file), or defaults to the head — the
+  emitted contract's hash with zero invariants. `invariants` are named
+  postconditions established by `data`-class migration steps (for example a
+  backfill); each one gets recorded on the live marker once its step runs,
+  and that record only ever accumulates.
+
+  At deploy time the step compares the marker against the ref and picks one
+  of three paths:
+
+  - **No-op.** The marker's `storageHash` equals the ref's hash and every
+    invariant the ref requires is already on the marker. The database is
+    already where it needs to be.
+  - **`dbInit`.** The database is fresh and the ref requires no invariants.
+    `dbInit` does additive-only synthesis and never runs data steps, which
+    is exactly why it's unsafe to use when invariants are required — that
+    case falls through to `migrate` instead.
+  - **`migrate`.** Everything else: a different hash, a missing invariant
+    (note a pure data change with no schema change is a self-edge from a
+    hash to itself), or a fresh database whose ref does require invariants.
+    This walks the **authored** migration graph. The deploy fails if no
+    path exists, if a step is destructive without explicit opt-in, or if
+    the runner itself fails.
+
+  The tracked migration resource is keyed on the ref's identity (hash plus
+  sorted invariants), so a data-only change still produces a distinct deploy
+  step. Synthesized diff-and-apply (`dbUpdate`) is never used against a
+  deployed database — only `migrate` is.
 
 Bare `postgres()` is unchanged: the untyped escape hatch, the `any` of data
 deps, the same role `http()` plays for communication.
@@ -80,9 +105,17 @@ deferred (see Alternatives).
 
 **Schema checking is a build/deploy-time job, not a runtime one.** The
 authoritative check is the deploy: `migrate` walks the authored graph from the
-marker's hash to the target, is resume-safe, and writes markers atomically
+marker's state to the target ref, is resume-safe, and writes markers atomically
 with apply, so a failed deploy leaves marker and database unchanged; a contract
 with no authored path is a deploy failure surfaced before any DB change.
+**The target must be a ref, not a bare hash.** Keying on `storageHash` alone
+has two failure modes Prisma Next's own model rules out: a pure data-invariant
+change is an A→A self-edge (same hash), which a hash-keyed deploy silently
+skips; and `dbInit` is additive-only synthesis that never runs app-space data
+steps, so first-applying a target that requires invariants through `dbInit`
+would leave `marker.invariants` empty while claiming success. The ref decision
+(hash equality plus invariant subset, mirroring Prisma Next's verifier) closes
+both.
 Synthesized plans are a dev-time convenience, never a production operation.
 Because the deploy guarantees the live database is at the contract's hash, the
 runtime binding does **no** schema verification — it just builds the client.

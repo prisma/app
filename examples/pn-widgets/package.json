@@ -1,0 +1,27 @@
+{
+  "name": "@prisma/example-pn-widgets",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "deploy": "pnpm turbo run build --filter @prisma/example-pn-widgets... && ( set -a; . ../../.env; set +a; bun node_modules/.bin/prisma-app deploy system.ts ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )",
+    "destroy": "( set -a; . ../../.env; set +a; bun node_modules/.bin/prisma-app destroy system.ts --production ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )"
+  },
+  "dependencies": {
+    "@prisma-next/postgres": "0.14.0",
+    "@prisma/app": "workspace:0.2.0",
+    "@prisma/app-cloud": "workspace:0.2.0",
+    "@prisma/app-node": "workspace:0.2.0",
+    "effect": "4.0.0-beta.92",
+    "pg": "8.21.0"
+  },
+  "devDependencies": {
+    "@prisma/app-cli": "workspace:0.2.0",
+    "@types/bun": "^1.3.13",
+    "tsdown": "^0.22.3",
+    "typescript": "^6.0.3",
+    "@prisma/management-api-sdk": "^1.47.0"
+  }
+}

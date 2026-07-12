@@ -10,17 +10,17 @@
  * the returned role and the binding via `expectTypeOf`; the wiring reject
  * case keeps a `// @ts-expect-error`.
  */
-import type {
-  BuildAdapter,
-  DependencyEnd,
-  Hydrated,
-  ResourceNode,
-  SystemBuilder,
-} from '@prisma/app';
+import type { BuildAdapter, DependencyEnd, Hydrated, SystemBuilder } from '@prisma/app';
 import { service } from '@prisma/app';
 import { expectTypeOf, test } from 'vitest';
 import { postgres } from '../postgres.ts';
-import { type Client, type PnPostgresContract, pnContract, pnPostgres } from '../prisma-next.ts';
+import {
+  type Client,
+  type PnPostgresContract,
+  type PnPostgresResourceNode,
+  pnContract,
+  pnPostgres,
+} from '../prisma-next.ts';
 import type { Contract as GadgetContract } from './fixtures/gadget-contract/emitted/contract.d.ts';
 import type { Contract as WidgetContract } from './fixtures/widget-contract/emitted/contract.d.ts';
 
@@ -38,9 +38,11 @@ test('pnContract wraps an emitted contract into the prisma-next kind', () => {
   expectTypeOf(widget).toEqualTypeOf<PnPostgresContract<WidgetContract>>();
 });
 
-test('{ name, contract } yields the resource identity providing contract', () => {
-  const identity = pnPostgres({ name: 'db', contract: widget });
-  expectTypeOf(identity).toEqualTypeOf<ResourceNode<typeof widget>>();
+test('{ name, contract, config } yields the resource node carrying the config path', () => {
+  const identity = pnPostgres({ name: 'db', contract: widget, config: './prisma-next.config.ts' });
+  expectTypeOf(identity).toEqualTypeOf<PnPostgresResourceNode<typeof widget>>();
+  // The config path rides on the node as a string field, sibling to provides.
+  expectTypeOf(identity.config).toEqualTypeOf<string>();
 });
 
 test('pnPostgres(contract) yields the dependency requiring that contract; its binding is the typed client', () => {
@@ -68,9 +70,18 @@ const consumer = service({
 
 declare const h: SystemBuilder;
 
-const widgetRef = h.provision('db1', pnPostgres({ name: 'db', contract: widget }));
-const widgetAgainRef = h.provision('db2', pnPostgres({ name: 'db', contract: widgetAgain }));
-const gadgetRef = h.provision('db3', pnPostgres({ name: 'db', contract: gadget }));
+const widgetRef = h.provision(
+  'db1',
+  pnPostgres({ name: 'db', contract: widget, config: './prisma-next.config.ts' }),
+);
+const widgetAgainRef = h.provision(
+  'db2',
+  pnPostgres({ name: 'db', contract: widgetAgain, config: './prisma-next.config.ts' }),
+);
+const gadgetRef = h.provision(
+  'db3',
+  pnPostgres({ name: 'db', contract: gadget, config: './prisma-next.config.ts' }),
+);
 
 test('a resource providing the SAME emitted contract (same storageHash) satisfies the dependency slot', () => {
   expectTypeOf(h.provision).toBeCallableWith('c1', consumer, { db: widgetRef });

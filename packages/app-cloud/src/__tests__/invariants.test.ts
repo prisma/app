@@ -22,6 +22,34 @@ function shippedSources(): { file: string; text: string }[] {
   return out;
 }
 
+// A built dist entry PLUS every relative chunk it (transitively) imports or
+// re-exports, concatenated. tsup/rolldown hoists code shared between entries
+// (e.g. pg-connection.ts, used by both control.ts and prisma-next.ts) into a
+// chunk, leaving the entry file a thin re-export shim — so a token check that
+// reads only the entry file would go vacuous. Following the shim's own imports
+// makes the check see the real code again.
+function builtEntryGraph(entryFileName: string): string {
+  const distDir = path.join(pkgDir, 'dist');
+  const relImport = /(?:from|import)\s*["'](\.[^"']+)["']/g;
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  const queue = [path.join(distDir, entryFileName)];
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (file === undefined || seen.has(file)) continue;
+    seen.add(file);
+    const text = fs.readFileSync(file, 'utf8');
+    parts.push(text);
+    for (const match of text.matchAll(relImport)) {
+      const spec = match[1];
+      if (spec === undefined) continue;
+      const resolved = path.resolve(path.dirname(file), spec);
+      if (fs.existsSync(resolved)) queue.push(resolved);
+    }
+  }
+  return parts.join('\n');
+}
+
 describe('entry map: authoring + control + prisma-next + testing, no other runtime entry', () => {
   test("package.json exports '.', './control', './prisma-next', and './testing'", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
@@ -206,9 +234,35 @@ describe('invariant 7 (ADR-0022): the authoring entry never reaches the prisma-n
     }
   });
 
-  test('the built dist/index.mjs contains no @prisma-next/* or pg tokens', () => {
-    const built = fs.readFileSync(path.join(pkgDir, 'dist', 'index.mjs'), 'utf8');
+  test('the built dist/index.mjs graph contains no @prisma-next/* or pg tokens', () => {
+    const built = builtEntryGraph('index.mjs');
+    expect(built.length).toBeGreaterThan(0);
     expect(built).not.toContain('@prisma-next/');
     expect(built.includes('"pg"') || built.includes("'pg'")).toBe(false);
+  });
+
+  // The ./prisma-next authoring entry legitimately bundles
+  // @prisma-next/postgres/runtime (the typed client) and pg (its runtime
+  // connect-retry, slice 3). But the deploy-only machinery — the CLI config
+  // loader, the control client, and the migration/config/resource/warm modules
+  // — must NEVER leak into it, or every service using pnPostgres would pull the
+  // CLI into its runtime bundle. The entry file is a re-export shim whose real
+  // code lives in a chunk (pg-connection.ts is shared with control.ts), so we
+  // check the whole reachable graph, not just the shim.
+  test('the built dist/prisma-next.mjs graph contains no deploy-only machinery', () => {
+    const built = builtEntryGraph('prisma-next.mjs');
+    // Positive marker: the graph reached the real runtime code in the chunk,
+    // so the forbidden-token checks below are not vacuous.
+    expect(built).toContain('@prisma-next/postgres/runtime');
+    for (const token of [
+      '@prisma-next/cli',
+      'postgres/control',
+      'pn-config',
+      'pn-migration-resource',
+      'prisma-next-migrate',
+      'pg-warm-resource',
+    ]) {
+      expect({ token, present: built.includes(token) }).toEqual({ token, present: false });
+    }
   });
 });

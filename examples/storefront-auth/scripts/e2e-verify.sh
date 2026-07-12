@@ -4,11 +4,11 @@
 # storefront->auth round trip. Retries because a version cold-starts after
 # deploy (PRO-200) and auth's DB ping can transiently fail right after idle
 # (FT-5219), recovering on the next hit. Run from examples/storefront-auth.
-# Requires PRISMA_SERVICE_TOKEN; STOREFRONT_STACK_NAME optionally overrides the
+# Requires PRISMA_SERVICE_TOKEN; STACK_NAME optionally overrides the
 # project name (defaults to storefront-auth, matching the stack name the CLI deploys).
 set -euo pipefail
 
-stack="${STOREFRONT_STACK_NAME:-storefront-auth}"
+stack="${STACK_NAME:-storefront-auth}"
 api="https://api.prisma.io/v1"
 auth_header="Authorization: Bearer ${PRISMA_SERVICE_TOKEN:?PRISMA_SERVICE_TOKEN is required}"
 

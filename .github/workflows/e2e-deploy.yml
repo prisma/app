@@ -1,12 +1,8 @@
 name: E2E deploy
 
-# Deploys examples/storefront-auth to real Prisma Cloud, verifies the live
-# service-to-service round trip (the storefront renders auth's /verify
-# response — the Connection primitive end to end), then destroys it. Requires
-# a repo secret PRISMA_SERVICE_TOKEN (a Prisma Console service token) and a
-# repo variable PRISMA_WORKSPACE_ID (the target workspace id — not sensitive,
-# so a variable, not a secret). A human must create both in the repo's Actions
-# settings before this runs.
+# Deploys examples/storefront-auth and examples/pn-widgets to real Prisma
+# Cloud, verifies each round trip, then destroys them. Requires repo secret
+# PRISMA_SERVICE_TOKEN and repo variable PRISMA_WORKSPACE_ID.
 
 on:
   push:
@@ -18,8 +14,7 @@ permissions:
   contents: read
 
 # Fixed group (not per-ref): only one real-cloud deploy runs at a time.
-# cancel-in-progress is false because killing a run mid-deploy or mid-destroy
-# would orphan cloud resources with nothing left to clean them up.
+# cancel-in-progress stays false so a kill mid-deploy/destroy can't orphan resources.
 concurrency:
   group: e2e-deploy
   cancel-in-progress: false
@@ -28,62 +23,64 @@ jobs:
   deploy:
     name: Deploy, verify, destroy
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Secrets aren't available to forked-PR workflow runs; skip rather than
-    # fail loudly on a run that could never have them.
+    timeout-minutes: 3
+    # Secrets aren't available on forked-PR runs; skip rather than fail loudly.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     env:
       PRISMA_SERVICE_TOKEN: ${{ secrets.PRISMA_SERVICE_TOKEN }}
-      # A workspace id is an identifier, not a credential, so it lives as a
-      # repo variable (vars.*), not a secret.
       PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
-      # The stack name becomes the PDP Project name. A per-run name keeps this
-      # ephemeral CI deploy from colliding with — or destroying — a standing
-      # demo in the shared workspace. Passed as `prisma-app`'s `--name` override
-      # (deploy-cli.md) — system.ts's own name is the local-dev default.
-      STOREFRONT_STACK_NAME: storefront-auth-ci-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-verify-destroy
+        with:
+          working-directory: examples/storefront-auth
+          build-filter: '@prisma/example-storefront-auth...'
+          stack-name: storefront-auth-ci-${{ github.run_id }}
+          verify-command: bash scripts/e2e-verify.sh
+
+  deploy-pn-widgets:
+    name: Deploy, verify, destroy (pn-widgets)
+    runs-on: ubuntu-latest
+    # Not a data dependency — runs after storefront so the two deploys never
+    # hold projects/databases concurrently (workspace DB-quota headroom).
+    needs: deploy
+    timeout-minutes: 3
+    # Secrets aren't available on forked-PR runs; skip rather than fail loudly.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      PRISMA_SERVICE_TOKEN: ${{ secrets.PRISMA_SERVICE_TOKEN }}
+      PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-verify-destroy
+        with:
+          working-directory: examples/pn-widgets
+          build-filter: '@prisma/example-pn-widgets...'
+          stack-name: pn-widgets-ci-${{ github.run_id }}
+          verify-command: bun scripts/e2e-verify.ts
+          destroy-label: 'pn-widgets '
+          sweep-prefixes: storefront-auth pn-widgets hello canary
+
+  cold-connect-canary:
+    name: Cold-connect canary (FT-5226)
+    runs-on: ubuntu-latest
+    # Runs after both deploys so it never holds a database concurrently with
+    # them (workspace DB-quota headroom). Fails when PPg no longer rejects a
+    # database's first connection — the signal to remove withConnectionRetry.
+    needs: deploy-pn-widgets
+    timeout-minutes: 3
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      PRISMA_SERVICE_TOKEN: ${{ secrets.PRISMA_SERVICE_TOKEN }}
+      PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # storefront-auth's own `build` script is a no-op — turbo's ^build
-      # (from the workspace deps in its package.json) builds the two systems.
-      # `pnpm build` alone wouldn't trigger that, so run it through turbo.
-      - name: Build
-        working-directory: examples/storefront-auth
-        run: pnpm turbo run build --filter @prisma/example-storefront-auth...
-
-      - name: Deploy
-        id: deploy
-        # Do not use the package's `deploy` script: it sources ../../.env,
-        # which doesn't exist in CI; env vars are already set on this job.
-        # The CLI must run under BUN: Load imports the app's service modules,
-        # and auth's imports `bun` (SQL) — under node that import throws.
-        # `bun node_modules/.bin/prisma-app` also sets npm_config_user_agent=bun,
-        # which the spawned `alchemy` launcher uses to re-exec itself under bun
-        # when it evaluates the generated stack (which imports system.ts again).
-        working-directory: examples/storefront-auth
-        run: bun node_modules/.bin/prisma-app deploy system.ts --name "$STOREFRONT_STACK_NAME"
-
-      - name: Verify the round trip (storefront -> auth)
-        working-directory: examples/storefront-auth
-        run: bash scripts/e2e-verify.sh
-
-      - name: Destroy
-        # Runs whenever the Deploy step actually started (success or
-        # failure) — even on failure above, so a failed run doesn't leave
-        # orphaned cloud resources nobody else can clean up. Deploy state is
-        # hosted by default (the workspace's `prisma-app-state` project, via
-        # PRISMA_SERVICE_TOKEN + PRISMA_WORKSPACE_ID — both already set on
-        # this job), not local to the runner, so `.alchemy/` presence is not
-        # a reliable signal of whether a deploy ran; gate on the Deploy
-        # step's own outcome instead (`skipped` only when Deploy itself never
-        # ran, e.g. Build failed first).
-        if: always() && steps.deploy.outcome != 'skipped'
-        working-directory: examples/storefront-auth
-        run: bash ../scripts/destroy-guard.sh "" system.ts "$STOREFRONT_STACK_NAME"
+      - run: pnpm install --frozen-lockfile
+      - run: bun examples/scripts/cold-connect-canary.ts

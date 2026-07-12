@@ -30,7 +30,7 @@ client round-trips and a mismatched marker warns without throwing; bare
 **Hands to:** stable primitive + `Contract` type flow + ADR merged, for the
 lowering to target.
 
-**Linear:** [TML-3009](https://linear.app/prisma-company/issue/TML-3009/slice-1-typed-pnpostgres-primitive-adr-0021)
+**Linear:** [TML-3009](https://linear.app/prisma-company/issue/TML-3009/slice-1-typed-pnpostgres-primitive-adr-0021) · **PR:** [prisma/app#44](https://github.com/prisma/app/pull/44) (open, reviewer SATISFIED) · **Status:** delivered, in review
 
 ### Slice 2: deploy migrate lowering (`deploy-migrate-lowering`)
 
@@ -48,7 +48,7 @@ still exercises bare `postgres()`.
 **Builds on:** Slice 1.
 **Hands to:** project DoD; the datahub port consumes the shipped primitive.
 
-**Linear:** _pending green light_
+**Linear:** [TML-3011](https://linear.app/prisma-company/issue/TML-3011/slice-2-deploy-migrate-lowering) · **Dispatches:** D1 resource `config` field → D2 lowering (local-proven) → D3 example + live E2E · **Design + full spec:** `slices/deploy-migrate-lowering/spec.md`
 
 ## Sequencing
 

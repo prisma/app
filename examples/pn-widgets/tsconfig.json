@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"]
+  },
+  "include": ["system.ts", "prisma-app.config.ts", "src", "scripts", "contract.d.ts"]
+}

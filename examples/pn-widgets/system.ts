@@ -1,0 +1,24 @@
+import { system } from '@prisma/app';
+import { pnPostgres } from '@prisma/app-cloud/prisma-next';
+import { widgetContract } from './src/contract.ts';
+import widgetsService from './src/service.ts';
+
+/**
+ * The pn-widgets app: one Prisma Next-typed Postgres and one compute service
+ * that round-trips through it. A closed root (empty boundary).
+ *
+ * The database provision id is "database" (not "db"): the prisma-cloud target
+ * passes it through as the Prisma resource name, and the Connection API rejects
+ * names shorter than 3 characters. The resource carries two doors (ADR-0022):
+ * `contract` (consumed — types + wires the resource, gives the deploy its
+ * target storageHash) and `config` (the prisma-next.config.ts PATH the deploy
+ * migration step loads to find migrations/ — never imported by the app build).
+ */
+export default system('pn-widgets', {}, ({ provision }) => {
+  const db = provision(
+    'database',
+    pnPostgres({ name: 'database', contract: widgetContract, config: './prisma-next.config.ts' }),
+  );
+  provision('widgets', widgetsService, { db });
+  return {};
+});

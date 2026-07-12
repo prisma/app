@@ -65,23 +65,87 @@ deps: { db: pnPostgres(contract) }                   // binding: PostgresClient<
   through the config import; PSL-first passes the emitted `contract.d.ts` type
   explicitly as the type parameter. Support and document both.
 
+## Config-path mechanism (slice 2, locked)
+
+The deploy lowering needs the `prisma-next.config.ts` **path** to find the
+migrations directory, but the frozen core `ResourceNode`
+(`{ kind, name, extension, type, provides }`) has no metadata slot. Decision:
+
+- **app-cloud owns a `prisma-next` resource node that carries `config` (the
+  path) as a first-class field, sibling to `provides`.** `pnPostgres({ name,
+  contract, config })` builds it by augmenting `resource()`'s output
+  (`Object.freeze({ ...resource({...}), config })` — the `[NODE]`
+  `Symbol.for` brand is an enumerable own prop and survives the spread; the
+  spread-and-refreeze node pattern already exists in `node.ts`).
+- **The lowering reads it via a type predicate** (`isPnPostgresResourceNode`),
+  not a bare cast — `ctx.node` is typed `ServiceNode | ResourceNode`.
+- **No core change.** Rejected: (a) a core `ResourceNode` metadata field —
+  grows the deliberately-minimal core type for an extension's concern (against
+  thin-core); (b) folding the path into the contract's `__cmp` — re-merges the
+  two doors the authoring model deliberately separates (operator instinct) and
+  puts resource-only deploy data on a contract-kind value.
+- **What `config` carries:** the `prisma-next.config.ts` path (string). At
+  deploy the lowering loads that config (deploy-time only — PN machinery never
+  enters the app bundle) to resolve the migrations dir PN's control client
+  needs (`dbInit`/`migrate`'s `migrationsDir`). The resource's optional
+  `targetRef` (a ref NAME, also deploy-only) pins the migration target; the
+  default is the head — the emitted contract's hash.
+
 ## Deploy lowering
 
-Per PN-postgres resource, after DB provisioning, an Alchemy resource:
+Per PN-postgres resource, after DB provisioning, a **tracked Alchemy resource**
+runs `applyPnMigration` against a target **ref** `{ hash, invariants }` — the
+named `targetRef` (`migrations/app/refs/<name>.json`, fail loudly if missing)
+or the head by default (PN synthesizes the app head from the emitted contract:
+its hash, zero invariants). The resource is keyed on the **ref identity**
+(hash + sorted invariants) — a pure data-invariant change is an A→A self-edge
+at the same hash, so the invariants must participate or the deploy would
+wrongly no-op it.
 
-1. `readMarker()` on the live DB → compare marker `storageHash` to the
-   contract's.
-2. Equal → no-op (idempotent redeploy).
-3. Different → PN `migrate`: walk the authored migration graph from the
-   marker's hash to the target hash. Resume-safe; marker writes are atomic
-   with apply.
-4. Fail the deploy on: no path through the graph, destructive step without
-   explicit opt-in (`acceptDataLoss` stays off), or runner failure. A failed
-   apply leaves marker and diff unchanged.
+1. `readMarker()` on the live DB → decide against the ref
+   (`decideMigrationAction`, mirroring PN's verifier).
+2. Marker at the ref's hash AND every ref invariant on the marker → no-op
+   (idempotent redeploy; also an Alchemy-level no-op via the ref key).
+3. No marker (fresh DB) and **no required invariants** → `dbInit({ mode:
+   'apply' })` — dbInit is additive-only synthesis and never runs app-space
+   data steps, so it's ruled out whenever invariants are required. Anything
+   else (different hash, missing invariant, fresh DB with required
+   invariants) → `migrate`: walk the authored migration graph to the ref
+   (with a named ref, `refHash`/`refInvariants`/`refName` thread into PN's
+   invariant-aware path planning, exactly like the CLI's `migrate --to`).
+   Resume-safe; marker writes are atomic with apply.
+4. Fail the deploy on: no authored path (`MIGRATION_PATH_NOT_FOUND`), a
+   missing named ref (`TARGET_REF_NOT_FOUND`), or runner failure
+   (`RUNNER_FAILED` / `INIT_FAILED`). A failed apply leaves marker and
+   schema unchanged (confirmed live).
 
-The plan-mode operation list is the Alchemy diff preview. Migration files are
-read from disk relative to the config — deploys run from a machine/CI that has
-the workspace, so the files are present where the lowering runs.
+**Safety model — authored-only, never synthesize.** The guarantee is that the
+deploy runs *only* the user's authored migrations (`migrate`/`dbInit`) and
+*never* a synthesized `dbUpdate` plan. There is deliberately **no**
+`acceptDataLoss`/"reject destructive" hook: `migrate()` has no such option (it
+is a `dbUpdate` concept), and a destructive step in an *authored* migration is
+the user's explicit intent — the framework does not second-guess authored DDL.
+The protection against *accidental* data loss is that nothing synthesizes a
+plan; every DDL that runs is one the user wrote and committed.
+
+**Alchemy modeling (locked): a tracked resource defined in app-cloud, not in
+`@prisma/alchemy`.** Inside the lowering `Effect` the DB `url` is a lazy
+`Output`, so the migration must run at apply-time (after the DB provisions) —
+which means a tracked resource whose `reconcile` receives the resolved url, not
+an inline call. The resource + its provider live in **app-cloud** (which
+already owns the PN dependency); the descriptor merges the provider into its
+`providers()` layer (`Layer.merge(Prisma.providers(), pnMigrationProvider)` —
+`deploy.ts`'s `mergedProviders` already `Layer.mergeAll`s across extensions).
+`@prisma/alchemy` stays PN-free. Rejected: (a) an imperative
+`Output.mapEffect` in the lowering — a provisioned-but-unconsumed DB would
+never migrate, and it doesn't participate in deploy state; (b) defining the
+resource inside `@prisma/alchemy` — couples a generic Prisma-Cloud provisioning
+lib to `@prisma-next/postgres/control`.
+
+Migration files are read from disk relative to the config path (`node.config`)
+— deploys run from a machine/CI that has the workspace, so the files are
+present where the lowering runs. `control.ts` importing PN control is
+deploy-only and never enters a runtime bundle (index-isolation invariant).
 
 ## Packaging
 

@@ -16,7 +16,7 @@
     "lint:rules:symlinks": "node scripts/sync-agent-rules.mjs --check",
     "check:publish-deps": "node scripts/check-publish-deps.mjs",
     "test": "turbo run test",
-    "test:scripts": "node --test scripts/*.test.mjs scripts/*.test.ts",
+    "test:scripts": "node --test scripts/*.test.mjs scripts/*.test.ts examples/scripts/*.test.ts",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "prepare": "husky && skills add prisma/skills --skill '*' --agent universal claude-code -y && skills add ./skills-contrib --skill '*' --agent universal claude-code -y && node scripts/sync-agent-rules.mjs"

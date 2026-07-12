@@ -17,7 +17,7 @@ type ReservedParams = typeof reservedParams;
 
 /**
  * A Prisma Compute service — declarations only (deps + params + build + the
- * ports it exposes), no handler. `params` merges with the reserved
+ * ports it exposes), no descriptor. `params` merges with the reserved
  * `ReservedParams` (`port`); a user param whose name collides with a reserved
  * one fails at authoring, the same way a colliding dependency name does.
  * Returns the extension's runnable/loadable node:

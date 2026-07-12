@@ -141,7 +141,7 @@ framework's envelope:
   self-contained (hoisted `node_modules`, static assets, `public/`, the
   runtime-autoinstall guard). Deterministic file-shuffling, not compilation.
 
-The extension's `package()` control entry then wraps the assembled dir in its
+The extension's `package()` descriptor SPI then wraps the assembled dir in its
 platform envelope (bootstrap, manifest, deterministic tar), unchanged from the
 current model.
 

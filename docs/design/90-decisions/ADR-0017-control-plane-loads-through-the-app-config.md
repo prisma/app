@@ -66,12 +66,12 @@ without a `node_modules` tree don't support at all.
 With loading settled, correlation becomes plain data. Every pack-authored node
 already names its origin: `extension` is the extension's package name, `type`
 is the node's ID within it. An extension descriptor carries a registry of
-node controls under those same IDs, so the deploy walk is a map lookup —
+node descriptors under those same IDs, so the deploy walk is a map lookup —
 `extensions[node.extension].nodes[node.type]` — for services, resources, and
 build descriptors alike. One mechanism, no special cases.
 
 That uniformity deliberately kills the "target" as a privileged concept.
-There is no one blessed platform per application: each node's control entry
+There is no one blessed platform per application: each node's descriptor entry
 knows how to provision, serialize, package, and deploy *that node*, alchemy
 composes the used extensions' provider layers into one stack, and nodes on
 different platforms coexist in one graph. What remains singular is the

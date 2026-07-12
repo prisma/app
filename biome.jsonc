@@ -21,6 +21,8 @@
       "!**/.alchemy",
       "!**/*.d.ts",
       "!**/fixtures/**/emitted",
+      "!**/examples/**/migrations",
+      "!examples/pn-widgets/contract.json",
       "!**/pnpm-lock.yaml"
     ]
   },

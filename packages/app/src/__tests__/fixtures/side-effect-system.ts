@@ -1,7 +1,7 @@
 import { service, system } from '../../index.ts';
 
 // Importing this module must not increment this counter — only Loading the
-// system may run the body (the service node itself carries no handler to run).
+// system may run the body (the service node itself carries no behavior to run).
 export let bodyCallCount = 0;
 
 const svc = service({

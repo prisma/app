@@ -1,27 +1,49 @@
 import { describe, expect, mock, test } from 'bun:test';
+// Import the REAL modules the mocks below stub, so each mock can spread them.
+// This matters beyond convenience: `bun test` runs every test file in ONE
+// process and `mock.module` is process-global. When the real module is already
+// loaded, bun patches the listed exports in place and every other export
+// survives for sibling test files; when it is NOT yet loaded, the factory
+// REPLACES the module and a sibling's import of an unlisted export throws.
+// Static-importing the real module here forces the survivable patch-in-place
+// mode regardless of the (filesystem-dependent) test-file order.
+import * as RealPrismaAlchemy from '@prisma/alchemy';
 import type { LowerContext, LoweredNode } from '@prisma/app/deploy';
+import * as RealOutput from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
+import * as RealPgWarm from '../pg-warm-resource.ts';
 
 // Stub the provider layer AND alchemy/Output so the compute target's data
 // flow (id derivation, props threading, outputs shape) runs purely — no
 // Alchemy engine, no cloud. Output.map just applies its function directly
 // (real Output values are lazy expressions; here every "output" is already
 // the resolved value the mock resource returned).
-const recorded = {
-  envVar: [] as unknown[][],
-  db: [] as unknown[][],
-  conn: [] as unknown[][],
-  svc: [] as unknown[][],
-  deploy: [] as unknown[][],
-  pkg: [] as unknown[][],
+const recorded: {
+  envVar: Array<[string, unknown]>;
+  db: Array<[string, unknown]>;
+  conn: Array<[string, unknown]>;
+  warm: Array<[string, unknown]>;
+  svc: Array<[string, unknown]>;
+  deploy: Array<[string, unknown]>;
+  pkg: Array<[unknown]>;
+} = {
+  envVar: [],
+  db: [],
+  conn: [],
+  warm: [],
+  svc: [],
+  deploy: [],
+  pkg: [],
 };
 
 mock.module('alchemy/Output', () => ({
+  ...RealOutput,
   map: (output: unknown, fn: (v: unknown) => unknown) => fn(output),
 }));
 
 mock.module('@prisma/alchemy', () => ({
+  ...RealPrismaAlchemy,
   providers: () => ({ stub: 'providers' }),
   EnvironmentVariable: (id: string, props: { key: string }) => {
     recorded.envVar.push([id, props]);
@@ -50,6 +72,18 @@ mock.module('@prisma/alchemy', () => ({
     recorded.pkg.push([opts]);
     return { path: `/tmp/${opts.id}.tar.gz`, sha256: `sha-${opts.id}` };
   },
+}));
+
+// PgWarm is a real Alchemy Resource (needs the Stack service); stub it so the
+// lowering's data flow runs purely. `reconcile` echoes the url, so the stub
+// returns { url } — the same shape the lowering threads into outputs/migration.
+mock.module('../pg-warm-resource.ts', () => ({
+  ...RealPgWarm,
+  PgWarm: (id: string, props: { url: unknown }) => {
+    recorded.warm.push([id, props]);
+    return Effect.succeed({ url: props.url });
+  },
+  PgWarmProvider: () => ({ stub: 'pg-warm-provider' }),
 }));
 
 const { prismaCloud } = await import('../control.ts');
@@ -84,17 +118,17 @@ function applicationOf(descriptor: Descriptor) {
   if (descriptor.application === undefined) throw new Error('expected an application hook');
   return descriptor.application;
 }
-function resourceControlOf(descriptor: Descriptor, type: string) {
-  const control = descriptor.nodes[type];
-  if (control === undefined || control.kind !== 'resource')
-    throw new Error(`expected a resource control for "${type}"`);
-  return control;
+function resourceDescriptorOf(ext: Descriptor, type: string) {
+  const descriptor = ext.nodes[type];
+  if (descriptor === undefined || descriptor.kind !== 'resource')
+    throw new Error(`expected a resource descriptor for "${type}"`);
+  return descriptor;
 }
-function serviceControlOf(descriptor: Descriptor, type: string) {
-  const control = descriptor.nodes[type];
-  if (control === undefined || control.kind !== 'service')
-    throw new Error(`expected a service control for "${type}"`);
-  return control;
+function serviceDescriptorOf(ext: Descriptor, type: string) {
+  const descriptor = ext.nodes[type];
+  if (descriptor === undefined || descriptor.kind !== 'service')
+    throw new Error(`expected a service descriptor for "${type}"`);
+  return descriptor;
 }
 const configFor = (descriptor: Descriptor) => ({
   extensions: [descriptor],
@@ -184,7 +218,7 @@ describe('prismaCloud().application.provision (once-per-lowering hook)', () => {
   });
 });
 
-describe("prismaCloud().nodes['postgres'] — the resource control", () => {
+describe("prismaCloud().nodes['postgres'] — the resource descriptor", () => {
   test("creates a Database + Connection in the application's project; url unwraps the Redacted connection string", async () => {
     await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
@@ -194,7 +228,7 @@ describe("prismaCloud().nodes['postgres'] — the resource control", () => {
         application: { outputs: { projectId: 'shop-project#cloud-id' } },
       } as unknown as LowerContext;
 
-      const result = run<LoweredNode>(resourceControlOf(target, 'postgres')(ctx));
+      const result = run<LoweredNode>(resourceDescriptorOf(target, 'postgres')(ctx));
 
       expect(result.outputs).toEqual({ url: 'postgres://data-conn' });
       expect(recorded.db).toEqual([
@@ -215,7 +249,7 @@ describe("prismaCloud().nodes['postgres'] — the resource control", () => {
       } as unknown as LowerContext;
       const before = recorded.db.length;
 
-      run<LoweredNode>(resourceControlOf(target, 'postgres')(ctx));
+      run<LoweredNode>(resourceDescriptorOf(target, 'postgres')(ctx));
 
       expect(recorded.db.slice(before)).toEqual([
         [
@@ -232,7 +266,7 @@ describe("prismaCloud().nodes['postgres'] — the resource control", () => {
   });
 });
 
-describe("prismaCloud().nodes['compute'] — the service control", () => {
+describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
   test("provision creates a ComputeService inside the application's project", async () => {
     await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
@@ -241,7 +275,7 @@ describe("prismaCloud().nodes['compute'] — the service control", () => {
         application: { outputs: { projectId: 'shop-project#cloud-id' } },
       } as unknown as LowerContext;
 
-      const result = run<LoweredNode>(serviceControlOf(target, 'compute').provision(ctx));
+      const result = run<LoweredNode>(serviceDescriptorOf(target, 'compute').provision(ctx));
 
       expect(result.outputs).toEqual({
         serviceId: 'auth-svc#cloud-id',
@@ -262,7 +296,7 @@ describe("prismaCloud().nodes['compute'] — the service control", () => {
       } as unknown as LowerContext;
       const before = recorded.svc.length;
 
-      run<LoweredNode>(serviceControlOf(target, 'compute').provision(ctx));
+      run<LoweredNode>(serviceDescriptorOf(target, 'compute').provision(ctx));
 
       expect(recorded.svc.slice(before)).toEqual([
         [
@@ -300,7 +334,7 @@ describe("prismaCloud().nodes['compute'] — the service control", () => {
       const config = { service: { port: 3000 }, inputs: { db: { url: 'postgres://real-db' } } };
 
       const result = run<LoweredNode>(
-        serviceControlOf(target, 'compute').serialize(ctx, provisioned, config),
+        serviceDescriptorOf(target, 'compute').serialize(ctx, provisioned, config),
       );
 
       expect(recorded.envVar.slice(-2)).toEqual([
@@ -354,7 +388,7 @@ describe("prismaCloud().nodes['compute'] — the service control", () => {
       const config = { service: { port: 3000 }, inputs: {} };
       const before = recorded.envVar.length;
 
-      run<LoweredNode>(serviceControlOf(target, 'compute').serialize(ctx, provisioned, config));
+      run<LoweredNode>(serviceDescriptorOf(target, 'compute').serialize(ctx, provisioned, config));
 
       expect(recorded.envVar.slice(before)).toEqual([
         [
@@ -391,7 +425,7 @@ describe("prismaCloud().nodes['compute'] — the service control", () => {
       const config = { service: { port: 8080 }, inputs: {} };
 
       const result = run<LoweredNode>(
-        serviceControlOf(target, 'compute').serialize(ctx, provisioned, config),
+        serviceDescriptorOf(target, 'compute').serialize(ctx, provisioned, config),
       );
 
       expect(result.outputs['port']).toBe(8080);
@@ -403,7 +437,7 @@ describe("prismaCloud().nodes['compute'] — the service control", () => {
     const ctx = { id: 'auth' } as unknown as LowerContext;
 
     const result = run(
-      serviceControlOf(target, 'compute').package(ctx, {
+      serviceDescriptorOf(target, 'compute').package(ctx, {
         assembled: { dir: 'systems/auth/dist/bundle', entry: 'server.js' },
         address: 'auth',
       }),
@@ -438,7 +472,7 @@ describe("prismaCloud().nodes['compute'] — the service control", () => {
     };
 
     const result = run<LoweredNode>(
-      serviceControlOf(target, 'compute').deploy(ctx, provisioned, artifact, serialized),
+      serviceDescriptorOf(target, 'compute').deploy(ctx, provisioned, artifact, serialized),
     );
 
     expect(recorded.deploy).toEqual([

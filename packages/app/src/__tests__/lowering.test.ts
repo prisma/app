@@ -371,7 +371,7 @@ describe('lowering a system root — a single service', () => {
     expect(error.message).toContain('prisma-app.config.ts');
   });
 
-  test('a resource node routed to a service control is a LowerError naming (extension, type, expected kind)', () => {
+  test('a resource node routed to a service descriptor is a LowerError naming (extension, type, expected kind)', () => {
     const { config } = fakeExtension();
     const root = system('hello', {}, (h) => {
       h.provision(
@@ -379,7 +379,7 @@ describe('lowering a system root — a single service', () => {
         resource({
           name: 'db',
           extension: 'test/pack',
-          // The registry's 'fake/compute' entry is a service control.
+          // The registry's 'fake/compute' entry is a service descriptor.
           provides: providerContract('fake/compute', { url: '' }),
         }),
       );
@@ -391,7 +391,7 @@ describe('lowering a system root — a single service', () => {
     expect(error).toBeInstanceOf(LowerError);
     expect(error.message).toContain('test/pack');
     expect(error.message).toContain('fake/compute');
-    expect(error.message).toContain('"resource" control');
+    expect(error.message).toContain('"resource" descriptor');
   });
 });
 

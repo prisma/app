@@ -11,9 +11,11 @@
  * `postgres<Contract>({ contractJson })` convention (see prisma-next.ts).
  */
 import { describe, expect, test } from 'bun:test';
-import type { Contract } from '@prisma/app';
-import { isNode, string } from '@prisma/app';
-import { pnContract, pnPostgres } from '../prisma-next.ts';
+import type { Contract, ResourceNode } from '@prisma/app';
+import { isNode, Load, string, system } from '@prisma/app';
+import { blindCast } from '@prisma/app/casts';
+import { postgres } from '../postgres.ts';
+import { isPnPostgresResourceNode, pnContract, pnPostgres } from '../prisma-next.ts';
 import type { Contract as GadgetContract } from './fixtures/gadget-contract/emitted/contract.d.ts';
 import gadgetContractJson from './fixtures/gadget-contract/emitted/contract.json' with {
   type: 'json',
@@ -71,16 +73,25 @@ describe('pnContract().satisfies()', () => {
 });
 
 describe('pnPostgres() factory shapes', () => {
-  test('{ name, contract } yields a branded ResourceNode providing contract', () => {
+  test('{ name, contract, config } yields a branded resource node carrying config', () => {
     const widget = pnContract<WidgetContract>(widgetContractJson);
-    const node = pnPostgres({ name: 'database', contract: widget });
+    const node = pnPostgres({
+      name: 'database',
+      contract: widget,
+      config: './prisma-next.config.ts',
+    });
 
+    // The leaf class inherits the [NODE] Symbol.for brand from
+    // ResourceNodeBase as an own instance field — still a recognized node.
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.name).toBe('database');
     expect(node.extension).toBe('@prisma/app-cloud');
     expect(node.type).toBe('prisma-next');
     expect(node.provides).toBe(widget);
+    // config rides on the node as a first-class field, sibling to provides.
+    expect(node.config).toBe('./prisma-next.config.ts');
+    expect(Object.isFrozen(node)).toBe(true);
   });
 
   test('pnPostgres(contract) yields a branded DependencyEnd requiring that contract', () => {
@@ -93,6 +104,77 @@ describe('pnPostgres() factory shapes', () => {
     expect(dep.required).toBe(widget);
     expect(Object.keys(dep.connection.params)).toEqual(['url']);
     expect(dep.connection.params['url']).toEqual(string({ secret: true }));
+  });
+});
+
+describe("isPnPostgresResourceNode (the deploy lowering's read predicate)", () => {
+  const widget = pnContract<WidgetContract>(widgetContractJson);
+
+  test('narrows a base-typed resource node so `.config` reads', () => {
+    // The lowering's ctx.node is the base union; the predicate is a downcast
+    // of a known node, not an untrusted-value guard.
+    const node: ResourceNode = pnPostgres({
+      name: 'database',
+      contract: widget,
+      config: './prisma-next.config.ts',
+    });
+    expect(isPnPostgresResourceNode(node)).toBe(true);
+    if (isPnPostgresResourceNode(node)) {
+      // the narrow gives the lowering `config` without a bare cast
+      expect(node.config).toBe('./prisma-next.config.ts');
+    }
+  });
+
+  test('false for a pnPostgres dependency end (kind is dependency, no config)', () => {
+    // A dependency end is never a lowering's ctx.node — cast only to prove
+    // the kind check rejects it.
+    const dep = blindCast<ResourceNode, 'test-only: prove the kind check rejects a dependency end'>(
+      pnPostgres(widget),
+    );
+    expect(isPnPostgresResourceNode(dep)).toBe(false);
+  });
+
+  test('false for a bare postgres() resource (type is postgres, not prisma-next)', () => {
+    expect(isPnPostgresResourceNode(postgres({ name: 'db' }))).toBe(false);
+  });
+
+  test('false for a resource lookalike whose config is missing or not a string', () => {
+    const noConfig = blindCast<ResourceNode, 'test-only: right kind+type, config missing'>({
+      kind: 'resource',
+      type: 'prisma-next',
+    });
+    expect(isPnPostgresResourceNode(noConfig)).toBe(false);
+    const numberConfig = blindCast<ResourceNode, 'test-only: right kind+type, config not a string'>(
+      { kind: 'resource', type: 'prisma-next', config: 42 },
+    );
+    expect(isPnPostgresResourceNode(numberConfig)).toBe(false);
+  });
+});
+
+describe('the config path rides through provisioning (brand intact)', () => {
+  test('a provisioned pnPostgres resource Loads as a resource and keeps config', () => {
+    const widget = pnContract<WidgetContract>(widgetContractJson);
+    const node = pnPostgres({
+      name: 'database',
+      contract: widget,
+      config: './prisma-next.config.ts',
+    });
+
+    const graph = Load(
+      system('pn-system', {}, ({ provision }) => {
+        provision('db', node);
+        return {};
+      }),
+      { id: 'pn' },
+    );
+
+    // Provisioned as a resource (the brand survived, so Load recognized it).
+    const db = graph.nodes.find((n) => n.id === 'db');
+    expect(db?.node.kind).toBe('resource');
+    // The exact augmented node is in the graph, config and all — so the
+    // predicate holds for the very value the graph carries.
+    expect(db?.node).toBe(node);
+    expect(isPnPostgresResourceNode(node)).toBe(true);
   });
 });
 

@@ -26,7 +26,12 @@ import type { Contract as WidgetContract } from './fixtures/widget-contract/emit
 import widgetContractJson from './fixtures/widget-contract/emitted/contract.json' with {
   type: 'json',
 };
-import { startTestPostgres, type TestPostgres } from './postgres-harness.ts';
+import {
+  createTestDatabase,
+  startTestPostgres,
+  type TestDatabase,
+  type TestPostgres,
+} from './postgres-harness.ts';
 
 const pg: TestPostgres | undefined = startTestPostgres();
 
@@ -40,7 +45,6 @@ if (pg === undefined) {
 
 describe.skipIf(pg === undefined)('pnPostgres hydrate — live round trip', () => {
   if (pg === undefined) return;
-  const url = pg.url;
 
   // The wrapped, branded contract — the exact value both the resource and the
   // dependency reference. Typing it as WidgetContract makes the hydrated
@@ -48,6 +52,9 @@ describe.skipIf(pg === undefined)('pnPostgres hydrate — live round trip', () =
   const contract = pnContract<WidgetContract>(widgetContractJson);
   let migrationsDir: string;
   let db: Client<typeof contract>;
+  // An owned database (not the shared `postgres`/`public`) so dbInit applies
+  // onto an empty schema and the fixed-id insert can't collide with a prior run.
+  let testDb: TestDatabase;
 
   beforeAll(async () => {
     // Bring the DB's schema to the contract via PN's control client — creates
@@ -56,6 +63,8 @@ describe.skipIf(pg === undefined)('pnPostgres hydrate — live round trip', () =
     // dbInit synthesizes the additive create-table plan for the single app
     // contract and signs it.
     migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-app-pn-mig-'));
+    testDb = await createTestDatabase(pg.url);
+    const url = testDb.url;
     const control = createPostgresControlClient({ connection: url });
     await control.connect();
     const result = await control.dbInit({
@@ -73,6 +82,7 @@ describe.skipIf(pg === undefined)('pnPostgres hydrate — live round trip', () =
 
   afterAll(async () => {
     await db?.close().catch(() => {});
+    await testDb?.drop().catch(() => {});
     pg.stop();
     if (migrationsDir !== undefined) fs.rmSync(migrationsDir, { recursive: true, force: true });
   });

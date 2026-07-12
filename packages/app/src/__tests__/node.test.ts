@@ -173,7 +173,7 @@ describe('service()', () => {
     expect(Object.isFrozen(node.build)).toBe(true);
   });
 
-  test('carries no handler — the node is a pure description', () => {
+  test('carries no descriptor — the node is a pure description', () => {
     const node = service({
       name: 'hello',
       extension: 'test/pack',

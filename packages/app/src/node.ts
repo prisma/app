@@ -1,14 +1,6 @@
 /**
- * Core model: node types and the factories that construct them. All nodes are
- * plain frozen data objects — with two sanctioned behavior slots: a
- * Connection's `hydrate` (validated values → client) and, on the extension's
- * runnable service shape, `run`/`load` (the process controller and its
- * pull-DI). The Service node carries NO handler — it is a description; the
- * code that serves is the app's own entrypoint. Config declarations are pure
- * data; core reads no environment and loads no modules. A node's `extension`
- * + `type` form its control-plane routing key at deploy
- * (`config.extensions[extension].nodes[type]` — see ADR-0017); core never
- * interprets them beyond lookup.
+ * Core model: node types and the factories that construct them, plain frozen
+ * data objects. A node's `extension` + `type` form its deploy-time registry key (ADR-0017).
  */
 import { blindCast } from './casts.ts';
 import type { ConfigParam, Connection, Params, Values } from './config.ts';
@@ -18,41 +10,32 @@ import type { Contract } from './contract.ts';
 // Symbol.for so the check survives duplicated module instances in a workspace.
 const NODE: unique symbol = Symbol.for('prisma:node') as never;
 
-/** How a service's app becomes a runnable artifact — the build control's routing key (`extension`/`type`) plus paths resolved relative to the authoring module. */
+/** Opaque `Contract<any, any>` bound shared by every node/port type that doesn't care which contract. */
+// biome-ignore lint/suspicious/noExplicitAny: the one alias for this bound — see doc comment.
+export type AnyContract = Contract<any, any>;
+
+/** How a service's app becomes a runnable artifact — the build descriptor's routing key (`extension`/`type`) plus paths resolved relative to the authoring module. */
 export interface BuildAdapter {
-  /** The extension package that provides the build control, e.g. "@prisma/app-node". */
+  /** The extension package that provides the build descriptor, e.g. "@prisma/app-node". */
   readonly extension: string;
-  /** The build control's node ID within its extension, e.g. "node" · "nextjs". */
+  /** The build descriptor's node ID within its extension, e.g. "node" · "nextjs". */
   readonly type: string;
-  /**
-   * The authoring module's `import.meta.url` — every other path on this
-   * descriptor resolves relative to `dirname(module)`. Nothing reads it at
-   * runtime.
-   */
+  /** The authoring module's `import.meta.url` — every other path on this descriptor resolves relative to `dirname(module)`. */
   readonly module: string;
   /**
-   * The app's built runnable, resolved relative to `dirname(module)`. The
-   * type's build control interprets it. "node": a path to the built server
-   * file (e.g. "../dist/server.js"). "nextjs": a bare filename inside the
-   * standalone output dir (e.g. "server.js") — see the nextjs adapter's
-   * `appDir` for where that output dir itself is anchored.
+   * The app's built runnable, resolved relative to `dirname(module)` and
+   * interpreted by the type's build descriptor (e.g. "node": a server file path;
+   * "nextjs": a filename inside the standalone output dir).
    */
   readonly entry: string;
 }
 
 /**
  * A Resource's identity: the one place a piece of infrastructure exists.
- * Provisioned by a system (`h.provision(id, postgres({ name }))`), never embedded
- * in a service's deps — a service declares a DependencyEnd slot instead and
- * the system wires this node's ref into it. `provides` is the Contract the
- * resource offers consumers (its one port); `type` — the within-extension
- * routing key — is derived from `provides.kind`, so wiring a slot to a
- * resource whose contract doesn't satisfy the slot's requirement fails at
- * compile time and at Load, through exactly the machinery service ports use.
- * `extension` names the extension package whose registry lowers this node.
+ * Provisioned by a system, never embedded in a service's deps. `provides`
+ * is the Contract the resource offers; `type` is derived from `provides.kind`.
  */
-// biome-ignore lint/suspicious/noExplicitAny: opaque per-contract Cmp — matches Contract's own bound.
-export interface ResourceNode<C extends Contract<any, any> = Contract<any, any>> {
+export interface ResourceNode<C extends AnyContract = AnyContract> {
   readonly [NODE]: true;
   readonly kind: 'resource';
   /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
@@ -65,15 +48,9 @@ export interface ResourceNode<C extends Contract<any, any> = Contract<any, any>>
 }
 
 /**
- * A Service: inputs + its own declared params + how it is built. This IS the
- * user's default export — inspectable (inputs/type/params/build), inert until
- * run. It carries NO handler; the app's own entrypoint is the code that
- * serves. The BASE node is not runnable: booting needs an extension's
- * environment knowledge, so the extension's factory returns a
- * runnable/loadable shape that adds `run`/`load` (see RunnableServiceNode).
- * The node is the handle. `extension` + `type` form the control-plane
- * registry key at deploy; `build.extension` + `build.type` do the same for
- * assembly.
+ * A Service: inputs + its own declared params + how it is built. Inspectable,
+ * inert until run, and carries NO runtime behavior — an extension's factory
+ * wraps it into a runnable/loadable shape (see RunnableServiceNode).
  */
 export interface ServiceNode<
   D extends Deps = Deps,
@@ -97,15 +74,9 @@ export interface ServiceNode<
 }
 
 /**
- * The extension's runnable/loadable service node — what an extension's
- * authoring factory (e.g. `compute()`) returns. `run(address, boot)` is the
- * process controller: deserialize the platform environment (keyed off
- * `address`, the bootstrap's parameter) into a typed Config, stash it under
- * process-local keys, then call `boot()` to start the app's entry. From inside
- * that entry, `load()` reads the stash and returns the hydrated, memoized
- * dependencies; `config()` returns the resolved, typed config params. The two
- * are separate so a dependency and a param of the same name never collide
- * (ADR-0021). Core defines this shape; only an extension instantiates it.
+ * The extension's runnable/loadable service node. `run` boots the app after
+ * deserializing its Config; `load`/`config` then read deps/params back out
+ * (kept separate per ADR-0021 so a same-named dep and param never collide).
  */
 export interface RunnableServiceNode<
   D extends Deps = Deps,
@@ -118,20 +89,9 @@ export interface RunnableServiceNode<
 }
 
 /**
- * A service's dependency declaration — THE slot, whoever the producer is.
- * Nothing is provisioned FOR it: at Load the enclosing system wires a provisioned
- * producer's ref into it (a service's exposed port, or a resource — the
- * contract determines validity, never the producer's kind), and at deploy it
- * becomes an EDGE from that producer to the consumer. At run it hydrates a
- * client through the Connection machinery; the consumer never learns HOW the
- * producer's address reached it. Carries no `extension` — a dependency end
- * is never provisioned, so deploy tooling never routes one to a registry.
- *
- * `Req` is the contract this end requires — `unknown` for an untyped end
- * (e.g. `http()`, the escape hatch that accepts anything). `SystemBuilder.provision`
- * checks each wired ref against `Req` at compile time; `required` carries the
- * same contract as a runtime value so Load can call its `satisfies()` as the
- * backstop.
+ * A service's dependency slot. At Load the enclosing system wires a
+ * producer's ref into it; at run it hydrates a client via Connection. `Req`
+ * is the required contract (`unknown` for an untyped end like `http()`).
  */
 export interface DependencyEnd<C = unknown, Req = unknown> {
   readonly [NODE]: true;
@@ -157,10 +117,7 @@ export interface SystemNode<D extends Deps = Deps, E extends Expose = Expose> {
 
 /**
  * What a system's body receives: its declared inputs as forwardable wiring
- * values, and `provision` to register the owned services/systems it wires them
- * into. `inputs[K]` stands for "whatever the enclosing scope wires here" —
- * Load resolves it, at the system's own provision() call, to the actual producer
- * the enclosing scope supplied.
+ * values, plus `provision` to register the owned services/systems it wires them into.
  */
 export interface SystemContext<D extends Deps> {
   /** The system's declared inputs as wiring values — pass them into provision(). */
@@ -170,39 +127,27 @@ export interface SystemContext<D extends Deps> {
 }
 
 /**
- * A system's forwarded-input value: the same ref-port shape a producer's output
- * carries, so it satisfies the identical `Wiring<D>` assignability at any
- * nested `provision()` call — an input flows down by being indistinguishable,
- * at the wiring site, from a sibling's exposed port. Because a dependency
- * slot always carries a contract (resource-backed or service-backed alike —
- * the unified model has no untyped-by-construction resource slot), a
- * resource-backed input forwards across a system boundary exactly like a
- * service-backed one.
+ * A system's forwarded-input value: the same ref-port shape a producer's
+ * output carries, so it flows down a nested `provision()` call indistinguishably
+ * from a sibling's exposed port.
  */
 export type InputRef<DE> =
   // biome-ignore lint/suspicious/noExplicitAny: matches ReqOf's bound.
-  DE extends DependencyEnd<any, infer Req extends Contract<any, any>> ? RefPort<Req> : never;
+  DE extends DependencyEnd<any, infer Req extends AnyContract> ? RefPort<Req> : never;
 
 /** One ref-port per declared expose key, contract-checked against `E` (mirrors `Wiring`'s `NoInfer` use). */
 export type SystemOutputs<E extends Expose> = { [P in keyof E]: RefPort<NoInfer<E[P]>> };
 
 /**
- * A provisioned producer's port as a wiring-time value: the port's own
- * contract, tagged with which provider produced it. `provision(id, consumer,
- * wiring)` checks a ref-port's contract against the consumer's required slot
- * (plain assignability); Load reads `__providerId` to resolve the edge and
- * calls the port's own `satisfies()` as the runtime mirror of that check.
+ * A provisioned producer's port as a wiring-time value: its contract, tagged
+ * with which provider produced it (`__providerId`, read by Load to resolve the edge).
  */
-// biome-ignore lint/suspicious/noExplicitAny: opaque per-port Cmp — matches Expose's own `any` bound.
-export type RefPort<C extends Contract<any, any>> = C & { readonly __providerId: string };
+export type RefPort<C extends AnyContract> = C & { readonly __providerId: string };
 
 /**
- * What `provision(id, service)` hands back: a stable id — so a service with no
- * exposed ports (or an untyped dependency slot) can still be wired wholesale
- * by passing the ref itself — plus one ref-port per exposed contract (empty
- * when the service declares no `expose`). `provision(id, resource)` returns
- * the same shape with the resource's ONE port — its provided contract —
- * flattened onto the ref itself: `{ id } & RefPort<C>`.
+ * What `provision(id, service)` hands back: a stable id plus one ref-port per
+ * exposed contract. `provision(id, resource)` returns the same shape with the
+ * resource's one port flattened onto the ref itself.
  */
 export type ProvisionedRef<E extends Expose = Record<never, never>> = { readonly id: string } & {
   readonly [P in keyof E]: RefPort<E[P]>;
@@ -217,8 +162,7 @@ type Wiring<D extends Deps> = { [K in keyof D]: NoInfer<ReqOf<D[K]>> };
 
 export interface SystemBuilder {
   /** Provisions an owned resource under a stable id, returning its ref for wiring into a consumer. */
-  // biome-ignore lint/suspicious/noExplicitAny: opaque per-contract Cmp — matches RefPort's own `any` bound.
-  provision<C extends Contract<any, any>>(
+  provision<C extends AnyContract>(
     id: string,
     resource: ResourceNode<C>,
   ): { readonly id: string } & RefPort<C>;
@@ -267,18 +211,12 @@ export interface SystemBuilder {
   ): ProvisionedRef<E>;
 }
 
-/**
- * Dependency map: name → the slot the service declares. Only declarations
- * are admitted — a concrete ResourceNode never sits in deps, so a service
- * cannot cause infrastructure to exist by mentioning it. `any`, not
- * `unknown` — keeps inference.
- */
+/** Dependency map: name → the slot the service declares. Only declarations are admitted, never a concrete ResourceNode. */
 // biome-ignore lint/suspicious/noExplicitAny: `any` (not `unknown`) preserves loaded-dep inference from each entry's hydrate return.
 export type Deps = Record<string, DependencyEnd<any, any>>;
 
 /** Output-port map: name → the Contract a service exposes for others to depend on. */
-// biome-ignore lint/suspicious/noExplicitAny: opaque per-port Cmp — core never inspects it (see Contract).
-export type Expose = Readonly<Record<string, Contract<any, any>>>;
+export type Expose = Readonly<Record<string, AnyContract>>;
 
 export type Hydrated<N> =
   // biome-ignore lint/suspicious/noExplicitAny: Req is irrelevant to the hydrated shape.
@@ -306,12 +244,9 @@ function requireExtension(extension: string, factory: string): void {
 }
 
 /**
- * `configKey` (the extension's semantic↔physical config mapping) joins address
- * segments, an input's name, and a param's name with "_" and uppercases the
- * result — so an underscore INSIDE a name is indistinguishable from that
- * separator. Without this check, service param "db_url" and input "db"'s
- * param "url" would both serialize to the env key "DB_URL" and silently
- * collide. Rejected at construction, naming the offender.
+ * Config keys join address/input/param names with "_" and uppercase — an
+ * underscore inside a name would collide with that separator (e.g. param
+ * "db_url" vs input "db"'s param "url" both hitting env key "DB_URL").
  */
 function requireNoUnderscoreName(name: string, kind: 'input' | 'param', factory: string): void {
   if (name.includes('_')) {
@@ -348,49 +283,77 @@ function frozenShallowCopy<T extends object>(obj: T): T {
 }
 
 /**
+ * Seals a node instance after its constructor has assigned all fields — the
+ * last statement of a concrete node class's constructor. A free function, not
+ * a base-class method, so an instance stays structurally a plain frozen node.
+ */
+export function freezeNode<T extends object>(node: T): T {
+  Object.freeze(node);
+  return node;
+}
+
+/**
+ * Everything `resource()` establishes, minus the freeze — an extension
+ * whose resource node carries extra fields extends this, assigns them, and
+ * calls `freezeNode(this)` as its constructor's last statement.
+ */
+export abstract class ResourceNodeBase<C extends AnyContract = AnyContract>
+  implements ResourceNode<C>
+{
+  readonly [NODE] = true as const;
+  readonly kind = 'resource' as const;
+  readonly name: string;
+  readonly extension: string;
+  readonly type: C['kind'];
+  readonly provides: C;
+
+  constructor(def: { name: string; extension: string; provides: C }) {
+    requireName(def.name, 'resource');
+    requireExtension(def.extension, 'resource');
+    const provides = def.provides;
+    if (
+      typeof provides !== 'object' ||
+      provides === null ||
+      typeof provides.kind !== 'string' ||
+      provides.kind.length === 0 ||
+      typeof provides.satisfies !== 'function'
+    ) {
+      throw new Error(
+        'resource() requires `provides` — the Contract this resource offers ' +
+          '(a non-empty `kind` plus its `satisfies()`).',
+      );
+    }
+    this.name = def.name;
+    this.extension = def.extension;
+    this.type = provides.kind;
+    this.provides = provides;
+  }
+}
+
+/** The core leaf: exactly the base, frozen. */
+class FrozenResourceNode<C extends AnyContract> extends ResourceNodeBase<C> {
+  constructor(def: { name: string; extension: string; provides: C }) {
+    super(def);
+    freezeNode(this);
+  }
+}
+
+/**
  * Constructs a branded, frozen Resource node — an identity plus the Contract
  * it provides; the routing `type` is the contract's `kind`. Pure — nothing
- * executes; nothing is provisioned until a system provisions it. `extension`
- * (e.g. "@prisma/app-cloud") keys the control-plane registry lookup at
- * deploy — the extension itself is loaded only by `prisma-app.config.ts`.
+ * is provisioned until a system provisions it.
  */
-// biome-ignore lint/suspicious/noExplicitAny: opaque per-contract Cmp — matches ResourceNode's own bound.
-export function resource<C extends Contract<any, any>>(def: {
+export function resource<C extends AnyContract>(def: {
   name: string;
   extension: string;
   provides: C;
 }): ResourceNode<C> {
-  requireName(def.name, 'resource');
-  requireExtension(def.extension, 'resource');
-  const provides = def.provides;
-  if (
-    typeof provides !== 'object' ||
-    provides === null ||
-    typeof provides.kind !== 'string' ||
-    provides.kind.length === 0 ||
-    typeof provides.satisfies !== 'function'
-  ) {
-    throw new Error(
-      'resource() requires `provides` — the Contract this resource offers ' +
-        '(a non-empty `kind` plus its `satisfies()`).',
-    );
-  }
-  return Object.freeze({
-    [NODE]: true as const,
-    kind: 'resource' as const,
-    name: def.name,
-    extension: def.extension,
-    type: provides.kind,
-    provides,
-  });
+  return new FrozenResourceNode(def);
 }
 
 /**
- * Constructs a branded, frozen Service node — declarations only (inputs, params,
- * build adapter, and the ports it exposes). Pure; carries no handler.
- * `extension` (e.g. "@prisma/app-cloud") keys the control-plane registry
- * lookup at deploy — the extension itself is loaded only by
- * `prisma-app.config.ts`.
+ * Constructs a branded, frozen Service node — declarations only (inputs,
+ * params, build adapter, and the ports it exposes). Pure; carries no runtime behavior.
  */
 export function service<
   D extends Deps,
@@ -424,13 +387,9 @@ export function service<
 }
 
 /**
- * Constructs a branded, frozen DependencyEnd. Pure — nothing executes; the
- * connection's hydrate runs only through the boot pipeline. `required` (if
- * given) is the contract this end depends on — the same value Load compares
- * a wired ref against via `satisfies()`. `name` is diagnostic only and
- * optional — a consumer's dep key (e.g. `deps: { auth: http({ name: "auth" }) }`)
- * already identifies the end at the wiring site; an unnamed end falls back to
- * its `type`.
+ * Constructs a branded, frozen DependencyEnd. `required` (if given) is the
+ * contract Load compares a wired ref against via `satisfies()`; an unnamed
+ * end's diagnostic `name` falls back to its `type`.
  */
 export function dependency<P extends Params, C, Req = unknown>(def: {
   name?: string;
@@ -509,9 +468,8 @@ export function system(
 
 /**
  * True if `value` was constructed by this module's factories. Checks the
- * brand ONLY — never a prototype — because a graph may mix nodes built by a
- * different installed copy of core (dual-package hazard); nodes are plain
- * data, so the Symbol.for brand is the whole identity story.
+ * brand only, never a prototype — a graph may mix nodes from a different
+ * installed copy of core (dual-package hazard).
  */
 export function isNode(
   value: unknown,
