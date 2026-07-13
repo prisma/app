@@ -97,14 +97,16 @@ Config = { service: { jobs: [ {jobId:'tick',…}, {jobId:'mrr',…} ], port: 300
 ```
 
 **Deploy — serialize (the target).** `@prisma/compose-prisma-cloud` encodes each value into
-its medium — key/value strings, keyed `ADDRESS_OWNER_NAME` to stay unique in the
-shared project — validating structured values and passing dependency-input values
-(provisioning refs) through untouched:
+its medium — key/value strings, keyed `COMPOSE_ADDRESS_OWNER_NAME` to stay unique in
+the shared project — validating structured values and passing dependency-input values
+(provisioning refs) through untouched. Every generated key carries the `COMPOSE_`
+prefix — the framework's reserved namespace, kept clear of the user-provisioned
+variables secrets point at (§ Secrets):
 
 ```
-SCHEDULER_JOBS        = '[{"jobId":"tick","every":"60s"},…]'
-SCHEDULER_PORT        = '3000'
-SCHEDULER_TRIGGER_URL = 'https://…runner…'
+COMPOSE_SCHEDULER_JOBS        = '[{"jobId":"tick","every":"60s"},…]'
+COMPOSE_SCHEDULER_PORT        = '3000'
+COMPOSE_SCHEDULER_TRIGGER_URL = 'https://…runner…'
 ```
 
 The encoding (JSON here) is app-cloud's own; a different target would store the

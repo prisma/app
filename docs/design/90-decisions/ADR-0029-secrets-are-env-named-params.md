@@ -226,12 +226,13 @@ way any other optional param's absence is.
   forbidding `default` makes the pattern unexpressible going forward.
 - **Bake wiring into the bundle to avoid a pointer row** — resolve a secret's
   platform name at build time and inline it into the compiled bundle instead
-  of writing it as a config row. Rejected: it breaks the invariant that a
-  bundle carries only the node's own declaration
-  ([ADR-0008](ADR-0008-wrapper-inlines-everything-except-runtime-builtins.md)),
-  and it makes the bundle stage-specific — the same artifact could no longer
-  deploy unchanged to preview and production, which the platform's own
-  class/branch materialization is designed to let it do.
+  of writing it as a config row. Rejected: it makes the bundle stage-specific.
+  The same artifact could no longer deploy unchanged to preview and
+  production — which the platform's own class/branch materialization exists to
+  let it do, and which target-owned serialization keeps stage-neutral
+  ([ADR-0019](ADR-0019-the-target-owns-config-serialization.md)). A pointer
+  row, resolved by the target at deploy, keeps the built artifact identical
+  across stages.
 - **Unprefixed generated keys.** Rejected: the `EnvironmentVariable`
   reconciler adopts and `PATCH`es any pre-existing row at the same
   `(project, class, key)`
