@@ -336,7 +336,7 @@ await withConnectionRetry(() => client.dbInit(...), { attempts: 12, delayMs: 500
 
 ## Idle direct-connection close kills pooled node-postgres clients — first query after idle 500s with "Connection terminated unexpectedly"
 
-**Filed upstream:** _not yet filed_ (target: [`compute-gotchas`](https://linear.app/prisma-company/project/compute-gotchas-dd3ac34b5ad4/overview))
+**Filed upstream:** [PRO-216](https://linear.app/prisma-company/issue/PRO-216/idle-direct-connection-close-kills-pooled-node-postgres-clients-first) — _"Idle direct-connection close kills pooled node-postgres clients — first query after idle fails with 'Connection terminated unexpectedly'"_
 **Product:** Prisma Postgres idle-close × Prisma Compute scale-to-zero (the FT-5219 family, pooled-client variant)
 **Version:** `pg` 8.21.0 `Pool` (via `@prisma-next/postgres` 0.14.0); PPg direct connection; Prisma Compute (scale-to-zero)
 **First hit:** `examples/store` — the orders service after an idle spell; presented as the storefront rendering Next's error page
@@ -368,7 +368,7 @@ pool.on("error", (err) => console.error("pg pool idle client error", err));
 
 ## Service-to-service HTTP gets ECONNRESET while the target cold-starts from scale-to-zero
 
-**Filed upstream:** _not yet filed_ (target: [`compute-gotchas`](https://linear.app/prisma-company/project/compute-gotchas-dd3ac34b5ad4/overview))
+**Filed upstream:** [PRO-217](https://linear.app/prisma-company/issue/PRO-217/service-to-service-http-gets-econnreset-while-the-target-cold-starts) — _"Service-to-service HTTP gets ECONNRESET while the target cold-starts from scale-to-zero"_
 **Product:** Prisma Compute (ingress / scale-to-zero cold start)
 **Version:** Prisma Compute, Bun `fetch` from a Next.js standalone SSR render; observed 2026-07-13
 **First hit:** `examples/store` — the storefront's SSR calls to the catalog and orders services' `*.ewr.prisma.build` endpoints
