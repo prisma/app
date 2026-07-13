@@ -6,9 +6,12 @@
  * pack owns encoding — serializing that Config to the platform environment
  * and reversing it (see core-model.md § Runtime). Core never stringifies and
  * never touches an environment.
+ *
+ * Secrets are NOT params — they are their own forwardable slot (ADR-0029, see
+ * `secret()`/`envSecret()`/`secrets()` in node.ts). A param is never secret.
  */
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { Graph } from './graph-types.ts';
+import type { Graph, SecretBinding } from './graph-types.ts';
 import type { ServiceNode } from './node.ts';
 
 /**
@@ -21,13 +24,6 @@ import type { ServiceNode } from './node.ts';
  */
 export interface ConfigParam<S extends StandardSchemaV1 = StandardSchemaV1> {
   readonly schema: S;
-  /** Redacted in any introspection output. */
-  readonly secret?: boolean;
-  /**
-   * The platform env-var name a secret param is bound to (set by `envSecret`,
-   * ADR-0029). The framework carries only this name — never the value.
-   */
-  readonly external?: string;
   readonly optional?: boolean;
   readonly default?: StandardSchemaV1.InferOutput<S>;
 }
@@ -56,19 +52,16 @@ export interface Connection<P extends Params = Params, C = unknown> {
 
 /**
  * The enumerable config surface of a service — derivable from the graph
- * alone, nothing booted, no platform keys. The introspection artifact
- * (secrets marked, values absent). `schema` is a data-only projection of the
- * param's Standard Schema (JSON Schema when the vendor supports the optional
- * conversion, a `{ vendor }` tag otherwise) — never the param's functions.
- * Physical locations are the target pack's business.
+ * alone, nothing booted, no platform keys. The introspection artifact (values
+ * absent). `schema` is a data-only projection of the param's Standard Schema
+ * (JSON Schema when the vendor supports the optional conversion, a `{ vendor }`
+ * tag otherwise) — never the param's functions. Physical locations are the
+ * target pack's business. Secrets are not here — they live on their own slot.
  */
 export interface ConfigDeclaration {
   readonly owner: 'service' | { readonly input: string };
   readonly name: string;
   readonly schema: Readonly<Record<string, unknown>>;
-  readonly secret: boolean;
-  /** The platform env-var name a secret param is bound to; omitted for a non-secret param (ADR-0029). */
-  readonly external?: string;
   readonly optional: boolean;
   readonly default: unknown;
 }
@@ -119,8 +112,6 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
         owner: { input },
         name,
         schema: projectSchema(param.schema),
-        secret: param.secret === true,
-        ...(param.external !== undefined ? { external: param.external } : {}),
         optional: param.optional === true,
         default: param.default,
       });
@@ -132,8 +123,6 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
       owner: 'service',
       name,
       schema: projectSchema(param.schema),
-      secret: param.secret === true,
-      ...(param.external !== undefined ? { external: param.external } : {}),
       optional: param.optional === true,
       default: param.default,
     });
@@ -142,35 +131,15 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
   return entries;
 }
 
-/** One pointer secret in the app's provision manifest — a platform env-var NAME that must exist before deploy (ADR-0029). */
-export interface ManifestEntry {
-  /** The platform env-var name the secret is bound to (its `external` facet). */
-  readonly external: string;
-  /** Whether the binding is optional — an absent optional secret is not a deploy failure. */
-  readonly optional: boolean;
-  /** The graph address of the service that declares the binding (for diagnostics). */
-  readonly serviceAddress: string;
-}
-
 /**
- * The app's provision manifest: every pointer secret (a secret param bound to a
- * platform env-var NAME via `envSecret`) across the graph's services. Pure graph
- * introspection over `configOf`, so it is TARGET-AGNOSTIC — a deploy target's
- * preflight consumes it to verify each name exists on the platform (ADR-0029).
- * Non-secret params and secrets with no binding (e.g. a producer-valued database
- * url) are excluded — only external-bearing secret declarations are manifest.
+ * The app's provision manifest: every secret binding the root resolved across
+ * the graph (ADR-0029) — a platform env-var NAME per service secret slot. Pure
+ * graph introspection, TARGET-AGNOSTIC — a deploy target's preflight consumes
+ * it to verify each name exists on the platform before deploy. The framework
+ * carries only the names; the values are provisioned out-of-band.
  */
-export function provisionManifest(graph: Graph): readonly ManifestEntry[] {
-  const entries: ManifestEntry[] = [];
-  for (const { id, node } of graph.nodes) {
-    if (node.kind !== 'service') continue;
-    for (const decl of configOf(node)) {
-      if (decl.secret && decl.external !== undefined) {
-        entries.push({ external: decl.external, optional: decl.optional, serviceAddress: id });
-      }
-    }
-  }
-  return entries;
+export function provisionManifest(graph: Graph): readonly SecretBinding[] {
+  return graph.secrets;
 }
 
 // ——— Param constructors: plain data, target-agnostic (ADR-0018/0019). ———
@@ -203,68 +172,19 @@ const numberSchema = scalarSchema<number>(
   (v): v is number => typeof v === 'number' && Number.isFinite(v),
 );
 
-/**
- * Param facets. `secret` and `default` are mutually exclusive: a secret's value
- * lives on the platform (ADR-0029), so a default would both defeat the
- * deploy-time presence check and put a value into introspection output. The
- * union makes `{ secret: true, default }` a type error; `withFacets` re-checks
- * at runtime for callers that dodge the types.
- */
-export type ParamOptions<T> =
-  | { readonly secret?: false; readonly optional?: boolean; readonly default?: T }
-  | { readonly secret: true; readonly optional?: boolean };
-
-/** `withFacets`' internal option shape — adds `external`, which only `envSecret` sets. */
-interface FacetOptions<T> {
-  readonly secret?: boolean;
+export interface ParamOptions<T> {
   readonly optional?: boolean;
   readonly default?: T;
-  readonly external?: string;
 }
 
-const COMPOSE_PREFIX = 'COMPOSE_';
-const POISONED_NAMES = new Set(['DATABASE_URL', 'DATABASE_URL_POOLED']);
-
-/**
- * The single construction chokepoint: assembles a ConfigParam and enforces the
- * facet invariants the types express (ADR-0029), so a value that bypasses the
- * types still fails loudly.
- */
 function withFacets<S extends StandardSchemaV1>(
   schema: S,
-  opts: FacetOptions<StandardSchemaV1.InferOutput<S>>,
+  opts: ParamOptions<StandardSchemaV1.InferOutput<S>>,
 ): ConfigParam<S> {
-  if (opts.secret === true && opts.default !== undefined) {
-    throw new Error(
-      'a secret config param cannot declare a `default` — its value is provisioned on the platform ' +
-        '(ADR-0029); a default would defeat deploy preflight and leak a value into introspection.',
-    );
-  }
-  if (opts.external !== undefined) {
-    if (opts.external.length === 0) {
-      throw new Error(
-        "envSecret name must be a non-empty string, e.g. envSecret('STRIPE_SECRET_KEY').",
-      );
-    }
-    if (opts.external.startsWith(COMPOSE_PREFIX)) {
-      throw new Error(
-        `envSecret name "${opts.external}" may not start with "${COMPOSE_PREFIX}" — that prefix is ` +
-          "reserved for the framework's own generated config keys.",
-      );
-    }
-    if (POISONED_NAMES.has(opts.external)) {
-      throw new Error(
-        `envSecret name "${opts.external}" is reserved — ${[...POISONED_NAMES].join(' and ')} are ` +
-          'poisoned at project provision and cannot back a secret param.',
-      );
-    }
-  }
   return {
     schema,
-    ...(opts.secret !== undefined ? { secret: opts.secret } : {}),
     ...(opts.optional !== undefined ? { optional: opts.optional } : {}),
     ...(opts.default !== undefined ? { default: opts.default } : {}),
-    ...(opts.external !== undefined ? { external: opts.external } : {}),
   };
 }
 
@@ -288,22 +208,4 @@ export function param<S extends StandardSchemaV1>(
   opts: ParamOptions<StandardSchemaV1.InferOutput<S>> = {},
 ): ConfigParam<S> {
   return withFacets(schema, opts);
-}
-
-/**
- * A secret string param bound to an explicit platform env-var `name` (ADR-0029).
- * The framework carries only the name; the value is provisioned out-of-band on
- * the platform. `secret` forbids `default`; `optional` is allowed. `name` may
- * not use the reserved `COMPOSE_` prefix or the poisoned `DATABASE_URL(_POOLED)`
- * keys.
- */
-export function envSecret(
-  name: string,
-  opts: { readonly optional?: boolean } = {},
-): ConfigParam<StandardSchemaV1<string, string>> {
-  return withFacets(stringSchema, {
-    secret: true,
-    external: name,
-    ...(opts.optional !== undefined ? { optional: opts.optional } : {}),
-  });
 }

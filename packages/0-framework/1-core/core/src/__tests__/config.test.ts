@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { configOf, envSecret, number, param, provisionManifest, string } from '../config.ts';
+import { configOf, number, provisionManifest, string } from '../config.ts';
 import { Load } from '../graph.ts';
-import { dependency, module, service } from '../node.ts';
+import { dependency, envSecret, module, secret, service } from '../node.ts';
 import { conn, scalarDeclaration } from './helpers.ts';
 
 const build = {
@@ -21,10 +21,7 @@ describe('configOf', () => {
         db: dependency({
           name: 'db',
           type: 'fake/db',
-          connection: conn(
-            { url: string({ secret: true }), schema: string({ optional: true }) },
-            () => ({}),
-          ),
+          connection: conn({ url: string(), schema: string({ optional: true }) }, () => ({})),
         }),
       },
       params: { port: number({ default: 3000 }) },
@@ -32,7 +29,7 @@ describe('configOf', () => {
     });
 
     expect(configOf(root)).toEqual([
-      scalarDeclaration({ input: 'db' }, 'url', { secret: true }),
+      scalarDeclaration({ input: 'db' }, 'url'),
       scalarDeclaration({ input: 'db' }, 'schema', { optional: true }),
       scalarDeclaration('service', 'port', { default: 3000 }),
     ]);
@@ -98,155 +95,31 @@ describe('configOf', () => {
 
     expect(hydrateCalls).toBe(0);
   });
-});
 
-describe('configOf over dependency inputs', () => {
-  test('every dependency input appears with owner { input }, whatever it will be wired to', () => {
-    const root = service({
-      name: 'test-service',
-      extension: 'test/pack',
-      type: 'fake/app',
-      inputs: {
-        db: dependency({
-          name: 'db',
-          type: 'fake/db',
-          connection: conn({ url: string({ secret: true }) }, () => ({})),
-        }),
-        auth: dependency({
-          type: 'fake/http',
-          connection: conn({ url: string() }, () => ({})),
-        }),
-      },
-      params: { port: number({ default: 3000 }) },
-      build,
-    });
-
-    expect(configOf(root)).toEqual([
-      scalarDeclaration({ input: 'db' }, 'url', { secret: true }),
-      scalarDeclaration({ input: 'auth' }, 'url'),
-      scalarDeclaration('service', 'port', { default: 3000 }),
-    ]);
-  });
-});
-
-describe('envSecret', () => {
-  test('binds a secret string param to a platform env-var name — no default', () => {
-    const p = envSecret('STRIPE_SECRET_KEY');
-    expect(p.secret).toBe(true);
-    expect(p.external).toBe('STRIPE_SECRET_KEY');
-    expect(p.optional).toBeUndefined();
-    expect(p.default).toBeUndefined();
-    // Reuses the shared string schema — same singleton string() carries.
-    expect(p.schema).toBe(string().schema);
-  });
-
-  test('carries optional when asked, still no default', () => {
-    const p = envSecret('SENDGRID_API_KEY', { optional: true });
-    expect(p.secret).toBe(true);
-    expect(p.optional).toBe(true);
-    expect(p.external).toBe('SENDGRID_API_KEY');
-    expect(p.default).toBeUndefined();
-  });
-
-  test('rejects an empty name at construction', () => {
-    expect(() => envSecret('')).toThrow(/must be a non-empty string/);
-  });
-
-  test('rejects the reserved COMPOSE_ prefix', () => {
-    expect(() => envSecret('COMPOSE_STRIPE')).toThrow(/COMPOSE_/);
-  });
-
-  test('rejects the poisoned DATABASE_URL keys', () => {
-    expect(() => envSecret('DATABASE_URL')).toThrow(/reserved/);
-    expect(() => envSecret('DATABASE_URL_POOLED')).toThrow(/reserved/);
-  });
-
-  test('withFacets is the chokepoint — an empty external dodged in via string() is still caught', () => {
-    expect(() => string({ external: '' } as never)).toThrow(/must be a non-empty string/);
-  });
-});
-
-describe('secret forbids default (runtime guard)', () => {
-  test('string({ secret: true, default }) throws', () => {
-    expect(() => string({ secret: true, default: 'x' } as never)).toThrow(
-      /secret config param cannot declare a `default`/,
-    );
-  });
-
-  test('number({ secret: true, default }) throws', () => {
-    expect(() => number({ secret: true, default: 1 } as never)).toThrow(
-      /secret config param cannot declare a `default`/,
-    );
-  });
-
-  test('param(schema, { secret: true, default }) throws', () => {
-    expect(() => param(string().schema, { secret: true, default: 'x' } as never)).toThrow(
-      /secret config param cannot declare a `default`/,
-    );
-  });
-
-  test('a non-secret param keeps its default', () => {
-    expect(string({ default: 'x' }).default).toBe('x');
-  });
-});
-
-describe('configOf reports external', () => {
-  test('a service-own secret param reports its platform name; a non-secret one reports undefined', () => {
+  test('a secret slot is NOT a config param — configOf never reports it', () => {
     const root = service({
       name: 'ingest',
       extension: 'test/pack',
       type: 'fake/app',
       inputs: {},
-      params: { stripeKey: envSecret('STRIPE_SECRET_KEY'), port: number({ default: 3000 }) },
+      params: { port: number({ default: 3000 }) },
+      secrets: { stripeKey: secret() },
       build,
     });
 
-    expect(configOf(root)).toEqual([
-      scalarDeclaration('service', 'stripeKey', {
-        secret: true,
-        external: 'STRIPE_SECRET_KEY',
-      }),
-      scalarDeclaration('service', 'port', { default: 3000 }),
-    ]);
-  });
-
-  test('a dependency-input secret connection param reports external when bound', () => {
-    const root = service({
-      name: 'ingest',
-      extension: 'test/pack',
-      type: 'fake/app',
-      inputs: {
-        billing: dependency({
-          name: 'billing',
-          type: 'fake/rpc',
-          connection: conn({ key: envSecret('BILLING_KEY') }, () => ({})),
-        }),
-      },
-      params: {},
-      build,
-    });
-
-    expect(configOf(root)).toEqual([
-      scalarDeclaration({ input: 'billing' }, 'key', {
-        secret: true,
-        external: 'BILLING_KEY',
-      }),
-    ]);
+    expect(configOf(root)).toEqual([scalarDeclaration('service', 'port', { default: 3000 })]);
   });
 });
 
 describe('provisionManifest', () => {
-  test('aggregates pointer secrets across services; excludes non-secret and secret-without-external', () => {
+  test('aggregates the root-bound secret names across the graph', () => {
     const ingest = service({
       name: 'ingest',
       extension: 'test/pack',
       type: 'fake/app',
       inputs: {},
-      params: {
-        stripeKey: envSecret('STRIPE_SECRET_KEY'), // pointer secret → manifest
-        rawSecret: string({ secret: true }), // secret, no binding → excluded
-        port: number({ default: 3000 }), // non-secret → excluded
-      },
+      params: {},
+      secrets: { stripeKey: secret() },
       build,
     });
     const web = service({
@@ -254,44 +127,43 @@ describe('provisionManifest', () => {
       extension: 'test/pack',
       type: 'fake/app',
       inputs: {},
-      params: { sendgrid: envSecret('SENDGRID_API_KEY', { optional: true }) },
+      params: {},
+      secrets: { sendgrid: secret() },
       build,
     });
     const graph = Load(
-      module('app', {}, (h) => {
-        h.provision(ingest, { id: 'ingest' });
-        h.provision(web, { id: 'web' });
-        return {};
+      module('app', ({ provision }) => {
+        provision(ingest, { id: 'ingest', secrets: { stripeKey: envSecret('STRIPE_SECRET_KEY') } });
+        provision(web, { id: 'web', secrets: { sendgrid: envSecret('SENDGRID_API_KEY') } });
       }),
     );
 
     const manifest = provisionManifest(graph);
     expect(manifest).toHaveLength(2);
     expect(manifest).toContainEqual({
-      external: 'STRIPE_SECRET_KEY',
-      optional: false,
       serviceAddress: 'ingest',
+      slot: 'stripeKey',
+      name: 'STRIPE_SECRET_KEY',
     });
     expect(manifest).toContainEqual({
-      external: 'SENDGRID_API_KEY',
-      optional: true,
       serviceAddress: 'web',
+      slot: 'sendgrid',
+      name: 'SENDGRID_API_KEY',
     });
   });
 
-  test('is empty when no service binds a pointer secret', () => {
+  test('is empty when no service declares a secret slot', () => {
     const svc = service({
       name: 'x',
       extension: 'test/pack',
       type: 'fake/app',
       inputs: {},
-      params: { port: number({ default: 3000 }), raw: string({ secret: true }) },
+      params: { port: number({ default: 3000 }) },
       build,
     });
     const graph = Load(
-      module('app', {}, (h) => {
-        h.provision(svc, { id: 'x' });
-        return {};
+      module('app', ({ provision }) => {
+        provision(svc, { id: 'x' });
       }),
     );
 

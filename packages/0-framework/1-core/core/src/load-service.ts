@@ -54,5 +54,8 @@ export function loadService(root: ServiceNode, rootId: NodeId): Graph {
     root: rootGraphNode,
     nodes: [...topoSort(nodes, edges), rootGraphNode],
     edges,
+    // A lone service has no enclosing scope to bind its secrets; a service that
+    // declares secret slots must be composed by a module that binds them.
+    secrets: [],
   };
 }

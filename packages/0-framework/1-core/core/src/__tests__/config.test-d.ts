@@ -1,36 +1,48 @@
 /**
- * Type-level facet rules for config params (ADR-0029): `secret` and `default`
- * are mutually exclusive, and `envSecret` infers a string ConfigParam.
- * Type-only (vitest `--typecheck`, never executed).
+ * Type-level rules for the secret slot vocabulary (ADR-0029): `secret()` is a
+ * need, `envSecret()` is a source, `SecretValues<S>` boxes each slot, and
+ * `provision` requires a source per declared secret slot. Type-only (vitest
+ * `--typecheck`, never executed).
  */
-import type { StandardSchemaV1 } from '@standard-schema/spec';
+import type { SecretBox } from '@internal/foundation/secret';
 import { expectTypeOf, test } from 'vitest';
-import type { ConfigParam } from '../config.ts';
-import { envSecret, param, string } from '../config.ts';
+import type { BuildAdapter, SecretNeed, SecretSource, SecretValues } from '../node.ts';
+import { envSecret, module, secret, service } from '../node.ts';
 
-test('envSecret infers ConfigParam<StandardSchemaV1<string, string>>', () => {
-  expectTypeOf(envSecret('STRIPE_KEY')).toEqualTypeOf<
-    ConfigParam<StandardSchemaV1<string, string>>
-  >();
-  expectTypeOf(envSecret('STRIPE_KEY', { optional: true })).toEqualTypeOf<
-    ConfigParam<StandardSchemaV1<string, string>>
-  >();
+const build: BuildAdapter = {
+  extension: '@prisma/compose/node',
+  type: 'node',
+  module: 'file:///test/service.ts',
+  entry: 'server.js',
+};
+
+test('secret() is a SecretNeed; envSecret() is a SecretSource', () => {
+  expectTypeOf(secret()).toEqualTypeOf<SecretNeed>();
+  expectTypeOf(envSecret('AUTH_SIGNING_KEY')).toEqualTypeOf<SecretSource>();
 });
 
-test('a non-secret param may carry a default; a secret one may still be optional', () => {
-  string({ default: 'x' });
-  string({ optional: true, default: 'x' });
-  string({ secret: true });
-  string({ secret: true, optional: true });
+test('SecretValues<S> maps each declared slot to a SecretBox<string>', () => {
+  type S = { signingKey: SecretNeed; apiKey: SecretNeed };
+  expectTypeOf<SecretValues<S>>().toEqualTypeOf<{
+    readonly signingKey: SecretBox<string>;
+    readonly apiKey: SecretBox<string>;
+  }>();
 });
 
-test('a secret param may not carry a default', () => {
-  // @ts-expect-error secret forbids default
-  string({ secret: true, default: 'x' });
-});
+test('provisioning a service with a secret slot requires a source per slot', () => {
+  const svc = service({
+    name: 'auth',
+    extension: 'test/pack',
+    type: 'fake/app',
+    inputs: {},
+    params: {},
+    secrets: { signingKey: secret() },
+    build,
+  });
 
-test('a secret param over an arbitrary schema may not carry a default either', () => {
-  const schema = {} as StandardSchemaV1<string, string>;
-  // @ts-expect-error secret forbids default
-  param(schema, { secret: true, default: 'x' });
+  module('root', ({ provision }) => {
+    // @ts-expect-error a declared secret slot must be bound
+    provision(svc, { id: 'auth' });
+    provision(svc, { id: 'auth', secrets: { signingKey: envSecret('AUTH_SIGNING_KEY') } });
+  });
 });

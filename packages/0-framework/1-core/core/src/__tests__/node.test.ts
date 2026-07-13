@@ -65,14 +65,14 @@ describe('dependency()', () => {
     const end = dependency({
       name: 'db',
       type: 'fake/db',
-      connection: conn({ url: string({ secret: true }) }, (v) => ({ url: v.url })),
+      connection: conn({ url: string() }, (v) => ({ url: v.url })),
     });
 
     expect(isNode(end)).toBe(true);
     expect(end.kind).toBe('dependency');
     expect(end.name).toBe('db');
     expect(end.type).toBe('fake/db');
-    expect(end.connection.params).toEqual({ url: string({ secret: true }) });
+    expect(end.connection.params).toEqual({ url: string() });
     expect(Object.isFrozen(end)).toBe(true);
     expect(Object.isFrozen(end.connection)).toBe(true);
     expect(Object.isFrozen(end.connection.params)).toBe(true);
