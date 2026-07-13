@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { envSecret, Load, module, secret } from '@internal/core';
+import { Load, module, secret } from '@internal/core';
 import type { ManagementApiClient } from '@internal/lowering';
 import { compute } from '../index.ts';
 import { runPreflight } from '../preflight.ts';
+import { envSecret } from '../secret.ts';
 
 const build = {
   extension: '@prisma/compose/node',

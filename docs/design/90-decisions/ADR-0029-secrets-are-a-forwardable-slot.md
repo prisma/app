@@ -19,11 +19,11 @@ same rail.
 
 A secret is its own slot kind — not a config param, not a dependency.
 
-- **`secret()`** declares a nameless *need* on `compute()`/`module()`
-  (`secrets: { signingKey: secret() }`). A module forwards its need to an inner
+- **`secret()`** (from `@prisma/compose`) declares a nameless *need* on
+  `compute()`/`module()` (`secrets: { signingKey: secret() }`). A module forwards its need to an inner
   service through `ctx.secrets`, exactly as it forwards a dependency input.
-- **`envSecret('NAME')`** is the *source*: the root binds a need to a platform
-  env-var name — `provision(auth, { secrets: { signingKey: envSecret('AUTH_SIGNING_KEY') } })`.
+- **`envSecret('NAME')`** (from `@prisma/compose-prisma-cloud`) is the *source*:
+  the root binds a need to a platform env-var name — `provision(auth, { secrets: { signingKey: envSecret('AUTH_SIGNING_KEY') } })`.
   Only the root names the variable; the module never does.
 - **`secrets()`** reads the value at the point of use, a third accessor beside
   `load()`/`config()` (ADR-0021), returning one `SecretBox<string>` per slot.
@@ -40,6 +40,12 @@ name exists on the platform for the stage's class/branch before provisioning; a
 name absent from the platform but present in the deploy shell is provisioned with
 a direct write-only POST (never an Alchemy resource, so no value reaches deploy
 state); a name absent from both fails the deploy.
+
+**The need is core; the source is the target's.** `secret()` and the opaque
+`SecretSource` are `@prisma/compose`; core forwards a source and never reads its
+payload. The source constructor belongs to the target — Prisma Cloud ships
+`envSecret('NAME')` from `@prisma/compose-prisma-cloud`, which validates the name
+and wraps it via core's `secretSource()`. The ADR-0018/0019 split, for secrets.
 
 ## Rationale
 
@@ -88,6 +94,9 @@ state); a name absent from both fails the deploy.
 
 - [ADR-0016](ADR-0016-a-module-has-the-same-boundary-as-a-service.md) — the module
   input-forwarding rail secrets ride.
+- [ADR-0019](ADR-0019-the-target-owns-config-serialization.md) — the declaration/
+  encoding split this applies to secrets: core carries the need, the target owns
+  the source and its serialization.
 - [ADR-0021](ADR-0021-params-are-read-through-config-not-load.md) —
   `load()`/`config()`/`secrets()` as separate read namespaces.
 - [`../10-domains/config-params.md`](../10-domains/config-params.md) — the config

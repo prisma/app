@@ -22,6 +22,7 @@ import {
 } from '@internal/lowering';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
+import { secretName } from './secret.ts';
 
 type EnvClass = 'production' | 'preview';
 
@@ -188,8 +189,11 @@ export async function runPreflight(
   // Every wired secret is required — the forwarding model has no optional slot.
   const names = new Map<string, MissingSecret>();
   for (const binding of manifest) {
-    if (!names.has(binding.name)) {
-      names.set(binding.name, { name: binding.name, serviceAddress: binding.serviceAddress });
+    if (!names.has(secretName(binding))) {
+      names.set(secretName(binding), {
+        name: secretName(binding),
+        serviceAddress: binding.serviceAddress,
+      });
     }
   }
 

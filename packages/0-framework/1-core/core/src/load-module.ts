@@ -367,7 +367,7 @@ function flatten(
       for (const slot of Object.keys(child.secretSlots)) {
         const bound = localSecrets[slot];
         if (isSecretSource(bound)) {
-          secretBindings.push({ serviceAddress: fullAddress, slot, name: bound.name });
+          secretBindings.push({ serviceAddress: fullAddress, slot, source: bound });
         }
       }
       const inputs = serviceInputs(child, fullAddress);

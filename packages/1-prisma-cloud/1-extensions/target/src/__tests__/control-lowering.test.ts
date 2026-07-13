@@ -87,7 +87,7 @@ mock.module('../pg-warm-resource.ts', () => ({
 }));
 
 const { prismaCloud } = await import('../control.ts');
-const { compute, postgres } = await import('../index.ts');
+const { compute, envSecret, postgres } = await import('../index.ts');
 const { module, secret } = await import('@internal/core');
 const { lowering } = await import('@internal/core/deploy');
 
@@ -390,7 +390,9 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
         });
         // The root bound the slot to STRIPE_SECRET_KEY — it rides on graph.secrets.
         const graph = {
-          secrets: [{ serviceAddress: 'ingest', slot: 'stripeKey', name: 'STRIPE_SECRET_KEY' }],
+          secrets: [
+            { serviceAddress: 'ingest', slot: 'stripeKey', source: envSecret('STRIPE_SECRET_KEY') },
+          ],
         };
         const ctx = { address: 'ingest', node, graph } as unknown as LowerContext;
         const provisioned: LoweredNode = { outputs: { projectId: 'shop-project#cloud-id' } };

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { configOf, number, provisionManifest, string } from '../config.ts';
 import { Load } from '../graph.ts';
-import { dependency, envSecret, module, secret, service } from '../node.ts';
+import { dependency, module, secret, secretSource, service } from '../node.ts';
 import { conn, scalarDeclaration } from './helpers.ts';
 
 const build = {
@@ -133,23 +133,24 @@ describe('provisionManifest', () => {
     });
     const graph = Load(
       module('app', ({ provision }) => {
-        provision(ingest, { id: 'ingest', secrets: { stripeKey: envSecret('STRIPE_SECRET_KEY') } });
-        provision(web, { id: 'web', secrets: { sendgrid: envSecret('SENDGRID_API_KEY') } });
+        provision(ingest, {
+          id: 'ingest',
+          secrets: { stripeKey: secretSource('STRIPE_SECRET_KEY') },
+        });
+        provision(web, { id: 'web', secrets: { sendgrid: secretSource('SENDGRID_API_KEY') } });
       }),
     );
 
     const manifest = provisionManifest(graph);
+    // Core records the binding per (service, slot) with an opaque source; the
+    // env-var name lives in the target's payload, which core never reads.
     expect(manifest).toHaveLength(2);
-    expect(manifest).toContainEqual({
-      serviceAddress: 'ingest',
-      slot: 'stripeKey',
-      name: 'STRIPE_SECRET_KEY',
-    });
-    expect(manifest).toContainEqual({
-      serviceAddress: 'web',
-      slot: 'sendgrid',
-      name: 'SENDGRID_API_KEY',
-    });
+    expect(manifest).toContainEqual(
+      expect.objectContaining({ serviceAddress: 'ingest', slot: 'stripeKey' }),
+    );
+    expect(manifest).toContainEqual(
+      expect.objectContaining({ serviceAddress: 'web', slot: 'sendgrid' }),
+    );
   });
 
   test('is empty when no service declares a secret slot', () => {

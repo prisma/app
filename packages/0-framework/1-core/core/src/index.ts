@@ -45,7 +45,6 @@ export type {
 } from './node.ts';
 export {
   dependency,
-  envSecret,
   freezeNode,
   isNode,
   isSecretSource,
@@ -53,5 +52,6 @@ export {
   ResourceNodeBase,
   resource,
   secret,
+  secretSource,
   service,
 } from './node.ts';

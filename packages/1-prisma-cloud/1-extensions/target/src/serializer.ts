@@ -23,6 +23,7 @@
 import type { Config, ConfigParam, Params, SecretBinding, ServiceNode } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
+import { secretName } from './secret.ts';
 
 // The ambient environment of whatever runtime hosts the bundle. Declared
 // structurally so this entry imports no runtime's types. Writable: stash()
@@ -197,7 +198,7 @@ export function secretPointerRows(
         `secret slot "${slot}" of "${address}" has no bound platform name — Load should have bound it (ADR-0029).`,
       );
     }
-    rows.push({ key: secretKey(address, slot), name: binding.name });
+    rows.push({ key: secretKey(address, slot), name: secretName(binding) });
   }
   return rows;
 }

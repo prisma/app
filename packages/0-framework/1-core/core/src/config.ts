@@ -133,10 +133,10 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
 
 /**
  * The app's provision manifest: every secret binding the root resolved across
- * the graph (ADR-0029) — a platform env-var NAME per service secret slot. Pure
- * graph introspection, TARGET-AGNOSTIC — a deploy target's preflight consumes
- * it to verify each name exists on the platform before deploy. The framework
- * carries only the names; the values are provisioned out-of-band.
+ * the graph (ADR-0029) — an opaque, target-defined source per service secret
+ * slot; a deploy target's preflight reads its own payload. Pure graph
+ * introspection, TARGET-AGNOSTIC — the target consumes it to verify each secret
+ * exists on the platform before deploy. The values are provisioned out-of-band.
  */
 export function provisionManifest(graph: Graph): readonly SecretBinding[] {
   return graph.secrets;

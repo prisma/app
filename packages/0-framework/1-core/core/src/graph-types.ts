@@ -1,4 +1,4 @@
-import type { DependencyEnd, ModuleNode, ResourceNode, ServiceNode } from './node.ts';
+import type { DependencyEnd, ModuleNode, ResourceNode, SecretSource, ServiceNode } from './node.ts';
 
 /** Path-derived: root-scope children are bare ids ("auth", "db"); a nested module's own children dot-join under its address ("auth.db"). */
 export type NodeId = string;
@@ -23,19 +23,19 @@ export interface Edge {
 }
 
 /**
- * A resolved secret binding: the root bound a service's secret slot to a
- * platform env-var NAME, and the wiring forwarded it to that service's address
- * (ADR-0029). The framework carries only the name — the value is provisioned
- * out-of-band. A target's serializer keys the pointer row off this; the
- * preflight manifest aggregates the names.
+ * A resolved secret binding: the root bound a service's secret slot to an
+ * opaque, target-defined source, and the wiring forwarded it to that service's
+ * address (ADR-0029). Core never inspects the source; the deploy target reads
+ * its own payload. A target's serializer keys the pointer row off this; the
+ * preflight manifest aggregates the sources.
  */
 export interface SecretBinding {
   /** The graph address of the service that declares the secret slot. */
   readonly serviceAddress: NodeId;
   /** The secret slot key on that service. */
   readonly slot: string;
-  /** The platform env-var name the root bound the slot to. */
-  readonly name: string;
+  /** The opaque source the root bound the slot to. Core never inspects it; the deploy target reads back its own payload. */
+  readonly source: SecretSource;
 }
 
 export interface Graph {
@@ -43,7 +43,7 @@ export interface Graph {
   /** Root + one per input, topo-ordered (deps first). */
   readonly nodes: readonly GraphNode[];
   readonly edges: readonly Edge[];
-  /** Every service secret slot resolved to its root-bound platform name. */
+  /** Every service secret slot resolved to its root-bound opaque source. */
   readonly secrets: readonly SecretBinding[];
 }
 

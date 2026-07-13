@@ -156,7 +156,8 @@ module('auth', { secrets: { signingKey: secret() }, expose: … }, ({ secrets, p
   provision(inner, { secrets: { signingKey: secrets.signingKey } }),
 );
 
-// Only the ROOT names the platform variable:
+// Only the ROOT names the platform variable (envSecret is the TARGET's, from
+// @prisma/compose-prisma-cloud — secret() is core's, from @prisma/compose):
 provision(auth, { secrets: { signingKey: envSecret('AUTH_SIGNING_KEY') } });
 
 // Read at the point of use — expose() is the sole reader:
@@ -166,7 +167,10 @@ signingKey.expose();                       // the one door to the value
 
 `secrets()` sits beside `load()`/`config()` (ADR-0021). The `SecretBox` redacts
 under `toString`/`toJSON`/`valueOf`/`inspect`, so a stray log or serialization
-prints `[REDACTED]`; only `expose()` returns the value.
+prints `[REDACTED]`; only `expose()` returns the value. `secret()` and the opaque
+`SecretSource` are core (`@prisma/compose`); `envSecret('NAME')` — the source
+constructor that names and validates a platform variable — is the target's, from
+`@prisma/compose-prisma-cloud` (ADR-0018/0019 applied to secrets).
 
 The round trip carries only the name, never the value:
 

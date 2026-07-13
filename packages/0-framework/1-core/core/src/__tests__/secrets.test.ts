@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { blindCast } from '@internal/foundation/casts';
 import { Load } from '../graph.ts';
 import type { SecretSource, Secrets } from '../node.ts';
-import { envSecret, isSecretSource, module, resource, secret, service } from '../node.ts';
+import { isSecretSource, module, resource, secret, secretSource, service } from '../node.ts';
 import { providerContract } from './helpers.ts';
 
 const build = {
@@ -29,18 +29,11 @@ const svc = <S extends Secrets = Record<never, never>>(
   });
 
 describe('secret sources', () => {
-  test('envSecret is a secret source; secret() and plain values are not', () => {
-    expect(isSecretSource(envSecret('AUTH_KEY'))).toBe(true);
+  test('secretSource builds a secret source; secret() and plain values are not', () => {
+    expect(isSecretSource(secretSource('AUTH_KEY'))).toBe(true);
     expect(isSecretSource(secret())).toBe(false);
     expect(isSecretSource({})).toBe(false);
     expect(isSecretSource(undefined)).toBe(false);
-  });
-
-  test('envSecret rejects empty, COMPOSE_-prefixed, and poisoned names', () => {
-    expect(() => envSecret('')).toThrow(/non-empty/);
-    expect(() => envSecret('COMPOSE_X')).toThrow(/COMPOSE_/);
-    expect(() => envSecret('DATABASE_URL')).toThrow(/reserved/);
-    expect(() => envSecret('DATABASE_URL_POOLED')).toThrow(/reserved/);
   });
 });
 
@@ -49,12 +42,15 @@ describe('Load records secret bindings', () => {
     const auth = svc('auth', { signingKey: secret() });
     const graph = Load(
       module('root', ({ provision }) => {
-        provision(auth, { id: 'auth', secrets: { signingKey: envSecret('AUTH_SIGNING_KEY') } });
+        provision(auth, { id: 'auth', secrets: { signingKey: secretSource('AUTH_SIGNING_KEY') } });
       }),
     );
-    expect(graph.secrets).toEqual([
-      { serviceAddress: 'auth', slot: 'signingKey', name: 'AUTH_SIGNING_KEY' },
-    ]);
+    // Core records the binding at the right address/slot with an opaque source;
+    // it never reads the payload (the target's concern).
+    expect(graph.secrets.length).toBe(1);
+    expect(graph.secrets[0]?.serviceAddress).toBe('auth');
+    expect(graph.secrets[0]?.slot).toBe('signingKey');
+    expect(isSecretSource(graph.secrets[0]?.source)).toBe(true);
   });
 
   test('a module forwards a secret slot to an inner service (the multi-level case)', () => {
@@ -64,14 +60,15 @@ describe('Load records secret bindings', () => {
     });
     const graph = Load(
       module('root', ({ provision }) => {
-        provision(authModule, { id: 'auth', secrets: { key: envSecret('AUTH_KEY') } });
+        provision(authModule, { id: 'auth', secrets: { key: secretSource('AUTH_KEY') } });
       }),
     );
-    // The name flows root -> module.secrets.key -> inner's slot; the binding is
-    // recorded at the inner service's full address.
-    expect(graph.secrets).toEqual([
-      { serviceAddress: 'auth.inner', slot: 'key', name: 'AUTH_KEY' },
-    ]);
+    // The source flows root -> module.secrets.key -> inner's slot; the binding is
+    // recorded at the inner service's full address (payload untouched by core).
+    expect(graph.secrets.length).toBe(1);
+    expect(graph.secrets[0]?.serviceAddress).toBe('auth.inner');
+    expect(graph.secrets[0]?.slot).toBe('key');
+    expect(isSecretSource(graph.secrets[0]?.source)).toBe(true);
   });
 
   test('a service with no secret slots yields no bindings', () => {
@@ -92,7 +89,7 @@ describe('Load validates secret wiring', () => {
     expect(() =>
       Load(
         module('root', ({ provision }) => {
-          provision(m, { id: 'auth', secrets: { key: envSecret('AUTH_KEY') } });
+          provision(m, { id: 'auth', secrets: { key: secretSource('AUTH_KEY') } });
         }),
       ),
     ).toThrow(/declares secret "key" but never forwards/);
@@ -136,7 +133,7 @@ describe('Load validates secret wiring', () => {
             blindCast<
               { id: string },
               'a resource takes no secrets — inject one to hit the runtime check'
-            >({ id: 'db', secrets: { k: envSecret('K') } }),
+            >({ id: 'db', secrets: { k: secretSource('K') } }),
           );
         }),
       ),
@@ -170,7 +167,7 @@ describe('Load validates secret wiring', () => {
             blindCast<
               { id: string; secrets: { signingKey: SecretSource } },
               'inject an extra non-slot key to exercise the runtime extra-key check'
-            >({ id: 'auth', secrets: { signingKey: envSecret('K'), bogus: envSecret('B') } }),
+            >({ id: 'auth', secrets: { signingKey: secretSource('K'), bogus: secretSource('B') } }),
           );
         }),
       ),
@@ -186,7 +183,7 @@ describe('Load validates secret wiring', () => {
     // The SAME source object is bound to BOTH a and b. Without the per-slot
     // branded copies, forwarding secrets.a would alias-mark b used too; with
     // them, b is correctly flagged as never forwarded.
-    const src = envSecret('SHARED');
+    const src = secretSource('SHARED');
     expect(() =>
       Load(
         module('root', ({ provision }) => {

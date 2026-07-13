@@ -1,4 +1,5 @@
-import { envSecret, module } from '@prisma/compose';
+import { module } from '@prisma/compose';
+import { envSecret } from '@prisma/compose-prisma-cloud';
 import authModule from '@storefront-auth/auth';
 import storefrontService from '@storefront-auth/storefront';
 

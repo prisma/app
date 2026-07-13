@@ -32,11 +32,11 @@ export interface SecretNeed {
 /** A service/module's secret slots: name → the need it declares. */
 export type Secrets = Record<string, SecretNeed>;
 
-/** The wiring value bound to a secret slot — a leaf source carrying the platform env-var NAME, or a forwarded ctx.secrets ref (also carrying it). */
-export interface SecretSource {
+/** The wiring value bound to a secret slot: a target-defined payload core forwards but never inspects. A target (e.g. @prisma/compose-prisma-cloud's `envSecret`) builds one via `secretSource()`. */
+export interface SecretSource<T = unknown> {
   readonly [SECRET_SOURCE]: true;
-  /** The platform env-var name the slot is bound to. */
-  readonly name: string;
+  /** Target-defined. Core never reads this; the target that authored the source reads it back. */
+  readonly payload: T;
 }
 
 /** What `provision(node, { secrets })` supplies: one source per declared secret slot. */
@@ -50,34 +50,9 @@ export function secret(): SecretNeed {
   return Object.freeze({ [SECRET_NEED]: true as const, kind: 'secret' as const });
 }
 
-const RESERVED_SECRET_PREFIX = 'COMPOSE_';
-const POISONED_SECRET_NAMES: ReadonlySet<string> = new Set(['DATABASE_URL', 'DATABASE_URL_POOLED']);
-
-/**
- * The secret SOURCE bound at the root: a leaf value naming the platform env var
- * a secret slot resolves to (ADR-0029). The framework carries only the name.
- * The name may not use the reserved `COMPOSE_` prefix or the poisoned
- * `DATABASE_URL(_POOLED)` keys.
- */
-export function envSecret(name: string): SecretSource {
-  if (typeof name !== 'string' || name.length === 0) {
-    throw new Error(
-      "envSecret() requires a non-empty platform env-var name, e.g. envSecret('STRIPE_SECRET_KEY').",
-    );
-  }
-  if (name.startsWith(RESERVED_SECRET_PREFIX)) {
-    throw new Error(
-      `envSecret name "${name}" may not start with "${RESERVED_SECRET_PREFIX}" — that prefix is ` +
-        "reserved for the framework's own generated config keys.",
-    );
-  }
-  if (POISONED_SECRET_NAMES.has(name)) {
-    throw new Error(
-      `envSecret name "${name}" is reserved — ${[...POISONED_SECRET_NAMES].join(' and ')} are ` +
-        'poisoned at project provision and cannot back a secret.',
-    );
-  }
-  return Object.freeze({ [SECRET_SOURCE]: true as const, name });
+/** Builds an opaque secret source from a target-defined payload — the SPI a deploy target's own source constructor (e.g. `envSecret`) calls. Core forwards the source and never inspects the payload. */
+export function secretSource<T>(payload: T): SecretSource<T> {
+  return Object.freeze({ [SECRET_SOURCE]: true as const, payload });
 }
 
 /** True if `value` is a secret source (an `envSecret` result or a forwarded ctx.secrets ref). */
