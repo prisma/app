@@ -8,14 +8,14 @@
  * the loopback fake, and the H3 teardown decision (no `close()`) rests on
  * bun-test's per-file process isolation.
  *
- * storefront's build adapter is `nextjs()`: its `entry` is a bare filename
- * inside Next's standalone OUTPUT directory, not a path relative to
- * `build.module` — `bootstrapService`'s default derivation fits the `node`
- * adapter (see auth), not this one, so this test supplies its own boot
- * thunk, reusing the same standalone-path math
- * `@prisma/compose/nextjs/control`'s deploy assembly uses (`nextStandaloneDir`).
- * Requires `next build` to have already produced `.next/standalone` (turbo's
- * `test` task depends on `build`, so `pnpm -w test` always has it).
+ * storefront's build adapter is `nextjs()`: its `entry` is a path inside Next's
+ * standalone OUTPUT tree, not relative to `build.module` — `bootstrapService`'s
+ * default derivation fits the `node` adapter (see auth), not this one, so this
+ * test supplies its own boot thunk, reusing the same
+ * `@prisma/compose/nextjs/control` seam deploy assembly uses
+ * (`standaloneEntryPath`). Requires `next build` to have already produced
+ * `.next/standalone` (turbo's `test` task depends on `build`, so `pnpm -w test`
+ * always has it).
  */
 import { describe, expect, it } from 'bun:test';
 import { pathToFileURL } from 'node:url';
@@ -29,7 +29,7 @@ import storefrontService from '../src/service.ts';
 const PORT = 4310;
 
 function isNextjsBuild(build: BuildAdapter): build is NextjsBuildAdapter {
-  return build.type === 'nextjs' && 'appDir' in build && typeof build.appDir === 'string';
+  return build.type === 'nextjs' && 'standalone' in build && typeof build.standalone === 'string';
 }
 
 /** Boots the built standalone Next entry — its own `server.js`, unmodified — via the same path `assemble()` resolves for deploy (not the same bootstrap chain: deploy goes bootstrap.js -> main.mjs -> server.js; here `bootstrapService`'s `stash` stands in for the wrapper's env write). */

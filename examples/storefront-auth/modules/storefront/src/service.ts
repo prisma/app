@@ -6,5 +6,12 @@ import { authContract } from '@storefront-auth/auth/contract';
 export default compute({
   name: 'storefront',
   deps: { auth: rpc(authContract) },
-  build: nextjs({ module: import.meta.url, appDir: '..', entry: 'server.js' }),
+  // `standalone` is our finished flat standalone root (our build copies static
+  // in — see scripts/flatten-standalone.mjs); `entry` is server.js's path
+  // inside it, deep because outputFileTracingRoot is the repo root.
+  build: nextjs({
+    module: import.meta.url,
+    standalone: '../.next/standalone',
+    entry: 'examples/storefront-auth/modules/storefront/server.js',
+  }),
 });
