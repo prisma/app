@@ -7,8 +7,8 @@
  *  - presign: a real `@aws-sdk/s3-request-presigner` URL verifies, and an
  *    expired one is rejected (deterministic via injected `now`).
  *
- * The authoritative streams compatibility proof is D6 (real streams-server
- * against the deployed module); this covers the wire shape at the unit level.
+ * This covers the streams-server wire shape at the unit level — the verifier
+ * accepts a request signed exactly the way streams' R2 client signs one.
  */
 
 import { describe, expect, test } from 'bun:test';

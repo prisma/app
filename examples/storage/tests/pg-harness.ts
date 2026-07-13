@@ -1,9 +1,9 @@
 /**
- * A throwaway local Postgres for the example's local smoke validation — the
+ * A throwaway local Postgres for the blob store example's local integration test — the
  * same availability contract as the state-store harness (honors
  * `STATE_TEST_DATABASE_URL`, else spins an ephemeral `initdb`/`pg_ctl` cluster,
  * else returns `undefined` so the caller skips loudly; on CI the absence throws).
- * The whole cluster is thrown away, so the smoke uses its `postgres` database
+ * The whole cluster is thrown away, so the test uses its `postgres` database
  * directly — no per-run database is needed.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -51,7 +51,7 @@ export const startTestPostgres = (): TestPostgres | undefined => {
   if (initdb === undefined || pgCtl === undefined) {
     if (process.env['CI'] !== undefined) {
       throw new Error(
-        'CI is set but no Postgres is available for the storage example smoke test: neither ' +
+        'CI is set but no Postgres is available for the storage example integration test: neither ' +
           'STATE_TEST_DATABASE_URL nor initdb/pg_ctl were found.',
       );
     }

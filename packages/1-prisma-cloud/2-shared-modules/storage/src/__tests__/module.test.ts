@@ -66,13 +66,19 @@ describe('storage()', () => {
 
   test('opts.name and opts.bucket customize the module', () => {
     const root = module('root', {}, ({ provision }) => {
-      provision(storage({ name: 'blobs' }), { id: 'blobs' });
+      provision(storage({ name: 'blobs', bucket: 'photos' }), { id: 'blobs' });
       return {};
     });
 
     const graph = Load(root);
-    const ids = graph.nodes.map((n) => n.id);
-    expect(ids).toContain('blobs.service');
-    expect(ids).toContain('blobs.db');
+    const byId = new Map(graph.nodes.map((n) => [n.id, n.node]));
+    expect([...byId.keys()]).toContain('blobs.service');
+    expect([...byId.keys()]).toContain('blobs.db');
+
+    // opts.bucket reaches the s3-store service's `bucket` param default.
+    const service = byId.get('blobs.service');
+    const bucketDefault =
+      service !== undefined && 'params' in service ? service.params['bucket']?.default : undefined;
+    expect(bucketDefault).toBe('photos');
   });
 });
