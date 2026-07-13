@@ -85,22 +85,22 @@ describe('assemble()', () => {
     ).rejects.toThrow(/reserved for the Prisma App wrapper/);
   });
 
-  test('rejects an entry that resolves inside the deploy-owned staging dir', async () => {
-    // Staging is address-keyed under cwd, independent of the entry's own
-    // location — an entry that happens to resolve inside it must be caught
-    // before the `rm` that clears staging on every assemble would delete it
-    // out from under itself.
+  test('rejects an entry that resolves inside the deploy-owned working dir', async () => {
+    // The working dir is address-keyed under cwd, independent of the entry's
+    // own location — an entry that happens to resolve inside it must be caught
+    // before the `rm` that clears the working dir on every assemble would
+    // delete it out from under itself.
     const cwd = makeCwd();
     const address = 'svc';
-    const stagingDir = path.join(cwd, '.prisma-compose', 'artifacts', address);
-    fs.mkdirSync(path.join(stagingDir, 'src'), { recursive: true });
-    fs.writeFileSync(path.join(stagingDir, 'server.js'), 'export default "app-entry";\n');
+    const workDir = path.join(cwd, '.prisma-compose', 'artifacts', address);
+    fs.mkdirSync(path.join(workDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(workDir, 'server.js'), 'export default "app-entry";\n');
     await expect(
       assemble({
         build: {
           extension: '@prisma/compose/node',
           type: 'node',
-          module: pathToFileURL(path.join(stagingDir, 'src', 'service.ts')).href,
+          module: pathToFileURL(path.join(workDir, 'src', 'service.ts')).href,
           entry: '../server.js',
         },
         address,
@@ -109,7 +109,7 @@ describe('assemble()', () => {
     ).rejects.toThrow(/resolves inside the deploy staging dir/);
   });
 
-  test('produces a bundle under .prisma-compose/artifacts/<address> containing the wrapper and a copy of the built entry', async () => {
+  test('produces a working dir with main.mjs at root and the built entry under bundle/', async () => {
     const serviceDir = makeServiceDir();
     const cwd = makeCwd();
     const address = 'shop.storefront';
@@ -132,17 +132,22 @@ describe('assemble()', () => {
     });
 
     expect(result.dir).toBe(path.join(cwd, '.prisma-compose', 'artifacts', address));
-    expect(result.entry).toBe('server.js');
-    expect(fs.existsSync(path.join(result.dir, 'server.js'))).toBe(true);
+    // The user's entry lives under bundle/; the returned entry is bundle-prefixed.
+    expect(result.entry).toBe('bundle/server.js');
+    expect(fs.existsSync(path.join(result.dir, 'bundle', 'server.js'))).toBe(true);
+    // The wrapper sits at the working-dir root, not under bundle/.
     expect(fs.existsSync(path.join(result.dir, 'main.mjs'))).toBe(true);
+    expect(fs.existsSync(path.join(result.dir, 'bundle', 'main.mjs'))).toBe(false);
     // The copied entry is untouched — same module instance as the user's build.
-    expect(fs.readFileSync(path.join(result.dir, 'server.js'), 'utf8')).toContain('app-entry');
-    // Staging is deploy-owned — never the user's build output, never node_modules.
+    expect(fs.readFileSync(path.join(result.dir, 'bundle', 'server.js'), 'utf8')).toContain(
+      'app-entry',
+    );
+    // The working dir is deploy-owned — never the user's build output, never node_modules.
     expect(result.dir.startsWith(serviceDir)).toBe(false);
     expect(result.dir.includes('node_modules')).toBe(false);
   }, 20_000);
 
-  test('assembles a build whose module basename is not "service" (cron scheduler shape) to main.mjs, staged by address', async () => {
+  test('assembles a build whose module basename is not "service" (cron scheduler shape) to main.mjs, entry under bundle/', async () => {
     // The cron scheduler's build.module is "scheduler-service.mjs", not
     // "service.ts" — a filename-discovery approach (readdir + regex on
     // "service.*") would miss it; the tsdown object entry must not care what
@@ -173,8 +178,9 @@ describe('assemble()', () => {
 
     const expectedDir = path.join(cwd, '.prisma-compose', 'artifacts', address);
     expect(result.dir).toBe(expectedDir);
+    expect(result.entry).toBe('bundle/scheduler-entrypoint.js');
     expect(fs.existsSync(path.join(result.dir, 'main.mjs'))).toBe(true);
-    expect(fs.existsSync(path.join(result.dir, 'scheduler-entrypoint.js'))).toBe(true);
+    expect(fs.existsSync(path.join(result.dir, 'bundle', 'scheduler-entrypoint.js'))).toBe(true);
     expect(result.dir.startsWith(serviceDir)).toBe(false);
     expect(result.dir.includes('node_modules')).toBe(false);
   }, 20_000);
