@@ -119,7 +119,7 @@ function buildStreamsRequest(secret: string): { req: Request; authorization: str
     'x-amz-date': amzDate,
     authorization,
   });
-  return { req: new Request(url, { method: 'PUT', headers: reqHeaders }), authorization };
+  return { req: new Request(url.href, { method: 'PUT', headers: reqHeaders }), authorization };
 }
 
 describe('streams-server signer shape', () => {
@@ -217,7 +217,7 @@ describe('presigned URL verification', () => {
       'X-Amz-Signature',
       `${sig.slice(0, -1)}${sig.endsWith('0') ? '1' : '0'}`,
     );
-    const req = new Request(parsed, { method: 'GET' });
+    const req = new Request(parsed.href, { method: 'GET' });
     expect(verifyRequest(req, CREDENTIALS).ok).toBe(false);
   });
 });
