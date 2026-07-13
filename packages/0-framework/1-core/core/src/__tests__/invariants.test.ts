@@ -82,16 +82,13 @@ describe("invariant 2: the '.' authoring entry bundles lean", () => {
     }
   });
 
-  test('the ecosystem-seam adapters (@prisma/compose/node, @prisma/compose/nextjs) are equally lean', async () => {
+  test('the ecosystem-seam build adapter (@prisma/compose/node) is lean', async () => {
     const out = await Bun.build({
-      entrypoints: [
-        path.join(pkgDir, '..', '..', '2-authoring', 'node', 'src', 'index.ts'),
-        path.join(pkgDir, '..', '..', '2-authoring', 'nextjs', 'src', 'index.ts'),
-      ],
+      entrypoints: [path.join(pkgDir, '..', '..', '2-authoring', 'node', 'src', 'index.ts')],
       target: 'bun',
     });
     expect(out.success).toBe(true);
-    expect(out.outputs.length).toBe(2);
+    expect(out.outputs.length).toBe(1);
 
     for (const output of out.outputs) {
       const js = await output.text();

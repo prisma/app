@@ -37,7 +37,7 @@ describe('prisma-compose deploy — real extension-config resolution of prisma-c
     expect(result.stderr).not.toContain('Cannot resolve');
     expect(result.stderr).not.toContain('environment variable PRISMA_WORKSPACE_ID is required');
     expect(result.stderr).toContain('no built entry at');
-    expect(result.stderr).toContain("run this app's own build first");
+    expect(result.stderr).toContain('run your build first');
   });
 
   test('without PRISMA_WORKSPACE_ID, fails at the real prismaCloud() env check during config evaluation — proving the /control entry actually resolved and ran', () => {

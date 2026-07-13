@@ -18,8 +18,6 @@ export default defineConfig([
       rpc: 'src/rpc.ts',
       node: 'src/node.ts',
       'node-control': 'src/node-control.ts',
-      nextjs: 'src/nextjs.ts',
-      'nextjs-control': 'src/nextjs-control.ts',
     },
     exports: false,
     clean: true,

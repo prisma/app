@@ -17,8 +17,6 @@ const FRAMEWORK: Record<string, string> = {
   '@internal/rpc': '@prisma/compose/rpc',
   '@internal/node/control': '@prisma/compose/node/control',
   '@internal/node': '@prisma/compose/node',
-  '@internal/nextjs/control': '@prisma/compose/nextjs/control',
-  '@internal/nextjs': '@prisma/compose/nextjs',
 };
 const externalizeFramework = {
   name: 'externalize-framework-internals',

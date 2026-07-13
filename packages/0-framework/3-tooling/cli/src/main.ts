@@ -19,6 +19,7 @@ import {
 import { GENERATED_STACK_RELATIVE_PATH, writeStackFile } from './generate-stack.ts';
 import { findConfigPathForEntry, loadAppConfig, missingConfigError } from './load-config.ts';
 import { loadEntry } from './load-entry.ts';
+import { prepareNextStandalone } from './next-standalone.ts';
 import { type RunAlchemyInput, runAlchemy } from './run-alchemy.ts';
 import { validateRegistryCoverage } from './validate-coverage.ts';
 
@@ -178,6 +179,14 @@ function warnIfNoLocalDeployState(cwd: string): void {
 
 /** Runs the full pipeline; returns the process exit code. */
 export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<number> {
+  // Build-prep subcommand, not part of the deploy pipeline: flatten a Next.js
+  // standalone tree into a complete deploy bundle. `prisma-compose next-standalone [appDir]`.
+  if (argv[0] === 'next-standalone') {
+    const appDir = argv[1] !== undefined ? path.resolve(process.cwd(), argv[1]) : process.cwd();
+    prepareNextStandalone(appDir);
+    return 0;
+  }
+
   let args: ParsedArgs;
   try {
     args = parseArgs(argv);

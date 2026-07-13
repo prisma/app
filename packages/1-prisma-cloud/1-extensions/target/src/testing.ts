@@ -21,10 +21,9 @@ export interface BootstrappedService {
  * Boots `service`'s real entry against `config`, in-process. By default the
  * entry is `service.build.entry` resolved against `service.build.module` —
  * exactly how the printed deploy bootstrap imports it (see `@internal/lowering`'s
- * artifact.ts) — which fits a build adapter whose `entry` is a plain
- * module-relative path (`@prisma/compose/node`'s). A build adapter whose bootable
- * path isn't module-relative (`@prisma/compose/nextjs`'s standalone output)
- * supplies its own `boot` thunk; the target owns that resolution.
+ * artifact.ts). A service whose in-process boot needs to differ from that
+ * default (e.g. a Next.js standalone entry) supplies its own `boot` thunk; the
+ * target owns that resolution.
  *
  * `config.service.port` must be concrete — the entry self-listens and never
  * reports an OS-assigned port back. No `close()`: teardown rides bun-test's

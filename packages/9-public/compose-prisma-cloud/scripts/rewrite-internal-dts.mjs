@@ -16,8 +16,6 @@ const MAP = [
   ['@internal/rpc', '@prisma/compose/rpc'],
   ['@internal/node/control', '@prisma/compose/node/control'],
   ['@internal/node', '@prisma/compose/node'],
-  ['@internal/nextjs/control', '@prisma/compose/nextjs/control'],
-  ['@internal/nextjs', '@prisma/compose/nextjs'],
 ];
 const IMPORT_REF = /(?:import\(|from )["']@internal\/[^"']+["']/;
 
