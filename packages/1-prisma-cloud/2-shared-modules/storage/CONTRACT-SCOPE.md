@@ -60,6 +60,11 @@ Multipart upload, `CopyObject`, batch `DeleteObjects`, conditional requests
 (any bucket name simply namespaces keys), ACLs, versioning, lifecycle
 policies, and full S3-compatibility generally.
 
+aws-chunked / flexible-checksum PUTs (`content-encoding: aws-chunked`,
+`x-amz-content-sha256: STREAMING-…`) are rejected with `501` rather than
+stored — decoding the chunk framing is out of scope, so aws-sdk consumers set
+`requestChecksumCalculation: 'WHEN_REQUIRED'`.
+
 ## Envelope
 
 Objects up to ~16 MiB — the streams segment cap (`DS_SEGMENT_MAX_BYTES`), the

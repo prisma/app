@@ -100,7 +100,30 @@ async function handleList(store: ObjectStore, bucket: string, url: URL): Promise
   });
 }
 
+/**
+ * aws-chunked / flexible-checksum PUTs frame the body as chunk-size lines +
+ * a trailer, signalled by `x-amz-content-sha256: STREAMING-…` or
+ * `content-encoding: aws-chunked`. The seed signature still verifies, so
+ * without this check the raw framing would be stored as the object bytes.
+ * Decoding it is out of scope (checksums are a non-goal) — reject loudly
+ * rather than silently corrupt.
+ */
+function isStreamingPut(req: Request): boolean {
+  const contentSha = req.headers.get('x-amz-content-sha256') ?? '';
+  const contentEncoding = req.headers.get('content-encoding') ?? '';
+  return (
+    contentSha.startsWith('STREAMING-') ||
+    contentEncoding.split(',').some((e) => e.trim() === 'aws-chunked')
+  );
+}
+
 async function handlePut(store: ObjectStore, t: Target, req: Request): Promise<Response> {
+  if (isStreamingPut(req)) {
+    return new Response(
+      "aws-chunked / flexible checksums not supported; set requestChecksumCalculation: 'WHEN_REQUIRED'",
+      { status: 501 },
+    );
+  }
   const body = new Uint8Array(await req.arrayBuffer());
   const contentType = req.headers.get('content-type') ?? DEFAULT_CONTENT_TYPE;
   const { etag } = await store.put(t.bucket, t.key, body, { contentType });

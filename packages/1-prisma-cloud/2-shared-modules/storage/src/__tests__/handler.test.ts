@@ -8,6 +8,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { createHash, createHmac } from 'node:crypto';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -212,5 +213,76 @@ describe('presigned URLs against the running server', () => {
   test('an unsigned request is rejected with 403', async () => {
     const res = await fetch(`${endpoint}/${BUCKET}/streams/a`);
     expect(res.status).toBe(403);
+  });
+});
+
+describe('aws-chunked / flexible-checksum PUT (F2)', () => {
+  // A validly-signed PUT that declares an aws-chunked / streaming payload. The
+  // verifier uses the x-amz-content-sha256 value AS the payload hash, so the
+  // seed signature verifies — exactly the corruption path: without the guard the
+  // handler would store the chunk framing as the object bytes. The guard must
+  // reject with 501 before reading the body.
+  function signStreamingPut(headers: Record<string, string>): Request {
+    const url = new URL(`${endpoint}/${BUCKET}/chunked/obj`);
+    const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const date = amzDate.slice(0, 8);
+    const region = 'auto';
+    const all: Record<string, string> = {
+      host: url.host,
+      'x-amz-date': amzDate,
+      ...Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v])),
+    };
+    const names = Object.keys(all).sort();
+    const canonicalHeaders = names.map((n) => `${n}:${all[n]?.trim()}\n`).join('');
+    const signedHeaders = names.join(';');
+    const canonicalRequest = [
+      'PUT',
+      url.pathname,
+      '',
+      canonicalHeaders,
+      signedHeaders,
+      all['x-amz-content-sha256'] ?? '',
+    ].join('\n');
+    const scope = `${date}/${region}/s3/aws4_request`;
+    const hmac = (key: Buffer | string, data: string) =>
+      createHmac('sha256', key).update(data).digest();
+    const stringToSign = [
+      'AWS4-HMAC-SHA256',
+      amzDate,
+      scope,
+      createHash('sha256').update(canonicalRequest).digest('hex'),
+    ].join('\n');
+    const kSigning = hmac(
+      hmac(hmac(hmac(`AWS4${CREDENTIALS.secretAccessKey}`, date), region), 's3'),
+      'aws4_request',
+    );
+    const signature = createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+    const authorization = `AWS4-HMAC-SHA256 Credential=${CREDENTIALS.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+    // host is derived from the URL by the verifier; not set on the Request.
+    const reqHeaders = new Headers({ 'x-amz-date': amzDate, authorization, ...headers });
+    return new Request(url.href, {
+      method: 'PUT',
+      headers: reqHeaders,
+      body: TEXT.encode('ignored'),
+    });
+  }
+
+  test('a STREAMING x-amz-content-sha256 PUT is rejected with 501', async () => {
+    const req = signStreamingPut({
+      'x-amz-content-sha256': 'STREAMING-UNSIGNED-PAYLOAD-TRAILER',
+      'content-encoding': 'aws-chunked',
+      'x-amz-decoded-content-length': '5',
+    });
+    const res = await fetch(req);
+    expect(res.status).toBe(501);
+  });
+
+  test('a content-encoding: aws-chunked PUT is rejected with 501', async () => {
+    const req = signStreamingPut({
+      'x-amz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      'content-encoding': 'aws-chunked',
+    });
+    const res = await fetch(req);
+    expect(res.status).toBe(501);
   });
 });
