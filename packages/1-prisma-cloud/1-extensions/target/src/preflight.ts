@@ -34,29 +34,73 @@ const classFor = (branchId: string | undefined): EnvClass =>
  * OR this branch's own override — the platform's preview materialization
  * (pdp-data-model.md). Metadata read only; env-var values are write-only.
  */
+/** The fields of one env-var list page that preflight consumes (metadata only; values are write-only). */
+interface EnvVarListPage {
+  readonly data: readonly { readonly branchId: string | null }[];
+  readonly pagination: { readonly nextCursor: string | null; readonly hasMore: boolean };
+}
+interface EnvVarListResult {
+  readonly data?: EnvVarListPage;
+  readonly error?: unknown;
+}
+
+/**
+ * One page of the env-var list. The query is `blindCast` to `never` because
+ * openapi-fetch types this path's query as `never` (an SDK path/operation
+ * mismatch); that same workaround defeats the client's response-type inference,
+ * so the result is projected to the small shape we actually read.
+ */
+async function listEnvVars(
+  client: ManagementApiClient,
+  query: { projectId: string; class: EnvClass; key: string; cursor?: string },
+): Promise<EnvVarListResult> {
+  const res = await client.GET('/v1/environment-variables', {
+    params: {
+      query: blindCast<
+        never,
+        'openapi-fetch types this list query as never; the endpoint accepts projectId/class/key/cursor'
+      >(query),
+    },
+  });
+  return blindCast<
+    EnvVarListResult,
+    'project the SDK list response to the fields preflight reads; the query-never workaround defeats response inference'
+  >(res);
+}
+
 async function existsOnPlatform(
   client: ManagementApiClient,
   projectId: string,
   branchId: string | undefined,
   key: string,
 ): Promise<boolean> {
-  const res = await client.GET('/v1/environment-variables', {
-    params: {
-      query: blindCast<
-        never,
-        'openapi-fetch types this list query as never; the endpoint accepts projectId/class/key'
-      >({ projectId, class: classFor(branchId), key }),
-    },
-  });
-  if (res.error !== undefined) {
-    throw new Error(
-      `deploy preflight: Prisma Management API error listing "${key}": ${JSON.stringify(res.error)}.`,
+  const cls = classFor(branchId);
+  // Default stage → any production template counts; named stage → a preview
+  // template (branchId null) OR this branch's own override.
+  const visible = (row: { branchId: string | null }): boolean =>
+    branchId === undefined || row.branchId === null || row.branchId === branchId;
+
+  // The list is paginated: a key with more preview rows (template + many
+  // per-branch overrides) than one page must be followed to the end, or a
+  // present name is falsely reported missing. Short-circuit as soon as a
+  // visible row is seen.
+  let cursor: string | null = null;
+  do {
+    const res = await listEnvVars(
+      client,
+      cursor === null ? { projectId, class: cls, key } : { projectId, class: cls, key, cursor },
     );
-  }
-  const rows = res.data?.data ?? [];
-  return branchId === undefined
-    ? rows.length > 0
-    : rows.some((r) => r.branchId === null || r.branchId === branchId);
+    if (res.error !== undefined) {
+      throw new Error(
+        `deploy preflight: Prisma Management API error listing "${key}": ${JSON.stringify(res.error)}.`,
+      );
+    }
+    const page = res.data;
+    if (page === undefined) return false;
+    if (page.data.some(visible)) return true;
+    cursor = page.pagination.hasMore ? page.pagination.nextCursor : null;
+  } while (cursor !== null);
+  return false;
 }
 
 /**
@@ -145,7 +189,14 @@ export async function runPreflight(
         optional: entry.optional,
       });
     } else if (!entry.optional) {
-      names.set(entry.external, { ...prev, optional: false });
+      // Upgrade to required AND carry this (required) binding's serviceAddress,
+      // so a missing-secret error never attributes it to a service that only
+      // declared it optional.
+      names.set(entry.external, {
+        external: entry.external,
+        serviceAddress: entry.serviceAddress,
+        optional: false,
+      });
     }
   }
 

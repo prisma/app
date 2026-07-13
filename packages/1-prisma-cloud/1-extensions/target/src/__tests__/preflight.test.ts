@@ -86,6 +86,32 @@ const noSecretGraph = () =>
     }),
   );
 
+/** Two services binding the SAME external name — one optional (web), one required (ingest). */
+const sharedSecretGraph = () =>
+  Load(
+    module('app', {}, (h) => {
+      h.provision(
+        compute({
+          name: 'web',
+          deps: {},
+          params: { key: envSecret('STRIPE_SECRET_KEY', { optional: true }) },
+          build,
+        }),
+        { id: 'web' },
+      );
+      h.provision(
+        compute({
+          name: 'ingest',
+          deps: {},
+          params: { key: envSecret('STRIPE_SECRET_KEY') },
+          build,
+        }),
+        { id: 'ingest' },
+      );
+      return {};
+    }),
+  );
+
 /** Sets env vars for the duration of `fn`, restoring whatever was there before. */
 async function withEnv<T>(values: Record<string, string>, fn: () => Promise<T> | T): Promise<T> {
   const previous = new Map(Object.keys(values).map((k) => [k, process.env[k]]));
@@ -272,5 +298,59 @@ describe('runPreflight — secret manifest verification (ADR-0029)', () => {
     );
 
     expect(state.posts).toHaveLength(1);
+  });
+
+  test('follows pagination — a present name on a later page is not reported missing', async () => {
+    const pages = [
+      { data: [], pagination: { nextCursor: 'c1', hasMore: true } },
+      {
+        data: [
+          { projectId: 'proj', class: 'production', key: 'STRIPE_SECRET_KEY', branchId: null },
+        ],
+        pagination: { nextCursor: null, hasMore: false },
+      },
+    ];
+    const queries: Record<string, string>[] = [];
+    const posts: unknown[] = [];
+    let call = 0;
+    const client = {
+      GET: async (_path: string, init: { params: { query: Record<string, string> } }) => {
+        queries.push(init.params.query);
+        return {
+          data: pages[call++],
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      },
+      POST: async (_path: string, init: { body: Record<string, unknown> }) => {
+        posts.push(init.body);
+        return {
+          data: { data: { id: 'ev-new', key: init.body['key'] } },
+          error: undefined,
+          response: new Response(null, { status: 201 }),
+        };
+      },
+    } as unknown as ManagementApiClient;
+
+    await runPreflight(
+      { graph: secretGraph(), projectId: 'proj', branchId: undefined, stage: undefined },
+      { client },
+    );
+
+    expect(call).toBe(2); // followed to the second page
+    expect(queries[1]?.['cursor']).toBe('c1'); // carried the cursor forward
+    expect(posts).toEqual([]); // found present → no fill
+  });
+
+  test('a name declared optional by one service and required by another is attributed to the requiring service', async () => {
+    state.rows = [];
+
+    const error: unknown = await runPreflight(
+      { graph: sharedSecretGraph(), projectId: 'proj', branchId: undefined, stage: undefined },
+      { client: fakeClient(state) },
+    ).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('service "ingest"');
   });
 });
