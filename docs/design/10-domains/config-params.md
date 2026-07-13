@@ -5,9 +5,11 @@ read back at boot. Rests on
 [ADR-0018](../90-decisions/ADR-0018-config-params-carry-a-caller-owned-schema.md)
 (a param's type is a caller-owned schema),
 [ADR-0019](../90-decisions/ADR-0019-the-target-owns-config-serialization.md) (the
-deploy target owns serialization), and
+deploy target owns serialization),
 [ADR-0021](../90-decisions/ADR-0021-params-are-read-through-config-not-load.md)
-(params are read through `config()`).
+(params are read through `config()`), and
+[ADR-0029](../90-decisions/ADR-0029-secrets-are-env-named-params.md) (a secret
+param is bound to an explicit platform env-var name).
 
 ## The problem in one example
 
@@ -135,6 +137,62 @@ Job[] → Config (structured) → target serialize (its medium) → stored confi
       → target deserialize → schema-validated Job[] → config()
 ```
 
+## Secrets
+
+A secret is a param whose value the user provisions on the platform, never the
+framework. `envSecret` declares one, binding it to the platform env-var name
+that holds the value:
+
+```ts
+compute({
+  name: 'ingest',
+  params: { stripeKey: envSecret('STRIPE_SECRET_KEY') },
+  // ...
+});
+```
+
+`envSecret(name)` is `{ schema: <string>, secret: true, external: name }`.
+`secret` forbids `default` — a fallback value would let a missing secret pass
+silently and would leak into introspection, which is exactly what `secret`
+exists to prevent. `optional` is still allowed.
+
+The round trip carries only the name, never the value:
+
+1. **Declare.** A leaf binds its own secret param with `envSecret`. A param
+   that is `secret: true` with no `external` name has no value source and
+   fails at deploy build — either bind it directly or wire it from a
+   producer's own bound param, the same as any other dependency value.
+2. **Manifest.** `configOf` reports every param's `external` name; the
+   graph's aggregate of secret declarations is the app's provision manifest
+   — everything that must exist on the platform before deploy.
+3. **Preflight.** Before Alchemy runs, the deploy pipeline checks that every
+   manifest name exists on the platform for the target stage's class/branch,
+   filling a name from the deploy shell's environment when the platform
+   doesn't have it yet (a direct API call, never an Alchemy resource, never
+   overwriting an existing platform value). A name missing from both fails
+   the deploy, listing exactly what's absent.
+4. **Pointer row.** The pack writes a secret param's row as a pointer — the
+   generated key (`COMPOSE_`-prefixed, like every generated key) maps to the
+   `external` name, not a value:
+   ```
+   COMPOSE_INGEST_STRIPEKEY = "STRIPE_SECRET_KEY"
+   ```
+5. **Boot double-lookup.** Deserialize reads the pointer, then reads
+   `process.env` for the name it names, validating through the param's
+   schema.
+
+The `COMPOSE_` prefix reserves the framework's generated keys into their own
+namespace, so a generated key never collides with — and silently overwrites —
+a user's own secret name.
+
+**Rotation is PATCH + redeploy.** A compute version snapshots its whole env
+map at creation and never re-resolves it, so changing a secret's value is the
+platform's existing semantics: `PATCH` the value on the platform, then create
+a new version. Nothing about that is specific to secrets.
+
+See [ADR-0029](../90-decisions/ADR-0029-secrets-are-env-named-params.md) for
+the full design and its alternatives.
+
 ## Introspection
 
 A service's config surface is enumerable from the graph alone, nothing booted:
@@ -162,6 +220,8 @@ Three lines the model holds everywhere:
   [ADR-0019](../90-decisions/ADR-0019-the-target-owns-config-serialization.md),
   [ADR-0021](../90-decisions/ADR-0021-params-are-read-through-config-not-load.md) —
   the decisions this documents.
+- [ADR-0029](../90-decisions/ADR-0029-secrets-are-env-named-params.md) — the
+  secrets model this document's § Secrets summarizes.
 - [`core-model.md`](core-model.md) — where params sit in the node → graph → Config
   model.
 - [`ADR-0020`](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)
