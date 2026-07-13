@@ -89,7 +89,9 @@ export default defineConfig([
     ...baseConfig,
     dts: false,
     entry: {
-      'storage-service': `${storageDist}/storage-service.mjs`,
+      // Emitted as `service.mjs` — @prisma/compose/node's assemble() requires
+      // the service node's `build.module` basename to be `service.*`.
+      service: `${storageDist}/service.mjs`,
       'storage-entrypoint': `${storageDist}/storage-entrypoint.mjs`,
     },
     outDir: 'dist/storage',
@@ -97,6 +99,19 @@ export default defineConfig([
     clean: false,
     skipNodeModulesBundle: false,
     // `bun` is a runtime builtin — keep it external in the re-emitted entrypoint.
+    external: [/^bun$/, /^bun:/],
+    noExternal: [/^@internal\//],
+    plugins: [externalizeFramework],
+  },
+  {
+    // The /storage/testing local stand-in — inlines @internal/storage/testing's
+    // engine; `bun` stays external (the store uses Bun's SQL + Bun.serve).
+    ...baseConfig,
+    entry: { testing: 'src/storage-testing.ts' },
+    outDir: 'dist/storage',
+    exports: false,
+    clean: false,
+    skipNodeModulesBundle: false,
     external: [/^bun$/, /^bun:/],
     noExternal: [/^@internal\//],
     plugins: [externalizeFramework],

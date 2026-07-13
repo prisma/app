@@ -12,6 +12,7 @@
     "./cron/scheduler-entrypoint": "./dist/cron/scheduler-entrypoint.mjs",
     "./storage": "./dist/storage/index.mjs",
     "./storage/storage-entrypoint": "./dist/storage/storage-entrypoint.mjs",
+    "./storage/testing": "./dist/storage/testing.mjs",
     "./package.json": "./package.json"
   },
   "files": [
