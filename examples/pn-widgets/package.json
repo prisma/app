@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "deploy": "pnpm turbo run build --filter @prisma/example-pn-widgets... && ( set -a; . ../../.env; set +a; bun node_modules/.bin/prisma-compose deploy module.ts ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )",
-    "destroy": "( set -a; . ../../.env; set +a; bun node_modules/.bin/prisma-compose destroy module.ts --production ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )"
+    "deploy": "pnpm turbo run build --filter @prisma/example-pn-widgets... && ( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-compose deploy module.ts ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )",
+    "destroy": "( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-compose destroy module.ts --production ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )"
   },
   "dependencies": {
     "@prisma-next/postgres": "0.14.0",
