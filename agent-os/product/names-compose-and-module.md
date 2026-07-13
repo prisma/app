@@ -64,7 +64,9 @@ the tooling? does it name the goal, not the tax? does it keep the family legible
 
 **Referential battery** (products people talk about, above all the framework):
 - *Workbench frame:* "I'm working on this feature in ___" — the daily sentence.
-- *Artifact-collision rule* (hard): never name a tool after its output.
+- *Artifact-overlap flag:* a tool named after its output word tends to fail the
+  frames above, because the output word saturates every conversation around the
+  tool. A red flag that says run the frames — not a rule that decides by itself.
 - *Bare-token test:* people drop prefixes; does the name survive unprefixed?
 - *Identity frames:* "Intro to ___", "___ 2.0", "does ___ support X?"
 
@@ -146,7 +148,8 @@ carries a prefix well), and an SEO fight with docker-compose-with-Prisma content
   writing and died in a spoken sentence. Capital letters are silent.
 - **Test at the smallest grain.** Composition math puts most units below any hero
   example; "the auth system" proved nothing about "the cron system."
-- **Never name a tool after its output.** Hard rule; no prefix rescues it.
+- **Naming a tool after its output invites referential failure.** The output word
+  saturates the conversation; treat the overlap as a red flag and run the frames.
 - **The gloss test is a tell.** If you introduce a name by reaching for another
   word ("a component — a System"), the gloss is the better name.
 - **Check "nobody says X" against reality.** The deciding claim for System was

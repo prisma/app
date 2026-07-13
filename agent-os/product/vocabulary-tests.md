@@ -94,10 +94,10 @@ referential frames:
 1. **The workbench frame.** "I'm working on this feature in ___." Said by a
    contributor, understood by a stranger. The daily sentence; if it fails, the team
    invents shorthand and the name is already dead internally.
-2. **The artifact-collision rule** (hard rule, not a scored test). The name must not
-   be the word for what users produce with the tool. A tool named after its output
-   can never be referred to separately from the output — every mention of the tool
-   parses as a mention of the artifact, and no prefix can rescue it.
+2. **The artifact-overlap flag.** A tool named after its output word tends to fail
+   the other frames, because the output word saturates every conversation around
+   the tool. Not a rule that decides by itself — a red flag that says run the
+   frames and weight them heavily.
 3. **The bare-token test.** People drop prefixes; does the name survive unprefixed?
    ("Rails" yes; "App" no.)
 4. **Identity frames.** "Intro to ___" as a talk title, "___ 2.0", "does ___
@@ -115,7 +115,7 @@ which is the proper register for a milieu, not a violation of the value rule.
 | Test | Result |
 |---|---|
 | Workbench frame | Fails: "I'm working on this feature in App" refers to nothing — the sentence the team needed all week and could not say. |
-| Artifact collision | Fails the hard rule: the tool was named after its output. "App" is the user's artifact word. |
+| Artifact overlap | "App" is the user's artifact word — ambient in every sentence about the work — which is why the frames above had nothing to grab. |
 | Bare token | Fails: "app" is ambient noise in every conversation about software. |
 | Identity frames | Fails: "App 2.0" and "Intro to Prisma App" cannot pick out the product. |
 
