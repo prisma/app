@@ -13,7 +13,7 @@ export type {
   Params,
   Values,
 } from './config.ts';
-export { configOf, number, param, string } from './config.ts';
+export { configOf, envSecret, number, param, string } from './config.ts';
 export type { Contract } from './contract.ts';
 export type { Edge, Graph, GraphNode, NodeId } from './graph.ts';
 export { Load, LoadError } from './graph.ts';

@@ -159,6 +159,26 @@ function missingBundleError(id: NodeId): LowerError {
   );
 }
 
+function unboundSecretError(id: NodeId, param: string): LowerError {
+  return new LowerError(
+    `secret param "${param}" on service "${id}" has no platform binding — declare it with ` +
+      "envSecret('NAME'), or wire it from a producer.",
+  );
+}
+
+/**
+ * The name of the first service-OWN param that is `secret` with no platform
+ * binding (`external`), or `undefined`. A dependency input's secret connection
+ * params are exempt — their value comes from the producer, not a platform name —
+ * so only `node.params` is inspected (S1: no leaf→root forwarding, ADR-0029).
+ */
+function firstUnboundServiceSecret(node: ServiceNode): string | undefined {
+  for (const [name, param] of Object.entries(node.params)) {
+    if (param.secret === true && param.external === undefined) return name;
+  }
+  return undefined;
+}
+
 function duplicateExtensionError(id: string): LowerError {
   return new LowerError(
     `Extension "${id}" is listed more than once in \`extensions\` — each extension id must be unique.`,
@@ -307,6 +327,10 @@ export function lowering(
         );
       }
 
+      const unbound = firstUnboundServiceSecret(node as ServiceNode);
+      if (unbound !== undefined) {
+        return yield* Effect.fail(unboundSecretError(id, unbound));
+      }
       const provisioned = yield* descriptor.provision(ctx);
       const typedConfig = buildConfig(node as ServiceNode, id, graph, lowered);
       const serialized = yield* descriptor.serialize(ctx, provisioned, typedConfig);

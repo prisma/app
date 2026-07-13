@@ -3,7 +3,7 @@ import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import type { ExtensionDescriptor, PrismaAppConfig } from '../app-config.ts';
 import type { Config, Params } from '../config.ts';
-import { number, string } from '../config.ts';
+import { envSecret, number, string } from '../config.ts';
 import {
   type AlchemyStateLayer,
   type Artifact,
@@ -206,6 +206,55 @@ describe('buildConfig', () => {
       service: {},
       inputs: { db: { url: undefined } },
     });
+  });
+});
+
+describe('a service-own secret with no platform binding fails the deploy build', () => {
+  test('an unbound secret param is a LowerError naming the param, service, and the fix', () => {
+    const { config, calls } = fakeExtension();
+    const root = module('hello', {}, (h) => {
+      h.provision(app('fake/compute', {}, { stripeKey: string({ secret: true }) }), { id: 'svc' });
+      return {};
+    });
+
+    const error = runError(lowering(root, config, opts(svcBundles)));
+
+    expect(error).toBeInstanceOf(LowerError);
+    expect(error.message).toContain('secret param "stripeKey"');
+    expect(error.message).toContain('service "svc"');
+    expect(error.message).toContain('envSecret');
+    // Fails before the service is provisioned — no side effects.
+    expect(calls.map((c) => c.phase)).not.toContain('provision');
+  });
+
+  test('a bound secret (envSecret) lowers cleanly', () => {
+    const { config } = fakeExtension();
+    const root = module('hello', {}, (h) => {
+      h.provision(app('fake/compute', {}, { stripeKey: envSecret('STRIPE_SECRET_KEY') }), {
+        id: 'svc',
+      });
+      return {};
+    });
+
+    expect(run(lowering(root, config, opts(svcBundles)))).toEqual({ outputs: {} });
+  });
+
+  test('a dependency-input secret param without external lowers fine — its value comes from the producer', () => {
+    const secretDbEnd = () =>
+      dependency({
+        name: 'db',
+        type: 'fake/db',
+        connection: conn({ url: string({ secret: true }) }, () => ({})),
+        required: providerContract('fake/db', { url: '' }),
+      });
+    const { config } = fakeExtension();
+    const root = module('hello', {}, (h) => {
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(app('fake/compute', { db: secretDbEnd() }), { id: 'svc', deps: { db } });
+      return {};
+    });
+
+    expect(run(lowering(root, config, opts(svcBundles)))).toEqual({ outputs: {} });
   });
 });
 

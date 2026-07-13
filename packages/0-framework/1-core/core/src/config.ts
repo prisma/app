@@ -22,6 +22,11 @@ export interface ConfigParam<S extends StandardSchemaV1 = StandardSchemaV1> {
   readonly schema: S;
   /** Redacted in any introspection output. */
   readonly secret?: boolean;
+  /**
+   * The platform env-var name a secret param is bound to (set by `envSecret`,
+   * ADR-0029). The framework carries only this name — never the value.
+   */
+  readonly external?: string;
   readonly optional?: boolean;
   readonly default?: StandardSchemaV1.InferOutput<S>;
 }
@@ -61,6 +66,8 @@ export interface ConfigDeclaration {
   readonly name: string;
   readonly schema: Readonly<Record<string, unknown>>;
   readonly secret: boolean;
+  /** The platform env-var name a secret param is bound to; omitted for a non-secret param (ADR-0029). */
+  readonly external?: string;
   readonly optional: boolean;
   readonly default: unknown;
 }
@@ -112,6 +119,7 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
         name,
         schema: projectSchema(param.schema),
         secret: param.secret === true,
+        ...(param.external !== undefined ? { external: param.external } : {}),
         optional: param.optional === true,
         default: param.default,
       });
@@ -124,6 +132,7 @@ export function configOf(root: ServiceNode): readonly ConfigDeclaration[] {
       name,
       schema: projectSchema(param.schema),
       secret: param.secret === true,
+      ...(param.external !== undefined ? { external: param.external } : {}),
       optional: param.optional === true,
       default: param.default,
     });
@@ -162,21 +171,63 @@ const numberSchema = scalarSchema<number>(
   (v): v is number => typeof v === 'number' && Number.isFinite(v),
 );
 
-export interface ParamOptions<T> {
+/**
+ * Param facets. `secret` and `default` are mutually exclusive: a secret's value
+ * lives on the platform (ADR-0029), so a default would both defeat the
+ * deploy-time presence check and put a value into introspection output. The
+ * union makes `{ secret: true, default }` a type error; `withFacets` re-checks
+ * at runtime for callers that dodge the types.
+ */
+export type ParamOptions<T> =
+  | { readonly secret?: false; readonly optional?: boolean; readonly default?: T }
+  | { readonly secret: true; readonly optional?: boolean };
+
+/** `withFacets`' internal option shape — adds `external`, which only `envSecret` sets. */
+interface FacetOptions<T> {
   readonly secret?: boolean;
   readonly optional?: boolean;
   readonly default?: T;
+  readonly external?: string;
 }
 
+const COMPOSE_PREFIX = 'COMPOSE_';
+const POISONED_NAMES = new Set(['DATABASE_URL', 'DATABASE_URL_POOLED']);
+
+/**
+ * The single construction chokepoint: assembles a ConfigParam and enforces the
+ * facet invariants the types express (ADR-0029), so a value that bypasses the
+ * types still fails loudly.
+ */
 function withFacets<S extends StandardSchemaV1>(
   schema: S,
-  opts: ParamOptions<StandardSchemaV1.InferOutput<S>>,
+  opts: FacetOptions<StandardSchemaV1.InferOutput<S>>,
 ): ConfigParam<S> {
+  if (opts.secret === true && opts.default !== undefined) {
+    throw new Error(
+      'a secret config param cannot declare a `default` — its value is provisioned on the platform ' +
+        '(ADR-0029); a default would defeat deploy preflight and leak a value into introspection.',
+    );
+  }
+  if (opts.external !== undefined) {
+    if (opts.external.startsWith(COMPOSE_PREFIX)) {
+      throw new Error(
+        `envSecret name "${opts.external}" may not start with "${COMPOSE_PREFIX}" — that prefix is ` +
+          "reserved for the framework's own generated config keys.",
+      );
+    }
+    if (POISONED_NAMES.has(opts.external)) {
+      throw new Error(
+        `envSecret name "${opts.external}" is reserved — ${[...POISONED_NAMES].join(' and ')} are ` +
+          'poisoned at project provision and cannot back a secret param.',
+      );
+    }
+  }
   return {
     schema,
     ...(opts.secret !== undefined ? { secret: opts.secret } : {}),
     ...(opts.optional !== undefined ? { optional: opts.optional } : {}),
     ...(opts.default !== undefined ? { default: opts.default } : {}),
+    ...(opts.external !== undefined ? { external: opts.external } : {}),
   };
 }
 
@@ -200,4 +251,27 @@ export function param<S extends StandardSchemaV1>(
   opts: ParamOptions<StandardSchemaV1.InferOutput<S>> = {},
 ): ConfigParam<S> {
   return withFacets(schema, opts);
+}
+
+/**
+ * A secret string param bound to an explicit platform env-var `name` (ADR-0029).
+ * The framework carries only the name; the value is provisioned out-of-band on
+ * the platform. `secret` forbids `default`; `optional` is allowed. `name` may
+ * not use the reserved `COMPOSE_` prefix or the poisoned `DATABASE_URL(_POOLED)`
+ * keys.
+ */
+export function envSecret(
+  name: string,
+  opts: { readonly optional?: boolean } = {},
+): ConfigParam<StandardSchemaV1<string, string>> {
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new Error(
+      "envSecret() requires a non-empty platform env-var name, e.g. envSecret('STRIPE_SECRET_KEY').",
+    );
+  }
+  return withFacets(stringSchema, {
+    secret: true,
+    external: name,
+    ...(opts.optional !== undefined ? { optional: opts.optional } : {}),
+  });
 }
