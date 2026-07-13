@@ -233,6 +233,9 @@ importers:
       '@internal/tsdown-config':
         specifier: workspace:0.1.0
         version: link:../tsdown-config
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.5
       tsdown:
         specifier: ^0.22.3
         version: 0.22.3(typescript@6.0.3)
@@ -563,6 +566,9 @@ importers:
       '@internal/core':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/1-core/core
+      '@internal/foundation':
+        specifier: workspace:0.1.0
+        version: link:../../../0-framework/0-foundation/foundation
       '@internal/node':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/2-authoring/node

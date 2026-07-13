@@ -9,6 +9,7 @@
  * authoring barrel.
  */
 import { createHash } from 'node:crypto';
+import { retryTransientConnect } from '@internal/foundation/connection-retry';
 import { SQL } from 'bun';
 import type {
   GetResult,
@@ -29,47 +30,6 @@ function etagOf(bytes: Uint8Array): string {
 function toBytes(value: unknown): Uint8Array {
   if (value instanceof Uint8Array) return value;
   throw new TypeError(`expected bytea to decode as Uint8Array, got ${typeof value}`);
-}
-
-const TRANSIENT_FRAGMENTS = [
-  'upstream database',
-  'connection terminated',
-  'connection refused',
-  'terminating connection',
-  'server closed the connection',
-  'connection timeout',
-  'timeout expired',
-  'econnrefused',
-  'econnreset',
-  'etimedout',
-];
-
-/** A cold/just-provisioned Postgres rejects the first connect (FT-5226); those are worth retrying, a real SQL error is not. */
-function isTransient(error: unknown): boolean {
-  const raw =
-    typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
-  const message = String(raw).toLowerCase();
-  return TRANSIENT_FRAGMENTS.some((fragment) => message.includes(fragment));
-}
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function withColdStartRetry<T>(
-  op: () => Promise<T>,
-  attempts = 12,
-  delayMs = 5000,
-): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
-      return await op();
-    } catch (error) {
-      if (!isTransient(error)) throw error;
-      lastError = error;
-      if (attempt < attempts) await sleep(delayMs);
-    }
-  }
-  throw lastError;
 }
 
 class PgObjectStore implements ObjectStore {
@@ -174,7 +134,7 @@ class PgObjectStore implements ObjectStore {
  */
 export async function createPgStore(url: string): Promise<ObjectStore> {
   const sql = new SQL({ url, max: 1, idleTimeout: 10 });
-  await withColdStartRetry(
+  await retryTransientConnect(
     () => sql`
       create table if not exists objects (
         bucket text not null,
