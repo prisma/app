@@ -100,14 +100,7 @@ async function handleList(store: ObjectStore, bucket: string, url: URL): Promise
   });
 }
 
-/**
- * aws-chunked / flexible-checksum PUTs frame the body as chunk-size lines +
- * a trailer, signalled by `x-amz-content-sha256: STREAMING-…` or
- * `content-encoding: aws-chunked`. The seed signature still verifies, so
- * without this check the raw framing would be stored as the object bytes.
- * Decoding it is out of scope (checksums are a non-goal) — reject loudly
- * rather than silently corrupt.
- */
+/** aws-chunked / flexible-checksum PUTs frame the body as chunks + a trailer (signalled by `x-amz-content-sha256: STREAMING-…` or `content-encoding: aws-chunked`); the seed signature still verifies, so reject them (501) rather than store the raw framing as the object bytes. Decoding is out of scope. */
 function isStreamingPut(req: Request): boolean {
   const contentSha = req.headers.get('x-amz-content-sha256') ?? '';
   const contentEncoding = req.headers.get('content-encoding') ?? '';
@@ -130,16 +123,25 @@ async function handlePut(store: ObjectStore, t: Target, req: Request): Promise<R
   return new Response(null, { status: 200, headers: { etag } });
 }
 
+/** The etag/content-type/content-length/accept-ranges headers GET and HEAD share — `contentLength` is the slice length for GET, the total object size for HEAD. */
+function metaHeaders(meta: { etag: string; contentType: string; contentLength: number }): Headers {
+  return new Headers({
+    etag: meta.etag,
+    'content-type': meta.contentType,
+    'content-length': String(meta.contentLength),
+    'accept-ranges': 'bytes',
+  });
+}
+
 async function handleGet(store: ObjectStore, t: Target, req: Request): Promise<Response> {
   const range = parseRange(req.headers.get('range'));
   const object = await store.get(t.bucket, t.key, range ? { range } : undefined);
   if (!object) return new Response(null, { status: 404 });
 
-  const headers = new Headers({
+  const headers = metaHeaders({
     etag: object.etag,
-    'content-type': object.contentType,
-    'content-length': String(object.bytes.byteLength),
-    'accept-ranges': 'bytes',
+    contentType: object.contentType,
+    contentLength: object.bytes.byteLength,
   });
   if (!range) return new Response(object.bytes, { status: 200, headers });
 
@@ -159,12 +161,11 @@ async function handleHead(store: ObjectStore, t: Target): Promise<Response> {
   if (!meta) return new Response(null, { status: 404 });
   return new Response(null, {
     status: 200,
-    headers: {
+    headers: metaHeaders({
       etag: meta.etag,
-      'content-type': meta.contentType,
-      'content-length': String(meta.size),
-      'accept-ranges': 'bytes',
-    },
+      contentType: meta.contentType,
+      contentLength: meta.size,
+    }),
   });
 }
 

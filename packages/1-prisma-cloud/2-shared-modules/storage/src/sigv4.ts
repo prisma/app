@@ -1,16 +1,9 @@
 /**
- * AWS SigV4 verification for the S3 wire protocol — the compatibility contract
- * (spec § 2 auth). Verifies both the `Authorization`-header form and the
- * presigned query-param form by reconstructing the canonical request, deriving
- * the signing key, and comparing signatures in constant time.
- *
- * The payload hash comes straight from the client: for header auth it is the
- * `x-amz-content-sha256` value (a real hash or the literal `UNSIGNED-PAYLOAD`);
- * for presign it is always `UNSIGNED-PAYLOAD`. The verifier never re-hashes the
- * body — it trusts what was signed, exactly as a real S3 endpoint does.
- *
- * Runtime engine code (uses `node:crypto`); NOT re-exported from the authoring
- * barrel.
+ * AWS SigV4 verification for the S3 wire protocol (spec § 2 auth). The payload
+ * hash comes from the client — `x-amz-content-sha256` (a real hash or
+ * `UNSIGNED-PAYLOAD`) for header auth, `UNSIGNED-PAYLOAD` for presign — and is
+ * never re-hashed; the verifier trusts what was signed, like a real S3 endpoint.
+ * Runtime engine code (`node:crypto`); not re-exported from the authoring barrel.
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
@@ -76,9 +69,8 @@ function canonicalQuery(url: URL, exclude?: string): string {
     if (exclude !== undefined && key === exclude) continue;
     entries.push([awsUriEncode(key), awsUriEncode(value)]);
   }
-  entries.sort(([ak, av], [bk, bv]) =>
-    ak < bk ? -1 : ak > bk ? 1 : av < bv ? -1 : av > bv ? 1 : 0,
-  );
+  const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  entries.sort(([ak, av], [bk, bv]) => cmp(ak, bk) || cmp(av, bv));
   return entries.map(([k, v]) => `${k}=${v}`).join('&');
 }
 
@@ -119,37 +111,56 @@ function parseAuthorizationHeader(
   return { credential, signedHeaders: signedHeaders.split(';'), signature };
 }
 
-function verifyHeader(req: Request, url: URL, credentials: Credentials): VerifyResult {
-  const auth = parseAuthorizationHeader(req.headers.get('authorization') ?? '');
-  if (!auth) return { ok: false, reason: 'malformed Authorization header' };
-
-  const scope = parseCredential(auth.credential);
-  if (!scope) return { ok: false, reason: 'malformed credential scope' };
-  if (scope.accessKeyId !== credentials.accessKeyId)
+/** The one signing core both auth forms share: check the access key, rebuild the canonical request, derive the key, compare in constant time. */
+function verifySignature(
+  req: Request,
+  url: URL,
+  credentials: Credentials,
+  params: {
+    readonly scope: CredentialScope;
+    readonly amzDate: string;
+    readonly signedHeaders: readonly string[];
+    readonly payloadHash: string;
+    readonly signature: string;
+    readonly excludeQuery?: string;
+  },
+): VerifyResult {
+  if (params.scope.accessKeyId !== credentials.accessKeyId)
     return { ok: false, reason: 'unknown access key' };
-
-  const amzDate = req.headers.get('x-amz-date');
-  if (!amzDate) return { ok: false, reason: 'missing x-amz-date' };
-
-  const payloadHash = req.headers.get('x-amz-content-sha256');
-  if (!payloadHash) return { ok: false, reason: 'missing x-amz-content-sha256' };
-
   const canonicalRequest = [
     req.method,
     url.pathname,
-    canonicalQuery(url),
-    canonicalHeaders(url, req, auth.signedHeaders),
-    auth.signedHeaders.join(';'),
-    payloadHash,
+    canonicalQuery(url, params.excludeQuery),
+    canonicalHeaders(url, req, params.signedHeaders),
+    params.signedHeaders.join(';'),
+    params.payloadHash,
   ].join('\n');
-
   const expected = hmac(
-    signingKey(credentials.secretAccessKey, scope),
-    stringToSign(amzDate, scope, canonicalRequest),
+    signingKey(credentials.secretAccessKey, params.scope),
+    stringToSign(params.amzDate, params.scope, canonicalRequest),
   ).toString('hex');
-  return signatureMatches(expected, auth.signature)
+  return signatureMatches(expected, params.signature)
     ? { ok: true }
     : { ok: false, reason: 'signature mismatch' };
+}
+
+function verifyHeader(req: Request, url: URL, credentials: Credentials): VerifyResult {
+  const auth = parseAuthorizationHeader(req.headers.get('authorization') ?? '');
+  if (!auth) return { ok: false, reason: 'malformed Authorization header' };
+  const scope = parseCredential(auth.credential);
+  if (!scope) return { ok: false, reason: 'malformed credential scope' };
+  const amzDate = req.headers.get('x-amz-date');
+  if (!amzDate) return { ok: false, reason: 'missing x-amz-date' };
+  const payloadHash = req.headers.get('x-amz-content-sha256');
+  if (!payloadHash) return { ok: false, reason: 'missing x-amz-content-sha256' };
+
+  return verifySignature(req, url, credentials, {
+    scope,
+    amzDate,
+    signedHeaders: auth.signedHeaders,
+    payloadHash,
+    signature: auth.signature,
+  });
 }
 
 function verifyPresigned(
@@ -173,8 +184,6 @@ function verifyPresigned(
 
   const scope = parseCredential(credentialRaw);
   if (!scope) return { ok: false, reason: 'malformed credential scope' };
-  if (scope.accessKeyId !== credentials.accessKeyId)
-    return { ok: false, reason: 'unknown access key' };
 
   const signedAt = parseAmzDate(amzDate);
   const expires = Number(expiresRaw);
@@ -182,23 +191,14 @@ function verifyPresigned(
     return { ok: false, reason: 'malformed presign date' };
   if (now.getTime() > signedAt + expires * 1000) return { ok: false, reason: 'presign expired' };
 
-  const signedHeaders = signedHeadersRaw.split(';');
-  const canonicalRequest = [
-    req.method,
-    url.pathname,
-    canonicalQuery(url, 'X-Amz-Signature'),
-    canonicalHeaders(url, req, signedHeaders),
-    signedHeaders.join(';'),
-    UNSIGNED_PAYLOAD,
-  ].join('\n');
-
-  const expected = hmac(
-    signingKey(credentials.secretAccessKey, scope),
-    stringToSign(amzDate, scope, canonicalRequest),
-  ).toString('hex');
-  return signatureMatches(expected, signature)
-    ? { ok: true }
-    : { ok: false, reason: 'signature mismatch' };
+  return verifySignature(req, url, credentials, {
+    scope,
+    amzDate,
+    signedHeaders: signedHeadersRaw.split(';'),
+    payloadHash: UNSIGNED_PAYLOAD,
+    signature,
+    excludeQuery: 'X-Amz-Signature',
+  });
 }
 
 /**

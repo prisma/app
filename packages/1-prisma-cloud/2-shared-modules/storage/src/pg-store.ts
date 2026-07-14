@@ -32,6 +32,21 @@ function toBytes(value: unknown): Uint8Array {
   throw new TypeError(`expected bytea to decode as Uint8Array, got ${typeof value}`);
 }
 
+/** One row → GetResult (both the whole-object and ranged queries alias the payload as `bytes`; `size` is the bigint total). */
+function toGetResult(row: {
+  bytes: unknown;
+  size: number | string;
+  etag: string;
+  content_type: string;
+}): GetResult {
+  return {
+    bytes: toBytes(row.bytes),
+    etag: row.etag,
+    contentType: row.content_type,
+    size: Number(row.size),
+  };
+}
+
 class PgObjectStore implements ObjectStore {
   constructor(private readonly sql: SQL) {}
 
@@ -62,31 +77,19 @@ class PgObjectStore implements ObjectStore {
       const from = range.start + 1; // substring is 1-indexed
       const rows =
         range.end === undefined
-          ? await this.sql`select substring(bytes from ${from}) as slice, size, etag, content_type
+          ? await this.sql`select substring(bytes from ${from}) as bytes, size, etag, content_type
                            from objects where bucket = ${bucket} and key = ${key}`
           : await this
-              .sql`select substring(bytes from ${from} for ${range.end - range.start + 1}) as slice,
+              .sql`select substring(bytes from ${from} for ${range.end - range.start + 1}) as bytes,
                            size, etag, content_type
                            from objects where bucket = ${bucket} and key = ${key}`;
       const row = rows[0];
-      if (row === undefined) return null;
-      return {
-        bytes: toBytes(row.slice),
-        etag: row.etag,
-        contentType: row.content_type,
-        size: Number(row.size),
-      };
+      return row === undefined ? null : toGetResult(row);
     }
     const rows = await this.sql`select bytes, size, etag, content_type
                                 from objects where bucket = ${bucket} and key = ${key}`;
     const row = rows[0];
-    if (row === undefined) return null;
-    return {
-      bytes: toBytes(row.bytes),
-      etag: row.etag,
-      contentType: row.content_type,
-      size: Number(row.size),
-    };
+    return row === undefined ? null : toGetResult(row);
   }
 
   async head(bucket: string, key: string): Promise<HeadResult | null> {
