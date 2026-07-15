@@ -12,9 +12,12 @@ import * as Layer from 'effect/Layer';
 import { computeDescriptor } from './descriptors/compute.ts';
 import { postgresDescriptor } from './descriptors/postgres.ts';
 import { prismaNextDescriptor } from './descriptors/prisma-next.ts';
+import { s3CredentialsDescriptor } from './descriptors/s3-credentials.ts';
+import { s3StoreDescriptor } from './descriptors/s3-store.ts';
 import type { ResolvedCloudOptions } from './descriptors/shared.ts';
 import { PgWarmProvider } from './pg-warm-resource.ts';
 import { PnMigrationProvider } from './pn-migration-resource.ts';
+import { S3CredentialsProvider } from './s3-credentials-resource.ts';
 
 export { prismaState };
 
@@ -76,7 +79,14 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     id: '@prisma/compose-prisma-cloud',
 
     providers: () =>
-      asProvidersLayer(Layer.mergeAll(Prisma.providers(), PgWarmProvider(), PnMigrationProvider())),
+      asProvidersLayer(
+        Layer.mergeAll(
+          Prisma.providers(),
+          PgWarmProvider(),
+          PnMigrationProvider(),
+          S3CredentialsProvider(),
+        ),
+      ),
 
     // Runs once per lowering, before any service: references the CLI-ensured
     // Project, with the poison DATABASE_URL variables written immediately so
@@ -110,6 +120,8 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
       postgres: postgresDescriptor(o),
       'prisma-next': prismaNextDescriptor(o),
       compute: computeDescriptor(o),
+      credentials: s3CredentialsDescriptor(o),
+      's3-store': s3StoreDescriptor(o),
     },
   };
 };
