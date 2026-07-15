@@ -11,9 +11,9 @@ describe('envSecret (Prisma Cloud secret source)', () => {
     );
   });
 
-  test('rejects empty, COMPOSE_-prefixed, and poisoned names', () => {
+  test('rejects empty, COMPOSER_-prefixed, and poisoned names', () => {
     expect(() => envSecret('')).toThrow(/non-empty/);
-    expect(() => envSecret('COMPOSE_X')).toThrow(/COMPOSE_/);
+    expect(() => envSecret('COMPOSER_X')).toThrow(/COMPOSER_/);
     expect(() => envSecret('DATABASE_URL')).toThrow(/reserved/);
     expect(() => envSecret('DATABASE_URL_POOLED')).toThrow(/reserved/);
   });

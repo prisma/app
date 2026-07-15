@@ -105,14 +105,14 @@ describe('EnvironmentVariable reconcile — restricted adoption (ADR-0029)', () 
   });
 
   test('own prior row (output.id still exists): PATCHes it, no adoption GET-list', async () => {
-    state.byId['ev-mine'] = { id: 'ev-mine', key: 'COMPOSE_INGEST_STRIPEKEY' };
+    state.byId['ev-mine'] = { id: 'ev-mine', key: 'COMPOSER_INGEST_STRIPEKEY' };
 
     const result = await reconcile(state, {
-      news: { projectId: 'proj-1', key: 'COMPOSE_INGEST_STRIPEKEY', value: 'STRIPE_SECRET_KEY' },
-      output: { id: 'ev-mine', key: 'COMPOSE_INGEST_STRIPEKEY' },
+      news: { projectId: 'proj-1', key: 'COMPOSER_INGEST_STRIPEKEY', value: 'STRIPE_SECRET_KEY' },
+      output: { id: 'ev-mine', key: 'COMPOSER_INGEST_STRIPEKEY' },
     });
 
-    expect(result).toEqual({ id: 'ev-mine', key: 'COMPOSE_INGEST_STRIPEKEY' });
+    expect(result).toEqual({ id: 'ev-mine', key: 'COMPOSER_INGEST_STRIPEKEY' });
     // GET the own row, then PATCH it — never the (project,class,key) adoption list.
     expect(state.calls.map((c) => c.method)).toEqual(['GET', 'PATCH']);
     expect(state.calls.filter((c) => c.path === '/v1/environment-variables')).toHaveLength(0);
@@ -131,36 +131,36 @@ describe('EnvironmentVariable reconcile — restricted adoption (ADR-0029)', () 
     expect(state.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
   });
 
-  test('a COMPOSE_ key with a pre-existing row it has no state for fails loudly, never overwrites', async () => {
+  test('a COMPOSER_ key with a pre-existing row it has no state for fails loudly, never overwrites', async () => {
     state.listMatch = [{ id: 'ev-foreign' }];
 
     const exit = await reconcileExit(state, {
-      news: { projectId: 'proj-1', key: 'COMPOSE_INGEST_STRIPEKEY', value: 'STRIPE_SECRET_KEY' },
+      news: { projectId: 'proj-1', key: 'COMPOSER_INGEST_STRIPEKEY', value: 'STRIPE_SECRET_KEY' },
       output: undefined,
     });
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure') {
-      expect(Cause.pretty(exit.cause)).toContain('reserved COMPOSE_ key');
+      expect(Cause.pretty(exit.cause)).toContain('reserved COMPOSER_ key');
     }
     // It observed the collision, then refused — no PATCH, no POST.
     expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
     expect(state.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
   });
 
-  test('a COMPOSE_ key with no pre-existing row creates it', async () => {
+  test('a COMPOSER_ key with no pre-existing row creates it', async () => {
     state.listMatch = [];
 
     const result = await reconcile(state, {
-      news: { projectId: 'proj-1', key: 'COMPOSE_INGEST_STRIPEKEY', value: 'STRIPE_SECRET_KEY' },
+      news: { projectId: 'proj-1', key: 'COMPOSER_INGEST_STRIPEKEY', value: 'STRIPE_SECRET_KEY' },
       output: undefined,
     });
 
-    expect(result).toEqual({ id: 'ev-created', key: 'COMPOSE_INGEST_STRIPEKEY' });
+    expect(result).toEqual({ id: 'ev-created', key: 'COMPOSER_INGEST_STRIPEKEY' });
     const post = state.calls.find((c) => c.method === 'POST');
     expect(post?.body).toMatchObject({
       projectId: 'proj-1',
-      key: 'COMPOSE_INGEST_STRIPEKEY',
+      key: 'COMPOSER_INGEST_STRIPEKEY',
       value: 'STRIPE_SECRET_KEY',
     });
     expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);

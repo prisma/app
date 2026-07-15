@@ -30,7 +30,7 @@ choice, though any [Standard Schema](https://standardschema.dev) validator works
 //
 // Encode (deploy): the typed Job[] becomes one stored string, in the target's
 // chosen medium — for @prisma/composer-prisma-cloud, a project-scoped env var:
-COMPOSE_SCHEDULER_JOBS = '[{"jobId":"tick","every":"60s"},{"jobId":"mrr","every":"24h"}]'
+COMPOSER_SCHEDULER_JOBS = '[{"jobId":"tick","every":"60s"},{"jobId":"mrr","every":"24h"}]'
 
 // Decode (boot): the target reads the string back and validates it against the
 // param's schema, producing the typed value config() returns:
@@ -98,9 +98,9 @@ target that runs the service is the answer.
 
 `@prisma/composer-prisma-cloud` stores configuration as project-scoped, encrypted
 environment variables — rows of `{ key, value: string }` — which Compute injects
-into the service. Each key is generated in the framework's reserved `COMPOSE_`
+into the service. Each key is generated in the framework's reserved `COMPOSER_`
 namespace and carries the service's address so it stays unique within the shared
-project (`COMPOSE_SCHEDULER_JOBS` above). At deploy the target JSON-encodes each
+project (`COMPOSER_SCHEDULER_JOBS` above). At deploy the target JSON-encodes each
 of a service's own param values into those strings; at boot it JSON-parses them
 back and validates each against its schema. A dependency input's value (a
 provisioning reference such as a producer's URL) passes through untouched rather

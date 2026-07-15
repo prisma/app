@@ -37,7 +37,7 @@ function bootStandaloneNext(build: NextjsBuildAdapter, port: number): () => Prom
   return async () => {
     // Next's standalone server binds `process.env.PORT` directly (its own
     // convention) — it does NOT read the service's config(). The framework's
-    // address-free config keys are COMPOSE_-prefixed (ADR-0029), so `stash` no
+    // address-free config keys are COMPOSER_-prefixed (ADR-0029), so `stash` no
     // longer writes a bare `PORT` for Next to pick up. A real nextjs deploy uses
     // the reserved default port (3000), which Next also defaults to, so the
     // deployed storefront is unaffected; this test drives a non-default port to
