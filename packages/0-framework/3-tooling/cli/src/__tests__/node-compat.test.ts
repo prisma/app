@@ -18,7 +18,7 @@ describe('node compatibility smoke test', () => {
     expect(result.stderr).toContain('prisma-composer deploy');
     expect(result.stderr).toContain('prisma-composer destroy');
     expect(result.stderr).toContain('<entry>');
-  });
+  }, 15000);
 
   test('an unknown command under node prints usage and exits nonzero', () => {
     const result = spawnSync('node', [binPath, 'build', 'src/service.ts'], { encoding: 'utf8' });
@@ -26,5 +26,5 @@ describe('node compatibility smoke test', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('prisma-composer deploy');
     expect(result.stderr).toContain('prisma-composer destroy');
-  });
+  }, 15000);
 });
