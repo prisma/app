@@ -97,16 +97,16 @@ Config = { service: { jobs: [ {jobId:'tick',…}, {jobId:'mrr',…} ], port: 300
 ```
 
 **Deploy — serialize (the target).** `@prisma/composer-prisma-cloud` encodes each value into
-its medium — key/value strings, keyed `COMPOSE_ADDRESS_OWNER_NAME` to stay unique in
+its medium — key/value strings, keyed `COMPOSER_ADDRESS_OWNER_NAME` to stay unique in
 the shared project — validating structured values and passing dependency-input values
-(provisioning refs) through untouched. Every generated key carries the `COMPOSE_`
+(provisioning refs) through untouched. Every generated key carries the `COMPOSER_`
 prefix — the framework's reserved namespace, kept clear of the user-provisioned
 variables secrets point at (§ Secrets):
 
 ```
-COMPOSE_SCHEDULER_JOBS        = '[{"jobId":"tick","every":"60s"},…]'
-COMPOSE_SCHEDULER_PORT        = '3000'
-COMPOSE_SCHEDULER_TRIGGER_URL = 'https://…runner…'
+COMPOSER_SCHEDULER_JOBS        = '[{"jobId":"tick","every":"60s"},…]'
+COMPOSER_SCHEDULER_PORT        = '3000'
+COMPOSER_SCHEDULER_TRIGGER_URL = 'https://…runner…'
 ```
 
 The encoding (JSON here) is app-cloud's own; a different target would store the
@@ -183,15 +183,15 @@ The round trip carries only the name, never the value:
    never an Alchemy resource, never overwriting an existing value). A name
    missing from both fails the deploy, listing exactly what's absent.
 3. **Pointer row.** The target writes a pointer per slot — the generated key
-   (`COMPOSE_`-prefixed, like every generated key) maps to the bound name, not a
+   (`COMPOSER_`-prefixed, like every generated key) maps to the bound name, not a
    value:
    ```
-   COMPOSE_AUTH_SIGNINGKEY = "AUTH_SIGNING_KEY"
+   COMPOSER_AUTH_SIGNINGKEY = "AUTH_SIGNING_KEY"
    ```
 4. **Boot double-lookup.** Boot reads the pointer for the name, then reads
    `process.env[name]` for the platform value, and wraps it in a `SecretBox`.
 
-The `COMPOSE_` prefix reserves the framework's generated keys into their own
+The `COMPOSER_` prefix reserves the framework's generated keys into their own
 namespace, so a generated key never collides with — and silently overwrites — a
 user-provisioned platform variable.
 

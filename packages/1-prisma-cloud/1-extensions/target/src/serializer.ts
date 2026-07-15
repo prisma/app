@@ -70,12 +70,12 @@ export const configKey = (
 ): string => {
   const segments = address.split('.').filter((s) => s.length > 0);
   const owner = d.owner === 'service' ? [] : [d.owner.input];
-  // Every generated key lives in the framework's reserved COMPOSE_ namespace
+  // Every generated key lives in the framework's reserved COMPOSER_ namespace
   // (ADR-0029), so it can never collide with — and silently overwrite — a
   // user-provisioned platform var (e.g. a secret's external name). The poison
   // keys DATABASE_URL(_POOLED) are written directly in control.ts, not here, so
   // they stay unprefixed (they are the platform's own names).
-  return ['COMPOSE', ...segments, ...owner, d.name].join('_').toUpperCase();
+  return ['COMPOSER', ...segments, ...owner, d.name].join('_').toUpperCase();
 };
 
 /**
@@ -163,13 +163,13 @@ export const stash = (node: ServiceNode, config: Config): void => {
 // ——— Secret channel (ADR-0029): a POINTER row per secret slot, boot double-lookup.
 //
 // A secret is NOT a param — it is its own slot on the node (`node.secretSlots`).
-// Deploy writes COMPOSE_<addr>_<slot> = <platform env-var NAME> (the name the
+// Deploy writes COMPOSER_<addr>_<slot> = <platform env-var NAME> (the name the
 // root bound it to, from `graph.secrets`); the value never enters this row or
 // deploy state. Boot reads that pointer, then the platform var it names, and
 // wraps the result in a SecretBox (core's `hydrateSecrets`). Writer (deploy) and
 // reader (boot) share `secretKey`, so they cannot drift.
 
-/** The pointer-row key for a secret slot: COMPOSE_<addr>_<slot> (secrets are service-level). */
+/** The pointer-row key for a secret slot: COMPOSER_<addr>_<slot> (secrets are service-level). */
 export const secretKey = (address: string, slot: string): string =>
   configKey(address, { owner: 'service', name: slot });
 

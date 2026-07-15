@@ -18,13 +18,13 @@ export interface EnvSecretPayload {
   readonly name: string;
 }
 
-const RESERVED_SECRET_PREFIX = 'COMPOSE_';
+const RESERVED_SECRET_PREFIX = 'COMPOSER_';
 const POISONED_SECRET_NAMES: ReadonlySet<string> = new Set(['DATABASE_URL', 'DATABASE_URL_POOLED']);
 
 /**
  * Binds a secret slot to a named Prisma Cloud platform env var (ADR-0029). The
  * value is provisioned out-of-band; only the name is carried. The name may not
- * use the framework's reserved `COMPOSE_` prefix or the poisoned
+ * use the framework's reserved `COMPOSER_` prefix or the poisoned
  * `DATABASE_URL(_POOLED)` keys.
  */
 export function envSecret(name: string): SecretSource<EnvSecretPayload> {

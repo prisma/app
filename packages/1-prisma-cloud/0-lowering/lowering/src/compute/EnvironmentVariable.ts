@@ -50,7 +50,7 @@ export const EnvironmentVariableProvider = () =>
           const cls = news.class ?? 'production';
           // Value is write-only, so we PATCH, never diff. Adopt our own prior
           // row (output.id), or a pre-existing poison-key row (DATABASE_URL(_POOLED),
-          // platform-seeded). Any other untracked match is a COMPOSE_ collision we
+          // platform-seeded). Any other untracked match is a COMPOSER_ collision we
           // refuse to overwrite (see the throw below).
           let id = output?.id;
           if (id !== undefined) {
@@ -77,7 +77,7 @@ export const EnvironmentVariableProvider = () =>
                 throw new Error(
                   `EnvironmentVariable "${news.key}" (project "${news.projectId}", class "${cls}") ` +
                     'exists but is untracked in this deploy state — refusing to overwrite a reserved ' +
-                    "COMPOSE_ key. Restore this deploy's hosted state, or remove the variable to let " +
+                    "COMPOSER_ key. Restore this deploy's hosted state, or remove the variable to let " +
                     'this deploy recreate it.',
                 );
               }

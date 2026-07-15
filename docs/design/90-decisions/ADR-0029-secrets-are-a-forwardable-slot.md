@@ -51,7 +51,7 @@ environment gets a *pointer* — the name of the platform variable, not its
 contents:
 
 ```
-COMPOSE_AUTH_SIGNINGKEY = "AUTH_SIGNING_KEY"
+COMPOSER_AUTH_SIGNINGKEY = "AUTH_SIGNING_KEY"
 ```
 
 At boot the service does a two-step lookup: read that pointer to learn the
@@ -105,7 +105,7 @@ secrets needed no new composition machinery.
 
 ## Consequences
 
-- Every generated key carries a reserved `COMPOSE_` prefix, so a framework-written
+- Every generated key carries a reserved `COMPOSER_` prefix, so a framework-written
   key can never collide with — and silently overwrite — a variable the user
   provisioned themselves.
 - Every wired secret is required. An "optional secret" would be a separate

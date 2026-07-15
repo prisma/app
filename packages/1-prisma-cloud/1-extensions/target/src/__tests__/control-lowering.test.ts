@@ -341,10 +341,10 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
 
       expect(recorded.envVar.slice(-2)).toEqual([
         [
-          'COMPOSE_AUTH_DB_URL-var',
+          'COMPOSER_AUTH_DB_URL-var',
           {
             projectId: 'shop-project#cloud-id',
-            key: 'COMPOSE_AUTH_DB_URL',
+            key: 'COMPOSER_AUTH_DB_URL',
             value: 'postgres://real-db',
             class: 'production',
           },
@@ -353,18 +353,18 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
         // the ConfigVariable value field is string-typed, and deserialize reads
         // it back to a number (round-tripped in pack.test.ts).
         [
-          'COMPOSE_AUTH_PORT-var',
+          'COMPOSER_AUTH_PORT-var',
           {
             projectId: 'shop-project#cloud-id',
-            key: 'COMPOSE_AUTH_PORT',
+            key: 'COMPOSER_AUTH_PORT',
             value: '3000',
             class: 'production',
           },
         ],
       ]);
       expect(result.outputs['environment']).toEqual([
-        { id: 'COMPOSE_AUTH_DB_URL-var#cloud-id', key: 'COMPOSE_AUTH_DB_URL' },
-        { id: 'COMPOSE_AUTH_PORT-var#cloud-id', key: 'COMPOSE_AUTH_PORT' },
+        { id: 'COMPOSER_AUTH_DB_URL-var#cloud-id', key: 'COMPOSER_AUTH_DB_URL' },
+        { id: 'COMPOSER_AUTH_PORT-var#cloud-id', key: 'COMPOSER_AUTH_PORT' },
       ]);
       // serialize also surfaces the resolved listen port for deploy() — the
       // Deployment must route to whatever the app binds, not a constant.
@@ -409,7 +409,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
         // The pointer row holds the bound platform NAME, never a value.
         expect(writes).toContainEqual({
           projectId: 'shop-project#cloud-id',
-          key: 'COMPOSE_INGEST_STRIPEKEY',
+          key: 'COMPOSER_INGEST_STRIPEKEY',
           value: 'STRIPE_SECRET_KEY',
           class: 'production',
         });
@@ -441,10 +441,10 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
 
       expect(recorded.envVar.slice(before)).toEqual([
         [
-          'COMPOSE_AUTH3_PORT-var',
+          'COMPOSER_AUTH3_PORT-var',
           {
             projectId: 'shop-project#cloud-id',
-            key: 'COMPOSE_AUTH3_PORT',
+            key: 'COMPOSER_AUTH3_PORT',
             value: '3000',
             class: 'preview',
             branchId: 'branch_1',
@@ -514,7 +514,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
     const artifact = { path: '/tmp/auth.tar.gz', sha256: 'sha-auth' };
     const serialized: LoweredNode = {
       outputs: {
-        environment: [{ id: 'COMPOSE_AUTH_DB_URL-var#cloud-id', key: 'COMPOSE_AUTH_DB_URL' }],
+        environment: [{ id: 'COMPOSER_AUTH_DB_URL-var#cloud-id', key: 'COMPOSER_AUTH_DB_URL' }],
         // A non-default port from serialize must reach the Deployment verbatim.
         port: 8080,
       },
@@ -740,13 +740,13 @@ describe('sharing: one module-provisioned postgres, two compute consumers — th
         const writes = recorded.envVar.slice(before.envVar).map(([, props]) => props);
         expect(writes).toContainEqual({
           projectId: 'shop-project#cloud-id',
-          key: 'COMPOSE_AUTH_MAIN_URL',
+          key: 'COMPOSER_AUTH_MAIN_URL',
           value: 'postgres://data-conn',
           class: 'production',
         });
         expect(writes).toContainEqual({
           projectId: 'shop-project#cloud-id',
-          key: 'COMPOSE_BILLING_STORE_URL',
+          key: 'COMPOSER_BILLING_STORE_URL',
           value: 'postgres://data-conn',
           class: 'production',
         });
