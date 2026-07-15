@@ -3,29 +3,22 @@
 ## Decision
 
 The deploy entrypoint is `prisma-compose deploy <entry>`, where `entry` is a module
-whose default export is a **module** — the application root. Everything about
-the *application* is derived: it is the graph reachable from that module, and
+whose default export is a **module** — the application root, and the composition
+unit that wires services and infrastructure together. Everything about the
+*application* is derived from it: it is the graph reachable from that module, and
 its name comes from the root node (overridable with `--name`). The one thing
 that is not derivable — which control-plane extensions exist, and the deploy's
 state store — lives in `prisma-compose.config.ts` (ADR-0017). The config carries
 no application settings: no app reference, no name, no per-service options.
 
-> **Amended 2026-07:** the root must be a **module**, not "a service or a module".
-> A single service is deployed by wrapping it in a one-service module; the former
-> service-rooted deploy path (and its separate singular-`bundle` shape) was
-> removed to keep one deploy pipeline. Everything else in this decision is
-> unchanged.
-
-## Reasoning
-
-Start with what an app author actually writes. A service module declares a
-service and its dependencies, in vocabulary imported from an extension:
+Here is what an app author writes: a service module declaring a service and its
+dependencies, and a root module provisioning what those dependencies need and
+wiring it in.
 
 ```ts
 // src/service.ts
 import { compute, postgres } from "@prisma/compose-prisma-cloud";
 import node from "@prisma/compose/node";
-import { SQL } from "bun";
 
 const db = postgres(); // a dependency slot: the binding is typed config (ADR-0015)
 
@@ -40,24 +33,9 @@ import { module } from "@prisma/compose";
 import { postgres } from "@prisma/compose-prisma-cloud";
 import service from "./service.ts";
 
-export default module("hello", {}, ({ provision }) => {
-  const db = provision("db", postgres({ name: "db" }));
-  provision("hello", service, { db });
-  return {};
-});
-```
-
-The application root is a **module** — the composition unit. A single service is
-deployed by wrapping it in a one-service module:
-
-```ts
-// src/module.ts
-import { module } from "@prisma/compose";
-import service from "./service.ts";
-
-export default module("hello", {}, ({ provision }) => {
-  provision("hello", service);
-  return {};
+export default module("hello", ({ provision }) => {
+  const db = provision(postgres({ name: "db" }));
+  provision(service, { deps: { db } });
 });
 ```
 
@@ -66,6 +44,31 @@ Deploying it is one command:
 ```sh
 prisma-compose deploy src/module.ts
 ```
+
+## Reasoning
+
+The example above is the standard shape. A service module declares a service
+and its dependencies in vocabulary imported from an **extension** — a package
+that supplies compose's building blocks for a given deploy target,
+`@prisma/compose-prisma-cloud` here. The root module then provisions what those
+dependencies need and wires the result in — the mechanism ADR-0013 covers in
+full.
+
+The application root is a **module** — the composition unit. A single service
+with no dependencies of its own is deployed by wrapping it in a one-service
+module, with nothing to wire:
+
+```ts
+// src/module.ts
+import { module } from "@prisma/compose";
+import service from "./service.ts";
+
+export default module("hello", ({ provision }) => {
+  provision(service);
+});
+```
+
+Deploying either app is the same one command shown above.
 
 For that command to work, something has to supply each node's control-plane
 behavior — how a `compute` or a `postgres` is provisioned and deployed. That
@@ -113,9 +116,11 @@ follow:
   composed application because it carries its own name and therefore its own
   project.
 - A service with **unwired dependency slots** (which an enclosing module
-  normally wires to a provisioned producer — ADR-0013) fails at Load, with
-  an error naming the unwired input and pointing at deploying the composing
-  module instead.
+  normally wires to a provisioned producer — ADR-0013) fails at
+  [Load](ADR-0013-resources-are-provisioned-by-modules-deps-are-declarations.md)
+  — the step that runs the module bodies and builds the graph — with an error
+  naming the unwired input and pointing at deploying the composing module
+  instead.
 
 ## Consequences
 
@@ -127,9 +132,11 @@ follow:
   plugs into with zero CLI changes.
 - Platforms mix freely: nodes lowered by different extensions coexist in one
   application; one deploy still writes one state store (ADR-0017).
-- `lower()` in `@prisma/compose/deploy` remains the underlying mechanism and
-  the escape hatch for hand-composed or mixed Alchemy stacks; the CLI wraps
-  it and never replaces it.
+- `lower()` in `@prisma/compose/deploy` — the deploy pipeline's core step, which
+  turns the graph into a provisioning plan — remains the underlying mechanism
+  and the escape hatch for hand-composed or mixed Alchemy stacks, Alchemy being
+  the infrastructure-provisioning engine it targets; the CLI wraps it and never
+  replaces it.
 - The Load error for unwired inputs is user-facing surface: it is the message
   a user sees when they point the CLI at a component instead of the
   application, and it must keep telling them what to do instead.
