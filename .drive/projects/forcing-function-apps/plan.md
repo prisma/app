@@ -56,57 +56,69 @@ with that session, not a parallel spike against their moving target.
 
 ## Milestone 1: datahub on the framework
 
-### S1 — Secrets as bindings
+### S1 — Secrets as bindings — RESOLVED, NO SLICE
 
-Secret declared as a dependency, resolved to a binding; backing grounded
-against the platform surface (Compute env vars vs management-API store) before
-the design settles. ADR for the secrets model.
+The Config Params + Cron project absorbed the immediate need (a `secret`
+param facet the port could declare against), and
+[ADR-0029](../../../docs/design/90-decisions/ADR-0029-secrets-are-a-forwardable-slot.md)
+then settled the model: secrets are not params but their own forwardable slot
+(`secret()`/`envSecret()`/`secrets()`), bound where the service is
+provisioned, with the deployer's env as a first-class source. No separate
+secrets slice or ADR remained for this project to deliver.
 
-- **Builds on:** nothing.
-- **Hands to:** S2 — apps can declare secret inputs and receive typed bindings.
+### S2+S3 — datahub port (skeleton + cron) — DONE, one slice (TML-3012)
 
-### S2 — datahub port skeleton
+Cron shipped alongside the port
+([#45](https://github.com/prisma/composer/pull/45), merged), so S2 and S3 ran
+together. Spec: [slices/datahub-port/spec.md](slices/datahub-port/spec.md).
+Datahub branch `claude/prisma-app-port`: `system.ts` (postgres +
+cron(ingest-as-router) + web), ingest params from the original zod schemas
+with secret facets, the in-process `TICK_INTERVAL_MS` scheduler deleted (the
+cron scheduler is the only clock), framework packages via pkg.pr.new previews
+of #45. Proven by a `Load(system)` graph test and a `bootstrapService` boot of
+the real ingest entry (health + trigger dispatch). Port evidence recorded
+under Follow-ups.
 
-datahub deployed via `prisma-composer deploy` from its own repo: ingest + web
-services, postgres resource, secrets bindings, published/preview packages.
-Scheduling unchanged (in-process tick) for this slice.
+The port predates the Composer rename and ADR-0029, so its preview pins,
+`@prisma/app-*` imports, and secret-facet params need refreshing before S4.
 
-- **Builds on:** S1; publishing pipeline.
-- **Hands to:** S4 — a framework-deployed datahub verified equivalent to the
-  current deployment.
+### S4 — datahub live deploy + cutover
 
-### S3 — datahub consumes cron
+Refresh the port to the current surface (`@prisma/composer*` packages,
+first-class secrets), deploy it via `prisma-composer deploy` with the team's
+real secrets and workspace credentials, verify equivalence against the
+current deployment, and cut the team's real instance over. Closes M1.
+**Operator-gated** — needs credentials agents don't hold.
 
-The cron design and mechanism moved to its own project — **[Config Params +
-Cron](../config-params-and-cron/spec.md)** (ADR-0018/0019/0020): cron is a driver
-System (a scheduler that depends on what it calls), built on a new schema-typed,
-target-serialized config param. Designing cron for datahub is what surfaced the
-config-model change, so that foundation was carved out.
-
-This slice is now just the datahub side: wire datahub's `/tick` to the cron
-`cron-scheduler` + a `router`, with the schedule as a `defineSchedule` param.
-
-- **Builds on:** the Config Params + Cron project delivering a working cron; S2
-  (datahub port skeleton).
-- **Hands to:** S4 — datahub's scheduled ingest running on the framework's cron.
-
-### S4 — datahub on cron + cutover
-
-`/tick` driven by the cron resource; equivalence verified; the team's real
-instance cut over. Closes M1.
-
-- **Builds on:** S2, S3.
+- **Builds on:** S2+S3 (done); published `@prisma/composer*` packages
+  replacing the port's preview pins.
 - **Hands to:** M2 — port mechanics proven, first emulated resource in
   production.
 
-### Parallelisation
+### Follow-ups (evidence from the S2+S3 port)
 
-Two independent threads join at S4:
-
-- Thread A: S1 → S2 (no dependency on hex-composition; can start now)
-- Thread B: S3 — starts once hex-composition lands its resource-as-System model
-  **and** the cron reverse-edge is resolved with that session
-- Join: S4 (needs S2 and S3)
+- **pnPostgres conversion of `@workspace/db`** (ADR-0022): datahub's db layer
+  is prisma-next with a contract — exactly what `pnPostgres` types. Converting
+  would also eliminate the phantom-dependency fragility the port had to pin
+  around (`@prisma-next/*` + `pg` reached only via hoisting; adding the cloud
+  target package broke the hoist and silently degraded `db.orm` to `any`).
+- **A blessed pattern for module-global DB clients.** The port bridges
+  `DATABASE_URL` from `load()` ad hoc (ingest: dynamic-import entry; web:
+  `instrumentation.ts` + a lazy client). Real apps will keep hitting this;
+  the framework should bless one pattern.
+- **Deploy-time param values.** The port sourced secret values from the
+  deployer's env by app-side convention (`fromEnv()` defaults), with no
+  framework check that a required value is present at deploy. ADR-0029's
+  `envSecret()` resolves this for secrets; plain params still rely on
+  defaults evaluated at deploy-load.
+- **Next.js static generation never runs `instrumentation.ts`** (Next 16.1.6):
+  a page that queries the DB at build time can't get its config from `load()`;
+  the port went `force-dynamic`. Worth a documented stance for the nextjs
+  adapter.
+- **bun tarball fan-in bug**: 3+ workspace packages depending on the same
+  pkg.pr.new tarball URL makes `bun install` fail non-deterministically until
+  the cache warms (repros on bun 1.3.13/1.3.14). Worth an upstream repro if it
+  recurs.
 
 ## Milestone 2: open-chat + dev loop (sketch)
 
