@@ -26,29 +26,36 @@ root module
 ```ts
 interface StreamsConfig {
   readonly url: string;
+  readonly apiKey: string;
 }
 ```
 
 `streamsContract` (`kind: 'streams'`) with `durableStreams()` as the consumer
-dependency factory. The binding is the endpoint URL only; consumers build
-their own HTTP client against the Durable Streams protocol (ADR-0015):
+dependency factory. The binding is the endpoint URL plus the minted bearer
+key; consumers build their own HTTP client against the Durable Streams
+protocol (ADR-0015):
 `PUT/POST/GET/HEAD/DELETE /v1/stream/{name}`, reads from an `offset`, live
 tail via `?live=sse` and `?live=long-poll`. No websockets — the server has
 none and the module adds none.
 
-**Auth is not in the binding.** The bearer key is a `secret()` slot on the
-module boundary; a consumer that calls the service declares its own secret
-slot and the root binds both to the same platform variable. Secret values
-never travel through framework config (ADR-0029), so the binding cannot
-carry the key.
+**Auth rides the binding.** The bearer key is a deploy-minted capability
+token (ADR-0030), not an ADR-0029 secret: the module provisions a
+`bearer-key` resource, the framework mints its value once at deploy and
+keeps it stable in deploy state, and the `streams` node kind's extended
+deploy outputs deliver it to consumers alongside the URL. One key per
+module instance — the upstream server authenticates a single `API_KEY`;
+per-edge keys (rpc-service-key slice 2's `ServiceKey`) need an upstream
+accepted-key-set change and are recorded as future work.
 
 ## Config surface
 
 - **Typed params: none** (v1). The service keeps only the reserved `port`.
-- **Secrets: `apiKey`** — forwarded to the service, exported to the runtime
-  as `API_KEY` with `--auth-strategy api-key`. All endpoints including
-  `/health` require `Authorization: Bearer <key>` (verified acceptable on
-  Compute by open-chat's production deploy).
+- **Secrets: none.** The bearer key is the module-owned minted `credentials`
+  resource (`bearerKey({ name: 'credentials' })`), wired into the service as
+  a dependency and exported to the runtime as `API_KEY` with
+  `--auth-strategy api-key`. All endpoints including `/health` require
+  `Authorization: Bearer <key>` (verified acceptable on Compute by
+  open-chat's production deploy).
 - **Deps: `store: s3()`** on the module boundary — the storage module's
   port. The entrypoint maps the `S3Config` binding onto the server's
   `DURABLE_STREAMS_R2_{BUCKET,ENDPOINT,ACCESS_KEY_ID,SECRET_ACCESS_KEY}` env

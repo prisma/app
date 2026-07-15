@@ -3,19 +3,21 @@
 Durable append-only event streams as a Prisma Composer module. It wraps the
 production `@prisma/streams-server` runtime (npm, unmodified) as a Compute
 service behind a typed boundary: the module's `store` dependency takes a
-`storage()` module's port as its durable tier, its `apiKey` secret slot holds
-the bearer key, and it exposes a single `streams` port. Consumers get a
-`{ url }` binding and speak the **Durable Streams HTTP protocol** directly.
+`storage()` module's port as its durable tier, the bearer key is minted at
+deploy inside the module, and it exposes a single `streams` port. Consumers
+get a `{ url, apiKey }` binding and speak the **Durable Streams HTTP
+protocol** directly.
 
 Ships as the `@prisma/composer-prisma-cloud/streams` subpath (like `/storage`).
 
 ## Contract scope
 
-The binding is the endpoint URL only:
+The binding is the endpoint URL plus the minted bearer key:
 
 ```ts
 interface StreamsConfig {
   readonly url: string;
+  readonly apiKey: string;
 }
 ```
 
@@ -33,51 +35,47 @@ surface:
 Offsets are **opaque cursors**, not numeric indices: take them from the
 `stream-next-offset` response header and pass them back verbatim.
 
-**Auth is not in the binding.** The bearer key is an ADR-0029 secret — its
-value never travels through framework config, so `{ url }` cannot carry it. A
-consumer that calls the service declares its **own** `secret()` slot, and the
-root binds both slots to the same platform variable. Every endpoint, including
-`/health`, requires `Authorization: Bearer <key>`.
+**Auth rides the binding.** The bearer key is a deploy-minted capability
+token (ADR-0030), not an ADR-0029 secret: the framework mints it once at
+deploy, keeps it stable in deploy state, and delivers it to consumers on the
+same rail as the URL — no secret slot to declare, nothing to bind at the
+root. Every endpoint, including `/health`, requires
+`Authorization: Bearer <key>`.
+
+One key per module instance: the upstream server authenticates a single
+`API_KEY`, so every consumer of a `streams()` instance holds the same key.
+Distinct per-edge keys (the full ADR-0030 slice-2 shape, `ServiceKey` in the
+rpc-service-key project) need an upstream accepted-key-set change — recorded
+as future work in design-notes.md.
 
 ## Wiring
 
-The root provisions `storage()` as the durable tier, wires its `store` port
-into `streams()`, and binds the bearer key by name:
+The root provisions `storage()` as the durable tier and wires its `store`
+port into `streams()` — the key needs no wiring at all:
 
 ```ts
 // module.ts — the deploy root
 import { module } from '@prisma/composer';
-import { envSecret } from '@prisma/composer-prisma-cloud';
 import { storage } from '@prisma/composer-prisma-cloud/storage';
 import { streams } from '@prisma/composer-prisma-cloud/streams';
 import worker from './src/worker/service.ts';
 
 export default module('my-app', ({ provision }) => {
   const store = provision(storage());
-  const events = provision(streams(), {
-    deps: { store: store.store },
-    secrets: { apiKey: envSecret('STREAMS_API_KEY') },
-  });
-  provision(worker, {
-    deps: { streams: events.streams },
-    // The consumer's own secret slot, bound to the SAME platform variable —
-    // this is how the key reaches a caller without entering the binding.
-    secrets: { streamsKey: envSecret('STREAMS_API_KEY') },
-  });
+  const events = provision(streams(), { deps: { store: store.store } });
+  provision(worker, { deps: { streams: events.streams } });
 });
 ```
 
 ```ts
 // src/worker/service.ts — the consumer
 import node from '@prisma/composer/node';
-import { secret } from '@prisma/composer';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { durableStreams } from '@prisma/composer-prisma-cloud/streams';
 
 export default compute({
   name: 'worker',
   deps: { streams: durableStreams() },
-  secrets: { streamsKey: secret() },
   build: node({ module: import.meta.url, entry: '../../dist/worker/server.mjs' }),
 });
 ```
@@ -86,9 +84,8 @@ export default compute({
 // src/worker/server.ts — append, then long-poll for what follows
 import service from './service.ts';
 
-const { streams } = service.load(); // StreamsConfig: { url }
-const { streamsKey } = service.secrets();
-const authed = { authorization: `Bearer ${streamsKey.expose()}` };
+const { streams } = service.load(); // StreamsConfig: { url, apiKey }
+const authed = { authorization: `Bearer ${streams.apiKey}` };
 
 await fetch(`${streams.url}/v1/stream/jobs`, {
   method: 'POST',
