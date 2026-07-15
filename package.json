@@ -23,8 +23,8 @@
     "lint:deps": "depcruise --config dependency-cruiser.config.mjs packages examples test && node scripts/lint-publishable-location.mjs && node scripts/lint-framework-vocabulary.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.2",
-    "@clack/prompts": "^1.6.0",
+    "@biomejs/biome": "2.5.3",
+    "@clack/prompts": "^1.7.0",
     "dependency-cruiser": "^17.4.3",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
