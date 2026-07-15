@@ -90,4 +90,4 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm install --frozen-lockfile
-      - run: bun examples/scripts/cold-connect-canary.ts
+      - run: bun scripts/cold-connect-canary.ts
