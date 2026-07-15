@@ -83,4 +83,37 @@ describe('makeClient()', () => {
 
     expect(typeof client.verify).toBe('function');
   });
+
+  test('a serviceKey adds Authorization: Bearer <key> to every request', async () => {
+    const requests: Request[] = [];
+    const client = makeClient(authContract, 'http://auth.internal', {
+      serviceKey: 'edge-key',
+      fetch: async (req) => {
+        requests.push(req);
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.verify({ token: 't' });
+
+    expect(requests[0]?.headers.get('authorization')).toBe('Bearer edge-key');
+  });
+
+  test('no serviceKey means no Authorization header', async () => {
+    const requests: Request[] = [];
+    const client = makeClient(authContract, 'http://auth.internal', {
+      fetch: async (req) => {
+        requests.push(req);
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.verify({ token: 't' });
+
+    expect(requests[0]?.headers.has('authorization')).toBe(false);
+  });
 });

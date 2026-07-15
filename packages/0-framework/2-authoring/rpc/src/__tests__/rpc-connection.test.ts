@@ -15,7 +15,16 @@ describe('rpc(contract) — the dependency end', () => {
     expect(isNode(end)).toBe(true);
     expect(end.kind).toBe('dependency');
     expect(end.type).toBe('rpc');
-    expect(end.connection.params).toEqual({ url: string() });
+    expect(end.connection.params).toEqual({
+      url: string(),
+      serviceKey: string({ optional: true }),
+    });
+  });
+
+  test('serviceKey is optional', () => {
+    const end = rpc(authContract);
+
+    expect(end.connection.params['serviceKey']?.optional).toBe(true);
   });
 
   test('hydrate synchronously binds a client with a callable method per contract method', () => {

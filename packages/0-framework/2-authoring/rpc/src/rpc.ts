@@ -7,10 +7,12 @@
  * the two schemas for serve()/the client to read back out.
  *
  * A Contract instead types a dependency end — the typed sibling
- * of `http()`, same `{ url }` param, hydrating to the typed client `Client<C>`
- * over the network binding in client.ts. It carries the contract as its
- * `required` value, so `ModuleBuilder.provision`'s wiring is checked against it
- * (compile time) and Load's `satisfies()` backstop re-checks it (runtime).
+ * of `http()`, same `{ url }` param plus an optional `serviceKey` (the
+ * per-binding auth token ADR-0030 wires through here), hydrating to the typed
+ * client `Client<C>` over the network binding in client.ts. It carries the
+ * contract as its `required` value, so `ModuleBuilder.provision`'s wiring is
+ * checked against it (compile time) and Load's `satisfies()` backstop
+ * re-checks it (runtime).
  */
 import type { Contract } from '@internal/core';
 import { type DependencyEnd, dependency, string } from '@internal/core';
@@ -34,8 +36,8 @@ export function rpc(
   return dependency({
     type: 'rpc',
     connection: {
-      params: { url: string() },
-      hydrate: ({ url }) => makeClient(arg, url),
+      params: { url: string(), serviceKey: string({ optional: true }) },
+      hydrate: ({ url, serviceKey }) => makeClient(arg, url, { serviceKey }),
     },
     required: arg,
   });

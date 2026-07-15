@@ -4,7 +4,9 @@
  * runtime value (rpc()'s `{ input, output }`), POSTs JSON to
  * `<url>/rpc/<method>`, and validates the response against the output schema
  * before returning it (a provider can be typed-compatible and still lie at
- * runtime — this is the per-call layer that catches that).
+ * runtime — this is the per-call layer that catches that). When a
+ * `serviceKey` is supplied (ADR-0030), every request also carries
+ * `Authorization: Bearer <serviceKey>`.
  */
 
 import type { Contract } from '@internal/core';
@@ -47,9 +49,13 @@ async function errorDetail(res: Response): Promise<string | undefined> {
 export function makeClient<C extends Contract<'rpc', RpcFns>>(
   contract: C,
   url: string,
-  opts?: { fetch?: Transport },
+  opts?: { fetch?: Transport; serviceKey?: string },
 ): Client<C> {
   const send = opts?.fetch ?? fetch;
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (opts?.serviceKey !== undefined) {
+    headers['Authorization'] = `Bearer ${opts.serviceKey}`;
+  }
   const client: Record<string, (input: unknown) => Promise<unknown>> = {};
 
   for (const [method, schemas] of Object.entries(
@@ -62,7 +68,7 @@ export function makeClient<C extends Contract<'rpc', RpcFns>>(
       const res = await send(
         new Request(methodUrl(url, method), {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers,
           body: JSON.stringify(input),
         }),
       );

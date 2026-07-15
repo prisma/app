@@ -13,4 +13,4 @@ export { contract } from './contract.ts';
 export type { Client } from './rpc.ts';
 export { rpc } from './rpc.ts';
 export type { Handlers } from './serve.ts';
-export { serve } from './serve.ts';
+export { RPC_ACCEPTED_KEYS_ENV, serve } from './serve.ts';

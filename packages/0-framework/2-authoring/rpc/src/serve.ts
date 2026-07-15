@@ -7,12 +7,23 @@
  * `S["load"]`'s return, so an incomplete or mistyped `serve(service,
  * handlers)` call does not compile; extra handler methods/ports are allowed
  * (width, same as a provider exposing more than a consumer requires).
+ *
+ * Per ADR-0030, every request is checked against the accepted service-key
+ * set before dispatch: unset/empty is the pass-through migration state,
+ * a configured non-empty set requires `Authorization: Bearer <key>`.
  */
 
 import type { Contract, Expose, RunnableServiceNode } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { standardValidate } from './standard-schema.ts';
+
+// The ambient environment of whatever runtime hosts the bundle. Declared
+// structurally so this entry imports no runtime's types.
+declare const process: { env: Record<string, string | undefined> };
+
+/** The reserved env var the target (slice 2) writes the accepted key set to. */
+export const RPC_ACCEPTED_KEYS_ENV = 'COMPOSE_RPC_ACCEPTED_KEYS';
 
 // biome-ignore lint/suspicious/noExplicitAny: accepts any concrete runnable service node — generics are invariant, so `any` is required (mirrors ModuleBuilder.provision in @prisma/composer).
 type AnyRunnable = RunnableServiceNode<any, any, any>;
@@ -45,6 +56,54 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+/** The configured accepted key set, or `[]` if unset/empty/malformed — the pass-through state. */
+function acceptedKeys(): readonly string[] {
+  const raw = process.env[RPC_ACCEPTED_KEYS_ENV];
+  if (raw === undefined || raw === '') return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  return Array.isArray(parsed) && parsed.every((key): key is string => typeof key === 'string')
+    ? parsed
+    : [];
+}
+
+/**
+ * Length-independent constant-time string equality — no early exit on the
+ * first mismatched character or on a length difference, so a caller cannot
+ * time its way toward a valid key. No `node:crypto`, to keep this module
+ * runtime-agnostic.
+ */
+function constantTimeEquals(a: string, b: string): boolean {
+  const length = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < length; i++) {
+    diff |= (i < a.length ? a.charCodeAt(i) : 0) ^ (i < b.length ? b.charCodeAt(i) : 0);
+  }
+  return diff === 0;
+}
+
+/** Whether `presented` is a member of `accepted` — always compares against every key. */
+function isAcceptedKey(presented: string, accepted: readonly string[]): boolean {
+  let matched = false;
+  for (const key of accepted) {
+    matched = constantTimeEquals(presented, key) || matched;
+  }
+  return matched;
+}
+
+const BEARER_PREFIX = 'Bearer ';
+
+/** The bearer token on `Authorization`, or `''` if the header is missing or malformed. */
+function bearerToken(req: Request): string {
+  const header = req.headers.get('authorization');
+  return header?.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : '';
 }
 
 /**
@@ -103,6 +162,11 @@ export function serve<S extends AnyRunnable, H extends Handlers<S>>(
   const deps = service.load();
 
   return async (req: Request): Promise<Response> => {
+    const accepted = acceptedKeys();
+    if (accepted.length > 0 && !isAcceptedKey(bearerToken(req), accepted)) {
+      return jsonResponse({ error: 'Unauthorized: missing or invalid service key' }, 401);
+    }
+
     const { pathname } = new URL(req.url);
     const methodName = /^\/rpc\/([^/]+)$/.exec(pathname)?.[1];
     if (methodName === undefined) {
