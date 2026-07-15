@@ -63,7 +63,7 @@ runs:
       if: always() && steps.deploy.outcome != 'skipped'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: bash ../scripts/destroy-guard.sh "${{ inputs.destroy-label }}" module.ts "${{ inputs.stack-name }}"
+      run: bash "${{ github.workspace }}/scripts/destroy-guard.sh" "${{ inputs.destroy-label }}" module.ts "${{ inputs.stack-name }}"
 
     - name: Sweep leaked per-run projects
       # Must run under always(): the CLI creates the per-run project outside
@@ -71,4 +71,4 @@ runs:
       if: always()
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: bun ../scripts/ci-cleanup.ts ${{ inputs.sweep-prefixes }}
+      run: bun "${{ github.workspace }}/scripts/ci-cleanup.ts" ${{ inputs.sweep-prefixes }}

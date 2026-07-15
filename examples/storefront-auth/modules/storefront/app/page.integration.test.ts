@@ -8,7 +8,7 @@
  * the loopback fake, and the H3 teardown decision (no `close()`) rests on
  * bun-test's per-file process isolation.
  *
- * storefront's build is `nextjs({ appDir })`: the deploy assembler locates the
+ * storefront's build is `nextjs({ module })`: the deploy assembler locates the
  * built `server.js` inside the standalone tree, so this test boots it via the
  * same seam (`standaloneServerPath`) rather than re-deriving the path. The
  * deploy chain is bootstrap.js -> main.mjs -> server.js; here
@@ -23,7 +23,7 @@ import type { NextjsBuildAdapter } from '@prisma/compose/nextjs';
 import { standaloneServerPath } from '@prisma/compose/nextjs/control';
 import { bootstrapService } from '@prisma/compose-prisma-cloud/testing';
 import fakeAuthHandler from '@storefront-auth/auth/fake';
-import storefrontService from '../src/service.ts';
+import storefrontService from '../service.ts';
 
 const PORT = 4310;
 

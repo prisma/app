@@ -1,5 +1,5 @@
 import { revalidatePath } from 'next/cache';
-import service from '../src/service.ts';
+import service from '../service.ts';
 
 // service.load() needs the runtime environment, which doesn't exist at build
 // time — so render per request instead of prerendering.

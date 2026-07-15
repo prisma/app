@@ -12,6 +12,16 @@ describe('nextjs({ module, appDir })', () => {
     });
   });
 
+  test('appDir defaults to "." — the authoring file\'s own directory is the Next app root', () => {
+    expect(nextjs({ module: 'file:///app/service.ts' })).toEqual({
+      extension: '@prisma/compose/nextjs',
+      type: 'nextjs',
+      module: 'file:///app/service.ts',
+      appDir: '.',
+      entry: 'server.js',
+    });
+  });
+
   test('is pure data — calling it twice with the same input yields equal, independent objects', () => {
     const a = nextjs({ module: 'file:///app/src/service.ts', appDir: '..' });
     const b = nextjs({ module: 'file:///app/src/service.ts', appDir: '..' });

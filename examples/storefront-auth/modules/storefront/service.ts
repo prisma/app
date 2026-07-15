@@ -6,8 +6,8 @@ import { authContract } from '@storefront-auth/auth/contract';
 export default compute({
   name: 'storefront',
   deps: { auth: rpc(authContract) },
-  // `appDir` is the Next app root; `next build` (output: standalone) is all the
-  // app does — deploy assembly copies the standalone tree and the static/public
-  // assets Next omits, and locates server.js itself.
-  build: nextjs({ module: import.meta.url, appDir: '..' }),
+  // `next build` (output: standalone) is all the app does — deploy assembly
+  // copies the standalone tree and the static/public assets Next omits, and
+  // locates server.js itself. The Next app root defaults to this file's dir.
+  build: nextjs({ module: import.meta.url }),
 });

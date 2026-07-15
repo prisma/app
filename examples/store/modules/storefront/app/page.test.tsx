@@ -6,10 +6,10 @@
 import { mockService } from '@prisma/compose/testing';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type Service from '../src/service.ts';
+import type Service from '../service.ts';
 
-vi.mock('../src/service.ts', async () => {
-  const actual = await vi.importActual<{ default: typeof Service }>('../src/service.ts');
+vi.mock('../service.ts', async () => {
+  const actual = await vi.importActual<{ default: typeof Service }>('../service.ts');
   return {
     default: mockService(actual.default, {
       catalog: {
