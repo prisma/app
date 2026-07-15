@@ -44,7 +44,7 @@ module`, pushed to `bot/claude/streams-compose-module-07aefb`):
 **Hands to:** built module + deployed-conformance harness
 (`vitest.conformance.deployed.config.ts`) ready for a real deploy.
 
-## D3 — Deploy example + deployed proof
+## D3 — Deploy example + deployed proof ✅ (done 2026-07-15)
 
 **Outcome:** `examples/streams` (smoke/storage-example pattern) deploys the
 module to real Prisma Cloud — root module provisions `storage()` + `streams()`
@@ -67,7 +67,7 @@ deployment (version logs + object listing).
 - Deployment destroyed or left per operator instruction; example is
   CI-runnable locally (integration test against the stand-in).
 
-## D4 — README
+## D4 — README ✅ (done 2026-07-15)
 
 **Outcome:** `packages/1-prisma-cloud/2-shared-modules/streams/README.md`
 documents contract scope, wiring example (storage dependency + bearer-key
@@ -79,7 +79,7 @@ secret + consumer), and local dev — storage-README register.
 **Completed when:** README covers contract scope / wiring / local dev; lint
 green.
 
-## D5 — PR open
+## D5 — PR open ✅ (done 2026-07-15)
 
 **Outcome:** one PR for the slice on `claude/streams-compose-module-07aefb`,
 title/body from `references/pr-description.md`, technical content only (no
@@ -89,3 +89,9 @@ strategy rationale — public repo).
 **Hands to:** review URL returned to the operator; slice enters review.
 
 **Completed when:** PR open with drafted body; CI green or failures triaged.
+
+## D6 — Merge readiness (added post-plan) ✅ (done 2026-07-15)
+
+**Outcome:** branch rebased onto main across three breaking changes (Composer
+rename, COMPOSER_ env prefix, storage's dropped service.mjs workaround), full
+verification re-run green, PR #84 squash-merged with operator approval.
