@@ -117,10 +117,11 @@ Literal-bound params never touch the platform check.
 - Value changes need a redeploy to materialize — a compute version snapshots
   its environment at creation. Same platform semantics as secret rotation
   (ADR-0029).
-- The `@composer-param-pointer:` prefix becomes a reserved shape for stored
-  param rows; a literal string param whose *value* must start with that exact
-  prefix cannot be stored (the schema-validated literal would be JSON-encoded
-  with a leading quote, so in practice nothing collides).
+- The `@composer-param-pointer:` prefix is reserved only in raw stored-row
+  space, which literals never occupy: every service-owned literal is
+  JSON-encoded, so a string literal that itself starts with the prefix stores
+  with a leading quote, never matches the pointer check, and round-trips
+  intact. No literal value is restricted.
 
 ## Alternatives considered
 
