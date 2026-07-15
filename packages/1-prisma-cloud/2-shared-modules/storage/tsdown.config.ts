@@ -30,11 +30,15 @@ export default defineConfig([
     // The /testing local stand-in (createPgStore + startStorageServer). Its own
     // pass with `bun` external so the engine's `import { SQL } from 'bun'` and
     // Bun.serve resolve at runtime; kept off the index pass so index.mjs never
-    // shares a chunk carrying a runtime token.
+    // shares a chunk carrying a runtime token. `@internal/` is inlined (the pure
+    // `@internal/prisma-cloud/connection` retry helper) so the bundle's only
+    // externals stay `bun` + `node:` builtins.
     ...baseConfig,
     entry: { testing: 'src/testing.ts' },
     exports: false,
     clean: false,
+    skipNodeModulesBundle: false,
     external: [/^bun$/, /^bun:/],
+    noExternal: [/^@internal\//],
   },
 ]);

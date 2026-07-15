@@ -7,7 +7,6 @@
   "exports": {
     "./assertions": "./dist/assertions.mjs",
     "./casts": "./dist/casts.mjs",
-    "./connection-retry": "./dist/connection-retry.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -16,7 +15,6 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
     "typescript": "^6.0.3",
     "tsdown": "^0.22.3",
     "@internal/tsdown-config": "workspace:0.1.0"

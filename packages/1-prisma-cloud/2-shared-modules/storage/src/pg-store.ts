@@ -9,7 +9,7 @@
  * authoring barrel.
  */
 import { createHash } from 'node:crypto';
-import { retryTransientConnect } from '@internal/foundation/connection-retry';
+import { retryTransientConnect } from '@internal/prisma-cloud/connection';
 import { SQL } from 'bun';
 import type {
   GetResult,
