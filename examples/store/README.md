@@ -1,4 +1,4 @@
-# store — Compose Coffee
+# store — Composer Coffee
 
 A readable example Prisma App: a Next.js storefront, a **catalog** module, an
 **orders** module, and the shared **cron** module rotating the special of the
@@ -55,7 +55,7 @@ typed RPC contracts. The whole composition is [module.ts](module.ts).
   calls both typed clients; the Buy button is a server action that places an
   order.
 - [modules/promotions](modules/promotions) + the shared
-  `@prisma/compose-prisma-cloud/cron` module — **composition of a shared
+  `@prisma/composer-prisma-cloud/cron` module — **composition of a shared
   module**. promotions defines the schedule
   (`rotateSpecial: '30s'`) and the runner that maps the job id to
   `catalog.rotateSpecial()`; the root provisions `cron({ schedule, runner })`

@@ -30,7 +30,7 @@ function buildControlAssemble(
   if (descriptor === undefined) {
     throw new AssembleError(
       `No extension "${extension}" is configured (needed by service "${node.name}"'s build) — ` +
-        "add it to prisma-compose.config.ts's `extensions`.",
+        "add it to prisma-composer.config.ts's `extensions`.",
     );
   }
   const control = descriptor.nodes[type];

@@ -35,7 +35,7 @@ settled design, all on this PR:
   (core-model.md:106).
 - Rewrite the `deploy.ts` `address`/`cwd` doc comments in plain English.
 - Rejected on the way here: a generic `node({dir})` (deletes the nextjs adapter —
-  Will wanted it kept); a `prisma-compose next-standalone` CLI subcommand (wrong
+  Will wanted it kept); a `prisma-composer next-standalone` CLI subcommand (wrong
   altitude on the deploy CLI); a hand-maintained flatten script (a smell); a
   flat-bundle restructure (a novel invention off the trodden path).
 
@@ -48,7 +48,7 @@ amendment wins.
 ## Chosen design
 
 **Artifact layout (both adapters).** Assembly builds a per-service working dir
-`<cwd>/.prisma-compose/artifacts/<address>/` containing:
+`<cwd>/.prisma-composer/artifacts/<address>/` containing:
 - `main.mjs` — our wrapper, at the working-dir root.
 - `bundle/` — the user's built output, copied in wholesale (already flat per
   the contract; a plain recursive copy).
@@ -127,7 +127,7 @@ static/public copy; packager symlink hard-error; storefront-auth `nextjs()` call
 | Wrapper build's tsdown still auto-loads a stray `tsdown.config.ts` | Keep `config: false` (node adapter comment explains why — it would rewrite the package's own `exports`). |
 | App entry named `main.js`/`main.mjs` collides with the wrapper | Keep the existing reserved-basename error in the node adapter; add the equivalent to nextjs (its entry is `server.js`, so latent, but assert). |
 | storefront-auth standalone has no symlinks today (pnpm + hoisted `.npmrc`) so bug 3 doesn't trip it | The symlink error stays dormant for it; datahub (bun) is what the error is for. Don't regress the hoist shim. |
-| `.prisma-compose/artifacts/` under deploy cwd needs gitignoring in examples | storefront-auth already needs `.prisma-compose/` ignored (datahub added the same). Verify/add. |
+| `.prisma-composer/artifacts/` under deploy cwd needs gitignoring in examples | storefront-auth already needs `.prisma-composer/` ignored (datahub added the same). Verify/add. |
 
 ## Done conditions (slice-specific)
 
@@ -137,8 +137,8 @@ static/public copy; packager symlink hard-error; storefront-auth `nextjs()` call
 
 ## Open questions
 
-- Root for `.prisma-compose/artifacts/`: deploy `cwd` (where the CLI already
-  writes `.prisma-compose/alchemy.run.ts` and state — main.ts:255) is the
+- Root for `.prisma-composer/artifacts/`: deploy `cwd` (where the CLI already
+  writes `.prisma-composer/alchemy.run.ts` and state — main.ts:255) is the
   consistent choice. Confirm the assembler receives cwd or resolves it the same
   way the CLI does; if assembly has no cwd handle, thread it alongside `address`.
 

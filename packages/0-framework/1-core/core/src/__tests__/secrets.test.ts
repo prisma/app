@@ -6,7 +6,7 @@ import { isSecretSource, module, resource, secret, secretSource, service } from 
 import { providerContract } from './helpers.ts';
 
 const build = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',

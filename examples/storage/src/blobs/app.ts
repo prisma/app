@@ -21,7 +21,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import type { S3Config } from '@prisma/compose-prisma-cloud/storage';
+import type { S3Config } from '@prisma/composer-prisma-cloud/storage';
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream';
 

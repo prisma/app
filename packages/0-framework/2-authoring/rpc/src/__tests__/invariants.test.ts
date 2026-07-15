@@ -22,7 +22,7 @@ function shippedSources(): { file: string; text: string }[] {
   return out;
 }
 
-describe('entry map: @prisma/compose/rpc ships a single entry', () => {
+describe('entry map: @prisma/composer/rpc ships a single entry', () => {
   test("package.json exports exactly '.'", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
     // `./package.json` is a conventional manifest export, not a code entry.

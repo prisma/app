@@ -29,7 +29,7 @@ end      the dedicated connection closes (explicit release, or the process
 
 ## Reasoning
 
-Start with the collision this prevents. Two engineers run `prisma-compose deploy`
+Start with the collision this prevents. Two engineers run `prisma-composer deploy`
 for the same application within seconds of each other — a human and a CI job,
 say, after a merge. Each deploy is a long sequence of steps: read the state
 rows, diff, create or update cloud resources, write the results back.

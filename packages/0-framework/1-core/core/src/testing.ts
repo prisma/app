@@ -6,7 +6,7 @@
  * node has `load()`/`config()`. It does no module mocking; wiring the
  * substitution into a test runner (`vi.mock`, `mock.module`) stays in the test.
  * The integration seam (`bootstrapService`) is target-specific and lives in the
- * target's own testing entry (e.g. `@prisma/compose-prisma-cloud/testing`).
+ * target's own testing entry (e.g. `@prisma/composer-prisma-cloud/testing`).
  */
 import { blindCast } from '@internal/foundation/casts';
 import type { Params, Values } from './config.ts';

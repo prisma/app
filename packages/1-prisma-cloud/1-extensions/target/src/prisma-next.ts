@@ -54,7 +54,7 @@ export class PnPostgresResourceNode<
   declare readonly targetRef?: string;
 
   constructor(def: { name: string; contract: C; config: string; targetRef?: string }) {
-    super({ name: def.name, extension: '@prisma/compose-prisma-cloud', provides: def.contract });
+    super({ name: def.name, extension: '@prisma/composer-prisma-cloud', provides: def.contract });
     this.config = def.config;
     if (def.targetRef !== undefined) this.targetRef = def.targetRef;
     freezeNode(this);

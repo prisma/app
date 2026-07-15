@@ -1,6 +1,6 @@
 /**
  * The extension's control entry (ADR-0017): `nodeBuild()` returns the build
- * descriptor `prisma-compose.config.ts` lists. Deploy-only (ADR-0005): the user
+ * descriptor `prisma-composer.config.ts` lists. Deploy-only (ADR-0005): the user
  * builds their own runnable; `assemble` copies that built entry under `bundle/`
  * and adds the framework's boot wrapper — it never bundles or transforms the
  * app's code.
@@ -12,7 +12,7 @@
  * that hand off through process.env, so the wrapper is its own self-contained
  * build; `@prisma/*` is inlined, `bun` is a Compute built-in.
  *
- * Artifact layout: `<cwd>/.prisma-compose/artifacts/<address>/` (deploy-owned,
+ * Artifact layout: `<cwd>/.prisma-composer/artifacts/<address>/` (deploy-owned,
  * ADR-0005) holds `main.mjs` at the root and the app's entry under `bundle/`.
  * `entry` is file-relative to `dirname(build.module)` (ADR-0004).
  */
@@ -28,7 +28,7 @@ export type { AssembleInput, Bundle } from '@internal/core/deploy';
 export async function assemble(input: AssembleInput): Promise<Bundle> {
   if (input.build.type !== 'node') {
     throw new Error(
-      `@prisma/compose/node/control: expected a "node" build adapter, got "${input.build.type}".`,
+      `@prisma/composer/node/control: expected a "node" build adapter, got "${input.build.type}".`,
     );
   }
 
@@ -42,7 +42,7 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
     );
   }
 
-  const workDir = path.join(input.cwd, '.prisma-compose', 'artifacts', input.address);
+  const workDir = path.join(input.cwd, '.prisma-composer', 'artifacts', input.address);
   // The entry must sit outside the working dir cleared on every assemble, or
   // the rm would delete it before the copy.
   if (entryPath === workDir || entryPath.startsWith(workDir + path.sep)) {
@@ -68,7 +68,7 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
     // `tsdown.config.ts`. This package's build config enables tsdown's
     // `exports` management, which would rewrite THIS package's package.json
     // `exports` to point at the throwaway bundle dir — corrupting resolution
-    // of `@prisma/compose/node` for everything that imports it afterward.
+    // of `@prisma/composer/node` for everything that imports it afterward.
     config: false,
   });
   if (!fs.existsSync(path.join(workDir, 'main.mjs'))) {
@@ -83,9 +83,9 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
   return { dir: workDir, entry: path.posix.join('bundle', entryFile) };
 }
 
-/** The node build extension descriptor — `prisma-compose.config.ts` lists it under `extensions`. */
+/** The node build extension descriptor — `prisma-composer.config.ts` lists it under `extensions`. */
 export const nodeBuild = (): ExtensionDescriptor => ({
-  id: '@prisma/compose/node',
+  id: '@prisma/composer/node',
   nodes: {
     node: { kind: 'build', assemble },
   },

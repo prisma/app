@@ -1,8 +1,8 @@
 {
-  "name": "@prisma/compose-prisma-cloud",
+  "name": "@prisma/composer-prisma-cloud",
   "version": "0.1.0",
   "type": "module",
-  "description": "The Prisma Cloud target for Prisma Compose: compute(), postgres(), the target extension, and first-party modules realized on Prisma Cloud (cron).",
+  "description": "The Prisma Cloud target for Prisma Composer: compute(), postgres(), the target extension, and first-party modules realized on Prisma Cloud (cron).",
   "exports": {
     ".": "./dist/index.mjs",
     "./control": "./dist/control.mjs",
@@ -29,7 +29,7 @@
     "@prisma-next/migration-tools": "0.14.0",
     "@prisma-next/postgres": "0.14.0",
     "@prisma-next/sql-contract": "0.14.0",
-    "@prisma/compose": "workspace:0.1.0",
+    "@prisma/composer": "workspace:0.1.0",
     "@prisma/management-api-sdk": "^1.47.0",
     "@standard-schema/spec": "^1.1.0",
     "alchemy": "2.0.0-beta.59",
@@ -58,7 +58,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/compose.git",
-    "directory": "packages/9-public/compose-prisma-cloud"
+    "directory": "packages/9-public/composer-prisma-cloud"
   },
   "engines": {
     "node": ">=24"

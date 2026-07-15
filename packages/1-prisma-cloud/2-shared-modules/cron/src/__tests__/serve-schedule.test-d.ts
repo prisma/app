@@ -5,7 +5,7 @@
  * extra ports beyond `trigger` still type-checks as the `service` argument.
  *
  * Type-only (vitest `--typecheck`, never executed) — mirrors
- * `@prisma/compose/rpc`'s `serve-handlers.test-d.ts`.
+ * `@prisma/composer/rpc`'s `serve-handlers.test-d.ts`.
  */
 import type { DependencyEnd, RunnableServiceNode } from '@internal/core';
 import { dependency, service } from '@internal/core';

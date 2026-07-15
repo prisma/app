@@ -16,8 +16,8 @@ packages/
     1-extensions/         #   compute(), postgres(), the target descriptor
     2-shared-modules/            #   first-party modules realized on this target (cron)
   9-public/               # the ONLY publishable packages; imports both domains
-    compose/              #   → @prisma/compose (bin + curated re-exports + subpaths)
-    compose-prisma-cloud/ #   → @prisma/compose-prisma-cloud (+ /cron)
+    compose/              #   → @prisma/composer (bin + curated re-exports + subpaths)
+    compose-prisma-cloud/ #   → @prisma/composer-prisma-cloud (+ /cron)
 ```
 
 **The numbering is the ruleset.** Lower numbers may be imported by higher numbers,
@@ -92,7 +92,7 @@ cruiser lands.
 - **dependency-cruiser joins the dev toolchain** (`pnpm lint:deps` in CI and
   lint-staged).
 - **Future targets** land as `2-<target>/` domains publishing a
-  `@prisma/compose-<target>` package from `9-public`.
+  `@prisma/composer-<target>` package from `9-public`.
 
 ## Alternatives considered
 

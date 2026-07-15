@@ -22,8 +22,8 @@ export interface BootstrappedService {
  * entry is `service.build.entry` resolved against `service.build.module` —
  * exactly how the printed deploy bootstrap imports it (see `@internal/lowering`'s
  * artifact.ts) — which fits a build adapter whose `entry` is a plain
- * module-relative path (`@prisma/compose/node`'s). A build adapter whose bootable
- * path isn't module-relative (`@prisma/compose/nextjs`'s standalone output)
+ * module-relative path (`@prisma/composer/node`'s). A build adapter whose bootable
+ * path isn't module-relative (`@prisma/composer/nextjs`'s standalone output)
  * supplies its own `boot` thunk; the target owns that resolution.
  *
  * `config.service.port` must be concrete — the entry self-listens and never

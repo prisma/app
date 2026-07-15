@@ -168,7 +168,7 @@ describe.skipIf(pg === undefined)('PnMigration reconcile routes through applyPnM
     });
 
   beforeAll(async () => {
-    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-pn-res-'));
+    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-pn-res-'));
     testDb = await createTestDatabase(pg.url);
     url = testDb.url;
   });

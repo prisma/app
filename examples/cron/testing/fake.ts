@@ -12,9 +12,9 @@
  * `verify` has no state to reset between tests).
  */
 
-import node from '@prisma/compose/node';
-import { serve } from '@prisma/compose/rpc';
-import { compute } from '@prisma/compose-prisma-cloud';
+import node from '@prisma/composer/node';
+import { serve } from '@prisma/composer/rpc';
+import { compute } from '@prisma/composer-prisma-cloud';
 import { workerContract } from '../src/worker/contract.ts';
 
 const fakeWorker = compute({

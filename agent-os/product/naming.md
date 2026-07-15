@@ -1,15 +1,15 @@
 # Product Naming & Distribution
 
 A developer builds a **Prisma App** by composing Prisma primitives — Postgres,
-Compute, Data, and more — wired together by **Prisma Compose**, the framework. We
+Compute, Data, and more — wired together by **Prisma Composer**, the framework. We
 name every piece for the **value the user gets from it**, not the machinery that
-delivers it. This document covers the product family, how Prisma Compose fits into
+delivers it. This document covers the product family, how Prisma Composer fits into
 it, the vocabulary it introduces, and how its building blocks (Modules) are
 distributed.
 
-The framework name and its unit are settled: **Prisma Compose** (← Prisma App ←
+The framework name and its unit are settled: **Prisma Composer** (← Prisma App ←
 MakerKit), recorded in
-[ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-compose.md),
+[ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-composer.md),
 and **Module** (← System ← Hex), recorded in
 [ADR-0025](../../docs/design/90-decisions/ADR-0025-name-the-unit-of-composition-module.md).
 **"Prisma App" names the artifact** — the thing you build and deploy — never the
@@ -27,18 +27,18 @@ building an app is actually *for*:
 | Prisma Postgres | persist | my data has a home |
 | Prisma Compute | execute | my code runs |
 | Prisma Data *(← Prisma Next)* | data | I model, access, and manage my data |
-| Prisma Compose *(← Prisma App ← MakerKit)* | compose | my app comes together from parts |
+| Prisma Composer *(← Prisma App ← MakerKit)* | compose | my app comes together from parts |
 | Durable Streams | stream | my events flow and survive |
 | Connection | connect | my services reach each other |
 
 A product name need not equal its role word — but for the framework, it now does:
-Prisma Compose's role is "compose," exactly as Compute's is "execute." The value
+Prisma Composer's role is "compose," exactly as Compute's is "execute." The value
 word — App — belongs to the artifact, and the artifact keeps it: you build **Prisma
-Apps** with Prisma Compose.
+Apps** with Prisma Composer.
 
-## How Prisma Compose fits
+## How Prisma Composer fits
 
-The other primitives each deliver one capability. **Prisma Compose is different: it
+The other primitives each deliver one capability. **Prisma Composer is different: it
 is the framework that assembles the others into a running app.** It is the
 composition layer of the family — and it introduces its own small vocabulary for
 the job:
@@ -47,16 +47,16 @@ the job:
 |---|---|---|
 | **Prisma App** | the artifact: the application you build (the outermost Module) | software with users and features — the whole point |
 | **Module** | a building block you compose | a capability you reuse instead of writing |
-| **Extension** | what you slot into `prisma-compose.config.ts` | the toolchain reaches my target/stack |
+| **Extension** | what you slot into `prisma-composer.config.ts` | the toolchain reaches my target/stack |
 | **Topology** | the graph the framework produces | *(machinery — the user never says this)* |
 
-You build a **Prisma App** by composing **Modules** with **Prisma Compose** — each
+You build a **Prisma App** by composing **Modules** with **Prisma Composer** — each
 Module wrapping primitives like Compute and Postgres; the framework infers the
-**Topology** and provisions it. App, Module, and Compose are the words a developer
+**Topology** and provisions it. App, Module, and Composer are the words a developer
 says; Topology is the machinery underneath. The App is not a separate construct — it
-is simply the outermost Module, the one you point `prisma-compose deploy` at. (The
-whole surface carries the name: `@prisma/compose*` packages, the `prisma-compose`
-CLI, `prisma-compose.config.ts` — per ADR-0026.)
+is simply the outermost Module, the one you point `prisma-composer deploy` at. (The
+whole surface carries the name: `@prisma/composer*` packages, the `prisma-composer`
+CLI, `prisma-composer.config.ts` — per ADR-0026.)
 
 ## Name for value, not machinery
 
@@ -86,7 +86,7 @@ output). Both rubrics live in [vocabulary-tests.md](vocabulary-tests.md). Applyi
 the description tests alone is how the unit was misnamed "System"
 ([ADR-0025](../../docs/design/90-decisions/ADR-0025-name-the-unit-of-composition-module.md))
 and the framework was misnamed "Prisma App"
-([ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-compose.md)).
+([ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-composer.md)).
 
 The payoff of taking the value word for the brand: the precise words stay **free to
 mean exactly what they mean one level down**. The same shape repeats at every layer —
@@ -100,7 +100,7 @@ right:
 
 Note that "App" sits in the *Product* column, not the *Authored as* column — you do
 not write an `app()`; you write `module()`, and the App is the outermost one. The
-App is the artifact the user values; Prisma Compose is the tool that makes the row
+App is the artifact the user values; Prisma Composer is the tool that makes the row
 true.
 
 ## The data layer: Prisma Data
@@ -133,9 +133,9 @@ full reasoning is in
 [ADR-0025](../../docs/design/90-decisions/ADR-0025-name-the-unit-of-composition-module.md).
 
 Vocabulary sits in three registers: a **package** is the artifact npm hosts (npm's
-word, not ours); an **extension** slots into `prisma-compose.config.ts` and extends the
+word, not ours); an **extension** slots into `prisma-composer.config.ts` and extends the
 toolchain; a **Module** is what you plug together inside the app. One package may
-register an extension and provide modules — "use the cron module from the compose-prisma-cloud
+register an extension and provide modules — "use the cron module from the composer-prisma-cloud
 extension" is the model in one sentence.
 
 ## How Modules are distributed
@@ -159,19 +159,28 @@ That richer install is the point, and it depends on the typed-contract model bei
 sound. Because community Modules are arbitrary npm packages, the registry recognizes
 them by convention — a `keywords` entry or a manifest field.
 
-## The framework: Prisma Compose
+## The framework: Prisma Composer
 
-"Compose" is semantically exact where every synonym is not: build, construct, and
-make describe fabricating from raw material; *compose* means assembling finished
-parts into a whole — which is the product ("composability" is already the term for
-the property it sells). It passes the referential battery ("I'm working on this
-feature in Compose" refers instantly), aligns the name with its role word in the
-family table, and completes the vocabulary chain: **you compose Modules with Prisma
-Compose into your Prisma App.** The token is shared with Docker Compose and Jetpack
-Compose — evidence it carries a prefix well. Accepted trade-offs: the in-family
-Compute/Compose adjacency (frames never overlap — things run *on* Compute, are
-built *with* Compose) and an SEO fight with docker-compose-with-Prisma content
-(winnable; see ADR-0026).
+"Composer" is the agent noun for the tool that composes — the compiler / bundler /
+linter / formatter family. It's semantically exact where every synonym is not:
+build, construct, and make describe fabricating from raw material; *compose* means
+assembling finished parts into a whole, which is the product ("composability" is
+already the term for the property it sells). The verb stays the verb and the tool
+takes the agent noun, aligning the name with its role word in the family table and
+completing the vocabulary chain: **you compose Modules with Prisma Composer into
+your Prisma App** — the compiler / compile / compilation shape. It passes the
+referential battery: "I'm working on this feature in Composer" refers instantly.
+
+The agent-noun form is also what buys distance from **Compute**. "Compose" and
+"Compute" are two syllables a single vowel apart and collide in speech; "Composer"
+adds a third syllable and a distinct stressed vowel, separable by ear as well as on
+the page. That separation is why the framework is "Composer" and not the bare verb.
+
+Accepted trade-offs, eyes open: an external, same-category name-share with AWS
+Infrastructure/Application Composer — always vendor-prefixed ("Prisma Composer"),
+never shipped bare; the same class of shared token as Docker Compose and Jetpack
+Compose, which is evidence the token carries a product name well. Plus an SEO fight
+with docker-compose-with-Prisma content (winnable; see ADR-0026).
 
 ## Names to avoid
 
@@ -189,6 +198,6 @@ built *with* Compose) and an SEO fight with docker-compose-with-Prisma content
   ([ADR-0025](../../docs/design/90-decisions/ADR-0025-name-the-unit-of-composition-module.md));
   plain-English use in prose is fine, but no construct, term, or diagram label.
 - **"Prisma App" for the tool** — it names the artifact only
-  ([ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-compose.md)).
-  Docs say "built with Prisma Compose," never "built with Prisma App." The general
+  ([ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-composer.md)).
+  Docs say "built with Prisma Composer," never "built with Prisma App." The general
   rule is hard: never name a tool after its output.

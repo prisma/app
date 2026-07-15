@@ -1,4 +1,4 @@
-import { serveSchedule } from '@prisma/compose-prisma-cloud/cron';
+import { serveSchedule } from '@prisma/composer-prisma-cloud/cron';
 import service, { schedule } from './service.ts';
 
 // serveSchedule is exhaustive over the schedule's job ids at compile time —

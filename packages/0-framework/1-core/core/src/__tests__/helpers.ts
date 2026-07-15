@@ -28,7 +28,7 @@ export function scalarDeclaration(
   return {
     owner,
     name,
-    schema: { vendor: '@prisma/compose' },
+    schema: { vendor: '@prisma/composer' },
     optional: opts.optional ?? false,
     default: opts.default,
   };

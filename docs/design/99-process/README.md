@@ -1,6 +1,6 @@
 # Design process and documentation workflow
 
-This directory documents **how this documentation system works** and the **expected design process** for evolving Prisma Compose over time.
+This directory documents **how this documentation system works** and the **expected design process** for evolving Prisma Composer over time.
 
 ## The documentation system
 

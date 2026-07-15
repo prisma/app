@@ -5,7 +5,7 @@
  *
  * Type-only (vitest `--typecheck`, never executed): the reject cases are
  * structurally valid providers that simply fail Load's nominal `satisfies()`
- * check (see rpc-connection.test.ts and @prisma/compose's module.test.ts), so
+ * check (see rpc-connection.test.ts and @prisma/composer's module.test.ts), so
  * running the calls would throw. Positive cases use `expectTypeOf` matchers;
  * the negative wirings keep a `// @ts-expect-error` on the offending line.
  */
@@ -17,7 +17,7 @@ import { contract } from '../contract.ts';
 import { type Client, rpc } from '../rpc.ts';
 
 const build: BuildAdapter = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
@@ -51,7 +51,7 @@ const missing = contract({
   whoami: rpc({ input: type({}), output: type({ id: 'string' }) }),
 });
 
-// a second protocol kind, standing in for one @prisma/compose/rpc knows nothing
+// a second protocol kind, standing in for one @prisma/composer/rpc knows nothing
 // about — only to prove cross-protocol wiring is rejected by the brand.
 declare function wsContract<
   // biome-ignore lint/suspicious/noExplicitAny: mirrors contract-satisfaction.poc.ts's `wsContract` stub.

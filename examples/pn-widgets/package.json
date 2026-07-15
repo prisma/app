@@ -6,18 +6,18 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "deploy": "pnpm turbo run build --filter @prisma/example-pn-widgets... && ( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-compose deploy module.ts ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )",
-    "destroy": "( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-compose destroy module.ts --production ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )"
+    "deploy": "pnpm turbo run build --filter @prisma/example-pn-widgets... && ( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-composer deploy module.ts ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )",
+    "destroy": "( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-composer destroy module.ts --production ${PN_WIDGETS_STACK_NAME:+--name \"$PN_WIDGETS_STACK_NAME\"} )"
   },
   "dependencies": {
     "@prisma-next/postgres": "0.14.0",
-    "@prisma/compose": "workspace:0.1.0",
-    "@prisma/compose-prisma-cloud": "workspace:0.1.0",
+    "@prisma/composer": "workspace:0.1.0",
+    "@prisma/composer-prisma-cloud": "workspace:0.1.0",
     "effect": "4.0.0-beta.92",
     "pg": "8.21.0"
   },
   "devDependencies": {
-    "@prisma/compose": "workspace:0.1.0",
+    "@prisma/composer": "workspace:0.1.0",
     "@prisma/management-api-sdk": "^1.47.0",
     "@types/bun": "^1.3.13",
     "tsdown": "^0.22.3",

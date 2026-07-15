@@ -145,7 +145,7 @@ export function provisionManifest(graph: Graph): readonly SecretBinding[] {
 // ——— Param constructors: plain data, target-agnostic (ADR-0018/0019). ———
 //
 // A param is just a schema plus facets; serialization is the deploy target's
-// (see @prisma/compose-prisma-cloud's serializer.ts), so these constructors carry no
+// (see @prisma/composer-prisma-cloud's serializer.ts), so these constructors carry no
 // encoding. `string()`/`number()` supply hand-rolled Standard Schemas for the
 // common scalars — core needs no arktype dependency for them — and `param()`
 // wraps any caller-supplied schema.
@@ -157,7 +157,7 @@ function scalarSchema<T>(
   return {
     '~standard': {
       version: 1,
-      vendor: '@prisma/compose',
+      vendor: '@prisma/composer',
       validate: (value: unknown) =>
         check(value)
           ? { value }

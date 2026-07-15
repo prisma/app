@@ -86,7 +86,7 @@ describe('pnPostgres() factory shapes', () => {
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.name).toBe('database');
-    expect(node.extension).toBe('@prisma/compose-prisma-cloud');
+    expect(node.extension).toBe('@prisma/composer-prisma-cloud');
     expect(node.type).toBe('prisma-next');
     expect(node.provides).toBe(widget);
     // config rides on the node as a first-class field, sibling to provides.

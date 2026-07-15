@@ -12,9 +12,9 @@
  * integration test.
  */
 
-import node from '@prisma/compose/node';
-import { serve } from '@prisma/compose/rpc';
-import { compute } from '@prisma/compose-prisma-cloud';
+import node from '@prisma/composer/node';
+import { serve } from '@prisma/composer/rpc';
+import { compute } from '@prisma/composer-prisma-cloud';
 import { authContract } from '../src/contract.ts';
 
 const fakeAuth = compute({

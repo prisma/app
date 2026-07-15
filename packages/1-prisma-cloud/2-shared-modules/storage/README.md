@@ -1,13 +1,13 @@
-# `@prisma/compose-prisma-cloud/storage`
+# `@prisma/composer-prisma-cloud/storage`
 
-S3-compatible object storage as a Prisma Compose module. It is an ordinary
+S3-compatible object storage as a Prisma Composer module. It is an ordinary
 module: a Compute service that speaks the **S3 wire protocol**, backed by a
 module-provisioned Prisma Postgres (objects live in a single `bytea` column),
 with SigV4 credentials minted at deploy. Consumers wire the module's `store`
 port into an `s3()` slot and get an `S3Config` binding; they build their own
 S3 client (aws-sdk, or a hand-rolled SigV4 client) from it.
 
-Ships as the `@prisma/compose-prisma-cloud/storage` subpath (like `/cron`).
+Ships as the `@prisma/composer-prisma-cloud/storage` subpath (like `/cron`).
 
 ## Contract scope
 
@@ -48,8 +48,8 @@ Provision `storage()` in a module and wire its `store` port into a consumer's
 
 ```ts
 // module.ts — the deploy root
-import { module } from '@prisma/compose';
-import { storage } from '@prisma/compose-prisma-cloud/storage';
+import { module } from '@prisma/composer';
+import { storage } from '@prisma/composer-prisma-cloud/storage';
 import blobs from './src/blobs/service.ts';
 
 export default module('my-app', ({ provision }) => {
@@ -60,9 +60,9 @@ export default module('my-app', ({ provision }) => {
 
 ```ts
 // src/blobs/service.ts — the consumer declares an s3() dependency
-import node from '@prisma/compose/node';
-import { compute } from '@prisma/compose-prisma-cloud';
-import { s3 } from '@prisma/compose-prisma-cloud/storage';
+import node from '@prisma/composer/node';
+import { compute } from '@prisma/composer-prisma-cloud';
+import { s3 } from '@prisma/composer-prisma-cloud/storage';
 
 export default compute({
   name: 'blobs',
@@ -107,11 +107,11 @@ Cloud.
 ## Local development
 
 The same module runs locally against local Postgres — no cloud, no minted
-credentials. `@prisma/compose-prisma-cloud/storage/testing` exposes the store
+credentials. `@prisma/composer-prisma-cloud/storage/testing` exposes the store
 and server directly:
 
 ```ts
-import { createPgStore, startStorageServer } from '@prisma/compose-prisma-cloud/storage/testing';
+import { createPgStore, startStorageServer } from '@prisma/composer-prisma-cloud/storage/testing';
 
 const store = await createPgStore(process.env.DATABASE_URL!); // applies the schema
 const server = startStorageServer({

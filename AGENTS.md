@@ -1,4 +1,4 @@
-# Agent guidance — Prisma Compose
+# Agent guidance — Prisma Composer
 
 **Before doing any design or implementation work in this repo, read the
 guiding principles: [`docs/design/01-principles/`](docs/design/01-principles/).**

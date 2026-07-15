@@ -1,5 +1,5 @@
 /**
- * Pipeline step: find and load `prisma-compose.config.ts` (ADR-0017) — the ONE
+ * Pipeline step: find and load `prisma-composer.config.ts` (ADR-0017) — the ONE
  * file that imports control-plane code. Discovery is the standard walk-up
  * from the deploy entry's directory (mirrors prisma-next's config-loader);
  * loading is c12 with that explicit path (rc/global/package.json lookups
@@ -15,7 +15,7 @@ import { blindCast } from '@internal/foundation/casts';
 import * as c12 from 'c12';
 import { CliError } from './cli-error.ts';
 
-export const CONFIG_FILENAME = 'prisma-compose.config.ts';
+export const CONFIG_FILENAME = 'prisma-composer.config.ts';
 
 export interface LoadedAppConfig {
   /** The discovered config file's absolute path — the generated stack file imports it by a path relative to itself. */
@@ -39,13 +39,13 @@ export function missingConfigError(entryPath: string): CliError {
   return new CliError(
     `No ${CONFIG_FILENAME} found walking up from "${path.dirname(path.resolve(entryPath))}" — ` +
       "the deploy needs the app's config file. Create one next to (or above) the entry, " +
-      "default-exporting defineConfig({ extensions: [...], state: ... }) from '@prisma/compose/config'.",
+      "default-exporting defineConfig({ extensions: [...], state: ... }) from '@prisma/composer/config'.",
   );
 }
 
 function fieldError(field: string, requirement: string): CliError {
   return new CliError(
-    `${CONFIG_FILENAME}: \`${field}\` ${requirement} — see defineConfig() in '@prisma/compose/config'.`,
+    `${CONFIG_FILENAME}: \`${field}\` ${requirement} — see defineConfig() in '@prisma/composer/config'.`,
   );
 }
 
@@ -62,7 +62,7 @@ export function validateConfigShape(loaded: unknown, configPath: string): Prisma
   if (!isRecord(loaded) || Object.keys(loaded).length === 0) {
     throw new CliError(
       `"${configPath}" exported no config — it must default-export ` +
-        "defineConfig({ extensions: [...], state: ... }) from '@prisma/compose/config'.",
+        "defineConfig({ extensions: [...], state: ... }) from '@prisma/composer/config'.",
     );
   }
 
@@ -116,7 +116,7 @@ export function validateConfigShape(loaded: unknown, configPath: string): Prisma
  */
 export async function loadAppConfig(configPath: string): Promise<LoadedAppConfig> {
   const result = await c12.loadConfig({
-    name: 'prisma-compose',
+    name: 'prisma-composer',
     configFile: configPath,
     cwd: path.dirname(configPath),
     rcFile: false,

@@ -8,7 +8,7 @@ const tmpDirs: string[] = [];
 
 function makeTmpDir(): string {
   const dir = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-cli-alchemy-')),
+    fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-cli-alchemy-')),
   );
   tmpDirs.push(dir);
   return dir;
@@ -67,7 +67,7 @@ describe('runAlchemy()', () => {
 
     const status = runAlchemy({
       command: 'deploy',
-      stackFileRelativePath: '.prisma-compose/alchemy.run.ts',
+      stackFileRelativePath: '.prisma-composer/alchemy.run.ts',
       cwd: dir,
       stage: 'ci-42',
       projectId: 'proj-1',
@@ -79,7 +79,7 @@ describe('runAlchemy()', () => {
     const captured = JSON.parse(fs.readFileSync(captureFile, 'utf8'));
     expect(captured.argv).toEqual([
       'deploy',
-      '.prisma-compose/alchemy.run.ts',
+      '.prisma-composer/alchemy.run.ts',
       '--yes',
       '--stage',
       'ci-42',
@@ -104,7 +104,7 @@ describe('runAlchemy()', () => {
 
     runAlchemy({
       command: 'destroy',
-      stackFileRelativePath: '.prisma-compose/alchemy.run.ts',
+      stackFileRelativePath: '.prisma-composer/alchemy.run.ts',
       cwd: dir,
       stage: undefined,
       projectId: 'proj-1',
@@ -112,7 +112,7 @@ describe('runAlchemy()', () => {
     });
 
     const captured = JSON.parse(fs.readFileSync(captureFile, 'utf8'));
-    expect(captured.argv).toEqual(['destroy', '.prisma-compose/alchemy.run.ts', '--yes']);
+    expect(captured.argv).toEqual(['destroy', '.prisma-composer/alchemy.run.ts', '--yes']);
   });
 
   test('sets PRISMA_PROJECT_ID on the child env, and PRISMA_BRANCH_ID only for a named branch', () => {
@@ -135,7 +135,7 @@ describe('runAlchemy()', () => {
 
     runAlchemy({
       command: 'deploy',
-      stackFileRelativePath: '.prisma-compose/alchemy.run.ts',
+      stackFileRelativePath: '.prisma-composer/alchemy.run.ts',
       cwd: dir,
       stage: 'staging',
       projectId: 'proj-1',
@@ -148,7 +148,7 @@ describe('runAlchemy()', () => {
 
     runAlchemy({
       command: 'deploy',
-      stackFileRelativePath: '.prisma-compose/alchemy.run.ts',
+      stackFileRelativePath: '.prisma-composer/alchemy.run.ts',
       cwd: dir,
       stage: undefined,
       projectId: 'proj-1',

@@ -1,6 +1,6 @@
 # Versioning
 
-This page covers the **version contract** Prisma Compose offers, and the
+This page covers the **version contract** Prisma Composer offers, and the
 **mechanism** that delivers it. The first half is the policy you can rely on; the
 second half is the procedure maintainers follow to honour it.
 
@@ -27,7 +27,7 @@ Every workspace package — publishable, private, and the workspace root — car
 same `version`. One read of root `package.json` answers "what version is this code?"
 for the entire repository.
 
-- The two published packages (`@prisma/compose` and `@prisma/compose-prisma-cloud`
+- The two published packages (`@prisma/composer` and `@prisma/composer-prisma-cloud`
   — the only publishable packages, both under `packages/9-public/`, ADR-0027)
   publish at the same version, and each pins its workspace siblings to that
   **exact** version.
@@ -43,7 +43,7 @@ building on a false assumption.
 ## Dist-tag convention
 
 - **`latest`** — the most recent stable release; the default for `npm install
-  @prisma/compose`. New `latest` releases happen automatically when a release PR merges
+  @prisma/composer`. New `latest` releases happen automatically when a release PR merges
   (see procedure below).
 - **`dev`** — every push to `main` that doesn't change the root `version` produces a
   `<base>-dev.N` tarball under this tag. **No stability promise** — may be yanked freely.
@@ -102,7 +102,7 @@ publish trigger** — there is no separate dispatch step for a normal release.
    `latest`, and cuts a GitHub Release with auto-generated notes.
 
 Between releases, every merge to `main` publishes a `<base>-dev.N` build under `dev` —
-useful for `npm install @prisma/compose@dev` reproductions.
+useful for `npm install @prisma/composer@dev` reproductions.
 
 ## Validating publish changes
 
@@ -119,7 +119,7 @@ exist before you can enable a trusted publisher (unlike PyPI). So the first rele
 one-time manual bootstrap; every release after that goes through the workflow:
 
 _Completed 2026-07-12 for both packages; kept as the procedure for any future
-package (e.g. a new `@prisma/compose-<target>`)._
+package (e.g. a new `@prisma/composer-<target>`)._
 
 1. **Create the package once, with a token.** On a machine logged in to npm as a
    user with publish rights to the `@prisma` scope: `pnpm install && pnpm build`,

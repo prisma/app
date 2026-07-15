@@ -2,11 +2,11 @@
  * Drives main.ts's run() end to end with fakes at the module seams the CLI
  * already exposes (RunDeps): a fake config (no c12 evaluation), a fake
  * assembler (no real wrapper build), and a fake alchemy runner (no real
- * process). The entry module, the `prisma-compose.config.ts` file (discovery is
+ * process). The entry module, the `prisma-composer.config.ts` file (discovery is
  * real — the generated stack file imports the real path), and the generated
  * stack file are all real — written to a temp dir.
  *
- * `.prisma-compose/` lands in the process's own cwd (ADR-0004's rewrite — tool
+ * `.prisma-composer/` lands in the process's own cwd (ADR-0004's rewrite — tool
  * state lives where you run the tool), so each test chdir's into the fixture
  * app dir for the duration of run(), the same way a real invocation's cwd is
  * wherever the app's package script runs from.
@@ -76,7 +76,7 @@ function fakeConfig(): PrismaAppConfig {
 }
 
 /**
- * A real app package in a temp dir: package.json, a `prisma-compose.config.ts`
+ * A real app package in a temp dir: package.json, a `prisma-composer.config.ts`
  * (discovery walks up to it; its CONTENT is never evaluated — RunDeps.config
  * substitutes for c12), and an entry module whose default export is a genuine
  * service node (importing core by absolute path — the temp dir has no other
@@ -89,12 +89,12 @@ function makeAppDir(
   dir: string;
   entryPath: string;
 } {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-cli-run-')));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-cli-run-')));
   tmpDirs.push(dir);
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'fixture-app' }));
   if (opts.config !== false) {
     fs.writeFileSync(
-      path.join(dir, 'prisma-compose.config.ts'),
+      path.join(dir, 'prisma-composer.config.ts'),
       '// fixture config — discovery target only; tests inject RunDeps.config instead of evaluating this\nexport default {};\n',
     );
   }
@@ -157,7 +157,7 @@ describe('run() — the full pipeline over fakes', () => {
     expect(calls).toEqual([
       {
         command: 'deploy',
-        stackFileRelativePath: path.join('.prisma-compose', 'alchemy.run.ts'),
+        stackFileRelativePath: path.join('.prisma-composer', 'alchemy.run.ts'),
         cwd: app.dir,
         stage: 'ci-7',
         projectId: 'proj-fake',
@@ -165,10 +165,10 @@ describe('run() — the full pipeline over fakes', () => {
       },
     ]);
 
-    const stackPath = path.join(app.dir, '.prisma-compose', 'alchemy.run.ts');
+    const stackPath = path.join(app.dir, '.prisma-composer', 'alchemy.run.ts');
     const content = fs.readFileSync(stackPath, 'utf8');
     expect(content).toContain('name: "hello-run"');
-    expect(content).toContain('import config from "../prisma-compose.config.ts";');
+    expect(content).toContain('import config from "../prisma-composer.config.ts";');
     expect(content).toContain('import app from "../service.ts";');
     expect(content).toContain('lower(app, config, {');
     expect(content).toContain(
@@ -204,7 +204,7 @@ describe('run() — the full pipeline over fakes', () => {
     expect(alchemyCalls[0]).not.toHaveProperty('branchId');
   });
 
-  test('a missing prisma-compose.config.ts is a CliError naming the filename and the required export', async () => {
+  test('a missing prisma-composer.config.ts is a CliError naming the filename and the required export', async () => {
     const app = makeAppDir('no-config', { config: false });
     process.chdir(app.dir);
 
@@ -215,7 +215,7 @@ describe('run() — the full pipeline over fakes', () => {
 
     expect(error).toBeInstanceOf(CliError);
     const message = (error as CliError).message;
-    expect(message).toContain('prisma-compose.config.ts');
+    expect(message).toContain('prisma-composer.config.ts');
     expect(message).toContain('defineConfig');
   });
 
@@ -240,7 +240,7 @@ describe('run() — the full pipeline over fakes', () => {
     expect(error).toBeInstanceOf(CliError);
     const message = (error as CliError).message;
     expect(message).toContain('fixture-extension');
-    expect(message).toContain('prisma-compose.config.ts');
+    expect(message).toContain('prisma-composer.config.ts');
     expect(assemblerCalls).toEqual([]);
   });
 
@@ -358,7 +358,7 @@ describe('run() — the full pipeline over fakes', () => {
     expect((error as CliError).message).toContain('SECRET_X is not provisioned');
     expect(alchemyRan).toBe(false);
     // Preflight (step 7.5) runs before writeStackFile (step 8) — nothing side-effected.
-    expect(fs.existsSync(path.join(app.dir, '.prisma-compose', 'alchemy.run.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(app.dir, '.prisma-composer', 'alchemy.run.ts'))).toBe(false);
   });
 
   test('an alchemy failure propagates the nonzero exit and prints the generated file path', async () => {
@@ -374,7 +374,7 @@ describe('run() — the full pipeline over fakes', () => {
       });
 
       expect(status).toBe(42);
-      const stackPath = path.join(app.dir, '.prisma-compose', 'alchemy.run.ts');
+      const stackPath = path.join(app.dir, '.prisma-composer', 'alchemy.run.ts');
       const printed = errorSpy.mock.calls.map((args) => args.join(' ')).join('\n');
       expect(printed).toContain(stackPath);
     } finally {

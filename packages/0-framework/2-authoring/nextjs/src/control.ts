@@ -1,6 +1,6 @@
 /**
  * The extension's control entry (ADR-0017): `nextjsBuild()` returns the build
- * descriptor `prisma-compose.config.ts` lists. Deploy-only (ADR-0005): the user
+ * descriptor `prisma-composer.config.ts` lists. Deploy-only (ADR-0005): the user
  * runs `next build` (`output: "standalone"`); `assemble` then performs the
  * *documented* Next standalone deploy — it ships the standalone tree and copies
  * in the client assets Next deliberately omits (`.next/static`, `public/`) — and
@@ -84,7 +84,7 @@ export function standaloneServerPath(build: NextjsBuildAdapter): string {
 export async function assemble(input: AssembleInput): Promise<Bundle> {
   if (!isNextjsBuild(input.build)) {
     throw new Error(
-      `@prisma/compose/nextjs/control: expected a "nextjs" build adapter (with appDir), got "${input.build.type}".`,
+      `@prisma/composer/nextjs/control: expected a "nextjs" build adapter (with appDir), got "${input.build.type}".`,
     );
   }
   const buildDescriptor = input.build;
@@ -103,7 +103,7 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
   // Next's own build manifest, not searched for.
   const appRel = nextAppRel(appDir);
 
-  const workDir = path.join(input.cwd, '.prisma-compose', 'artifacts', input.address);
+  const workDir = path.join(input.cwd, '.prisma-composer', 'artifacts', input.address);
   await fs.promises.rm(workDir, { recursive: true, force: true });
   await fs.promises.mkdir(workDir, { recursive: true });
   const bundleDir = path.join(workDir, 'bundle');
@@ -140,7 +140,7 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
     clean: false,
     // Do NOT auto-load this package's tsdown.config.ts: its `exports`
     // management would rewrite this package's package.json to the throwaway
-    // bundle dir, corrupting resolution of @prisma/compose/nextjs afterward.
+    // bundle dir, corrupting resolution of @prisma/composer/nextjs afterward.
     config: false,
   });
   if (!fs.existsSync(path.join(workDir, 'main.mjs'))) {
@@ -153,9 +153,9 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
   };
 }
 
-/** The nextjs build extension descriptor — `prisma-compose.config.ts` lists it under `extensions`. */
+/** The nextjs build extension descriptor — `prisma-composer.config.ts` lists it under `extensions`. */
 export const nextjsBuild = (): ExtensionDescriptor => ({
-  id: '@prisma/compose/nextjs',
+  id: '@prisma/composer/nextjs',
   nodes: {
     nextjs: { kind: 'build', assemble },
   },

@@ -62,7 +62,7 @@ describe.skipIf(pg === undefined)('pnPostgres hydrate — live round trip', () =
     // fresh empty dir: with no authored migrations and no extension spaces,
     // dbInit synthesizes the additive create-table plan for the single app
     // contract and signs it.
-    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-pn-mig-'));
+    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-pn-mig-'));
     testDb = await createTestDatabase(pg.url);
     const url = testDb.url;
     const control = createPostgresControlClient({ connection: url });

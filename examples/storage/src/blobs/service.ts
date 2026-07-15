@@ -1,6 +1,6 @@
-import node from '@prisma/compose/node';
-import { compute } from '@prisma/compose-prisma-cloud';
-import { s3 } from '@prisma/compose-prisma-cloud/storage';
+import node from '@prisma/composer/node';
+import { compute } from '@prisma/composer-prisma-cloud';
+import { s3 } from '@prisma/composer-prisma-cloud/storage';
 
 /**
  * The blob-store service: a plain HTTP app that stores and serves objects,

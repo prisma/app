@@ -32,7 +32,7 @@ export interface SecretNeed {
 /** A service/module's secret slots: name → the need it declares. */
 export type Secrets = Record<string, SecretNeed>;
 
-/** The wiring value bound to a secret slot: a target-defined payload core forwards but never inspects. A target (e.g. @prisma/compose-prisma-cloud's `envSecret`) builds one via `secretSource()`. */
+/** The wiring value bound to a secret slot: a target-defined payload core forwards but never inspects. A target (e.g. @prisma/composer-prisma-cloud's `envSecret`) builds one via `secretSource()`. */
 export interface SecretSource<T = unknown> {
   readonly [SECRET_SOURCE]: true;
   /** Target-defined. Core never reads this; the target that authored the source reads it back. */
@@ -73,7 +73,7 @@ export type AnyContract = Contract<any, any>;
 
 /** How a service's app becomes a runnable artifact — the build descriptor's routing key (`extension`/`type`) plus paths resolved relative to the authoring module. */
 export interface BuildAdapter {
-  /** The extension package that provides the build descriptor, e.g. "@prisma/compose/node". */
+  /** The extension package that provides the build descriptor, e.g. "@prisma/composer/node". */
   readonly extension: string;
   /** The build descriptor's node ID within its extension, e.g. "node" · "nextjs". */
   readonly type: string;
@@ -93,7 +93,7 @@ export interface ResourceNode<C extends AnyContract = AnyContract> {
   readonly kind: 'resource';
   /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
   readonly name: string;
-  /** The extension package that authored this node, e.g. "@prisma/compose-prisma-cloud" — the registry key at deploy. */
+  /** The extension package that authored this node, e.g. "@prisma/composer-prisma-cloud" — the registry key at deploy. */
   readonly extension: string;
   readonly type: C['kind'];
   /** The Contract this resource provides — the resource's single port. */
@@ -115,7 +115,7 @@ export interface ServiceNode<
   readonly kind: 'service';
   /** Human-readable, given at authoring — logs/diagnostics only; identity remains the deploy address (ADR-0006). */
   readonly name: string;
-  /** The extension package that authored this node, e.g. "@prisma/compose-prisma-cloud" — the registry key at deploy. */
+  /** The extension package that authored this node, e.g. "@prisma/composer-prisma-cloud" — the registry key at deploy. */
   readonly extension: string;
   readonly type: string;
   readonly inputs: D;

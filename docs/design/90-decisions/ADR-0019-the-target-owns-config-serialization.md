@@ -29,7 +29,7 @@ choice, though any [Standard Schema](https://standardschema.dev) validator works
 // The target owns everything between that schema and storage.
 //
 // Encode (deploy): the typed Job[] becomes one stored string, in the target's
-// chosen medium — for @prisma/compose-prisma-cloud, a project-scoped env var:
+// chosen medium — for @prisma/composer-prisma-cloud, a project-scoped env var:
 COMPOSE_SCHEDULER_JOBS = '[{"jobId":"tick","every":"60s"},{"jobId":"mrr","every":"24h"}]'
 
 // Decode (boot): the target reads the string back and validates it against the
@@ -88,7 +88,7 @@ target-agnostic: the same `jobs` declaration can deploy through any target, and
 each target serializes it its own way. What ties a particular service's params
 to a particular target is not the params — it is the **service factory**, the
 constructor that creates the service node. A scheduler is a `compute()` service,
-`compute()` is `@prisma/compose-prisma-cloud`'s, so `@prisma/compose-prisma-cloud`
+`compute()` is `@prisma/composer-prisma-cloud`'s, so `@prisma/composer-prisma-cloud`
 is the target that serializes that scheduler's `jobs`. A scheduling extension
 that ships `defineSchedule` returns a plain param; the target hosting the
 scheduler is what encodes it. Nobody has to answer "which serializer" — the
@@ -96,7 +96,7 @@ target that runs the service is the answer.
 
 ### On Prisma Cloud specifically
 
-`@prisma/compose-prisma-cloud` stores configuration as project-scoped, encrypted
+`@prisma/composer-prisma-cloud` stores configuration as project-scoped, encrypted
 environment variables — rows of `{ key, value: string }` — which Compute injects
 into the service. Each key is generated in the framework's reserved `COMPOSE_`
 namespace and carries the service's address so it stays unique within the shared
@@ -118,7 +118,7 @@ medium is fixed by the framework.
 - **A new platform is a new target with its own serialization — not a change to
   core or to consuming code.** The param's schema is unchanged; only the storage
   side differs.
-- **`compute()` accepts user params, and `@prisma/compose-prisma-cloud`
+- **`compute()` accepts user params, and `@prisma/composer-prisma-cloud`
   serializes them.** Its reserved params (`port`) merge with the user's; a
   colliding name fails at authoring, the same way a colliding dependency name
   does.

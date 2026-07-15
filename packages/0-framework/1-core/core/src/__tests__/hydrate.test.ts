@@ -5,7 +5,7 @@ import { dependency, service } from '../node.ts';
 import { conn } from './helpers.ts';
 
 const build = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',

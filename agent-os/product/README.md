@@ -2,12 +2,12 @@
 
 This directory contains artifacts produced by the **Agent OS product planning workflow** (mission, roadmap, tech stack, naming).
 
-- [naming.md](naming.md) — how we name by user value; the piece names (Prisma Compose, Module, Prisma Data; "Prisma App" = the artifact) and the compose-from-blocks distribution model.
-- [vocabulary-tests.md](vocabulary-tests.md) — the spoken-sentence rubrics: unit nouns (System → Module, ADR-0025) and referential product names (Prisma App → Prisma Compose, ADR-0026).
+- [naming.md](naming.md) — how we name by user value; the piece names (Prisma Composer, Module, Prisma Data; "Prisma App" = the artifact) and the compose-from-blocks distribution model.
+- [vocabulary-tests.md](vocabulary-tests.md) — the spoken-sentence rubrics: unit nouns (System → Module, ADR-0025) and referential product names (Prisma App → Prisma Composer, ADR-0026).
 
 ## Source of truth for design/architecture
 
-Prisma Compose design and architecture documentation lives in:
+Prisma Composer design and architecture documentation lives in:
 
 - `docs/design/`
 

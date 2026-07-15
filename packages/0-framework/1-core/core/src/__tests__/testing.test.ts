@@ -6,7 +6,7 @@ import { mockService } from '../testing.ts';
 import { conn } from './helpers.ts';
 
 const build: BuildAdapter = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',

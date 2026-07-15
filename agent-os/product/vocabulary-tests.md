@@ -5,7 +5,7 @@ one for **units of composition** (produced by the "System" failure, resolved by
 [ADR-0025](../../docs/design/90-decisions/ADR-0025-name-the-unit-of-composition-module.md)),
 and one for **product names that must refer** (produced by the "Prisma App"
 framework-name failure, resolved by
-[ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-compose.md)).
+[ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-composer.md)).
 Every test in both is a sentence said aloud to a colleague.
 
 ## Part 1 — naming a unit of composition
@@ -26,7 +26,7 @@ People say "the auth module" all the time. See the failure record at the bottom.
 Three registers, only one of which we name:
 
 - **Package** — the artifact npm hosts. npm owns this vocabulary; we don't rename it.
-- **Extension** — what you slot into `prisma-compose.config.ts`: deploy targets, build
+- **Extension** — what you slot into `prisma-composer.config.ts`: deploy targets, build
   kinds, anything that extends the toolchain.
 - **Unit of composition** — what you plug together inside the app. This is the noun
   under test.
@@ -119,10 +119,10 @@ which is the proper register for a milieu, not a violation of the value rule.
 | Bare token | Fails: "app" is ambient noise in every conversation about software. |
 | Identity frames | Fails: "App 2.0" and "Intro to Prisma App" cannot pick out the product. |
 
-**Outcome:** the framework is **Prisma Compose**
-([ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-compose.md));
+**Outcome:** the framework is **Prisma Composer**
+([ADR-0026](../../docs/design/90-decisions/ADR-0026-name-the-framework-prisma-composer.md));
 "Prisma App" is kept as the name of the *artifact*, where it was always right — you
-compose Modules with Prisma Compose into your Prisma App. Compose beat the field
+compose Modules with Prisma Composer into your Prisma App. Compose beat the field
 (Construct, Alloy, Assemble, Wire, Forge, Stack, Prism, and a nineteen-word synonym
 sweep) as the only candidate with no failing grade — and as the semantically correct
 verb: build/construct/make mean fabricating from raw material; *compose* means

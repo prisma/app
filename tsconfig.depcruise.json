@@ -47,31 +47,33 @@
         "./packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-entrypoint.ts"
       ],
       "@internal/cron": ["./packages/1-prisma-cloud/2-shared-modules/cron/src/index.ts"],
-      "@prisma/compose/config": ["./packages/9-public/compose/src/config.ts"],
-      "@prisma/compose/deploy": ["./packages/9-public/compose/src/deploy.ts"],
-      "@prisma/compose/testing": ["./packages/9-public/compose/src/testing.ts"],
-      "@prisma/compose/casts": ["./packages/9-public/compose/src/casts.ts"],
-      "@prisma/compose/assertions": ["./packages/9-public/compose/src/assertions.ts"],
-      "@prisma/compose/rpc": ["./packages/9-public/compose/src/rpc.ts"],
-      "@prisma/compose/node/control": ["./packages/9-public/compose/src/node-control.ts"],
-      "@prisma/compose/node": ["./packages/9-public/compose/src/node.ts"],
-      "@prisma/compose/nextjs/control": ["./packages/9-public/compose/src/nextjs-control.ts"],
-      "@prisma/compose/nextjs": ["./packages/9-public/compose/src/nextjs.ts"],
-      "@prisma/compose-prisma-cloud/control": [
-        "./packages/9-public/compose-prisma-cloud/src/control.ts"
+      "@prisma/composer/config": ["./packages/9-public/composer/src/config.ts"],
+      "@prisma/composer/deploy": ["./packages/9-public/composer/src/deploy.ts"],
+      "@prisma/composer/testing": ["./packages/9-public/composer/src/testing.ts"],
+      "@prisma/composer/casts": ["./packages/9-public/composer/src/casts.ts"],
+      "@prisma/composer/assertions": ["./packages/9-public/composer/src/assertions.ts"],
+      "@prisma/composer/rpc": ["./packages/9-public/composer/src/rpc.ts"],
+      "@prisma/composer/node/control": ["./packages/9-public/composer/src/node-control.ts"],
+      "@prisma/composer/node": ["./packages/9-public/composer/src/node.ts"],
+      "@prisma/composer/nextjs/control": ["./packages/9-public/composer/src/nextjs-control.ts"],
+      "@prisma/composer/nextjs": ["./packages/9-public/composer/src/nextjs.ts"],
+      "@prisma/composer-prisma-cloud/control": [
+        "./packages/9-public/composer-prisma-cloud/src/control.ts"
       ],
-      "@prisma/compose-prisma-cloud/prisma-next": [
-        "./packages/9-public/compose-prisma-cloud/src/prisma-next.ts"
+      "@prisma/composer-prisma-cloud/prisma-next": [
+        "./packages/9-public/composer-prisma-cloud/src/prisma-next.ts"
       ],
-      "@prisma/compose-prisma-cloud/testing": [
-        "./packages/9-public/compose-prisma-cloud/src/testing.ts"
+      "@prisma/composer-prisma-cloud/testing": [
+        "./packages/9-public/composer-prisma-cloud/src/testing.ts"
       ],
-      "@prisma/compose-prisma-cloud/cron/scheduler-entrypoint": [
+      "@prisma/composer-prisma-cloud/cron/scheduler-entrypoint": [
         "./packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-entrypoint.ts"
       ],
-      "@prisma/compose-prisma-cloud/cron": ["./packages/9-public/compose-prisma-cloud/src/cron.ts"],
-      "@prisma/compose-prisma-cloud": ["./packages/9-public/compose-prisma-cloud/src/index.ts"],
-      "@prisma/compose": ["./packages/9-public/compose/src/index.ts"]
+      "@prisma/composer-prisma-cloud/cron": [
+        "./packages/9-public/composer-prisma-cloud/src/cron.ts"
+      ],
+      "@prisma/composer-prisma-cloud": ["./packages/9-public/composer-prisma-cloud/src/index.ts"],
+      "@prisma/composer": ["./packages/9-public/composer/src/index.ts"]
     }
   }
 }

@@ -11,7 +11,7 @@ auth module that needs a signing key:
 
 ```ts
 // 1. The reusable module declares a nameless NEED. It never learns which
-//    platform variable will feed it. (secret() is from @prisma/compose)
+//    platform variable will feed it. (secret() is from @prisma/composer)
 const auth = compute({
   name: 'auth',
   secrets: { signingKey: secret() },
@@ -20,7 +20,7 @@ const auth = compute({
 
 // 2. The application binds that need to a platform env var and provisions the
 //    module. Only the app names the variable. (envSecret() is from the target,
-//    @prisma/compose-prisma-cloud)
+//    @prisma/composer-prisma-cloud)
 export default module('app', ({ provision }) => {
   provision(auth, { secrets: { signingKey: envSecret('AUTH_SIGNING_KEY') } });
 });
@@ -69,7 +69,7 @@ then the value never lands in deploy state. A name missing from both places
 fails the deploy early, with the list of what to set.
 
 Finally, the **need lives in core and the source lives in the target**.
-`secret()` and the `SecretSource` it is bound to are `@prisma/compose`; core
+`secret()` and the `SecretSource` it is bound to are `@prisma/composer`; core
 forwards a source around but treats it as opaque and never reads inside it. The
 constructor that *builds* a source is the deploy target's: Prisma Cloud ships
 `envSecret('NAME')`, which validates an env-var name and wraps it. A different

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Dependency Cruiser configuration for Prisma Compose (ADR-0028).
+ * Dependency Cruiser configuration for Prisma Composer (ADR-0028).
  *
  * Derives module groups from architecture.config.json and encodes the
  * same-layer/downward-only semantics for domains and layers, plus the
@@ -227,7 +227,7 @@ export default {
       // Tests inside packages are excluded (they legitimately cross plane
       // boundaries); build tooling configs are excluded by NAME, deliberately
       // not by a generic `.config.` pattern — the examples'
-      // `prisma-compose.config.ts` files are user-facing imports and MUST be
+      // `prisma-composer.config.ts` files are user-facing imports and MUST be
       // cruised (they are how /control extensions enter the deploy, ADR-0017).
       path: [
         'node_modules',

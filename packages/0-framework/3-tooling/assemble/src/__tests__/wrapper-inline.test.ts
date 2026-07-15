@@ -16,7 +16,7 @@ describe('INLINE_EVERYTHING_EXCEPT_RUNTIME_BUILTINS', () => {
   test('everything else inlines: bare deps, scoped packages, subpaths', () => {
     expect(matches('pg')).toBe(true);
     expect(matches('arktype')).toBe(true);
-    expect(matches('@prisma/compose')).toBe(true);
+    expect(matches('@prisma/composer')).toBe(true);
     expect(matches('@storefront-auth/auth/contract')).toBe(true);
     // A package whose name merely STARTS with "bun" is not a runtime module.
     expect(matches('bunyan')).toBe(true);

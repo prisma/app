@@ -3,7 +3,11 @@ import { describe, it } from 'node:test';
 
 import { findLeaks, findPnPinViolations, isExactPnVersion } from './check-publish-deps.mjs';
 
-const INTERNAL_NAMES = new Set(['@prisma/compose', '@prisma/compose-cloud', '@prisma/compose-rpc']);
+const INTERNAL_NAMES = new Set([
+  '@prisma/composer',
+  '@prisma/composer-cloud',
+  '@prisma/composer-rpc',
+]);
 
 describe('isExactPnVersion', () => {
   it('accepts a clean release version', () => {
@@ -48,11 +52,11 @@ describe('findPnPinViolations', () => {
           name: '@scope/pkg',
           version: '0.7.0',
           dependencies: {
-            '@prisma/compose': '0.7.0',
-            '@prisma/compose-cloud': '0.7.0',
+            '@prisma/composer': '0.7.0',
+            '@prisma/composer-cloud': '0.7.0',
             arktype: '^2.1.29',
           },
-          peerDependencies: { '@prisma/compose-rpc': '0.7.0' },
+          peerDependencies: { '@prisma/composer-rpc': '0.7.0' },
         },
         INTERNAL_NAMES,
       ),
@@ -64,14 +68,14 @@ describe('findPnPinViolations', () => {
     const v = findPnPinViolations(
       {
         name: '@scope/pkg',
-        dependencies: { '@prisma/compose': '^0.7.0' },
+        dependencies: { '@prisma/composer': '^0.7.0' },
       },
       INTERNAL_NAMES,
     );
     assert.equal(v.length, 1);
     assert.deepEqual(v[0], {
       field: 'dependencies',
-      name: '@prisma/compose',
+      name: '@prisma/composer',
       spec: '^0.7.0',
     });
   });
@@ -81,7 +85,7 @@ describe('findPnPinViolations', () => {
       const v = findPnPinViolations(
         {
           name: '@scope/pkg',
-          dependencies: { '@prisma/compose': spec },
+          dependencies: { '@prisma/composer': spec },
         },
         INTERNAL_NAMES,
       );
@@ -94,8 +98,8 @@ describe('findPnPinViolations', () => {
     const v = findPnPinViolations(
       {
         name: '@scope/pkg',
-        peerDependencies: { '@prisma/compose': '^0.7.0' },
-        optionalDependencies: { '@prisma/compose-cloud': '~0.7.0' },
+        peerDependencies: { '@prisma/composer': '^0.7.0' },
+        optionalDependencies: { '@prisma/composer-cloud': '~0.7.0' },
       },
       INTERNAL_NAMES,
     );
@@ -109,7 +113,7 @@ describe('findPnPinViolations', () => {
       findPnPinViolations(
         {
           name: '@scope/pkg',
-          devDependencies: { '@prisma/compose': '^0.7.0' },
+          devDependencies: { '@prisma/composer': '^0.7.0' },
         },
         INTERNAL_NAMES,
       ),
@@ -150,8 +154,8 @@ describe('findPnPinViolations', () => {
     const v = findPnPinViolations(
       {
         name: '@scope/pkg',
-        dependencies: { '@prisma/compose': '0.7.0' },
-        peerDependencies: { '@prisma/compose-cloud': '^0.7.0' },
+        dependencies: { '@prisma/composer': '0.7.0' },
+        peerDependencies: { '@prisma/composer-cloud': '^0.7.0' },
       },
       INTERNAL_NAMES,
     );
@@ -163,8 +167,8 @@ describe('findPnPinViolations', () => {
     const pkg = {
       name: '@scope/pkg',
       dependencies: {
-        '@prisma/compose': 'workspace:0.7.0',
-        '@prisma/compose-cloud': 'catalog:',
+        '@prisma/composer': 'workspace:0.7.0',
+        '@prisma/composer-cloud': 'catalog:',
       },
     };
     assert.deepEqual(findPnPinViolations(pkg, INTERNAL_NAMES), []);
@@ -177,7 +181,7 @@ describe('findPnPinViolations', () => {
       findPnPinViolations(
         {
           name: '@scope/pkg',
-          dependencies: { '@prisma/compose': '0.7.0-dev.5' },
+          dependencies: { '@prisma/composer': '0.7.0-dev.5' },
         },
         INTERNAL_NAMES,
       ),

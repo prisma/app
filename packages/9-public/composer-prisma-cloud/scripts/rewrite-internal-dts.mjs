@@ -1,5 +1,5 @@
 // Rewrites inline `import("@internal/…")` type references left in the rolled
-// declarations to the public `@prisma/compose` subpaths. Top-level imports are
+// declarations to the public `@prisma/composer` subpaths. Top-level imports are
 // handled by the resolve hook in tsdown.config.ts; TypeScript's inline import
 // types inside the internals' prebuilt d.mts are plain text the bundler passes
 // through, so they are mapped here. Fails the build if any @internal IMPORT
@@ -7,17 +7,17 @@
 import { globSync, readFileSync, writeFileSync } from 'node:fs';
 
 const MAP = [
-  ['@internal/foundation/casts', '@prisma/compose/casts'],
-  ['@internal/foundation/assertions', '@prisma/compose/assertions'],
-  ['@internal/core/config', '@prisma/compose/config'],
-  ['@internal/core/deploy', '@prisma/compose/deploy'],
-  ['@internal/core/testing', '@prisma/compose/testing'],
-  ['@internal/core', '@prisma/compose'],
-  ['@internal/rpc', '@prisma/compose/rpc'],
-  ['@internal/node/control', '@prisma/compose/node/control'],
-  ['@internal/node', '@prisma/compose/node'],
-  ['@internal/nextjs/control', '@prisma/compose/nextjs/control'],
-  ['@internal/nextjs', '@prisma/compose/nextjs'],
+  ['@internal/foundation/casts', '@prisma/composer/casts'],
+  ['@internal/foundation/assertions', '@prisma/composer/assertions'],
+  ['@internal/core/config', '@prisma/composer/config'],
+  ['@internal/core/deploy', '@prisma/composer/deploy'],
+  ['@internal/core/testing', '@prisma/composer/testing'],
+  ['@internal/core', '@prisma/composer'],
+  ['@internal/rpc', '@prisma/composer/rpc'],
+  ['@internal/node/control', '@prisma/composer/node/control'],
+  ['@internal/node', '@prisma/composer/node'],
+  ['@internal/nextjs/control', '@prisma/composer/nextjs/control'],
+  ['@internal/nextjs', '@prisma/composer/nextjs'],
 ];
 const IMPORT_REF = /(?:import\(|from )["']@internal\/[^"']+["']/;
 

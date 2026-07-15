@@ -107,11 +107,11 @@ export interface Bundle {
 /** Shared input shape for every extension's build descriptor. */
 export interface AssembleInput {
   readonly build: BuildAdapter;
-  /** Extra patterns to inline into the wrapper besides `@prisma/compose*` (e.g. the app's own workspace packages). */
+  /** Extra patterns to inline into the wrapper besides `@prisma/composer*` (e.g. the app's own workspace packages). */
   readonly wrapperNoExternal?: readonly RegExp[];
-  /** The service's graph address (e.g. "storefront.web"). Unique per service, so the assembler uses it to name this service's own working directory: `<cwd>/.prisma-compose/artifacts/<address>/`. */
+  /** The service's graph address (e.g. "storefront.web"). Unique per service, so the assembler uses it to name this service's own working directory: `<cwd>/.prisma-composer/artifacts/<address>/`. */
   readonly address: string;
-  /** The directory the deploy command was run from. The assembler puts its working directory under it (`<cwd>/.prisma-compose/`), the same place the CLI writes its other generated files. */
+  /** The directory the deploy command was run from. The assembler puts its working directory under it (`<cwd>/.prisma-composer/`), the same place the CLI writes its other generated files. */
   readonly cwd: string;
 }
 
@@ -184,7 +184,7 @@ function extensionsById(
 function unknownExtensionError(extension: string, id: NodeId): LowerError {
   return new LowerError(
     `No extension "${extension}" is configured (needed by node "${id}") — add it to ` +
-      "prisma-compose.config.ts's `extensions` (import its /control entry and list its descriptor).",
+      "prisma-composer.config.ts's `extensions` (import its /control entry and list its descriptor).",
   );
 }
 

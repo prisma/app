@@ -1,7 +1,7 @@
 /**
  * The authoring vocabulary for Prisma Cloud — nodes carrying their
  * connection and config knowledge. The driver is a parameter, so the extension
- * ships none and the client type is inferred. Imports @prisma/compose and
+ * ships none and the client type is inferred. Imports @prisma/composer and
  * nothing else. Pure barrel — implementations live in the named modules.
  */
 

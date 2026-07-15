@@ -2,8 +2,8 @@ import { UsageError } from 'clipanion';
 import { run } from './main.ts';
 
 /**
- * Run the `prisma-compose` CLI end to end: dispatch `argv`, map errors to exit
- * codes. Shared by this package's `bin` and the unscoped `prisma-compose` launcher.
+ * Run the `prisma-composer` CLI end to end: dispatch `argv`, map errors to exit
+ * codes. Shared by this package's `bin` and the unscoped `prisma-composer` launcher.
  */
 export async function cli(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
   try {

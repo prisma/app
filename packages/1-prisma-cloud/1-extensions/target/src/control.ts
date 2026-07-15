@@ -1,6 +1,6 @@
 /**
  * The extension's control-plane entry (ADR-0017) — the only place
- * @internal/lowering is imported; loaded only by `prisma-compose.config.ts`.
+ * @internal/lowering is imported; loaded only by `prisma-composer.config.ts`.
  */
 
 import type { ExtensionDescriptor } from '@internal/core/config';
@@ -72,12 +72,12 @@ function resolveOptions(opts: PrismaCloudOptions): ResolvedCloudOptions {
   return { workspaceId, region, projectId, branchId };
 }
 
-/** The Prisma Cloud extension descriptor — `prisma-compose.config.ts` lists it under `extensions`. */
+/** The Prisma Cloud extension descriptor — `prisma-composer.config.ts` lists it under `extensions`. */
 export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor => {
   const o = resolveOptions(opts);
 
   return {
-    id: '@prisma/compose-prisma-cloud',
+    id: '@prisma/composer-prisma-cloud',
 
     providers: () =>
       asProvidersLayer(
@@ -103,7 +103,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
           const projectId = o.projectId;
           if (projectId === undefined || projectId.length === 0) {
             throw new Error(
-              'prismaCloud(): environment variable PRISMA_PROJECT_ID is required (the CLI sets it — deploy via `prisma-compose deploy`).',
+              'prismaCloud(): environment variable PRISMA_PROJECT_ID is required (the CLI sets it — deploy via `prisma-composer deploy`).',
             );
           }
           for (const key of ['DATABASE_URL', 'DATABASE_URL_POOLED']) {

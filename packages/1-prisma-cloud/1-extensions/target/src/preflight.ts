@@ -7,7 +7,7 @@
  * never lands in hosted deploy state. A name absent from both fails the deploy,
  * listing exactly what is missing and where to set it.
  *
- * Control-plane only (imported by control.ts → prisma-compose.config.ts); runs
+ * Control-plane only (imported by control.ts → prisma-composer.config.ts); runs
  * in the CLI parent, so it builds its own Management API client from env — the
  * same credential path `ensureContainers` uses.
  */

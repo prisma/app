@@ -18,14 +18,14 @@ describe('resource()', () => {
     const provides = dbContract();
     const node = resource({
       name: 'db',
-      extension: '@prisma/compose-prisma-cloud',
+      extension: '@prisma/composer-prisma-cloud',
       provides,
     });
 
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.name).toBe('db');
-    expect(node.extension).toBe('@prisma/compose-prisma-cloud');
+    expect(node.extension).toBe('@prisma/composer-prisma-cloud');
     expect(node.type).toBe('fake/db');
     expect(node.provides).toBe(provides);
     expect(Object.isFrozen(node)).toBe(true);
@@ -133,7 +133,7 @@ describe('dependency()', () => {
 
 describe('service()', () => {
   const build = {
-    extension: '@prisma/compose/node',
+    extension: '@prisma/composer/node',
     type: 'node',
     module: 'file:///app/src/service.ts',
     entry: 'dist/server.js',
@@ -147,7 +147,7 @@ describe('service()', () => {
     });
     const node = service({
       name: 'hello',
-      extension: '@prisma/compose-prisma-cloud',
+      extension: '@prisma/composer-prisma-cloud',
       type: 'fake/app',
       inputs: { db },
       params: { port: number({ default: 3000 }) },
@@ -157,12 +157,12 @@ describe('service()', () => {
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('service');
     expect(node.name).toBe('hello');
-    expect(node.extension).toBe('@prisma/compose-prisma-cloud');
+    expect(node.extension).toBe('@prisma/composer-prisma-cloud');
     expect(node.type).toBe('fake/app');
     expect(node.inputs.db).toBe(db);
     expect(node.params).toEqual({ port: number({ default: 3000 }) });
     expect(node.build).toEqual({
-      extension: '@prisma/compose/node',
+      extension: '@prisma/composer/node',
       type: 'node',
       module: 'file:///app/src/service.ts',
       entry: 'dist/server.js',

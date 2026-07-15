@@ -53,7 +53,7 @@ test('pnPostgres(contract) yields the dependency requiring that contract; its bi
 });
 
 const build: BuildAdapter = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',

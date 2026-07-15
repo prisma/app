@@ -265,97 +265,97 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose/src/deploy.ts",
+      "glob": "packages/9-public/composer/src/deploy.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/compose/src/config.ts",
+      "glob": "packages/9-public/composer/src/config.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/compose/src/node-control.ts",
+      "glob": "packages/9-public/composer/src/node-control.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/compose/src/nextjs-control.ts",
+      "glob": "packages/9-public/composer/src/nextjs-control.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/compose/src/index.ts",
+      "glob": "packages/9-public/composer/src/index.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose/src/testing.ts",
+      "glob": "packages/9-public/composer/src/testing.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose/src/casts.ts",
+      "glob": "packages/9-public/composer/src/casts.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose/src/assertions.ts",
+      "glob": "packages/9-public/composer/src/assertions.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose/src/rpc.ts",
+      "glob": "packages/9-public/composer/src/rpc.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose/src/node.ts",
+      "glob": "packages/9-public/composer/src/node.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose/src/nextjs.ts",
+      "glob": "packages/9-public/composer/src/nextjs.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose-prisma-cloud/src/control.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/control.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/compose-prisma-cloud/src/index.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/index.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose-prisma-cloud/src/prisma-next.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/prisma-next.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose-prisma-cloud/src/testing.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/testing.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/compose-prisma-cloud/src/cron.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/cron.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"

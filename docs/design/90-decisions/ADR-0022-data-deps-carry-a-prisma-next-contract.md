@@ -4,8 +4,8 @@
 
 A second data primitive joins bare `postgres()`: `pnPostgres`, a
 Prisma Next-typed Postgres resource and dependency, shipped in
-`@prisma/compose-prisma-cloud` behind its own subpath entry
-(`@prisma/compose-prisma-cloud/prisma-next`). **Prisma Next** is Prisma's
+`@prisma/composer-prisma-cloud` behind its own subpath entry
+(`@prisma/composer-prisma-cloud/prisma-next`). **Prisma Next** is Prisma's
 schema-and-migration engine; its unit is a **contract** — a deterministic,
 hashable description of a database schema, emitted as `contract.json` (data) and
 `contract.d.ts` (types).
@@ -17,7 +17,7 @@ provision, and a dependency that resolves to a typed client:
 // contract.ts — wrap Prisma Next's emitted artifact into the framework's kind.
 // contract.json is pure data; Contract is its emitted, branded type. Neither
 // pulls in Prisma Next's CLI or migration engine.
-import { pnContract } from '@prisma/compose-prisma-cloud/prisma-next';
+import { pnContract } from '@prisma/composer-prisma-cloud/prisma-next';
 import type { Contract } from '../contract.d.ts';
 import contractJson from '../contract.json' with { type: 'json' };
 export const widgetContract = pnContract<Contract>(contractJson);
@@ -155,7 +155,7 @@ closes both.
 - Services get schema-typed data access with the schema version enforced at the
   type level, at Load, and at deploy — three checkpoints, the same shape as RPC
   contracts.
-- `@prisma/compose-prisma-cloud` takes `@prisma-next/postgres` (and transitively
+- `@prisma/composer-prisma-cloud` takes `@prisma-next/postgres` (and transitively
   `pg`) as a dependency; install weight is shared by all users, runtime weight
   only by importers of the subpath.
 - The deploy pipeline becomes schema-aware: contract changes without an authored

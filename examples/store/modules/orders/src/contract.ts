@@ -2,7 +2,7 @@
  * orders' public RPC contract. `placeOrder` snapshots the product's name and
  * price at placement time — later catalog changes don't rewrite history.
  */
-import { contract, rpc } from '@prisma/compose/rpc';
+import { contract, rpc } from '@prisma/composer/rpc';
 import { type } from 'arktype';
 
 export const order = type({

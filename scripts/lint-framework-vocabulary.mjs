@@ -5,7 +5,7 @@
  * appears anywhere in a domain's shipped source — including comments and
  * naming, not just import specifiers.
  *
- * The framework domain (`@prisma/compose` core, `packages/0-framework`) is
+ * The framework domain (`@prisma/composer` core, `packages/0-framework`) is
  * target-agnostic: it must never name a specific database/target, so a helper
  * whose Postgres-ness lives in a doc comment or an identifier is exactly the
  * leak this catches (unlike `lint:deps`'s import graph, which sees only real

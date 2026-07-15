@@ -4,7 +4,7 @@ import nextjs from '../index.ts';
 describe('nextjs({ module, appDir })', () => {
   test('returns a plain { extension, type, module, appDir, entry } build adapter descriptor', () => {
     expect(nextjs({ module: 'file:///app/src/service.ts', appDir: '..' })).toEqual({
-      extension: '@prisma/compose/nextjs',
+      extension: '@prisma/composer/nextjs',
       type: 'nextjs',
       module: 'file:///app/src/service.ts',
       appDir: '..',

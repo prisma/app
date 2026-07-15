@@ -5,9 +5,9 @@
  * supplies any producer of `catalogContract`; orders never knows which.
  */
 import { fileURLToPath } from 'node:url';
-import { module } from '@prisma/compose';
-import { rpc } from '@prisma/compose/rpc';
-import { pnPostgres } from '@prisma/compose-prisma-cloud/prisma-next';
+import { module } from '@prisma/composer';
+import { rpc } from '@prisma/composer/rpc';
+import { pnPostgres } from '@prisma/composer-prisma-cloud/prisma-next';
 import { catalogContract } from '@store/catalog/contract';
 import { ordersContract } from './contract.ts';
 import { ordersData } from './data.ts';

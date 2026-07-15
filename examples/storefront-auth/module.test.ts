@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { Load } from '@prisma/compose';
-import { secretName } from '@prisma/compose-prisma-cloud';
+import { Load } from '@prisma/composer';
+import { secretName } from '@prisma/composer-prisma-cloud';
 import root from './module.ts';
 
 describe('storefront-auth root graph', () => {

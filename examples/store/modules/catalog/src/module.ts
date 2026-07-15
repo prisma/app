@@ -11,8 +11,8 @@
  * it doesn't read as "catalog.catalog".
  */
 import { fileURLToPath } from 'node:url';
-import { module } from '@prisma/compose';
-import { pnPostgres } from '@prisma/compose-prisma-cloud/prisma-next';
+import { module } from '@prisma/composer';
+import { pnPostgres } from '@prisma/composer-prisma-cloud/prisma-next';
 import { catalogContract } from './contract.ts';
 import { catalogData } from './data.ts';
 import catalogService from './service.ts';
