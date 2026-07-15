@@ -40,11 +40,11 @@
     "@prisma/streams-server": "0.1.11"
   },
   "devDependencies": {
-    "@durable-streams/server-conformance-tests": "^0.2.3",
+    "@durable-streams/server-conformance-tests": "^0.3.5",
     "@internal/tsdown-config": "workspace:0.1.0",
     "@types/bun": "^1.3.13",
     "tsdown": "^0.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.10"
   }
 }
