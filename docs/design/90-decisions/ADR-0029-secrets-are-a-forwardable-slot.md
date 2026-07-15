@@ -1,9 +1,5 @@
 # ADR-0029: Secrets are a forwardable slot
 
-## Status
-
-Proposed
-
 ## Context
 
 A service needs a secret — a signing key, an API token — whose value the platform
