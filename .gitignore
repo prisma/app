@@ -18,7 +18,8 @@ packages/e2e-tests/.tmp-output
 .alchemy/
 .drive/projects/*/reviews/
 
-# `prisma-compose deploy`/`destroy`'s generated stack file (deploy-cli.md) — regenerated every run.
+# `prisma-compose deploy`/`destroy`'s generated stack file (deploy-cli.md) —
+# regenerated every run, full of machine-local absolute paths.
 .prisma-compose/
 .makerkit/
 
