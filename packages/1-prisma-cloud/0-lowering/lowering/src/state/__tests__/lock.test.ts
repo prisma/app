@@ -100,7 +100,7 @@ describe.skipIf(pg === undefined)('acquireStateLock', () => {
     // — by joining the advisory lock it holds (identified by the same key
     // `acquireStateLock` computes) to `pg_stat_activity`, not by reaching
     // into `acquireStateLock`'s internals.
-    const key = `prisma-compose:${stack}/${stage}`;
+    const key = `prisma-composer:${stack}/${stage}`;
     const lockRows = await admin<{ pid: number }[]>`
       select l.pid
       from pg_locks l

@@ -39,7 +39,7 @@ export function s3Credentials(opts?: {
   if (opts?.name !== undefined) {
     return resource({
       name: opts.name,
-      extension: '@prisma/compose-prisma-cloud',
+      extension: '@prisma/composer-prisma-cloud',
       provides: credentialsContract,
     });
   }

@@ -22,7 +22,7 @@ import { loadEntry } from './load-entry.ts';
 import { type RunAlchemyInput, runAlchemy } from './run-alchemy.ts';
 import { validateRegistryCoverage } from './validate-coverage.ts';
 
-const BINARY_NAME = 'prisma-compose';
+const BINARY_NAME = 'prisma-composer';
 
 /** The <entry>/--name/--stage surface shared by deploy and destroy; execute() is unused — run() drives the pipeline directly so error handling stays under this module's control. */
 abstract class DeployCliCommand extends Command {
@@ -70,7 +70,7 @@ class DestroyCommand extends DeployCliCommand {
 function buildCli(): Cli {
   return Cli.from([DeployCommand, DestroyCommand], {
     binaryName: BINARY_NAME,
-    binaryLabel: 'The prisma-compose deploy CLI',
+    binaryLabel: 'The prisma-composer deploy CLI',
   });
 }
 
@@ -199,7 +199,7 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
     warnIfNoLocalDeployState(cwd);
   }
 
-  // 1. Find + load prisma-compose.config.ts — runs extension env validation before the entry import.
+  // 1. Find + load prisma-composer.config.ts — runs extension env validation before the entry import.
   const resolvedEntryPath = path.resolve(cwd, args.entry);
   const configPath = findConfigPathForEntry(resolvedEntryPath);
   if (configPath === undefined) {
@@ -269,7 +269,7 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
     }
   }
 
-  // 8. Generate .prisma-compose/alchemy.run.ts (tool state lives where you run the tool).
+  // 8. Generate .prisma-composer/alchemy.run.ts (tool state lives where you run the tool).
   const stackPath = writeStackFile({
     entryPath: entryModule.path,
     cwd,

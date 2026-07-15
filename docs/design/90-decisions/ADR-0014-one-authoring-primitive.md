@@ -27,7 +27,7 @@ There is no separate `app()` construct. The name for what you build is a
 (This ADR's naming choices for the unit, the framework, the packages, and the
 CLI are superseded — see
 [ADR-0025](ADR-0025-name-the-unit-of-composition-module.md) and
-[ADR-0026](ADR-0026-name-the-framework-prisma-compose.md); the single-primitive
+[ADR-0026](ADR-0026-name-the-framework-prisma-composer.md); the single-primitive
 model here stands.)
 
 ## Reasoning
@@ -57,7 +57,7 @@ core stays small and stable, with specifics pushed out into extensions — here,
 that means one authoring construct, not two.
 
 One consequence is worth stating plainly: "App" never appears as an imported
-symbol anywhere in a Prisma Compose codebase. It's the product name and the
+symbol anywhere in a Prisma Composer codebase. It's the product name and the
 word for the deployed result — but the only thing a developer ever writes is
 `module()`.
 
@@ -72,8 +72,8 @@ word for the deployed result — but the only thing a developer ever writes is
   once it's in the wild.
 - **The unit noun, framework name, package family, and CLI now live in other
   ADRs.** [ADR-0025](ADR-0025-name-the-unit-of-composition-module.md) names the
-  unit Module; [ADR-0026](ADR-0026-name-the-framework-prisma-compose.md) names
-  the framework Prisma Compose and renames the packages and CLI to match.
+  unit Module; [ADR-0026](ADR-0026-name-the-framework-prisma-composer.md) names
+  the framework Prisma Composer and renames the packages and CLI to match.
 
 ## Alternatives considered
 
@@ -85,8 +85,8 @@ word for the deployed result — but the only thing a developer ever writes is
 
 ## Related
 
-- [ADR-0026](ADR-0026-name-the-framework-prisma-compose.md) — the framework
-  name (Prisma Compose), the package family, and the CLI.
+- [ADR-0026](ADR-0026-name-the-framework-prisma-composer.md) — the framework
+  name (Prisma Composer), the package family, and the CLI.
 - [ADR-0025](ADR-0025-name-the-unit-of-composition-module.md) — the unit of
   composition (Module), authored with `module()`.
 - [ADR-0003](ADR-0003-deploy-derives-everything-from-the-root-node.md) — deploy

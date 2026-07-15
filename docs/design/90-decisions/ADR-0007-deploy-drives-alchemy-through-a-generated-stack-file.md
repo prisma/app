@@ -2,10 +2,10 @@
 
 ## Decision
 
-`prisma-compose deploy` materializes its work as a small, human-readable stack
-module at `.prisma-compose/alchemy.run.ts` — regenerated on every run,
+`prisma-composer deploy` materializes its work as a small, human-readable stack
+module at `.prisma-composer/alchemy.run.ts` — regenerated on every run,
 gitignored — and shells out to the `alchemy` CLI against it. It does not
-embed Alchemy's provisioning engine programmatically. `prisma-compose destroy`
+embed Alchemy's provisioning engine programmatically. `prisma-composer destroy`
 drives
 `alchemy destroy` against the same generated file.
 
@@ -15,9 +15,9 @@ Here is the file the CLI generates for a single-service app (the deploy root
 is always a module — see ADR-0003):
 
 ```ts
-// .prisma-compose/alchemy.run.ts — generated; do not edit
-import { lower } from '@prisma/compose/deploy';
-import { fromEnv } from "@prisma/compose-prisma-cloud/target";
+// .prisma-composer/alchemy.run.ts — generated; do not edit
+import { lower } from '@prisma/composer/deploy';
+import { fromEnv } from "@prisma/composer-prisma-cloud/target";
 import app from "../src/module.ts";
 
 export default lower(app, fromEnv(), {
@@ -36,7 +36,7 @@ The answer is to write the pipeline's results down first. The file above *is*
 the CLI's work product: which module is the app, which pack's target, what
 the application is named, where each assembled bundle landed. Written as a
 runnable module, that product becomes inspectable — a failing deploy prints
-the file's path, and running `alchemy deploy .prisma-compose/alchemy.run.ts`
+the file's path, and running `alchemy deploy .prisma-composer/alchemy.run.ts`
 directly bisects the failure into "the framework computed the wrong thing" versus
 "Alchemy/the platform rejected the right thing". No debugger, no verbose
 mode: the artifact between the two modules is a file you can read.

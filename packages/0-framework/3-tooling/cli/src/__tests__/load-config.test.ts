@@ -1,5 +1,5 @@
 /**
- * Discovery (walk-up) + real c12 evaluation of a `prisma-compose.config.ts` in a
+ * Discovery (walk-up) + real c12 evaluation of a `prisma-composer.config.ts` in a
  * temp tree, plus the field-by-field shape validation. The config file's
  * imports here are self-contained (no extension packages) — the resolution
  * proof against REAL extension /control entries lives in test/integration.
@@ -19,7 +19,9 @@ import {
 const tmpDirs: string[] = [];
 
 function makeTree(): string {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-cli-config-')));
+  const dir = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-cli-config-')),
+  );
   tmpDirs.push(dir);
   return dir;
 }
@@ -102,7 +104,7 @@ describe('loadAppConfig() — real c12 evaluation', () => {
 });
 
 describe('validateConfigShape() — field-by-field CliErrors', () => {
-  const configPath = '/repo/app/prisma-compose.config.ts';
+  const configPath = '/repo/app/prisma-composer.config.ts';
 
   test('an empty export is a CliError naming defineConfig', () => {
     expect(() => validateConfigShape({}, configPath)).toThrow(CliError);

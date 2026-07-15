@@ -5,7 +5,7 @@
  * end (`pnPostgres(catalogData)` in service.ts). Emitted from contract.prisma
  * by `prisma-next contract emit`.
  */
-import { pnContract } from '@prisma/compose-prisma-cloud/prisma-next';
+import { pnContract } from '@prisma/composer-prisma-cloud/prisma-next';
 import type { Contract } from '../contract.d.ts';
 import contractJson from '../contract.json' with { type: 'json' };
 

@@ -14,7 +14,7 @@ Contract source: [spec.md](spec.md). Do not re-derive the design; implement it.
 **Outcome:** a node service — including the cron scheduler, whose build module
 is `scheduler-service.mjs`, not `service.ts` — assembles its wrapper to
 `main.mjs` inside a deploy-owned, address-keyed dir
-(`<cwd>/.prisma-compose/artifacts/<address>/`), with the user's built entry
+(`<cwd>/.prisma-composer/artifacts/<address>/`), with the user's built entry
 copied in beside it. Nothing is written into `node_modules` or the user's build
 output.
 
@@ -37,7 +37,7 @@ them; `main.mjs` staging is deploy-owned and address-keyed.
 **Completed when:**
 - `pnpm test:packages` covers a node assemble over a non-`service.ts` module
   (cron-scheduler shape) producing `main.mjs`; asserts staging is under
-  `.prisma-compose/artifacts/<address>/`, not `node_modules`/user output.
+  `.prisma-composer/artifacts/<address>/`, not `node_modules`/user output.
 - Existing node-adapter + assemble tests green with the new `AssembleInput`.
 
 ## D2 — nextjs adapter takes the standalone path; stops completing the tree
@@ -89,7 +89,7 @@ links in your build, e.g. cp -RL`). No deref, no symlink tar entries.
 **Outcome:** storefront-auth's storefront module builds a **complete flat
 standalone** (next build → copy `.next/static` + `public/` → no symlinks) and
 its `nextjs()` call uses the standalone-path API, so its deploy path works with
-the framework no longer completing the tree. `.prisma-compose/` is gitignored.
+the framework no longer completing the tree. `.prisma-composer/` is gitignored.
 
 **Implementation notes:** update
 `examples/storefront-auth/modules/storefront/src/service.ts`'s `nextjs({...})`
@@ -105,7 +105,7 @@ the new contract end-to-end.
 - Locally: storefront-auth's build produces a standalone with `static/` +
   `public/` present and zero symlinks; `assembleServices` + `packageComputeArtifact`
   over that tree succeed (binary, local — the live deploy is the PR's CI).
-- `examples/storefront-auth/.gitignore` ignores `.prisma-compose/`.
+- `examples/storefront-auth/.gitignore` ignores `.prisma-composer/`.
 
 ---
 

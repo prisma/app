@@ -23,14 +23,14 @@ function scalarDeclaration(
   return {
     owner,
     name,
-    schema: { vendor: '@prisma/compose' },
+    schema: { vendor: '@prisma/composer' },
     optional: opts.optional ?? false,
     default: opts.default,
   };
 }
 
 const build = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
@@ -57,7 +57,7 @@ describe('postgres({ name })', () => {
     expect(isNode(node)).toBe(true);
     expect(node.kind).toBe('resource');
     expect(node.type).toBe('postgres');
-    expect(node.extension).toBe('@prisma/compose-prisma-cloud');
+    expect(node.extension).toBe('@prisma/composer-prisma-cloud');
     expect(node.name).toBe('db');
     expect(node.provides).toBe(postgresContract);
     expect('connection' in node).toBe(false);
@@ -565,7 +565,7 @@ describe('structured params + target-owned serialization (ADR-0018/0019)', () =>
   test('configOf reports a schema projection, not a scalar type tag', () => {
     const app = compute({ name: 's', deps: { db: postgres() }, build });
     const portDecl = configOf(app).find((d) => d.owner === 'service' && d.name === 'port');
-    expect(portDecl?.schema).toEqual({ vendor: '@prisma/compose' });
+    expect(portDecl?.schema).toEqual({ vendor: '@prisma/composer' });
   });
 
   test('LANDMINE: a dependency-input value passes through encode untouched — a provisioning ref keeps its edge', () => {

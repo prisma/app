@@ -6,14 +6,14 @@
   "scripts": {
     "build": "echo 'nothing to build for this package itself \u2014 @storefront-auth/auth and @storefront-auth/storefront build via turbo ^build, from the workspace deps below'",
     "typecheck": "tsc --noEmit",
-    "deploy": "pnpm turbo run build --filter @prisma/example-storefront-auth... && ( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-compose deploy module.ts ${STOREFRONT_STACK_NAME:+--name \"$STOREFRONT_STACK_NAME\"} )",
-    "destroy": "( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-compose destroy module.ts --production ${STOREFRONT_STACK_NAME:+--name \"$STOREFRONT_STACK_NAME\"} )",
+    "deploy": "pnpm turbo run build --filter @prisma/example-storefront-auth... && ( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-composer deploy module.ts ${STOREFRONT_STACK_NAME:+--name \"$STOREFRONT_STACK_NAME\"} )",
+    "destroy": "( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-composer destroy module.ts --production ${STOREFRONT_STACK_NAME:+--name \"$STOREFRONT_STACK_NAME\"} )",
     "test": "bun test module.test.ts"
   },
   "dependencies": {
     "@effect/platform-bun": "4.0.0-beta.92",
-    "@prisma/compose": "workspace:0.1.0",
-    "@prisma/compose-prisma-cloud": "workspace:0.1.0",
+    "@prisma/composer": "workspace:0.1.0",
+    "@prisma/composer-prisma-cloud": "workspace:0.1.0",
     "@storefront-auth/auth": "workspace:0.1.0",
     "@storefront-auth/storefront": "workspace:0.1.0",
     "alchemy": "2.0.0-beta.59",
@@ -21,7 +21,7 @@
     "effect": "4.0.0-beta.92"
   },
   "devDependencies": {
-    "@prisma/compose": "workspace:0.1.0",
+    "@prisma/composer": "workspace:0.1.0",
     "@types/bun": "^1.3.13",
     "typescript": "^6.0.3"
   }

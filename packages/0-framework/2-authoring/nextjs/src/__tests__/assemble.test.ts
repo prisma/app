@@ -10,7 +10,7 @@ const tmpDirs: string[] = [];
 
 /** A fresh tmp root standing in for a Next app: src/service.ts, .next/standalone/<deep>, .next/static, public. */
 function makeAppRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-nextjs-assemble-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-nextjs-assemble-'));
   tmpDirs.push(root);
   fs.mkdirSync(path.join(root, 'src'), { recursive: true });
   return root;
@@ -66,7 +66,7 @@ describe('assemble()', () => {
         address: 'web',
         cwd: root,
         build: {
-          extension: '@prisma/compose/node',
+          extension: '@prisma/composer/node',
           type: 'node',
           module: moduleUrl(root),
           entry: 'server.js',
@@ -89,7 +89,7 @@ describe('assemble()', () => {
   test('ships the standalone tree, copies static/public to the located app dir, main.mjs at root', async () => {
     const root = makeAppRoot();
     const { appRel } = writeNextBuild(root);
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-nextjs-cwd-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-nextjs-cwd-'));
     tmpDirs.push(cwd);
 
     const result = await assemble({
@@ -98,7 +98,7 @@ describe('assemble()', () => {
       build: nextjs({ module: moduleUrl(root), appDir: '..' }),
     });
 
-    const workDir = path.join(cwd, '.prisma-compose', 'artifacts', 'storefront.web');
+    const workDir = path.join(cwd, '.prisma-composer', 'artifacts', 'storefront.web');
     const bundleApp = path.join(workDir, 'bundle', appRel);
     expect(result.dir).toBe(workDir);
     // The deep server path came from Next's manifest (relativeAppDir), prefixed with bundle/.

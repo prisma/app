@@ -1,4 +1,4 @@
-/** The `prisma-compose.config.ts` surface (ADR-0017): statically imports each extension's node-descriptor registry plus the state store; core defines only the types. */
+/** The `prisma-composer.config.ts` surface (ADR-0017): statically imports each extension's node-descriptor registry plus the state store; core defines only the types. */
 import type * as Layer from 'effect/Layer';
 import type {
   AlchemyStateLayer,
@@ -16,7 +16,7 @@ import type { Graph } from './graph.ts';
  * keyed by the node's within-extension ID (`node.type` / `build.type`).
  */
 export interface ExtensionDescriptor {
-  /** The extension's package name, e.g. "@prisma/compose-prisma-cloud" — what a node's `extension` field is matched against. */
+  /** The extension's package name, e.g. "@prisma/composer-prisma-cloud" — what a node's `extension` field is matched against. */
   readonly id: string;
   /** ONE registry per extension, keyed by node ID. */
   readonly nodes: Record<string, NodeDescriptor>;
@@ -66,7 +66,7 @@ export interface PrismaAppConfig {
   readonly state: () => AlchemyStateLayer;
 }
 
-/** Typed identity — exists so `prisma-compose.config.ts` gets checked against PrismaAppConfig where it is written. */
+/** Typed identity — exists so `prisma-composer.config.ts` gets checked against PrismaAppConfig where it is written. */
 export function defineConfig(config: PrismaAppConfig): PrismaAppConfig {
   return config;
 }

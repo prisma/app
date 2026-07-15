@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown';
 
 // The app's own build (ADR-0005): the blob service's runnable, built to a
-// SINGLE self-contained dist/blobs/server.mjs. @prisma/compose/node's assemble()
+// SINGLE self-contained dist/blobs/server.mjs. @prisma/composer/node's assemble()
 // copies only the entry file into the deployed bundle (ADR-0004), so no sibling
 // chunks are allowed — outputOptions.inlineDynamicImports collapses @aws-sdk's
 // lazy imports and shared helpers into the one file. Everything is inlined

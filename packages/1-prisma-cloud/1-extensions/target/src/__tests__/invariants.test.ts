@@ -75,7 +75,7 @@ describe('invariant 2: authoring imports stay lean (core + pack)', () => {
 
     const js = await out.outputs[0]!.text();
     // Positive marker: the probe genuinely bundled the pack's vocabulary.
-    expect(js).toContain('@prisma/compose-prisma-cloud');
+    expect(js).toContain('@prisma/composer-prisma-cloud');
     for (const token of [
       'alchemy',
       'effect',
@@ -157,7 +157,7 @@ describe('invariant 5: no runtime coupling in shipped surface', () => {
 describe('invariant 6 (ADR-0017, extension config): the authoring entry never reaches the control entry', () => {
   test('no module reachable from src/index.ts imports a /control entry — the firewall by file boundary', () => {
     // Control-plane code (this extension's control.ts, and transitively
-    // prisma-alchemy/alchemy/effect) is imported ONLY by prisma-compose.config.ts.
+    // prisma-alchemy/alchemy/effect) is imported ONLY by prisma-composer.config.ts.
     // A control import reachable from the authoring barrel would get followed
     // and inlined by the wrapper's own bundler (tsdown/rolldown), dragging
     // deploy-only tooling into the runtime artifact.

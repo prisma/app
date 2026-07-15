@@ -137,7 +137,7 @@ describe('assembleServices()', () => {
     const graph = Load(root);
 
     await expect(assembleServices(graph, emptyConfig, CWD)).rejects.toThrow(
-      /No extension "@fixture\/node-adapter" is configured .*prisma-compose\.config\.ts/,
+      /No extension "@fixture\/node-adapter" is configured .*prisma-composer\.config\.ts/,
     );
   });
 

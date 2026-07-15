@@ -323,7 +323,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
           db: postgres(),
         },
         build: {
-          extension: '@prisma/compose/node',
+          extension: '@prisma/composer/node',
           type: 'node',
           module: 'file:///test/service.ts',
           entry: 'server.js',
@@ -384,7 +384,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
           deps: {},
           secrets: { stripeKey: secret() },
           build: {
-            extension: '@prisma/compose/node',
+            extension: '@prisma/composer/node',
             type: 'node',
             module: 'file:///test/service.ts',
             entry: 'server.js',
@@ -426,7 +426,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
         name: 'test-service',
         deps: {},
         build: {
-          extension: '@prisma/compose/node',
+          extension: '@prisma/composer/node',
           type: 'node',
           module: 'file:///test/service.ts',
           entry: 'server.js',
@@ -461,7 +461,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
         name: 'test-service',
         deps: {},
         build: {
-          extension: '@prisma/compose/node',
+          extension: '@prisma/composer/node',
           type: 'node',
           module: 'file:///test/service.ts',
           entry: 'server.js',
@@ -545,7 +545,7 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
 
 describe("prismaCloud().nodes['s3-store'] — the service descriptor with extended outputs (§ 5)", () => {
   const build = {
-    extension: '@prisma/compose/node',
+    extension: '@prisma/composer/node',
     type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',
@@ -662,7 +662,7 @@ describe("prismaCloud().nodes['s3-store'] — the service descriptor with extend
 
 describe('s3StoreService() authoring factory', () => {
   const build = {
-    extension: '@prisma/compose/node',
+    extension: '@prisma/composer/node',
     type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',
@@ -693,7 +693,7 @@ describe('sharing: one module-provisioned postgres, two compute consumers — th
       () => {
         const target = prismaCloud({ workspaceId: 'ws_1' });
         const build = {
-          extension: '@prisma/compose/node',
+          extension: '@prisma/composer/node',
           type: 'node',
           module: 'file:///test/service.ts',
           entry: 'server.js',
@@ -757,7 +757,7 @@ describe('sharing: one module-provisioned postgres, two compute consumers — th
 
 describe('name validation — fail fast on Prisma name constraints, before creating anything', () => {
   const build = {
-    extension: '@prisma/compose/node',
+    extension: '@prisma/composer/node',
     type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',

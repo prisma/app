@@ -10,7 +10,7 @@ If you cannot use GitHub's form for any reason, you may instead email `security@
 
 When reporting, please include:
 
-- The affected package and version (e.g. `@prisma/compose@0.1.0`, or the `prisma-compose` CLI).
+- The affected package and version (e.g. `@prisma/composer@0.1.0`, or the `prisma-composer` CLI).
 - A reproduction or proof-of-concept, where possible.
 - Your assessment of severity and impact.
 - Any disclosure timeline you are working under.
@@ -27,8 +27,8 @@ We are still establishing public response-time and patch-time SLOs; the 5-busine
 
 In scope — we accept reports against any of the following published packages:
 
-- The `prisma-compose` CLI launcher.
-- The framework packages published to npm: `@prisma/compose`, `@prisma/compose/nextjs`, `@prisma/compose/node`, `@prisma/compose-prisma-cloud`, `@prisma/compose/rpc`, `@internal/assemble`, `@internal/cli`, and `@internal/lowering`. The canonical list is whichever of these packages appear on npm at any given time.
+- The `prisma-composer` CLI launcher.
+- The framework packages published to npm: `@prisma/composer`, `@prisma/composer/nextjs`, `@prisma/composer/node`, `@prisma/composer-prisma-cloud`, `@prisma/composer/rpc`, `@internal/assemble`, `@internal/cli`, and `@internal/lowering`. The canonical list is whichever of these packages appear on npm at any given time.
 
 Out of scope (please do not file vulnerability reports for these):
 
@@ -39,7 +39,7 @@ Out of scope (please do not file vulnerability reports for these):
 
 ## Supported versions
 
-Prisma Compose is **pre-1.0**. While we are pre-1.0:
+Prisma Composer is **pre-1.0**. While we are pre-1.0:
 
 - **Only the latest minor version receives security fixes.** Older minor versions (e.g. `0.3.x` once `0.4.0` is released) are not supported and will not receive backports. If you are on an older minor and report an issue, the fix will land on the latest minor and you will need to upgrade to receive it.
 - We reserve the right to introduce breaking changes between minor versions while addressing a security issue, if the simpler fix requires it.

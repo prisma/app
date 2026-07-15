@@ -9,7 +9,7 @@ const tmpDirs: string[] = [];
 
 /** A tmp dir standing in for a service package: src/service.ts + a dist/ sibling. */
 function makeServiceDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-node-assemble-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-node-assemble-'));
   tmpDirs.push(dir);
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   return dir;
@@ -17,7 +17,7 @@ function makeServiceDir(): string {
 
 /** A tmp dir standing in for the deploy CLI's cwd — kept separate from the service package so staging-location assertions can't pass by accident. */
 function makeCwd(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-node-assemble-cwd-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-node-assemble-cwd-'));
   tmpDirs.push(dir);
   return dir;
 }
@@ -40,7 +40,7 @@ describe('assemble()', () => {
     await expect(
       assemble({
         build: {
-          extension: '@prisma/compose/other',
+          extension: '@prisma/composer/other',
           type: 'other',
           module: moduleUrl(serviceDir),
           entry: 'server.js',
@@ -56,7 +56,7 @@ describe('assemble()', () => {
     await expect(
       assemble({
         build: {
-          extension: '@prisma/compose/node',
+          extension: '@prisma/composer/node',
           type: 'node',
           module: moduleUrl(serviceDir),
           entry: '../dist/server.js',
@@ -70,13 +70,13 @@ describe('assemble()', () => {
   test('rejects an entry that resolves inside the deploy-owned working dir', async () => {
     const cwd = makeCwd();
     const address = 'svc';
-    const workDir = path.join(cwd, '.prisma-compose', 'artifacts', address);
+    const workDir = path.join(cwd, '.prisma-composer', 'artifacts', address);
     fs.mkdirSync(path.join(workDir, 'src'), { recursive: true });
     fs.writeFileSync(path.join(workDir, 'server.js'), 'export default "app-entry";\n');
     await expect(
       assemble({
         build: {
-          extension: '@prisma/compose/node',
+          extension: '@prisma/composer/node',
           type: 'node',
           module: pathToFileURL(path.join(workDir, 'src', 'service.ts')).href,
           entry: '../server.js',
@@ -100,7 +100,7 @@ describe('assemble()', () => {
 
     const result = await assemble({
       build: {
-        extension: '@prisma/compose/node',
+        extension: '@prisma/composer/node',
         type: 'node',
         module: moduleUrl(serviceDir),
         entry: '../dist/server.js',
@@ -109,7 +109,7 @@ describe('assemble()', () => {
       cwd,
     });
 
-    expect(result.dir).toBe(path.join(cwd, '.prisma-compose', 'artifacts', address));
+    expect(result.dir).toBe(path.join(cwd, '.prisma-composer', 'artifacts', address));
     expect(result.entry).toBe('bundle/server.js');
     expect(fs.existsSync(path.join(result.dir, 'bundle', 'server.js'))).toBe(true);
     // The wrapper sits at the working-dir root, not under bundle/.
@@ -142,7 +142,7 @@ describe('assemble()', () => {
 
     const result = await assemble({
       build: {
-        extension: '@prisma/compose/node',
+        extension: '@prisma/composer/node',
         type: 'node',
         module: pathToFileURL(path.join(serviceDir, 'src', 'scheduler-service.ts')).href,
         entry: '../dist/scheduler-entrypoint.js',

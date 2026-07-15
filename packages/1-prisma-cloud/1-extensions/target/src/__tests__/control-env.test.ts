@@ -22,7 +22,7 @@ describe('prismaCloud() — env read + validation at construction (config evalua
   test('builds a descriptor from PRISMA_WORKSPACE_ID alone', async () => {
     await withEnv({ PRISMA_WORKSPACE_ID: 'ws-123', PRISMA_REGION: undefined }, () => {
       const descriptor = prismaCloud();
-      expect(descriptor.id).toBe('@prisma/compose-prisma-cloud');
+      expect(descriptor.id).toBe('@prisma/composer-prisma-cloud');
       expect(Object.keys(descriptor.nodes).sort()).toEqual([
         'compute',
         'credentials',

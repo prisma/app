@@ -5,7 +5,7 @@
  * `Cmp`, checked at `ModuleBuilder.provision`'s call site (node.ts); `satisfies`
  * is its runtime mirror, called at Load (graph.ts). Correctness comes from
  * the kind's builder shaping `Cmp` so assignability means the right thing —
- * see @prisma/compose/rpc's `contract()`/`rpc()`.
+ * see @prisma/composer/rpc's `contract()`/`rpc()`.
  */
 export interface Contract<Kind extends string, Cmp> {
   readonly kind: Kind;

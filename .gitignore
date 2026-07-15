@@ -18,9 +18,9 @@ packages/e2e-tests/.tmp-output
 .alchemy/
 .drive/projects/*/reviews/
 
-# `prisma-compose deploy`/`destroy`'s generated stack file (deploy-cli.md) —
+# `prisma-composer deploy`/`destroy`'s generated stack file (deploy-cli.md) —
 # regenerated every run, full of machine-local absolute paths.
-.prisma-compose/
+.prisma-composer/
 .makerkit/
 
 # Local clone of prisma-next used as a scaffolding reference; not part of this repo.
@@ -60,4 +60,4 @@ skills-lock.json
 next-env.d.ts
 
 # Deploy working dir — assembled artifacts staged per graph address (ADR-0005)
-.prisma-compose/
+.prisma-composer/

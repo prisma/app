@@ -1,7 +1,7 @@
 /**
  * The RPC kind's Contract builder. Its Cmp is the concrete function map
  * `Fns` (each entry built by `rpc()`), never a mapped type over a schema map
- * — that is what makes @prisma/compose's plain assignability check apply real
+ * — that is what makes @prisma/composer's plain assignability check apply real
  * function variance (contravariant input, covariant output). Load-time
  * compatibility is nominal: a value only satisfies itself.
  */

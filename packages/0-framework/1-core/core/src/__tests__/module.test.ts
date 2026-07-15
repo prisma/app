@@ -13,7 +13,7 @@ import { conn, providerContract } from './helpers.ts';
 const unwired = blindCast<never, 'deliberately unwired to exercise the runtime backstop'>({});
 
 const build = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
@@ -397,11 +397,11 @@ describe('importing a module module', () => {
 });
 
 describe('Load of a module root — typed wiring (the satisfies() backstop)', () => {
-  // A minimal Contract, nominal like @prisma/compose/rpc's own: satisfies() is
+  // A minimal Contract, nominal like @prisma/composer/rpc's own: satisfies() is
   // identity, so a ref-port only satisfies the contract it was actually built
   // from — mirrors what a cast-bypassed wrong wiring would look like at
   // runtime (TypeScript already rejects this at the call site — see
-  // @prisma/compose/rpc's contract-satisfaction.test-d.ts).
+  // @prisma/composer/rpc's contract-satisfaction.test-d.ts).
   const fakeContract = <Cmp>(cmp: Cmp): Contract<'rpc', Cmp> => {
     const value: Contract<'rpc', Cmp> = {
       kind: 'rpc',

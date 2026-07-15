@@ -4,10 +4,10 @@
  * `runScheduler` fires on. Short intervals so the integration test is quick.
  */
 
-import node from '@prisma/compose/node';
-import { rpc } from '@prisma/compose/rpc';
-import { compute } from '@prisma/compose-prisma-cloud';
-import { defineSchedule, triggerContract } from '@prisma/compose-prisma-cloud/cron';
+import node from '@prisma/composer/node';
+import { rpc } from '@prisma/composer/rpc';
+import { compute } from '@prisma/composer-prisma-cloud';
+import { defineSchedule, triggerContract } from '@prisma/composer-prisma-cloud/cron';
 import { workerContract } from '../worker/contract.ts';
 
 export const schedule = defineSchedule({ tick: '2s', mrr: '5s' });

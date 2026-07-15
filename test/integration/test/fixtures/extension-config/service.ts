@@ -1,12 +1,12 @@
-import { module } from '@prisma/compose';
-import node from '@prisma/compose/node';
-import { compute } from '@prisma/compose-prisma-cloud';
+import { module } from '@prisma/composer';
+import node from '@prisma/composer/node';
+import { compute } from '@prisma/composer-prisma-cloud';
 
 /**
  * A real (not faked) service: `@prisma/integration-tests` genuinely depends
- * on `@prisma/compose/node` and `@prisma/compose-prisma-cloud`, and this package's own
- * `prisma-compose.config.ts` (found by the CLI's walk-up from this entry)
- * imports both packages' REAL `/control` entries, so `prisma-compose deploy`
+ * on `@prisma/composer/node` and `@prisma/composer-prisma-cloud`, and this package's own
+ * `prisma-composer.config.ts` (found by the CLI's walk-up from this entry)
+ * imports both packages' REAL `/control` entries, so `prisma-composer deploy`
  * resolves them from this app's own dependency tree — see
  * `../../cli.extension-config.test.ts`. The deploy root must be a module.
  */

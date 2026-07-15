@@ -4,7 +4,7 @@ import node from '../index.ts';
 describe('node({ module, entry })', () => {
   test('returns a plain { extension, type, module, entry } build adapter descriptor', () => {
     expect(node({ module: 'file:///app/src/service.ts', entry: 'server.js' })).toEqual({
-      extension: '@prisma/compose/node',
+      extension: '@prisma/composer/node',
       type: 'node',
       module: 'file:///app/src/service.ts',
       entry: 'server.js',

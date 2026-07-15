@@ -1,7 +1,7 @@
 # Core model — classes and data structures
 
-The complete type-level design of `@prisma/compose` and the target-pack contract,
-with `@prisma/compose-prisma-cloud` as the worked instance. This is the implementation
+The complete type-level design of `@prisma/composer` and the target-pack contract,
+with `@prisma/composer-prisma-cloud` as the worked instance. This is the implementation
 design under [`core-and-targets.md`](../03-domain-model/core-and-targets.md): that
 doc says *what* the split is; this one says exactly *which types exist, what fields
 they carry, and who imports what*. Scope: the current model — Services declaring
@@ -54,20 +54,20 @@ glossary's Lowering — live in `/deploy`):
 **`/control` is reserved as the settled design direction**: today the control
 surface is two pure, lean functions, too little to justify its own entry — but
 the moment it grows (the queryable-topology emit, config-declaration tooling, graph
-transforms when Modules arrive), it carves out of `.` into `@prisma/compose/control`.
+transforms when Modules arrive), it carves out of `.` into `@prisma/composer/control`.
 The boundary is decided; only the carve is deferred.
 
 | Entry | Exports | Imports (weight) |
 | --- | --- | --- |
-| `@prisma/compose` | node factories (`service`, `resource`, `dependency`, `module`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
-| `@prisma/compose/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
-| `@prisma/compose-prisma-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/compose` only |
-| `@prisma/compose/rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/compose` + a Standard Schema validator |
-| `@prisma/compose-prisma-cloud/cron` | cron as a driver (see [ADR-0020](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)) — `defineSchedule`, `serveSchedule`, `cronScheduler`, `cron()`, `triggerContract` | `@prisma/compose` + `app-node` + `app-rpc` |
-| `@prisma/compose-prisma-cloud/storage` | S3-compatible object storage as a module (S3 wire protocol on Compute + Postgres `bytea`; see [`README`](../../../packages/1-prisma-cloud/2-shared-modules/storage/README.md)) — `storage()`, `s3()` + `s3Contract`/`S3Config`, `storageService`; `/storage/testing` adds the `createPgStore` + `startStorageServer` local stand-in | `@prisma/compose` + `app-node` + `@prisma/compose-prisma-cloud` |
-| `@prisma/compose-prisma-cloud/target` | `prismaCloud()` | `@internal/lowering`, `alchemy`, `effect` |
-| `@prisma/compose/node` · `@prisma/compose/nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@prisma/compose` only |
-| `@prisma/compose/node/assemble` · `@prisma/compose/nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
+| `@prisma/composer` | node factories (`service`, `resource`, `dependency`, `module`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
+| `@prisma/composer/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
+| `@prisma/composer-prisma-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/composer` only |
+| `@prisma/composer/rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/composer` + a Standard Schema validator |
+| `@prisma/composer-prisma-cloud/cron` | cron as a driver (see [ADR-0020](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)) — `defineSchedule`, `serveSchedule`, `cronScheduler`, `cron()`, `triggerContract` | `@prisma/composer` + `app-node` + `app-rpc` |
+| `@prisma/composer-prisma-cloud/storage` | S3-compatible object storage as a module (S3 wire protocol on Compute + Postgres `bytea`; see [`README`](../../../packages/1-prisma-cloud/2-shared-modules/storage/README.md)) — `storage()`, `s3()` + `s3Contract`/`S3Config`, `storageService`; `/storage/testing` adds the `createPgStore` + `startStorageServer` local stand-in | `@prisma/composer` + `app-node` + `@prisma/composer-prisma-cloud` |
+| `@prisma/composer-prisma-cloud/target` | `prismaCloud()` | `@internal/lowering`, `alchemy`, `effect` |
+| `@prisma/composer/node` · `@prisma/composer/nextjs` (build adapters) | `node()` · `nextjs()` — the authoring **descriptor** (lean, rides in `service.ts`), stamped with the adapter's own `pack` | `@prisma/composer` only |
+| `@prisma/composer/node/assemble` · `@prisma/composer/nextjs/assemble` | the deploy-side assembler (called by `package`) | `node:fs`/framework tooling — deploy machine only |
 | `@internal/assemble` | `assembleServices()` — routes each service to its adapter's `/assemble` via `${build.pack}/assemble` (entry-anchored), the wrapper-inlining policy, `AssembleError` | `node:fs`/`node:module` — deploy machine only; consumed by `@internal/cli` and the future programmatic deploy API |
 
 A build adapter splits exactly like a target pack: a **lean authoring descriptor**
@@ -78,7 +78,7 @@ resolved from `pack` (`${build.pack}/assemble`) the same entry-anchored way a
 target pack's `/target` is. The descriptor rides into every bundle that
 imports `service.ts`; the assembler never does.
 
-`@prisma/compose-prisma-cloud/cron` is a **subpath**, not its own package: Prisma Cloud's common Modules each get one entry point under `@prisma/compose-prisma-cloud` (`/cron` today, more later), so an app that never imports `/cron` never bundles it (tree-shakable by subpath). A Module's runnable entries (`scheduler-service.mjs`, `scheduler-entrypoint.mjs`) ship as self-contained dist files that only its own build descriptors reference by path — never imported by the subpath's own authoring barrel.
+`@prisma/composer-prisma-cloud/cron` is a **subpath**, not its own package: Prisma Cloud's common Modules each get one entry point under `@prisma/composer-prisma-cloud` (`/cron` today, more later), so an app that never imports `/cron` never bundles it (tree-shakable by subpath). A Module's runnable entries (`scheduler-service.mjs`, `scheduler-entrypoint.mjs`) ship as self-contained dist files that only its own build descriptors reference by path — never imported by the subpath's own authoring barrel.
 
 Per the [runtime-agnostic
 principle](../01-principles/architectural-principles.md), no execution-plane entry
@@ -87,20 +87,20 @@ driver, the server API) appears only in **app files**.
 
 Who imports what, end to end:
 
-- the **user's service module** (`service.ts`) imports `@prisma/compose-prisma-cloud`, a
-  build-adapter descriptor (`@prisma/compose/node` / `@prisma/compose/nextjs`), and the app's
+- the **user's service module** (`service.ts`) imports `@prisma/composer-prisma-cloud`, a
+  build-adapter descriptor (`@prisma/composer/node` / `@prisma/composer/nextjs`), and the app's
   own driver of choice (a DB client factory lives inline here). It exports the
   service node and **nothing runs on import**;
 - the **user's entrypoint** (`server.ts`, or a Next page) imports the service
   module and calls `service.load()` for typed deps. The app author writes AND
   bundles this file (their bundler, or `next build`) — the framework never touches it;
 - the **deploy entry is the app module itself** — there is no config file
-  (ADR-0003). `prisma-compose deploy <entry>` imports it, infers the target pack from
+  (ADR-0003). `prisma-composer deploy <entry>` imports it, infers the target pack from
   the nodes, and constructs the target from the environment via the pack's
   `/target` `fromEnv()` — the only place the heavy target import happens — then
-  calls `@prisma/compose/deploy`'s `lower()` internally. The app author writes no
-  stack file and no config file — `prisma-compose deploy` generates one at
-  `.prisma-compose/alchemy.run.ts` per run and drives it; see
+  calls `@prisma/composer/deploy`'s `lower()` internally. The app author writes no
+  stack file and no config file — `prisma-composer deploy` generates one at
+  `.prisma-composer/alchemy.run.ts` per run and drives it; see
   [`deploy-cli.md`](deploy-cli.md).
 
 At deploy, the build adapter's assembler produces a **normalized bundle dir**: the
@@ -112,13 +112,13 @@ compiled by the framework.
 
 ## Decision taken: Alchemy is core's provisioning substrate
 
-`@prisma/compose/deploy` imports `alchemy`/`effect`. The architectural principle
+`@prisma/composer/deploy` imports `alchemy`/`effect`. The architectural principle
 forbids core knowledge of **deployment targets** (Prisma Cloud); Alchemy is not a
 target — it is the provisioning plane [`layering.md`](../03-domain-model/layering.md)
 already commits to (claim 3: the framework uses Alchemy's definition language *and*
 engine). Putting the engine in core means every target pack supplies only data
 (providers + lowerings) instead of re-implementing apply/state. The swap test still
-holds: replacing `@prisma/compose-prisma-cloud` with another pack changes nothing in core.
+holds: replacing `@prisma/composer-prisma-cloud` with another pack changes nothing in core.
 
 ## The three execution paths
 
@@ -155,7 +155,7 @@ entry, `load()` reads the stash and hands back each dependency's typed binding. 
 deploy path's `serialize` and the run path's deserialize use the pack's **one
 shared serializer**, so writer and reader cannot drift.
 
-## Core model types (`@prisma/compose`)
+## Core model types (`@prisma/composer`)
 
 All nodes are **plain, frozen, serializable data** — with exactly **two sanctioned
 behavior slots** hanging off the graph as data: a Connection's `hydrate` (typed
@@ -182,7 +182,7 @@ interface NodeBase {
 // transparent wiring, not a routable thing (see § Nodes).
 
 // Shared base for pack-authored nodes (service + resource): the pack's package
-// name, e.g. "@prisma/compose-prisma-cloud" — deploy tooling reads it off the graph
+// name, e.g. "@prisma/composer-prisma-cloud" — deploy tooling reads it off the graph
 // to resolve `${pack}/target` (ADR-0003). DependencyEnd stays pack-less.
 // Deploy tooling routes on the (pack, type) pair: `pack` selects the target,
 // `type` selects that target's lowering-table entry within it — `type` never
@@ -250,7 +250,7 @@ interface Config {
 // entry-anchored) at deploy and never ships in a bundle (§ Lowering, § Extension).
 interface BuildAdapter {
   readonly kind: string                        // "node" · "nextjs" — the resolved module's own discriminant
-  readonly pack: string                        // the adapter's package name, e.g. "@prisma/compose/node" — baked in by node()/nextjs(); resolves `${pack}/assemble`
+  readonly pack: string                        // the adapter's package name, e.g. "@prisma/composer/node" — baked in by node()/nextjs(); resolves `${pack}/assemble`
   readonly module: string                      // the authoring module's import.meta.url — the anchor every other path resolves against
   readonly entry: string                       // built runnable, resolved relative to dirname(module) (e.g. "../dist/server.js")
 }
@@ -347,7 +347,7 @@ Target packs do not hand-roll node objects — they call core's factories, which
 validate, and freeze. This is the whole "framework provides / pack wraps" contract:
 
 ```ts
-// @prisma/compose
+// @prisma/composer
 function resource<C extends Contract<any, any>>(def: {
   name: string
   pack: string
@@ -381,7 +381,7 @@ inside a name would collide with that separator. Nothing executes: constructing
 nodes is pure. The pack's authoring factory (`compute()`) calls `service()` and
 returns a subclass carrying `run` and `load`.
 
-## Graph and Load (`@prisma/compose`)
+## Graph and Load (`@prisma/composer`)
 
 ```ts
 type NodeId = string           // path-derived: root "hello", its input "hello.db"
@@ -427,7 +427,7 @@ in memory to inspect or hand to `lower` (or the node's `run`). A **topology view
 plus edges, function slots dropped — is `JSON.stringify`-able by construction; the
 serialized-artifact emit step builds on this later.
 
-## Lowering (`@prisma/compose/deploy`)
+## Lowering (`@prisma/composer/deploy`)
 
 The router. Core's only job at deploy: Load, then look up each node's `type` in the
 target's lowering table and run what it finds, deps before dependents.
@@ -523,7 +523,7 @@ interface LoweredNode { readonly outputs: Readonly<Record<string, unknown>> }
 
 interface LowerOptions {
   readonly name: string                                  // stack name (+ Load's root id override)
-  // `prisma-compose deploy` runs each service's build-adapter assembler and writes
+  // `prisma-composer deploy` runs each service's build-adapter assembler and writes
   // the resulting bundle dirs here, into the generated stack file it hands to
   // `lower()` — one bundle per provision id (the deploy root is always a
   // module). A hand-composed / mixed-stack caller (the escape hatch — see
@@ -697,7 +697,7 @@ interface ConfigDeclaration {
   readonly optional: boolean
   readonly default: unknown
 }
-function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @prisma/compose (pure)
+function configOf(root: ServiceNode): readonly ConfigDeclaration[]   // in @prisma/composer (pure)
 
 // Core's boot-side helper: given a service and a concrete typed Config, hydrate
 // every input (connection.hydrate with its value slice) into its binding. No
@@ -729,7 +729,7 @@ Next page prerendered at build time, with no `run()` in the process) fails loudl
 too — pages that call `load()` opt out of build-time prerender (`force-dynamic`),
 and local dev supplies the stash through a dev harness.
 
-## The Prisma Cloud pack (`@prisma/compose-prisma-cloud`) — worked instance
+## The Prisma Cloud pack (`@prisma/composer-prisma-cloud`) — worked instance
 
 Authoring entry — nodes carrying their connection/host knowledge; the pack ships
 no driver, and a resource dependency's binding is its typed config (the app
@@ -739,7 +739,7 @@ builds its own client — ADR-0015):
 import { resource, dependency, service, configOf, hydrate, string, number,
   type BuildAdapter, type Config, type ConfigDeclaration, type Connection,
   type Contract, type Deps, type DependencyEnd, type Loaded, type ResourceNode,
-  type RunnableServiceNode } from "@prisma/compose"
+  type RunnableServiceNode } from "@prisma/composer"
 
 export interface PostgresConfig { readonly url: string }
 
@@ -761,7 +761,7 @@ export const postgresContract: Contract<"postgres", PostgresConfig> = Object.fre
 export function postgres(opts: { name: string }): ResourceNode<typeof postgresContract>
 export function postgres(): DependencyEnd<PostgresConfig, typeof postgresContract>
 export function postgres(opts?: { name: string }): unknown {
-  if (opts?.name !== undefined) return resource({ name: opts.name, pack: "@prisma/compose-prisma-cloud", provides: postgresContract })
+  if (opts?.name !== undefined) return resource({ name: opts.name, pack: "@prisma/composer-prisma-cloud", provides: postgresContract })
   return dependency({
     type: "postgres",
     connection: { params: { url: string() }, hydrate: (v) => v },
@@ -798,7 +798,7 @@ export const compute = <D extends Deps>(def: {
   build: BuildAdapter
 }): RunnableServiceNode<D, typeof computeParams> => {
   const node = service({
-    pack: "@prisma/compose-prisma-cloud", type: "compute", inputs: def.deps, params: computeParams, build: def.build,
+    pack: "@prisma/composer-prisma-cloud", type: "compute", inputs: def.deps, params: computeParams, build: def.build,
   })
   let loaded: Loaded<D, typeof computeParams> | undefined   // per-process memo for load()
   return Object.freeze({
@@ -840,7 +840,7 @@ Target entry — the lowering table (the only place `prisma-alchemy` is imported
 ```ts
 import * as Effect from "effect/Effect"
 import * as Prisma from "@internal/lowering"
-import type { Target } from "@prisma/compose/deploy"
+import type { Target } from "@prisma/composer/deploy"
 
 export interface PrismaCloudOptions {
   workspaceId: string
@@ -973,27 +973,27 @@ The assembler normalizes the app's own build output into a bundle dir with the
 framework wrapper, and reports the runtime entry path.
 
 ```ts
-// @prisma/compose/node — the authoring descriptor (lean; rides in service.ts). `entry`
+// @prisma/composer/node — the authoring descriptor (lean; rides in service.ts). `entry`
 // resolves relative to dirname(module) — exactly like an import specifier.
 // `pack` is baked in by this factory, not passed by the caller — the same
 // uniform rule a node's own `pack` follows (ADR-0003).
 export default (opts: { module: string; entry: string }): BuildAdapter =>
-  ({ kind: "node", pack: "@prisma/compose/node", module: opts.module, entry: opts.entry })
+  ({ kind: "node", pack: "@prisma/composer/node", module: opts.module, entry: opts.entry })
 
-// @prisma/compose/nextjs — carries an extra `appDir` (the Next app's root, the
+// @prisma/composer/nextjs — carries an extra `appDir` (the Next app's root, the
 // standalone layout root), also resolved relative to dirname(module). `entry`
 // is a bare filename inside the standalone output dir.
 export default (opts: { module: string; appDir: string; entry: string }): NextjsBuildAdapter =>
-  ({ kind: "nextjs", pack: "@prisma/compose/nextjs", module: opts.module, appDir: opts.appDir, entry: opts.entry })
+  ({ kind: "nextjs", pack: "@prisma/composer/nextjs", module: opts.module, appDir: opts.appDir, entry: opts.entry })
 
 // @internal/assemble — routes each service to its adapter's `/assemble` via
 // `${build.pack}/assemble` (entry-anchored, same resolver the pack CLI seam
 // uses for `${pack}/target`) — never a hardcoded kind→package map.
-// @prisma/compose-<adapter>/assemble — the deploy-side assembler (heavy; deploy machine)
+// @prisma/composer-<adapter>/assemble — the deploy-side assembler (heavy; deploy machine)
 // Produces the normalized bundle dir + the runtime entry path for the bootstrap.
 // No serviceDir/serviceModule input: the descriptor's own `module` is the anchor.
 interface Assembler {
-  assemble(input: AssembleInput): Promise<Bundle>  // { build } → { dir, entry } — @prisma/compose/deploy's shared seam contract
+  assemble(input: AssembleInput): Promise<Bundle>  // { build } → { dir, entry } — @prisma/composer/deploy's shared seam contract
 }
 ```
 
@@ -1018,8 +1018,8 @@ only; the app writes and bundles its own entry:
 // postgresContract and never provisions anything — the composing module owns the
 // database and wires its ref in. Its binding is `PostgresConfig` ({ url }); the
 // app builds its own client in server.ts (ADR-0015).
-import { compute, postgres } from "@prisma/compose-prisma-cloud"
-import node from "@prisma/compose/node"
+import { compute, postgres } from "@prisma/composer-prisma-cloud"
+import node from "@prisma/composer/node"
 
 const db = postgres()
 
@@ -1034,8 +1034,8 @@ export default compute({
 // src/module.ts — the app root: the module OWNS the database. It provisions the
 // identity `postgres({ name })` and wires its ref into the service's slot (the
 // contract matches); its name names the app (ADR-0006).
-import { module } from "@prisma/compose"
-import { postgres } from "@prisma/compose-prisma-cloud"
+import { module } from "@prisma/composer"
+import { postgres } from "@prisma/composer-prisma-cloud"
 import service from "./service.ts"
 
 export default module("hello", (h) => {
@@ -1057,7 +1057,7 @@ Bun.serve({ port, hostname: "0.0.0.0",
 // There is no deploy config file (ADR-0003). The app builds itself first
 // (its own bundler produces dist/server.js), then:
 //
-//   prisma-compose deploy src/module.ts
+//   prisma-composer deploy src/module.ts
 //
 // The CLI infers the target pack from the nodes, constructs it from the
 // environment (the pack's /target fromEnv() reads PRISMA_WORKSPACE_ID), runs
@@ -1091,8 +1091,8 @@ disappear into core's sequencing.
 
 ```ts
 // storefront/src/service.ts — declares the dependency; never learns how the URL arrives
-import { compute, http } from "@prisma/compose-prisma-cloud"
-import nextjs from "@prisma/compose/nextjs"
+import { compute, http } from "@prisma/composer-prisma-cloud"
+import nextjs from "@prisma/composer/nextjs"
 const auth = http({ name: "auth" })
 export default compute({ name: "storefront",
   deps: { auth },
@@ -1114,7 +1114,7 @@ export default async function Home() {
 // the application (Project) name; each service's build adapter carries its own
 // authoring module (BuildAdapter.module), so a module can compose services that
 // live in entirely different directories.
-import { postgres } from "@prisma/compose-prisma-cloud"
+import { postgres } from "@prisma/composer-prisma-cloud"
 import authService from "./modules/auth/src/service"
 import storefrontService from "./modules/storefront/src/service"
 export default module("storefront-auth", (h) => {
@@ -1124,7 +1124,7 @@ export default module("storefront-auth", (h) => {
 })
 
 // No deploy config file (ADR-0003): build both apps, then
-//   prisma-compose deploy app.ts
+//   prisma-composer deploy app.ts
 ```
 
 At deploy, core sequences: the db resource (lowered once) → auth provision →
@@ -1142,10 +1142,10 @@ producer from a resource — one mechanism.
 
 ## Invariants (enforced, not aspirational)
 
-1. **Core has no target dependency**: `@prisma/compose`'s `package.json` depends on
+1. **Core has no target dependency**: `@prisma/composer`'s `package.json` depends on
    neither `@internal/lowering` nor any `prisma-*` package — checked by a test.
-2. **Authoring imports stay lean**: bundling a module that imports `@prisma/compose`,
-   `@prisma/compose-prisma-cloud`, and a build-adapter descriptor (authoring entries
+2. **Authoring imports stay lean**: bundling a module that imports `@prisma/composer`,
+   `@prisma/composer-prisma-cloud`, and a build-adapter descriptor (authoring entries
    only) contains no `alchemy`/`effect`/`prisma-alchemy`/`new SQL(`/`node:fs`
    tokens — the import-split guard test, extended to the pack and the adapters'
    descriptor entries. The adapters' `/assemble` entries are deploy-only and
@@ -1180,7 +1180,7 @@ producer from a resource — one mechanism.
   `service.load()`, the same mechanism the Hono entry uses. No separate `use()`
   accessor is needed; the earlier framework-DI gap is closed by `load()`.
 - **Typed connection interfaces — shipped as Contracts.** A service-to-service
-  dependency is declared against a Contract (`@prisma/compose/rpc`'s `contract()` +
+  dependency is declared against a Contract (`@prisma/composer/rpc`'s `contract()` +
   `rpc()`), compatibility is checked at the wiring site, at Load
   (`satisfies()`), and per call, and the consumer's `load()` returns a typed
   client. `http()` remains the untyped escape hatch. The mechanism — including

@@ -31,9 +31,9 @@ type ReservedParams = typeof reservedParams;
  *     load() hydrates + memoizes the deps, config() returns the typed params.
  *     Separate accessors so a dep and a param never share a namespace (ADR-0021).
  *
- * `service()`'s underlying node carries `extension: '@prisma/compose-prisma-cloud'` —
- * the control-plane registry key `prisma-compose deploy` resolves through the
- * app's `prisma-compose.config.ts` (ADR-0017). This module loads nothing at
+ * `service()`'s underlying node carries `extension: '@prisma/composer-prisma-cloud'` —
+ * the control-plane registry key `prisma-composer deploy` resolves through the
+ * app's `prisma-composer.config.ts` (ADR-0017). This module loads nothing at
  * deploy time; nodes are pure data.
  */
 export const compute = <
@@ -73,7 +73,7 @@ export const compute = <
   });
   const node = service<D, P & ReservedParams, E, S>({
     name: def.name,
-    extension: '@prisma/compose-prisma-cloud',
+    extension: '@prisma/composer-prisma-cloud',
     type: 'compute',
     inputs: def.deps,
     params,

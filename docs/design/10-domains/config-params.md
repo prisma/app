@@ -70,7 +70,7 @@ Because serialization lives with the target and not the param, a param is
 target-agnostic — the same `jobs` declaration deploys through any target, each
 serializing it its own way. What binds a service's config to a particular target
 is the **service factory**: a scheduler is a `compute()` service, `compute()` is
-`@prisma/compose-prisma-cloud`'s, so app-cloud is the target that serializes that scheduler's
+`@prisma/composer-prisma-cloud`'s, so app-cloud is the target that serializes that scheduler's
 params. A scheduling extension's `defineSchedule` returns a plain param; whichever
 target runs the scheduler encodes it.
 
@@ -81,7 +81,7 @@ fail); serializability is the target's contract, surfaced as a deploy error.
 ## The round trip, end to end
 
 Follow `jobs` from the declaration to a firing timer, deployed through
-`@prisma/compose-prisma-cloud`, whose storage is project-scoped encrypted environment
+`@prisma/composer-prisma-cloud`, whose storage is project-scoped encrypted environment
 variables. (The scalar params `port` and the dependency `url` travel the same
 path; the structured one just exercises more of it.)
 
@@ -96,7 +96,7 @@ Config = { service: { jobs: [ {jobId:'tick',…}, {jobId:'mrr',…} ], port: 300
            inputs:  { trigger: { url: 'https://…runner…' } } }
 ```
 
-**Deploy — serialize (the target).** `@prisma/compose-prisma-cloud` encodes each value into
+**Deploy — serialize (the target).** `@prisma/composer-prisma-cloud` encodes each value into
 its medium — key/value strings, keyed `COMPOSE_ADDRESS_OWNER_NAME` to stay unique in
 the shared project — validating structured values and passing dependency-input values
 (provisioning refs) through untouched. Every generated key carries the `COMPOSE_`
@@ -157,7 +157,7 @@ module('auth', { secrets: { signingKey: secret() }, expose: … }, ({ secrets, p
 );
 
 // Only the ROOT names the platform variable (envSecret is the TARGET's, from
-// @prisma/compose-prisma-cloud — secret() is core's, from @prisma/compose):
+// @prisma/composer-prisma-cloud — secret() is core's, from @prisma/composer):
 provision(auth, { secrets: { signingKey: envSecret('AUTH_SIGNING_KEY') } });
 
 // Read at the point of use — expose() is the sole reader:
@@ -168,9 +168,9 @@ signingKey.expose();                       // the one door to the value
 `secrets()` sits beside `load()`/`config()` (ADR-0021). The `SecretBox` redacts
 under `toString`/`toJSON`/`valueOf`/`inspect`, so a stray log or serialization
 prints `[REDACTED]`; only `expose()` returns the value. `secret()` and the opaque
-`SecretSource` are core (`@prisma/compose`); `envSecret('NAME')` — the source
+`SecretSource` are core (`@prisma/composer`); `envSecret('NAME')` — the source
 constructor that names and validates a platform variable — is the target's, from
-`@prisma/compose-prisma-cloud` (ADR-0018/0019 applied to secrets).
+`@prisma/composer-prisma-cloud` (ADR-0018/0019 applied to secrets).
 
 The round trip carries only the name, never the value:
 

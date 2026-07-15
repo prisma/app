@@ -2,7 +2,7 @@
   "name": "@internal/cli",
   "version": "0.1.0",
   "type": "module",
-  "description": "The `prisma-compose` deploy CLI.",
+  "description": "The `prisma-composer` deploy CLI.",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",

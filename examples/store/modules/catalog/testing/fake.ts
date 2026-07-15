@@ -4,9 +4,9 @@
  * type-checked against the same contract the real catalog exposes. Test-only,
  * deliberately outside `src/`, so it never rides into the deployed artifact.
  */
-import node from '@prisma/compose/node';
-import { serve } from '@prisma/compose/rpc';
-import { compute } from '@prisma/compose-prisma-cloud';
+import node from '@prisma/composer/node';
+import { serve } from '@prisma/composer/rpc';
+import { compute } from '@prisma/composer-prisma-cloud';
 import { catalogContract, type Product } from '../src/contract.ts';
 
 export const FAKE_PRODUCTS: Product[] = [

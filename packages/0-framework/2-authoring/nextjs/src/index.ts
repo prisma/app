@@ -8,7 +8,7 @@
  * client assets (`.next/static`, `public/`) it omits — so there is no
  * build-script step and no path to spell out. Returns plain data; nothing runs
  * on import. `extension` + `type` are the control-plane registry key: deploy
- * tooling routes assembly through the app's `prisma-compose.config.ts` to this
+ * tooling routes assembly through the app's `prisma-composer.config.ts` to this
  * package's `/control` descriptor (ADR-0017).
  */
 import type { BuildAdapter } from '@internal/core';
@@ -20,7 +20,7 @@ export interface NextjsBuildAdapter extends BuildAdapter {
 }
 
 const nextjsBuild = (opts: { module: string; appDir: string }): NextjsBuildAdapter => ({
-  extension: '@prisma/compose/nextjs',
+  extension: '@prisma/composer/nextjs',
   type: 'nextjs',
   module: opts.module,
   appDir: opts.appDir,

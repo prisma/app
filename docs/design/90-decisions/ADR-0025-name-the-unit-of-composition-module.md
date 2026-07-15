@@ -5,7 +5,7 @@
 The unit of composition is a **Module**, authored with a single primitive:
 
 ```ts
-import { module } from '@prisma/compose';
+import { module } from '@prisma/composer';
 import catalogModule from './modules/catalog/module.ts';
 import storefrontService from './modules/storefront/service.ts';
 
@@ -17,7 +17,7 @@ export default module('store', ({ provision }) => {
 
 `module()` wraps services, resources, and other Modules, and composes
 recursively. The App is the outermost Module — the node you point
-`prisma-compose deploy` at. Everything ADR-0014 established about the
+`prisma-composer deploy` at. Everything ADR-0014 established about the
 primitive's shape (recursive composition, no privileged root, deploy derives
 everything from the root node) carries over unchanged; only the noun changed,
 from "System" to "Module."
@@ -29,7 +29,7 @@ framework.
 
 The vocabulary sits in a three-register model. A **package** is the artifact
 npm hosts; npm owns that word and we do not rename it. An **extension** is what
-you slot into `prisma-compose.config.ts` — deploy targets, build kinds,
+you slot into `prisma-composer.config.ts` — deploy targets, build kinds,
 anything that extends the toolchain. A **Module** is what you plug together
 inside the app. One npm package may register an extension and provide modules;
 the registers name roles, not artifacts.
@@ -131,7 +131,7 @@ where most of the actual usage is.
 - [ADR-0014](ADR-0014-one-authoring-primitive.md) — the single-primitive model
   this renames; its shape stands unchanged, its framework, package, and CLI
   names are superseded by
-  [ADR-0026](ADR-0026-name-the-framework-prisma-compose.md).
+  [ADR-0026](ADR-0026-name-the-framework-prisma-composer.md).
 - [ADR-0003](ADR-0003-deploy-derives-everything-from-the-root-node.md),
   [ADR-0006](ADR-0006-every-node-is-named.md) — the root-node mechanics "the
   App is the outermost Module" rests on.

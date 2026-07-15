@@ -27,7 +27,7 @@ export async function loadEntry(entryArg: string, cwd: string): Promise<LoadedEn
   if (!isNode(root) || root.kind === 'dependency' || root.kind === 'resource') {
     throw new CliError(
       `Entry module "${resolvedPath}" must default-export a node (a service or a module) — ` +
-        'construct it with service() or module() from @prisma/compose.',
+        'construct it with service() or module() from @prisma/composer.',
     );
   }
 

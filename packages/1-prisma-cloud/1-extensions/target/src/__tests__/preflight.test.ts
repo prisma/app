@@ -6,7 +6,7 @@ import { runPreflight } from '../preflight.ts';
 import { envSecret } from '../secret.ts';
 
 const build = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',

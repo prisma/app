@@ -2,7 +2,7 @@
   "name": "@internal/assemble",
   "version": "0.1.0",
   "type": "module",
-  "description": "Deploy-only: routes each service to its build adapter's /assemble entry and applies the wrapper-inlining policy. Consumed by @prisma/compose-cli; the future programmatic deploy API is its second consumer.",
+  "description": "Deploy-only: routes each service to its build adapter's /assemble entry and applies the wrapper-inlining policy. Consumed by @prisma/composer-cli; the future programmatic deploy API is its second consumer.",
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"

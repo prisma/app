@@ -1,36 +1,36 @@
 ---
-name: deploying-prisma-composes
+name: deploying-prisma-composers
 description: >-
-  How to deploy a Prisma App to production with `prisma-compose deploy`, stand up
+  How to deploy a Prisma App to production with `prisma-composer deploy`, stand up
   an isolated staging or per-PR preview environment with `--stage`, and tear
-  environments down with `prisma-compose destroy`. Destroy always requires an
-  explicit target — a bare `prisma-compose destroy` is an error. Use when
+  environments down with `prisma-composer destroy`. Destroy always requires an
+  explicit target — a bare `prisma-composer destroy` is an error. Use when
   deploying a Prisma App, creating a staging/preview environment, or removing
-  a deployed environment. Triggers on "prisma-compose deploy", "deploy a prisma
-  app", "--stage", "staging environment", "preview environment", "prisma-compose
+  a deployed environment. Triggers on "prisma-composer deploy", "deploy a prisma
+  app", "--stage", "staging environment", "preview environment", "prisma-composer
   destroy", "tear down a stage".
 ---
 
 # Deploying Prisma Apps
 
-`prisma-compose` deploys the app whose root node is your entry file's default
+`prisma-composer` deploys the app whose root node is your entry file's default
 export. Two commands, `deploy` and `destroy`; the target environment — called
 a **stage** — is chosen on the command line, never in your code.
 
 | You want to… | Run |
 | --- | --- |
-| Deploy to production | `prisma-compose deploy <entry>` |
-| Deploy an isolated environment | `prisma-compose deploy <entry> --stage <name>` |
-| Tear down an isolated environment | `prisma-compose destroy <entry> --stage <name>` |
-| Tear down production's resources | `prisma-compose destroy <entry> --production` |
+| Deploy to production | `prisma-composer deploy <entry>` |
+| Deploy an isolated environment | `prisma-composer deploy <entry> --stage <name>` |
+| Tear down an isolated environment | `prisma-composer destroy <entry> --stage <name>` |
+| Tear down production's resources | `prisma-composer destroy <entry> --production` |
 
 ## The commands
 
 ```sh
-prisma-compose deploy module.ts                  # production
-prisma-compose deploy module.ts --stage staging  # an isolated "staging" environment
-prisma-compose deploy module.ts --stage pr-42    # one isolated environment per PR
-prisma-compose deploy module.ts --name demo-42   # override the app name for this run
+prisma-composer deploy module.ts                  # production
+prisma-composer deploy module.ts --stage staging  # an isolated "staging" environment
+prisma-composer deploy module.ts --stage pr-42    # one isolated environment per PR
+prisma-composer deploy module.ts --name demo-42   # override the app name for this run
 ```
 
 A deploy needs exactly two environment variables: `PRISMA_SERVICE_TOKEN` and
@@ -39,10 +39,10 @@ the root module's name) and, for a named stage, the stage's Branch, creating
 either if it doesn't exist yet. A fresh checkout with just those two variables
 set deploys successfully.
 
-Build your app first — `prisma-compose deploy` does not build for you:
+Build your app first — `prisma-composer deploy` does not build for you:
 
 ```sh
-turbo run build && prisma-compose deploy module.ts
+turbo run build && prisma-composer deploy module.ts
 ```
 
 Re-deploying the same stage is idempotent: it finds the existing Project and
@@ -62,10 +62,10 @@ normalized.
 
 ## Destroy requires an explicit target
 
-A bare `prisma-compose destroy` is an error.
+A bare `prisma-composer destroy` is an error.
 
 ```sh
-prisma-compose destroy module.ts
+prisma-composer destroy module.ts
 # error: `destroy` requires an explicit target: --stage <name> to tear down a
 # branch environment, or --production to tear down the production environment.
 ```
@@ -73,8 +73,8 @@ prisma-compose destroy module.ts
 Name what you're tearing down:
 
 ```sh
-prisma-compose destroy module.ts --stage staging     # removes staging's resources, then its Branch
-prisma-compose destroy module.ts --production         # removes production's resources
+prisma-composer destroy module.ts --stage staging     # removes staging's resources, then its Branch
+prisma-composer destroy module.ts --production         # removes production's resources
 ```
 
 `--stage` and `--production` together is also an error — pick one. Destroying
@@ -90,10 +90,10 @@ first.
 ```sh
 cd examples/storefront-auth
 
-prisma-compose deploy module.ts                  # production: its own URL, its own database
-prisma-compose deploy module.ts --stage staging  # staging: a second, isolated URL and database
+prisma-composer deploy module.ts                  # production: its own URL, its own database
+prisma-composer deploy module.ts --stage staging  # staging: a second, isolated URL and database
 
-prisma-compose destroy module.ts --stage staging # tears down staging only — production is untouched
+prisma-composer destroy module.ts --stage staging # tears down staging only — production is untouched
 ```
 
 ## Full model

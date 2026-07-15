@@ -206,7 +206,7 @@ export function packAll(destDir) {
 function tarballNameFor(pkgName, version) {
   // Mirrors pnpm pack's default naming: `<name>-<version>.tgz` with the
   // package's `/` rewritten to `-` and the leading scope `@` dropped.
-  // (e.g. `@prisma/compose-cloud@1.2.3` → `prisma-compose-cloud-1.2.3.tgz`).
+  // (e.g. `@prisma/composer-cloud@1.2.3` → `prisma-composer-cloud-1.2.3.tgz`).
   return `${pkgName.replace(/^@/, '').replace(/\//g, '-')}-${version}.tgz`;
 }
 

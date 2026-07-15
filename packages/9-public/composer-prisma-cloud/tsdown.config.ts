@@ -3,22 +3,22 @@ import { defineConfig } from 'tsdown';
 
 // Cloud-domain internals (@internal/lowering, /prisma-cloud, /cron) are
 // inlined from their built dist. Framework internals are NOT bundled — a
-// resolve hook rewrites them to the public `@prisma/compose` subpaths and
+// resolve hook rewrites them to the public `@prisma/composer` subpaths and
 // marks them external, so both the emitted JS and the rolled .d.mts reference
 // the one installed framework copy (type identity: core's node brand is a
 // unique symbol; two bundled declaration copies would not unify).
 const FRAMEWORK: Record<string, string> = {
-  '@internal/foundation/casts': '@prisma/compose/casts',
-  '@internal/foundation/assertions': '@prisma/compose/assertions',
-  '@internal/core/config': '@prisma/compose/config',
-  '@internal/core/deploy': '@prisma/compose/deploy',
-  '@internal/core/testing': '@prisma/compose/testing',
-  '@internal/core': '@prisma/compose',
-  '@internal/rpc': '@prisma/compose/rpc',
-  '@internal/node/control': '@prisma/compose/node/control',
-  '@internal/node': '@prisma/compose/node',
-  '@internal/nextjs/control': '@prisma/compose/nextjs/control',
-  '@internal/nextjs': '@prisma/compose/nextjs',
+  '@internal/foundation/casts': '@prisma/composer/casts',
+  '@internal/foundation/assertions': '@prisma/composer/assertions',
+  '@internal/core/config': '@prisma/composer/config',
+  '@internal/core/deploy': '@prisma/composer/deploy',
+  '@internal/core/testing': '@prisma/composer/testing',
+  '@internal/core': '@prisma/composer',
+  '@internal/rpc': '@prisma/composer/rpc',
+  '@internal/node/control': '@prisma/composer/node/control',
+  '@internal/node': '@prisma/composer/node',
+  '@internal/nextjs/control': '@prisma/composer/nextjs/control',
+  '@internal/nextjs': '@prisma/composer/nextjs',
 };
 const externalizeFramework = {
   name: 'externalize-framework-internals',

@@ -82,7 +82,7 @@ describe('decideMigrationAction — the decision matrix', () => {
 describe('resolveTargetRef', () => {
   const contractJson = { storage: { storageHash: A } };
   const withTempDir = async (fn: (dir: string) => Promise<void>) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-pn-ref-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-pn-ref-'));
     try {
       await fn(dir);
     } finally {

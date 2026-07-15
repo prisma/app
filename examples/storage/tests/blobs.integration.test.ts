@@ -8,7 +8,7 @@
  * Skipped only on a dev machine with no Postgres; on CI the harness throws.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { createPgStore, startStorageServer } from '@prisma/compose-prisma-cloud/storage/testing';
+import { createPgStore, startStorageServer } from '@prisma/composer-prisma-cloud/storage/testing';
 import { createBlobApp } from '../src/blobs/app.ts';
 import { startTestPostgres, type TestPostgres } from './pg-harness.ts';
 

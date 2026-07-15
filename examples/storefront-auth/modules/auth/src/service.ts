@@ -1,6 +1,6 @@
-import { secret } from '@prisma/compose';
-import node from '@prisma/compose/node';
-import { compute, postgres } from '@prisma/compose-prisma-cloud';
+import { secret } from '@prisma/composer';
+import node from '@prisma/composer/node';
+import { compute, postgres } from '@prisma/composer-prisma-cloud';
 import { authContract } from './contract.ts';
 
 // The `db` dependency is pure requirement: its binding is PostgresConfig

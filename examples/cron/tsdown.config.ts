@@ -1,4 +1,4 @@
-import { prismaTsDownConfig } from '@prisma/compose/tsdown';
+import { prismaTsDownConfig } from '@prisma/composer/tsdown';
 
 // The app's own build (ADR-0005): two SEPARATE builds, one per service, each
 // into its own dist/ subdir — not one multi-entry build, which would split the

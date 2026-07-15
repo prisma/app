@@ -1,6 +1,6 @@
-import nextjs from '@prisma/compose/nextjs';
-import { rpc } from '@prisma/compose/rpc';
-import { compute } from '@prisma/compose-prisma-cloud';
+import nextjs from '@prisma/composer/nextjs';
+import { rpc } from '@prisma/composer/rpc';
+import { compute } from '@prisma/composer-prisma-cloud';
 import { catalogContract } from '@store/catalog/contract';
 import { ordersContract } from '@store/orders/contract';
 

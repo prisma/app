@@ -137,7 +137,7 @@ export const startTestPostgres = (): TestPostgres | undefined => {
 
   const baseDir = process.env['STATE_TEST_PG_TMPDIR'] ?? os.tmpdir();
   fs.mkdirSync(baseDir, { recursive: true });
-  const dataDir = fs.mkdtempSync(path.join(baseDir, 'prisma-compose-pn-pg-'));
+  const dataDir = fs.mkdtempSync(path.join(baseDir, 'prisma-composer-pn-pg-'));
   const logFile = path.join(dataDir, 'server.log');
 
   execFileSync(

@@ -24,6 +24,6 @@ describe('envSecret (Prisma Cloud secret source)', () => {
     const source = secretSource('STRIPE_SECRET_KEY');
     const read = () => secretName({ serviceAddress: 'ingest', slot: 'stripeKey', source });
     expect(read).toThrow(/secret slot "stripeKey" of service "ingest".*not created by envSecret/);
-    expect(read).toThrow(/envSecret\('NAME'\) from @prisma\/compose-prisma-cloud/);
+    expect(read).toThrow(/envSecret\('NAME'\) from @prisma\/composer-prisma-cloud/);
   });
 });

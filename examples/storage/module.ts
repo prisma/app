@@ -1,5 +1,5 @@
-import { module } from '@prisma/compose';
-import { storage } from '@prisma/compose-prisma-cloud/storage';
+import { module } from '@prisma/composer';
+import { storage } from '@prisma/composer-prisma-cloud/storage';
 import blobsService from './src/blobs/service.ts';
 
 /**

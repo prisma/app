@@ -3,10 +3,10 @@
 > **Status: superseded by [ADR-0014](../../docs/design/90-decisions/ADR-0014-one-authoring-primitive.md).**
 > This is the original proposal that opened the naming discussion, kept as a record of
 > the strategic reasoning (one product identity; why now, with agents). The decision
-> differs in three ways: the framework is **Prisma App** — not "Prisma Compose"; the
+> differs in three ways: the framework is **Prisma App** — not "Prisma Composer"; the
 > building block is a **System** — not "Hex"; and the registry (proposed here as
 > "Hexicon") is **deferred**, its name reopened. **Prisma Next → Prisma Data** remains
-> proposed. Where this doc says "Prisma Compose" read "Prisma App", and where it says
+> proposed. Where this doc says "Prisma Composer" read "Prisma App", and where it says
 > "Hex" read "System".
 
 I'd like to propose a holistic naming scheme for the Prisma family that reorients us
@@ -18,7 +18,7 @@ Here's the whole thing in one breath:
 
 > You build a **Prisma App** by snapping together **Hexes** — reusable building
 > blocks you install from a public registry. You wire them together with **Prisma
-> Compose**. You deploy it to **Prisma Cloud**, where it runs on **Prisma Compute**,
+> Composer**. You deploy it to **Prisma Cloud**, where it runs on **Prisma Compute**,
 > its data modeled by **Prisma Data** and persisted to **Prisma Postgres**.
 
 ## The family, named by role
@@ -31,7 +31,7 @@ The components you compose into a Prisma App:
 | Prisma Postgres | persist | my data has a home |
 | Prisma Streams | stream | my events flow and survive |
 | Prisma Data | data | I model, query, and manage my data |
-| Prisma Compose | compose | my app comes together from parts |
+| Prisma Composer | compose | my app comes together from parts |
 
 And the platform around them:
 
@@ -42,9 +42,9 @@ And the platform around them:
 
 ## Two renames worth flagging
 
-- **MakerKit → Prisma Compose.** "MakerKit" sounds like a standalone starter kit and
+- **MakerKit → Prisma Composer.** "MakerKit" sounds like a standalone starter kit and
   doesn't sit in the family. What it actually does is *compose* the other pieces into
-  an app — so the name should just say that. Prisma Compose belongs.
+  an app — so the name should just say that. Prisma Composer belongs.
 - **Prisma Next → Prisma Data.** This one's a bigger call, so it has [its own
   write-up](prisma-data-rename.md). Short version: Prisma Next was going to become
   "Prisma 8", but it isn't really the next ORM — it's a different product with a
@@ -81,7 +81,7 @@ Only the App has to be a word people identify with — "my app," "my data." The
 components just need to be clear in that context: nobody says "my Compute," they say
 "my app runs on Compute" — which is exactly right, because Compute is a supporting
 part, not the hero. And where a component maps to something you *do*, the name says so —
-you **compose** your app with Prisma Compose; the wiring it generates underneath stays
+you **compose** your app with Prisma Composer; the wiring it generates underneath stays
 out of the name.
 
 ## Why now: building apps fast, with agents
@@ -111,7 +111,7 @@ packages, so npm does the hosting — versions, resolution, all of it, for free.
 Hexicon is the thin, valuable layer on top: search, ranking, trust, and a
 one-command install. It's the same split as skills.sh — decentralized hosting plus a
 named directory everyone goes to. And unlike a plain package, installing a Hex
-doesn't just download it — Prisma Compose wires it into your app.
+doesn't just download it — Prisma Composer wires it into your app.
 
 The registry is the flywheel: the more Hexes people publish, the more valuable the
 whole thing gets. That's the part I'm most excited about.
@@ -127,7 +127,7 @@ before it ever ships.
 ## So, the pitch
 
 One identity — the **Prisma App** — with components named for what they do in
-context. Rename **MakerKit → Prisma Compose** and **Prisma Next → Prisma Data**.
+context. Rename **MakerKit → Prisma Composer** and **Prisma Next → Prisma Data**.
 Build **Hexicon** as the Hex registry (hosting stays on npm). And **Prisma Dev** to
 run it all locally.
 

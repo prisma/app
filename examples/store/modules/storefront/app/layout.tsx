@@ -1,6 +1,6 @@
 import './globals.css';
 
-export const metadata = { title: 'Compose Coffee' };
+export const metadata = { title: 'Composer Coffee' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

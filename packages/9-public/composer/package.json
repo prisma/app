@@ -1,10 +1,10 @@
 {
-  "name": "@prisma/compose",
+  "name": "@prisma/composer",
   "version": "0.1.0",
   "type": "module",
-  "description": "Prisma Compose — build a Prisma App by composing Modules. Core authoring, deploy pipeline, the prisma-compose CLI, and the rpc/node/nextjs authoring surfaces.",
+  "description": "Prisma Composer — build a Prisma App by composing Modules. Core authoring, deploy pipeline, the prisma-composer CLI, and the rpc/node/nextjs authoring surfaces.",
   "bin": {
-    "prisma-compose": "./dist/bin.mjs"
+    "prisma-composer": "./dist/bin.mjs"
   },
   "exports": {
     ".": "./dist/index.mjs",
@@ -57,7 +57,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/compose.git",
-    "directory": "packages/9-public/compose"
+    "directory": "packages/9-public/composer"
   },
   "engines": {
     "node": ">=24"

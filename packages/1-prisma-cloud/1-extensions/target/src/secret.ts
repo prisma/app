@@ -73,7 +73,7 @@ export function secretName(binding: SecretBinding): string {
     throw new Error(
       `secret slot "${binding.slot}" of service "${binding.serviceAddress}" is bound to a source ` +
         "not created by envSecret() — bind secrets with envSecret('NAME') from " +
-        '@prisma/compose-prisma-cloud.',
+        '@prisma/composer-prisma-cloud.',
     );
   }
   return payload.name;

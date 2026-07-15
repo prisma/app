@@ -186,7 +186,7 @@ describe.skipIf(pg === undefined)('applyPnMigration — no authored graph (dbIni
   let url: string;
 
   beforeAll(async () => {
-    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-pn-mig-'));
+    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-pn-mig-'));
     db = await createTestDatabase(pg.url);
     url = db.url;
   });
@@ -259,7 +259,7 @@ describe.skipIf(pg === undefined)('applyPnMigration — authored graph with a da
   let migrationsDir: string;
 
   beforeAll(async () => {
-    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-compose-pn-inv-'));
+    migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-composer-pn-inv-'));
     await authorWidgetMigrations(migrationsDir);
   });
   afterAll(async () => {

@@ -14,7 +14,7 @@ import { blindCast } from '@internal/foundation/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { standardValidate } from './standard-schema.ts';
 
-// biome-ignore lint/suspicious/noExplicitAny: accepts any concrete runnable service node — generics are invariant, so `any` is required (mirrors ModuleBuilder.provision in @prisma/compose).
+// biome-ignore lint/suspicious/noExplicitAny: accepts any concrete runnable service node — generics are invariant, so `any` is required (mirrors ModuleBuilder.provision in @prisma/composer).
 type AnyRunnable = RunnableServiceNode<any, any, any>;
 
 type CmpOf<C> = C extends Contract<string, infer Cmp> ? Cmp : never;

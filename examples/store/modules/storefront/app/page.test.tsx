@@ -3,7 +3,7 @@
  * `load()` returns typed fakes for catalog and orders via `mockService`, then
  * renders the page directly — no server, no environment, no cloud.
  */
-import { mockService } from '@prisma/compose/testing';
+import { mockService } from '@prisma/composer/testing';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type Service from '../src/service.ts';

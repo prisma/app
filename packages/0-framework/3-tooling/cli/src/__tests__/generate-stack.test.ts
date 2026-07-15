@@ -9,7 +9,7 @@ describe('renderStackFile() — a module root', () => {
     const content = renderStackFile({
       entryPath: '/repo/app/module.ts',
       cwd: '/repo/app',
-      configPath: '/repo/app/prisma-compose.config.ts',
+      configPath: '/repo/app/prisma-composer.config.ts',
       name: 'app',
       assembled: {
         bundles: {
@@ -19,8 +19,8 @@ describe('renderStackFile() — a module root', () => {
       },
     });
 
-    expect(content).toContain("import { lower } from '@prisma/compose/deploy';");
-    expect(content).toContain('import config from "../prisma-compose.config.ts";');
+    expect(content).toContain("import { lower } from '@prisma/composer/deploy';");
+    expect(content).toContain('import config from "../prisma-composer.config.ts";');
     expect(content).toContain('import app from "../module.ts";');
     expect(content).toContain('lower(app, config, {');
     expect(content).toContain('name: "app"');
@@ -40,12 +40,12 @@ describe('renderStackFile() — a module root', () => {
     const content = renderStackFile({
       entryPath: '/repo/apps/shop/module.ts',
       cwd: '/repo/apps/shop',
-      configPath: '/repo/prisma-compose.config.ts',
+      configPath: '/repo/prisma-composer.config.ts',
       name: 'app',
       assembled: { bundles: { app: { dir: '/repo/apps/shop/dist', entry: 'server.js' } } },
     });
 
-    expect(content).toContain('import config from "../../../prisma-compose.config.ts";');
+    expect(content).toContain('import config from "../../../prisma-composer.config.ts";');
   });
 
   test('a cwd containing "*/" does not break the generated file (F01)', () => {
@@ -57,7 +57,7 @@ describe('renderStackFile() — a module root', () => {
     const content = renderStackFile({
       entryPath: '/repo/examples/foo*/app/module.ts',
       cwd,
-      configPath: '/repo/examples/foo*/app/prisma-compose.config.ts',
+      configPath: '/repo/examples/foo*/app/prisma-composer.config.ts',
       name: 'app',
       assembled: {
         bundles: { app: { dir: '/repo/examples/foo*/app/dist/bundle', entry: 'server.js' } },
@@ -69,7 +69,7 @@ describe('renderStackFile() — a module root', () => {
     // The import lines (and everything after the header) must survive intact
     // — a block-comment header would have truncated the file right after the
     // embedded "*/" in the cwd, before these lines are even reached.
-    expect(content).toContain("import { lower } from '@prisma/compose/deploy';");
+    expect(content).toContain("import { lower } from '@prisma/composer/deploy';");
     expect(content).toContain('name: "app"');
   });
 });
@@ -87,7 +87,7 @@ describe('the generated stack file for a real module entry (no alchemy run)', ()
     const content = renderStackFile({
       entryPath: entry.path,
       cwd: fixtureDir,
-      configPath: path.join(fixtureDir, 'prisma-compose.config.ts'),
+      configPath: path.join(fixtureDir, 'prisma-composer.config.ts'),
       name: entry.root.name,
       assembled: {
         bundles: {
@@ -97,7 +97,7 @@ describe('the generated stack file for a real module entry (no alchemy run)', ()
       },
     });
 
-    expect(content).toContain('import config from "../prisma-compose.config.ts";');
+    expect(content).toContain('import config from "../prisma-composer.config.ts";');
     expect(content).toContain('import app from "../valid-module.ts";');
     expect(content).toContain('name: "fixture-module"');
     expect(content).toContain(
@@ -142,7 +142,7 @@ describe('nested-module proof (H1: module-composition) — dotted addresses surv
     const content = renderStackFile({
       entryPath: '/repo/app/module.ts',
       cwd: '/repo/app',
-      configPath: '/repo/app/prisma-compose.config.ts',
+      configPath: '/repo/app/prisma-composer.config.ts',
       name: 'shop',
       assembled: { bundles: { 'auth.api': { dir: '/bundles/auth-api', entry: 'server.js' } } },
     });

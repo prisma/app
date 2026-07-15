@@ -28,7 +28,7 @@ const app = service({
   inputs: { db },
   params: { port: number({ default: 3000 }) },
   build: {
-    extension: '@prisma/compose/node',
+    extension: '@prisma/composer/node',
     type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',
@@ -47,7 +47,7 @@ const caller = service({
   inputs: { peer },
   params: {},
   build: {
-    extension: '@prisma/compose/node',
+    extension: '@prisma/composer/node',
     type: 'node',
     module: 'file:///test/service.ts',
     entry: 'server.js',

@@ -1,5 +1,5 @@
-import { module } from '@prisma/compose';
-import { cron } from '@prisma/compose-prisma-cloud/cron';
+import { module } from '@prisma/composer';
+import { cron } from '@prisma/composer-prisma-cloud/cron';
 import catalogModule from '@store/catalog';
 import ordersModule from '@store/orders';
 import promotionsService, { schedule } from '@store/promotions';
@@ -16,7 +16,7 @@ import storefrontService from '@store/storefront';
  * catalog and orders each own their own Postgres internally — the root never
  * sees it. All it wires are the exposed, typed rpc ports.
  *
- * `cron` is a SHARED module (@prisma/compose-prisma-cloud/cron), not app
+ * `cron` is a SHARED module (@prisma/composer-prisma-cloud/cron), not app
  * code: it takes our schedule and our promotions runner, and its boundary
  * deps mirror the runner's own — so the root wires `catalog` into it exactly
  * as it would for any other consumer of that contract.

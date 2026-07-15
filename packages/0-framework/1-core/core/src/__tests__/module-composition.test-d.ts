@@ -8,14 +8,14 @@ import { string } from '../config.ts';
  * script) — never executed: the reject cases are structurally valid values
  * that simply fail Load's runtime backstop (see module-composition.test.ts),
  * so running this file would throw. `.test-d` (not `.test`) keeps it out of
- * `bun test`, mirroring @prisma/compose/rpc's contract-satisfaction.test-d.ts.
+ * `bun test`, mirroring @prisma/composer/rpc's contract-satisfaction.test-d.ts.
  */
 import type { BuildAdapter, Contract, InputRef } from '../index.ts';
 import { dependency, module, service } from '../index.ts';
 import { conn } from './helpers.ts';
 
 const build: BuildAdapter = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',

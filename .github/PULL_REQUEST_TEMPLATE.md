@@ -1,5 +1,5 @@
 <!--
-Thanks for contributing to Prisma Compose!
+Thanks for contributing to Prisma Composer!
 
 Before you submit:
 - Have you read CONTRIBUTING.md?

@@ -1,6 +1,6 @@
-import node from '@prisma/compose/node';
-import { compute } from '@prisma/compose-prisma-cloud';
-import { pnPostgres } from '@prisma/compose-prisma-cloud/prisma-next';
+import node from '@prisma/composer/node';
+import { compute } from '@prisma/composer-prisma-cloud';
+import { pnPostgres } from '@prisma/composer-prisma-cloud/prisma-next';
 import { catalogContract } from './contract.ts';
 import { catalogData } from './data.ts';
 

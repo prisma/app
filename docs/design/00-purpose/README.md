@@ -1,6 +1,6 @@
-# Purpose: what is Prisma Compose?
+# Purpose: what is Prisma Composer?
 
-**Prisma Compose lets you write an application as connected components
+**Prisma Composer lets you write an application as connected components
 and turns it into a running, deployed module — without wiring infrastructure by
 hand.**
 

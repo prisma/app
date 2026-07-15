@@ -14,8 +14,8 @@ the slot:
 
 ```ts
 // src/module.ts
-import { module } from "@prisma/compose";
-import { postgres } from "@prisma/compose-prisma-cloud";
+import { module } from "@prisma/composer";
+import { postgres } from "@prisma/composer-prisma-cloud";
 import ingestService from "./ingest.ts";
 import apiService from "./api.ts";
 

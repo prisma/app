@@ -26,7 +26,7 @@ export default async function Home() {
 
   return (
     <main>
-      <h1>Compose Coffee</h1>
+      <h1>Composer Coffee</h1>
       <p className="tagline">
         A Prisma App: this Next.js storefront + a catalog module + an orders module.
       </p>

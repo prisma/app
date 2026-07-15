@@ -10,7 +10,7 @@
  * The rule: inline everything except the runtime's own modules — `bun`,
  * `bun:*` (e.g. bun:sqlite), and `node:*` builtins — which resolve inside
  * the deploy VM at runtime and must never be bundled. Verified (both
- * `@prisma/compose/node/control` and `@prisma/compose/nextjs/control` set
+ * `@prisma/composer/node/control` and `@prisma/composer/nextjs/control` set
  * `external: ['bun']` ahead of `noExternal` in their tsdown call, and tsdown/
  * rolldown's explicit `external` wins over a `noExternal` match — proven by
  * building an app's wrapper with this exact pattern: the

@@ -39,7 +39,7 @@ const httpEnd = () =>
   dependency({ type: 'fake/http', connection: conn({ url: string() }, () => ({})) });
 
 const defaultBuild: BuildAdapter = {
-  extension: '@prisma/compose/node',
+  extension: '@prisma/composer/node',
   type: 'node',
   module: 'file:///test/service.ts',
   entry: 'server.js',
@@ -368,7 +368,7 @@ describe('lowering a module root — a single service', () => {
 
     expect(error).toBeInstanceOf(LowerError);
     expect(error.message).toContain('@acme/other-cloud');
-    expect(error.message).toContain('prisma-compose.config.ts');
+    expect(error.message).toContain('prisma-composer.config.ts');
   });
 
   test('a resource node routed to a service descriptor is a LowerError naming (extension, type, expected kind)', () => {

@@ -18,10 +18,10 @@
  */
 import { describe, expect, it } from 'bun:test';
 import { pathToFileURL } from 'node:url';
-import type { BuildAdapter } from '@prisma/compose';
-import type { NextjsBuildAdapter } from '@prisma/compose/nextjs';
-import { standaloneServerPath } from '@prisma/compose/nextjs/control';
-import { bootstrapService } from '@prisma/compose-prisma-cloud/testing';
+import type { BuildAdapter } from '@prisma/composer';
+import type { NextjsBuildAdapter } from '@prisma/composer/nextjs';
+import { standaloneServerPath } from '@prisma/composer/nextjs/control';
+import { bootstrapService } from '@prisma/composer-prisma-cloud/testing';
 import fakeAuthHandler from '@storefront-auth/auth/fake';
 import storefrontService from '../src/service.ts';
 

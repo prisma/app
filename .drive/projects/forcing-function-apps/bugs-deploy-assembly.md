@@ -9,10 +9,10 @@
 > framework never launders trees. The per-bug fixes below are superseded where
 > they conflict; the ADR is authoritative.
 
-The first real out-of-repo deploy (`datahub`, `prisma-compose deploy module.ts`
+The first real out-of-repo deploy (`datahub`, `prisma-composer deploy module.ts`
 against the team workspace) surfaced three framework bugs in the deploy path.
-All three ship in the published `@prisma/compose@0.1.0` /
-`@prisma/compose-prisma-cloud@0.1.0`. None are datahub's fault. CI's
+All three ship in the published `@prisma/composer@0.1.0` /
+`@prisma/composer-prisma-cloud@0.1.0`. None are datahub's fault. CI's
 "Deploy, verify, destroy" job never caught them because it deploys only
 `storefront-auth` — one layout, no cron, and its tree happens not to trip the
 packager.
@@ -41,7 +41,7 @@ own `examples/cron` (never deployed in CI).
 tsdown object entry (`entry: { main: serviceModule }`) emits `main.mjs`
 directly; the readdir hunt, regex, and rename all delete. Stage the wrapper in
 a deploy-owned dir keyed by the node's graph address
-(`.prisma-compose/artifacts/<address>/`) — never inside `node_modules` (the
+(`.prisma-composer/artifacts/<address>/`) — never inside `node_modules` (the
 scheduler's wrapper currently lands in the installed package's `dist/`) and
 never in the user's build output. (An earlier basename-arithmetic patch was
 verified live but is superseded: no filesystem-derived identity.)

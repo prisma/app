@@ -1,5 +1,5 @@
-import { module } from '@prisma/compose';
-import { envSecret } from '@prisma/compose-prisma-cloud';
+import { module } from '@prisma/composer';
+import { envSecret } from '@prisma/composer-prisma-cloud';
 import authModule from '@storefront-auth/auth';
 import storefrontService from '@storefront-auth/storefront';
 

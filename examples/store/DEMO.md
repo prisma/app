@@ -42,7 +42,7 @@ setup. It doesn't know or care where catalog runs.
 
 [module.ts](module.ts) provisions `cron({ schedule, runner })` — the cron
 module ships with the framework
-(`@prisma/compose-prisma-cloud/cron`), not this app. Two points:
+(`@prisma/composer-prisma-cloud/cron`), not this app. Two points:
 
 - [modules/promotions/src/service.ts](modules/promotions/src/service.ts):
   the app supplies only the schedule (`rotateSpecial: '30s'`) and a runner

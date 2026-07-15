@@ -3,7 +3,7 @@
  * extension-printed bootstrap and manifest, tarred and gzipped deterministically
  * (fixed mtimes, sorted entry order) so an unchanged service noops on
  * redeploy — a rebuild is the only thing that changes the hash. Lives here
- * (not in @prisma/compose-prisma-cloud/control) because it needs node:fs/node:zlib,
+ * (not in @prisma/composer-prisma-cloud/control) because it needs node:fs/node:zlib,
  * which the extension's shipped src may never import (invariant 5).
  */
 import * as crypto from 'node:crypto';
@@ -139,7 +139,7 @@ export function packageComputeArtifact(opts: PackageComputeArtifactOptions): Com
     // packaging must not require a prior build. A build-less DEPLOY still fails
     // later — the Deployment provider's readFileSync hits ENOENT on this empty
     // path. An explicit up-front guard belongs in the deploy entrypoint (the
-    // prisma-compose deploy CLI), which is deferred.
+    // prisma-composer deploy CLI), which is deferred.
     return { path: '', sha256: 'absent' };
   }
 
@@ -177,7 +177,7 @@ export function packageComputeArtifact(opts: PackageComputeArtifactOptions): Com
   // on Windows — still a valid, deterministic directory name.
   const outDir = path.join(
     os.tmpdir(),
-    `prisma-compose-compute-${String(os.userInfo().uid)}`,
+    `prisma-composer-compute-${String(os.userInfo().uid)}`,
     sha256.slice(0, 16),
   );
   fs.mkdirSync(outDir, { recursive: true });
