@@ -3,6 +3,11 @@
  * testing. Duplicates the transient-error signatures from
  * packages/compose-cloud/src/pg-connection.ts (not exported from that package's
  * public entry points) — keep in sync if that list changes.
+ *
+ * FT-5226 (PPg cold-connect rejection) is INTERMITTENT — the edge proxy rejects
+ * a cold DB's first connect while its upstream warms, but a fast-enough connect
+ * occasionally slips through. So one connect can't tell "fixed" from "got lucky
+ * once": the canary samples N fresh cold DBs and only trusts a UNANIMOUS result.
  */
 
 const TRANSIENT_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN']);
@@ -43,38 +48,51 @@ function isInconclusive(error: unknown): boolean {
   return INCONCLUSIVE_MESSAGE_FRAGMENTS.some((fragment) => lower.includes(fragment));
 }
 
+/** One cold-connect attempt's outcome. `rejected` is the FT-5226 signal; `success` means the connect went through; `timeout`/`other` are inconclusive. */
+export type ColdConnectSample = 'rejected' | 'success' | 'timeout' | 'other';
+
+/** Classifies a single bare-connect result: no error → success; active transient reject → rejected (FT-5226); connect timeout → timeout; anything else (auth, quota) → other. */
+export function classifyColdConnectSample(error: unknown): ColdConnectSample {
+  if (error === undefined) return 'success';
+  if (isInconclusive(error)) return 'timeout';
+  if (isTransient(error)) return 'rejected';
+  return 'other';
+}
+
 export interface ColdConnectResult {
   readonly pass: boolean;
   readonly message: string;
 }
 
 /**
- * Classifies the canary's single bare connect attempt: success → FAIL (bug looks
- * fixed), active rejection → PASS (bug present), timeout → FAIL (inconclusive),
- * anything else (auth, quota) → FAIL (broken canary, not a fixed platform).
+ * Aggregates N cold-connect samples with UNANIMITY, so one flaky connect can't
+ * flip the verdict:
+ * - any active rejection → PASS (bug present — a single rejection proves it),
+ * - all N succeeded → FAIL (FT-5226 looks gone; remove the workaround),
+ * - otherwise (timeouts / odd errors, no rejection but not all-success) → FAIL
+ *   inconclusive (slow cold start, or a broken canary — a human should look).
  */
-export function classifyColdConnectResult(error: unknown): ColdConnectResult {
-  if (error === undefined) {
+export function classifyColdConnectRun(samples: readonly ColdConnectSample[]): ColdConnectResult {
+  const n = samples.length;
+  if (n === 0) return { pass: false, message: 'Canary took no samples — broken.' };
+  const count = (s: ColdConnectSample) => samples.filter((x) => x === s).length;
+  const rejected = count('rejected');
+  const success = count('success');
+
+  if (rejected > 0) {
     return {
-      pass: false,
-      message:
-        'PPG cold-connect rejection is gone (FT-5226 fixed?) — remove withConnectionRetry and this canary.',
+      pass: true,
+      message: `Cold-connect rejection still present (${rejected}/${n} rejected) — FT-5226 not fixed; keep withConnectionRetry.`,
     };
   }
-  if (isInconclusive(error)) {
-    const { message } = errorInfo(error);
+  if (success === n) {
     return {
       pass: false,
-      message: `Inconclusive: the connect timed out instead of being actively rejected — FT-5226 may be fixed (slow cold start), or the canary is broken: ${message}`,
+      message: `All ${n} cold connects succeeded — PPG cold-connect rejection is gone (FT-5226 fixed?). Remove withConnectionRetry and this canary.`,
     };
   }
-  if (isTransient(error)) {
-    const { message } = errorInfo(error);
-    return { pass: true, message: `Cold-connect rejection still present: ${message}` };
-  }
-  const { message } = errorInfo(error);
   return {
     pass: false,
-    message: `Canary got a non-transient error, not the known cold-start rejection — canary or credentials are broken, not FT-5226: ${message}`,
+    message: `Inconclusive across ${n} samples (${success} ok, ${count('timeout')} timeout, ${count('other')} other, 0 active rejections) — FT-5226 may be fixed via a slow cold start, or the canary/credentials are broken. Investigate before removing the workaround.`,
   };
 }

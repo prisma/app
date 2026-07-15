@@ -1,61 +1,92 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { classifyColdConnectResult } from './cold-connect-canary-classify.ts';
+import {
+  type ColdConnectSample,
+  classifyColdConnectRun,
+  classifyColdConnectSample,
+} from './cold-connect-canary-classify.ts';
 
-describe('classifyColdConnectResult', () => {
-  it('fails when the connect succeeded (no error) — the platform bug looks fixed', () => {
-    const result = classifyColdConnectResult(undefined);
-    assert.equal(result.pass, false);
-    assert.match(result.message, /FT-5226 fixed/);
+describe('classifyColdConnectSample', () => {
+  it('a successful connect (no error) → success', () => {
+    assert.equal(classifyColdConnectSample(undefined), 'success');
   });
 
-  it('passes for the PPG cold-start upstream reject message', () => {
-    const result = classifyColdConnectResult(
-      new Error('Failed to connect to upstream database. Please contact Prisma support'),
+  it('the PPG cold-start upstream reject message → rejected', () => {
+    assert.equal(
+      classifyColdConnectSample(
+        new Error('Failed to connect to upstream database. Please contact Prisma support'),
+      ),
+      'rejected',
     );
-    assert.equal(result.pass, true);
   });
 
-  it('passes for active-rejection socket codes', () => {
+  it('active-rejection socket codes → rejected', () => {
     for (const code of ['ECONNREFUSED', 'ECONNRESET', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN']) {
-      const result = classifyColdConnectResult(Object.assign(new Error('x'), { code }));
-      assert.equal(result.pass, true, `expected ${code} to pass`);
+      assert.equal(
+        classifyColdConnectSample(Object.assign(new Error('x'), { code })),
+        'rejected',
+        code,
+      );
     }
   });
 
-  it('passes for pool/server-close rejection messages', () => {
+  it('pool/server-close rejection messages → rejected', () => {
     for (const message of [
       'Connection terminated unexpectedly',
       'connection refused',
       'terminating connection due to administrator command',
       'server closed the connection unexpectedly',
     ]) {
-      const result = classifyColdConnectResult(new Error(message));
-      assert.equal(result.pass, true, `expected "${message}" to pass`);
+      assert.equal(classifyColdConnectSample(new Error(message)), 'rejected', message);
     }
   });
 
-  it('fails as inconclusive on connect timeouts — a timeout is not an active rejection', () => {
+  it('connect timeouts → timeout (not an active rejection)', () => {
     for (const error of [
       new Error('timeout expired'),
       new Error('Connection timeout'),
       Object.assign(new Error('x'), { code: 'ETIMEDOUT' }),
     ]) {
-      const result = classifyColdConnectResult(error);
-      assert.equal(result.pass, false);
-      assert.match(result.message, /Inconclusive/);
+      assert.equal(classifyColdConnectSample(error), 'timeout');
     }
   });
 
-  it('fails on a non-transient error, with a message distinguishing it from a fixed platform', () => {
-    const result = classifyColdConnectResult(new Error('password authentication failed for user'));
-    assert.equal(result.pass, false);
-    assert.match(result.message, /not the known cold-start rejection/);
+  it('auth/quota errors → other (not assumed transient)', () => {
+    assert.equal(
+      classifyColdConnectSample(new Error('password authentication failed for user')),
+      'other',
+    );
+    assert.equal(classifyColdConnectSample(new Error('quota exceeded')), 'other');
+  });
+});
+
+describe('classifyColdConnectRun (unanimity)', () => {
+  const run = (...s: ColdConnectSample[]) => classifyColdConnectRun(s);
+
+  it('ANY rejection → PASS, even amid successes (a single rejection proves the bug)', () => {
+    const result = run('success', 'success', 'rejected', 'success', 'success');
+    assert.equal(result.pass, true);
+    assert.match(result.message, /still present \(1\/5 rejected\)/);
   });
 
-  it('fails on an unrecognized error rather than assuming it is transient', () => {
-    const result = classifyColdConnectResult(new Error('quota exceeded'));
+  it('ALL successes → FAIL with the remove-the-workaround signal', () => {
+    const result = run('success', 'success', 'success', 'success', 'success');
     assert.equal(result.pass, false);
+    assert.match(result.message, /FT-5226 fixed/);
+  });
+
+  it('no rejections but not all-success (timeouts) → FAIL inconclusive, not "fixed"', () => {
+    const result = run('success', 'timeout', 'success', 'timeout', 'success');
+    assert.equal(result.pass, false);
+    assert.match(result.message, /Inconclusive/);
+  });
+
+  it('a lone success does not flip a rejecting run to "fixed"', () => {
+    assert.equal(run('rejected', 'rejected', 'success').pass, true);
+  });
+
+  it('zero samples → FAIL (broken canary)', () => {
+    assert.equal(classifyColdConnectRun([]).pass, false);
   });
 });
