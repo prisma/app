@@ -57,15 +57,15 @@ function nextAppRel(appDir: string): string {
       `no ${path.join('.next', 'required-server-files.json')} under ${appDir} — run \`next build\` with output: "standalone" first.`,
     );
   }
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
-    relativeAppDir?: unknown;
-    config?: { outputFileTracingRoot?: unknown };
-  };
+  // JSON.parse is `any`; both fields we read are re-checked with `typeof` below.
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const relativeAppDir: unknown = manifest?.relativeAppDir;
+  const tracingRoot: unknown = manifest?.config?.outputFileTracingRoot;
   const posixRel =
-    typeof manifest.relativeAppDir === 'string'
-      ? manifest.relativeAppDir
-      : typeof manifest.config?.outputFileTracingRoot === 'string'
-        ? path.relative(manifest.config.outputFileTracingRoot, appDir).split(path.sep).join('/')
+    typeof relativeAppDir === 'string'
+      ? relativeAppDir
+      : typeof tracingRoot === 'string'
+        ? path.relative(tracingRoot, appDir).split(path.sep).join('/')
         : undefined;
   if (posixRel === undefined) {
     throw new Error(
