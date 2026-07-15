@@ -1,11 +1,22 @@
 # Getting started
 
-From an empty directory to a deployed two-service Prisma App. You'll build a
-`quotes` service that owns an RPC contract, a public `gateway` that calls it,
-compose them in a root module, and deploy.
+This guide takes you from an empty directory to a two-service app running on
+Prisma Cloud. Along the way you'll meet every core idea once: a contract, a
+service, a root module, a build, a deploy. At the end there's a section on
+[porting an app you already have](#porting-an-existing-app).
 
-Prerequisites: [Bun](https://bun.sh) (the server runtime used throughout),
-pnpm or npm, and a Prisma Cloud workspace (for the deploy at the end).
+The app is deliberately tiny — a `quotes` API and a public `gateway` that
+calls it, no database — so you can see the whole shape at once. Adding a
+Postgres (including a Prisma Next-typed one) is the first thing to do after,
+and [Building an app](building-an-app.md#databases) covers it.
+
+You'll need:
+
+- [Bun](https://bun.sh) — Prisma Compute runs Bun, so that's what the server
+  code targets (`Bun.serve`), and it's the fastest way to run things locally.
+- pnpm (or npm).
+- For the deploy at the end: a Prisma Cloud workspace, plus a service token
+  and your workspace id from the [Prisma Console](https://console.prisma.io).
 
 ## 1. Project setup
 
@@ -32,7 +43,7 @@ pnpm add -D tsdown typescript @types/bun
 }
 ```
 
-The layout you're about to create:
+This is what you're about to create:
 
 ```
 my-app/
@@ -41,9 +52,9 @@ my-app/
 ├── tsdown.config.ts           # your build
 └── src/
     ├── quotes/
-    │   ├── contract.ts        # the service's public RPC contract
-    │   ├── service.ts         # the declaration: deps + build + expose
-    │   └── server.ts          # the entry your build produces
+    │   ├── contract.ts        # the quotes service's public API, as types
+    │   ├── service.ts         # what quotes is: deps + build + what it exposes
+    │   └── server.ts          # the code that actually runs
     └── gateway/
         ├── service.ts
         └── server.ts
@@ -51,9 +62,9 @@ my-app/
 
 ## 2. The quotes service
 
-**The contract** — the typed edge other services depend on. It lives with the
-service that owns it. Any Standard Schema validator works; arktype is what the
-examples use:
+Three files. First, the **contract** — the API other services will call,
+written as schemas. It lives with the service that owns it. Any Standard
+Schema validator works; the examples use arktype:
 
 ```ts
 // src/quotes/contract.ts
@@ -65,8 +76,9 @@ export const quotesContract = contract({
 });
 ```
 
-**The declaration** — pure data: a name, dependencies (none yet), how the
-service is built, and what it exposes:
+Second, the **service declaration**. This is pure data — no behavior. It says
+what the service is called, what it depends on (nothing yet), how it's built,
+and which contract it exposes:
 
 ```ts
 // src/quotes/service.ts
@@ -82,10 +94,10 @@ export default compute({
 });
 ```
 
-**The server entry** — what your build produces and the platform boots.
-`serve()` generates the HTTP handler from the contract; the handler map is
-checked against it at compile time, so a missing or wrong-shaped handler
-doesn't compile:
+Third, the **server** — the code your build turns into `dist/quotes/server.mjs`
+and the platform boots. `serve()` generates the HTTP handler from the
+contract; if you forget a handler or return the wrong shape, it doesn't
+compile:
 
 ```ts
 // src/quotes/server.ts
@@ -111,10 +123,17 @@ export default handler;
 Bun.serve({ port, hostname: '0.0.0.0', fetch: handler });
 ```
 
+Notice what's missing: no port constant, no URL of anything, no
+`process.env`. Configuration arrives through `service.config()`, dependencies
+through `service.load()` — that's the whole framework contract with your
+code.
+
 ## 3. The gateway service
 
-The gateway declares a dependency on the quotes contract and gets a typed
-client back from `load()` — no URL, no fetch wrapper, no client setup:
+The gateway depends on the quotes contract. Declaring
+`deps: { quotes: rpc(quotesContract) }` means `service.load()` hands the
+server a ready-made, typed client — calling it is just an async function
+call:
 
 ```ts
 // src/gateway/service.ts
@@ -147,13 +166,13 @@ Bun.serve({
 });
 ```
 
-Nothing exposes a contract here, so there's no `serve()` — the gateway is an
-ordinary HTTP server that happens to receive a typed client.
+The gateway exposes no contract of its own, so there's no `serve()` here —
+it's an ordinary HTTP server that happens to receive a typed client.
 
 ## 4. Compose the app
 
-The root module provisions both services and wires the exposed port into the
-dependency slot. Its default export is the app:
+The root module is the app. It provisions both services and wires the quotes
+service's exposed port into the gateway's dependency slot:
 
 ```ts
 // module.ts
@@ -167,8 +186,8 @@ export default module('my-app', ({ provision }) => {
 });
 ```
 
-The deploy config sits next to it. It is read only by `prisma-composer
-deploy`/`destroy` — app code never imports it:
+Next to it goes the deploy config. Only `prisma-composer deploy`/`destroy`
+read this file — your app code never imports it:
 
 ```ts
 // prisma-composer.config.ts
@@ -182,12 +201,38 @@ export default defineConfig({
 });
 ```
 
-## 5. Build
+## 5. Run it locally
 
-You own the build; the framework only assembles what you built. The shipped
-tsdown preset makes each entry self-contained. Two services means two separate
-builds into separate output directories — not one multi-entry build, which
-would split shared code (the contract) into a chunk neither output contains:
+There's no dev server yet (it's on the roadmap) — but a server entry is just
+a program, and locally `service.load()` and `service.config()` read plain
+environment variables named after the slot: `COMPOSER_PORT` for the service's
+own `port` param, `COMPOSER_QUOTES_URL` for the `quotes` dependency's URL. A
+missing required value fails loudly at boot with the exact variable name it
+wanted.
+
+Two terminals:
+
+```sh
+# terminal 1 — quotes; port defaults to 3000
+bun run src/quotes/server.ts
+
+# terminal 2 — gateway on 3001, pointed at the local quotes
+COMPOSER_PORT=3001 COMPOSER_QUOTES_URL=http://localhost:3000/ bun run src/gateway/server.ts
+
+curl localhost:3001
+# Make it work, make it right, make it fast.
+```
+
+In production nobody writes these variables by hand — the deploy provisions
+them from the wiring in `module.ts`. Locally you *are* the deploy.
+
+## 6. Build and deploy
+
+You own the build — the framework only assembles what you built. The shipped
+tsdown preset makes each entry a single self-contained file. Two services
+means two builds into two output directories (not one multi-entry build,
+which would split the shared contract code into a chunk neither output
+contains):
 
 ```ts
 // tsdown.config.ts
@@ -200,13 +245,12 @@ export default [
 ```
 
 ```sh
-pnpm tsdown
+pnpm exec tsdown
 ```
 
-## 6. Deploy
-
-A deploy needs exactly two environment variables — a service token and the
-workspace id from your Prisma Cloud workspace:
+Deploying needs exactly two environment variables. Create a service token in
+your workspace in the [Prisma Console](https://console.prisma.io); the
+workspace id is in the workspace's settings:
 
 ```sh
 export PRISMA_SERVICE_TOKEN=...
@@ -215,30 +259,76 @@ export PRISMA_WORKSPACE_ID=...
 pnpm exec prisma-composer deploy module.ts
 ```
 
-The CLI resolves (or creates) the app's Project, provisions both services on
-Prisma Compute, wires the gateway's `quotes` dependency to the deployed quotes
-service, and starts them. Each service becomes a Compute service in the
-Project; its public URL is its service endpoint domain, shown in the
-[Prisma Console](https://console.prisma.io). Open the gateway's URL and you
-get a quote — served over one typed RPC hop.
+The CLI creates a Project named `my-app` in your workspace, provisions both
+services on Prisma Compute, points the gateway's `quotes` dependency at the
+deployed quotes service, and starts everything. Each service's public URL is
+its Compute service endpoint, shown in the Console. Open the gateway's URL:
+you get a quote, served over one typed RPC hop.
 
-Re-deploying is idempotent: it updates the resources inside the same Project.
-To stand up an isolated copy (same topology, separate everything), deploy a
-**stage**, and tear it down when done:
+Re-deploying is idempotent — it updates the same Project. For an isolated
+copy of the whole app (own services, own config), deploy a **stage**, and
+tear it down when you're done:
 
 ```sh
 pnpm exec prisma-composer deploy module.ts --stage demo
 pnpm exec prisma-composer destroy module.ts --stage demo
 ```
 
+## Porting an existing app
+
+You don't rewrite an app to put it on Composer — you declare it. The server
+code you already have stays the server; you add the declaration around it.
+
+**A Node/Bun service.** Add a `service.ts` with `compute({ name, deps, build,
+entry })` pointing at your built entry, then make three changes to the server
+itself:
+
+1. Read the port from `service.config()` instead of `process.env.PORT`, and
+   bind `0.0.0.0`.
+2. Replace every `process.env` read with a declared param (values you
+   configure), a secret (credentials — see
+   [Building an app § Secrets](building-an-app.md#secrets)), or a dependency.
+3. If it talks to Postgres: declare `deps: { db: postgres() }` and build your
+   existing client (`pg`, Bun's `SQL`, whatever you use today) from the
+   injected `db.url` instead of a connection-string env var.
+
+Your build must produce a self-contained entry file — `prismaTsDownConfig`
+does that; keep your own build if it already does.
+
+**A Next.js app.** Use the `nextjs` build adapter instead of `node`; `next
+build` with `output: 'standalone'` is the whole build:
+
+```ts
+export default compute({
+  name: 'web',
+  deps: { api: rpc(apiContract) },
+  build: nextjs({ module: import.meta.url, appDir: '..' }),
+});
+```
+
+Add `nextjsBuild()` from `@prisma/composer/nextjs/control` to the deploy
+config's `extensions`. Any page or server action that calls `service.load()`
+needs `export const dynamic = 'force-dynamic'`, because the runtime
+environment doesn't exist at build time.
+[`examples/storefront-auth`](../../examples/storefront-auth/) is a complete
+ported-shaped app: a Next.js frontend calling a Bun API service that owns a
+Postgres.
+
+**More than one service.** Port them into one `module.ts` and replace the
+URLs they used to reach each other with contracts — that's the payoff: the
+edges become typed, and every environment (production, stages, tests) gets
+the wiring for free.
+
 ## Where to go next
 
-- [Building an app](building-an-app.md) — databases, reusable Modules, the
-  shared cron/storage/streams modules, config params, secrets.
+- [Building an app](building-an-app.md) — databases (including Prisma
+  Next-typed ones with migrations), reusable Modules, cron/storage/streams,
+  config params, secrets.
 - [Testing](testing.md) — unit tests with `mockService`, integration tests
   with `bootstrapService`.
-- [Deploying and operating](deploying.md) — stages, destroy semantics, CI,
-  production behavior.
-- [`examples/`](../../examples/) — complete apps, from a single service with a
-  typed database ([pn-widgets](../../examples/pn-widgets/)) to a four-module
-  store with cron ([store](../../examples/store/)).
+- [Deploying and operating](deploying.md) — stages, destroy, CI, how the app
+  behaves in production.
+- [`examples/`](../../examples/) — complete apps: start with
+  [pn-widgets](../../examples/pn-widgets/) (one service + one Prisma
+  Next-typed database) or [store](../../examples/store/) (four modules, cron,
+  a Next.js storefront).

@@ -1,108 +1,109 @@
 # Deploying and operating
 
-`prisma-composer` deploys the app whose root module is your entry file's
-default export. Two commands, `deploy` and `destroy`; the target environment —
-called a **stage** — is chosen on the command line, never in your code.
+One CLI, two commands. `prisma-composer deploy` takes your entry file (the
+one whose default export is the root module) and stands the whole app up on
+Prisma Cloud; `prisma-composer destroy` tears an environment down. Which
+environment you're touching — production or an isolated **stage** — is always
+a command-line choice, never something in your code.
 
 | You want to… | Run |
 | --- | --- |
 | Deploy to production | `prisma-composer deploy module.ts` |
 | Deploy an isolated environment | `prisma-composer deploy module.ts --stage <name>` |
-| Override the app name for one run | `prisma-composer deploy module.ts --name demo-42` |
+| Deploy under a different app name | `prisma-composer deploy module.ts --name demo-42` |
 | Tear down an isolated environment | `prisma-composer destroy module.ts --stage <name>` |
 | Tear down production's resources | `prisma-composer destroy module.ts --production` |
 
 ## Credentials
 
-A deploy needs exactly two environment variables: `PRISMA_SERVICE_TOKEN` and
-`PRISMA_WORKSPACE_ID`. Nothing else — the CLI resolves the app's Project (by
-the root module's name) and, for a named stage, the stage's Branch, creating
-either if it doesn't exist yet. A fresh checkout with just those two variables
-set deploys successfully.
+Two environment variables, nothing else:
 
-Keep the values out of the repo — an `.env` you source at deploy time, or CI
-secrets. There is no interactive login; the static token is the only
-authentication.
+- `PRISMA_SERVICE_TOKEN` — create a service token for your workspace in the
+  [Prisma Console](https://console.prisma.io).
+- `PRISMA_WORKSPACE_ID` — in the workspace's settings.
+
+A fresh checkout with just those two set deploys successfully — the CLI finds
+or creates everything else. Keep the values out of the repo (an `.env` you
+source at deploy time, or CI secrets). There's no interactive login; the
+token is the only authentication.
 
 ## Build first
 
-`prisma-composer deploy` does not build for you:
+`prisma-composer deploy` does not build for you — it assembles what your
+build produced:
 
 ```sh
 turbo run build && prisma-composer deploy module.ts
 ```
 
-The deploy assembles what your build produced (the `entry` each service's
-build adapter names) and provisions it. Deploy state lives in a
-workspace-hosted ledger (the `prismaState()` line in
-`prisma-composer.config.ts`), shared by every deployer of the app — your
-machine and CI see the same state, and concurrent deploys of the same stage
-are locked against each other.
+Deploy state (what's already provisioned, so re-deploys diff instead of
+recreate) is stored in your workspace, not on your machine — that's the
+`prismaState()` line in `prisma-composer.config.ts`. Everyone deploying the
+app shares it, your laptop and CI see the same world, and two concurrent
+deploys of the same environment lock each other out instead of corrupting it.
 
-## Stages
+## Production and stages
 
-Same code, many environments. Deploying with no `--stage` targets
-**production**, at the Project level. `--stage <name>` targets a **named
-stage** — a Branch of that same Project, with its own compute, its own empty
-database, and its own configuration
-([ADR-0023](../design/90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md),
-[ADR-0024](../design/90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)).
-Every environment repeats the app's full topology; only the data and config
-differ.
+Deploying with no `--stage` targets **production**. In Prisma Cloud terms:
+the app is a Project (named after your root module), and production lives at
+the Project level.
+
+`--stage <name>` deploys a complete, isolated copy of the app — every
+service, every database, its own configuration — as a Branch of that same
+Project. Nothing is shared with production except the code:
 
 ```sh
 prisma-composer deploy module.ts                  # production
-prisma-composer deploy module.ts --stage staging  # an isolated "staging" environment
-prisma-composer deploy module.ts --stage pr-42    # one isolated environment per PR
+prisma-composer deploy module.ts --stage staging  # a persistent staging environment
+prisma-composer deploy module.ts --stage pr-42    # one environment per PR
 ```
 
-Re-deploying the same stage is idempotent: it finds the existing Project and
-Branch and updates the resources inside them. A stage name must be a valid
-git ref name (checked with `git check-ref-format`); an invalid name is a hard
-error, never silently normalized.
+Re-deploying any environment is idempotent — it updates the resources in
+place. A stage name must be a valid git ref name (`git check-ref-format`);
+an invalid name is a hard error, never a silent rename.
 
-Each deployed service becomes a Compute service in the Project; its public
-URL is its service endpoint domain, shown in the
-[Prisma Console](https://console.prisma.io).
+After a deploy, each service is a Compute service in the Project; its public
+URL is its service endpoint domain, shown in the Console.
 
-## Destroy requires an explicit target
+## Destroying
 
-A bare `prisma-composer destroy` is an error — name what you're tearing down:
+`destroy` refuses to guess. A bare `prisma-composer destroy` is an error —
+name the target:
 
 ```sh
-prisma-composer destroy module.ts --stage staging  # removes staging's resources, then its Branch
-prisma-composer destroy module.ts --production     # removes production's resources
+prisma-composer destroy module.ts --stage staging  # staging only; production untouched
+prisma-composer destroy module.ts --production     # production's resources
 ```
 
-`--stage` and `--production` together is also an error — pick one. Destroying
-a named stage deletes its Branch after removing its resources; the production
-Branch itself is never deleted, only the resources inside it. Destroy never
-creates anything: destroying a stage that was never deployed fails with
-"nothing deployed" rather than standing one up first.
+`--stage` and `--production` together is an error too. Destroying a stage
+removes its resources and then deletes its Branch; destroying production
+removes the resources but the production Branch itself always survives.
+Destroy never creates: tearing down a stage that was never deployed fails
+with "nothing deployed" rather than provisioning one first.
 
 ## CI
 
-The commands are the same in CI — set the two variables as CI secrets, build,
-deploy. The per-PR pattern:
+Nothing is CI-specific — set the two variables as CI secrets, build, run the
+same commands. The per-PR environment pattern:
 
 ```sh
 prisma-composer deploy module.ts --stage "pr-$PR_NUMBER"    # on push
 prisma-composer destroy module.ts --stage "pr-$PR_NUMBER"   # on close
 ```
 
-Secrets your app declares (see
-[Building an app § Secrets](building-an-app.md#secrets)) are bound to
-platform env-var names by the root module; the deploy provisions their values
-from the deploying shell's environment, so CI must also export those
-variables (e.g. `AUTH_SIGNING_SECRET`).
+One extra: if your app declares secrets (see
+[Building an app § Secrets](building-an-app.md#secrets)), their values are
+provisioned from the deploying shell's environment — so CI must export those
+variables too (e.g. `AUTH_SIGNING_SECRET`), alongside the two credentials.
 
 ## Production behavior
 
-Things every deployed app runs into:
+What deployed apps actually run into, and what to do about it:
 
-- **Compute scales to zero, and idle database connections are closed.** A
-  persistent client crashes into a 502 restart loop unless you keep the pool
-  reconnect-friendly and refuse to die on async errors:
+- **Compute scales to zero, and idle database connections get closed.** A
+  long-lived client that treats a dropped connection as fatal will crash-loop
+  through 502s. Keep the pool small and reconnect-friendly, and don't let an
+  async error kill the process:
 
   ```ts
   const sql = new SQL({ url: db.url, max: 1, idleTimeout: 10 });
@@ -110,22 +111,23 @@ Things every deployed app runs into:
   process.on('unhandledRejection', (err) => console.error('unhandledRejection', err));
   ```
 
-- **Bind `0.0.0.0`**, not loopback — Compute routes external HTTP to the VM,
-  so a loopback-only listener is unreachable.
-- **Cold starts reset service-to-service connections.** A call into a
-  scaled-to-zero service can get `ECONNRESET` while it wakes; retry it.
-- **The ingress buffers streaming responses.** An open SSE tail delivers
-  nothing and times out at 60s — don't build on streamed HTTP responses.
-- **Next.js pages that call `service.load()` need
-  `export const dynamic = 'force-dynamic'`** — the runtime environment
-  doesn't exist at build time, and Next ignores runtime env for prerendered
-  routes.
+- **Bind `0.0.0.0`, not loopback.** Compute routes external HTTP to the VM; a
+  `localhost` listener is unreachable from outside.
+- **Calls into a sleeping service can get `ECONNRESET`** while it cold-starts.
+  Retry them.
+- **Streaming responses don't stream.** The ingress buffers the response until
+  it completes, so an open SSE tail delivers nothing and times out at 60s.
+  Don't build on streamed HTTP responses.
+- **Next.js: pages that call `service.load()` need
+  `export const dynamic = 'force-dynamic'`.** The runtime environment doesn't
+  exist at build time, and Next won't re-read it for prerendered routes.
 
-The full catalogue of platform footguns, with diagnoses, is
-[`gotchas.md`](../../gotchas.md) at the repo root.
+When something misbehaves in ways these don't explain, check
+[`gotchas.md`](../../gotchas.md) at the repo root — the catalogue of platform
+footguns with diagnoses, kept current as we hit them.
 
-## Full model
+## The full picture
 
 [`docs/design/10-domains/deploy-cli.md`](../design/10-domains/deploy-cli.md)
-— the pipeline, stages and containers, the destroy contract, the error
-surface.
+documents the deploy pipeline end to end — stages and containers, the destroy
+contract, the error surface.

@@ -1,32 +1,41 @@
 # Prisma Composer
 
-**Prisma Composer** is a TypeScript framework for building and deploying
-applications composed of components. You build a **Prisma App** by composing
-**Modules**: a Module owns its services and resources and exposes typed ports;
-you connect one Module's outputs to another's inputs, and at runtime the
-framework injects the dependencies that satisfy them. The whole app is itself
-a Module — the outermost one — and that is what you deploy.
+**Prisma Composer** deploys multi-service TypeScript apps to Prisma Cloud
+from a description you write in TypeScript. You declare each service and what
+it depends on — other services, databases, schedules, secrets — compose them
+into a **Prisma App**, and `prisma-composer deploy` provisions all of it:
+Compute services, Prisma Postgres databases, the wiring between them. There
+is no infrastructure configuration to write or maintain.
 
-From that structure the framework derives your application's dependency graph
-and provisions it on Prisma Cloud (Compute + Prisma Postgres). There's no
-infrastructure configuration to write or maintain — and the framework never
-bundles or transforms your code: you build it, the deploy assembles what you
-built.
+It earns its keep when an app is more than one piece. A lone server is easy
+to deploy anywhere; the work starts when the storefront needs the catalog's
+URL, the catalog needs its database's connection string, the cron job needs
+credentials, and every one of those has to be repeated per environment.
+Composer makes each of those edges a typed declaration and derives the rest.
+
+Two rules shape everything:
+
+- **Your code never reaches for its environment.** No `process.env`, no URLs.
+  Every dependency arrives typed, through one call — which is also why any
+  environment (production, a staging copy, a test) is just different injected
+  values.
+- **The framework never bundles or transforms your code.** You build; the
+  deploy assembles what you built.
 
 ## What it looks like
 
-A service declares its dependencies; app code receives them from one place,
-`service.load()` — never `process.env`, never a URL:
+A service declares its dependencies; app code receives them from
+`service.load()`:
 
 ```ts
 // service.ts — the declaration: pure data
 export default compute({
   name: 'storefront',
-  deps: { catalog: rpc(catalogContract) },
+  deps: { catalog: rpc(catalogContract) },   // "I call catalog's API"
   build: nextjs({ module: import.meta.url, appDir: '..' }),
 });
 
-// app code — load() returns a typed client for the contract
+// app code — load() returns a client typed by that contract
 const { catalog } = service.load();
 const { products } = await catalog.listProducts({});
 ```
@@ -74,9 +83,11 @@ flowchart TB
 
 Each box is a **Module**: a boundary that owns some code and data and is
 reachable only through typed ports. catalog and orders each own their own
-Postgres internally — the root never sees them; the only edges are the
-exposed, contract-typed RPC ports. Because nothing reaches inside a boundary,
-every dependency in the app is an explicit, compiler-checked edge.
+Postgres — a [Prisma Next](https://github.com/prisma/prisma-next)-typed one,
+with migrations applied at deploy — and the root never sees them; the only
+edges are the exposed, contract-typed RPC ports. Because nothing reaches
+inside a boundary, every dependency in the app is an explicit,
+compiler-checked edge.
 
 ## Getting started
 
@@ -84,15 +95,16 @@ every dependency in the app is an explicit, compiler-checked edge.
 pnpm add @prisma/composer @prisma/composer-prisma-cloud arktype
 ```
 
-Follow **[Getting started](docs/guides/getting-started.md)** — empty directory
-to a deployed two-service app.
+Start with **[Getting started](docs/guides/getting-started.md)** — an empty
+directory to a deployed two-service app, plus how to port an app you already
+have.
 
 | Guide | Covers |
 | --- | --- |
-| [Getting started](docs/guides/getting-started.md) | Your first app: contract → service → root module → deploy |
-| [Building an app](docs/guides/building-an-app.md) | Contracts, databases (plain + Prisma Next-typed), reusable Modules, cron/storage/streams, config params, secrets, builds |
+| [Getting started](docs/guides/getting-started.md) | Your first app end to end; porting an existing Node or Next.js app |
+| [Building an app](docs/guides/building-an-app.md) | Contracts, databases (plain + Prisma Next-typed with migrations), reusable Modules, cron/storage/streams, config, secrets |
 | [Testing](docs/guides/testing.md) | Unit tests with `mockService`, integration tests with `bootstrapService` |
-| [Deploying and operating](docs/guides/deploying.md) | Stages, destroy semantics, CI, production behavior |
+| [Deploying and operating](docs/guides/deploying.md) | Stages, destroy, CI, how apps behave in production |
 
 ## Examples
 
@@ -101,7 +113,7 @@ Complete, deployable apps under [`examples/`](examples/):
 | Example | Demonstrates |
 | --- | --- |
 | [pn-widgets](examples/pn-widgets/) | The minimal app: one service + one Prisma Next-typed Postgres |
-| [storefront-auth](examples/storefront-auth/) | Next.js consumer + API producer, a reusable Module owning its database, secrets |
+| [storefront-auth](examples/storefront-auth/) | Next.js frontend + API service, a reusable Module owning its database, secrets |
 | [store](examples/store/) | Four modules, typed databases with migrations, the shared cron module |
 | [cron](examples/cron/) | Scheduled jobs: `defineSchedule` + `serveSchedule` + the cron module |
 | [storage](examples/storage/) | The S3-backed blob store module |

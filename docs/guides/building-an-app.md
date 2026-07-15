@@ -1,42 +1,40 @@
 # Building an app
 
-The authoring guide: everything a service can declare, how Modules compose,
-and the building blocks that ship with the framework. It assumes you've been
-through [Getting started](getting-started.md).
+This guide covers everything you reach for once
+[Getting started](getting-started.md) has shown you the shape: giving a
+service a database (plain or Prisma Next-typed), packaging pieces as reusable
+Modules, the cron/storage/streams modules that ship with the framework,
+configuration, and secrets.
 
-## The model in one paragraph
+## How the pieces fit
 
-A Prisma App is a tree of **Modules**. The leaves are **services**
-(`compute()` — units that run your code) and **resources** (`postgres()` —
-stateful things services depend on). Every dependency is declared on the
-service and wired by a parent module; app code receives dependencies from
-exactly one place, `service.load()`, and never reads `process.env` or looks a
-service up by name. The framework never bundles or transforms your code — you
-build it, the deploy assembles the built output
-([ADR-0005](../design/90-decisions/ADR-0005-users-build-the-framework-assembles.md)).
-
-A service declaration:
+A Prisma App is a tree of **Modules**. At the leaves are **services** —
+`compute()`, the units that run your code — and **resources** — stateful
+things like `postgres()`. A parent module wires them together; your code
+never participates in the wiring, it just receives the results:
 
 ```ts
 compute({
-  name: 'auth',                 // the node's name; also its default provision id
-  deps: { db: postgres() },     // typed dependency slots — read via load()
-  params: { region: string() }, // config values — read via config()
-  secrets: { key: secret() },   // secret needs — read via secrets()
+  name: 'auth',                 // the service's name in the app graph
+  deps: { db: postgres() },     // what it needs   → read via service.load()
+  params: { region: string() }, // its config      → read via service.config()
+  secrets: { key: secret() },   // its credentials → read via service.secrets()
   build: node({ module: import.meta.url, entry: '../dist/server.mjs' }),
-  expose: { rpc: authContract },// ports other services can depend on
+  expose: { rpc: authContract },// what it offers to other services
 });
 ```
 
-`deps`, `params`, and `secrets` are three separate namespaces with three
-separate accessors — a dependency and a config value never masquerade as each
-other ([ADR-0021](../design/90-decisions/ADR-0021-params-are-read-through-config-not-load.md)).
+Dependencies, config, and secrets are three deliberately separate things with
+three separate accessors, so a database can never masquerade as a string and
+a credential can never end up in ordinary config. Your code contains no
+`process.env` reads and no URLs; that is what makes every environment —
+production, a stage, a test — just a different set of injected values.
 
 ## Contracts
 
-A **contract** types the edge between two services. The producer exposes and
-serves it; a consumer depends on it and receives a typed client. The contract
-lives with the service that owns it:
+A **contract** is a service's API written as schemas, and it types both ends
+of the edge: the producer's handlers and the consumer's client. Define it
+once, in the package of the service that owns it:
 
 ```ts
 import { contract, rpc } from '@prisma/composer/rpc';
@@ -47,10 +45,10 @@ export const authContract = contract({
 });
 ```
 
-Producer side — `serve()` turns the service's `expose` into a fetch handler.
-The handler map is keyed by the expose port's name, exhaustive at compile
-time, and each handler receives the validated input (plus the service's own
-loaded deps as a second argument):
+On the producer, `serve()` turns the service's `expose` into a fetch handler.
+The handler map must cover every method — a missing or wrong-shaped handler
+doesn't compile. Each handler receives the validated input (and the service's
+own loaded deps as a second argument):
 
 ```ts
 const handler = serve(service, {
@@ -60,83 +58,96 @@ const handler = serve(service, {
 });
 ```
 
-Consumer side — declare `deps: { auth: rpc(authContract) }` and
-`service.load()` returns `{ auth }` as a typed client: `await
-auth.verify({ token })`. Input and output are validated at the boundary at
-runtime, against the same schemas that type both ends.
+On the consumer, declare `deps: { auth: rpc(authContract) }` and
+`service.load()` returns `{ auth }` — call `await auth.verify({ token })`
+like a local function. Inputs and outputs are also validated at runtime, at
+the boundary, against the same schemas.
 
-RPC over HTTP is the only contract kind today — no gRPC, WebSocket, or
-streaming contracts.
+The only contract kind today is RPC over HTTP — no gRPC, WebSockets, or
+streaming contracts yet.
 
 ## Databases
 
-Two kinds of Postgres dependency, by how much the framework does for you:
+There are two ways for a service to get a Postgres, depending on how much you
+want the framework to do.
 
-**`postgres()`** — the binding is `{ url }` and the app owns its client
-([ADR-0015](../design/90-decisions/ADR-0015-dependencies-resolve-to-bindings-clients-are-app-side.md)).
-Build whatever client you like in the server entry:
+### `postgres()` — bring your own client
+
+The dependency delivers connection config — `{ url }` — and nothing else. You
+build the client you already know (`pg`, Bun's `SQL`, an ORM) in your server
+entry:
 
 ```ts
 import { SQL } from 'bun';
+
 const { db } = service.load();
 const sql = new SQL({ url: db.url, max: 1, idleTimeout: 10 });
 ```
 
-(Those pool settings matter in production — see
+(Those pool settings are not decorative — Compute scales to zero and idle
+connections get closed; see
 [Deploying and operating](deploying.md#production-behavior).)
 
-**`pnPostgres(...)`** — a [Prisma Next](https://github.com/prisma/prisma-next)-typed
-database ([ADR-0022](../design/90-decisions/ADR-0022-data-deps-carry-a-prisma-next-contract.md)):
-`load()` returns a typed client constructed from your data contract, so
-queries are compile-time checked against the schema —
-`db.orm.public.Product.where({ id }).first()`, no SQL strings, no row
-mapping. Three pieces:
+### `pnPostgres()` — a Prisma Next-typed database
 
-- `contract.prisma` — the schema. `prisma-next contract emit` turns it into
-  `contract.json` + `contract.d.ts`, which you wrap once:
+If you want typed queries and managed migrations, make the database a
+[Prisma Next](https://github.com/prisma/prisma-next) one. `load()` then
+returns a client generated from your schema — queries like
+`db.orm.public.Product.where({ id }).first()` are compile-time checked, no
+SQL strings, no row mapping.
 
-  ```ts
-  // src/data.ts — the ONE value both ends reference
-  import { pnContract } from '@prisma/composer-prisma-cloud/prisma-next';
-  import type { Contract } from '../contract.d.ts';
-  import contractJson from '../contract.json' with { type: 'json' };
+The workflow, once per schema change (all `prisma-next` commands — see the
+Prisma Next docs for the details):
 
-  export const catalogData = pnContract<Contract>(contractJson);
-  ```
+1. Edit `contract.prisma` — your schema.
+2. `prisma-next contract emit` — regenerates `contract.json` +
+   `contract.d.ts` from it.
+3. `prisma-next migration plan` — authors the migration into `migrations/`.
+4. Deploy. The deploy applies `migrations/` before the service starts —
+   there's no `CREATE TABLE IF NOT EXISTS` anywhere in app code.
 
-- The dependency end: `deps: { db: pnPostgres(catalogData) }`.
-- The resource end (in the module that owns the database): also names the
-  `prisma-next.config.ts` path, which the deploy's migration step loads to
-  find `migrations/`:
-
-  ```ts
-  const db = provision(pnPostgres({ name: 'database', contract: catalogData, config }));
-  ```
-
-Migrations are applied at deploy, before the service starts — no
-`CREATE TABLE IF NOT EXISTS` in app code. The deploy refuses to wire a
-service against a database with a different contract.
-[`examples/store/modules/catalog`](../../examples/store/modules/catalog/) is
-the complete pattern; [`examples/pn-widgets`](../../examples/pn-widgets/) is
-the minimal one.
-
-## Modules
-
-A Module is the unit of composition and reuse: it owns its internals (its
-database, its services) and is reachable only through its typed boundary.
-
-**A closed root** — no boundary, only provisions. This is the app:
+In your app, the emitted contract is wrapped once, and that one value is
+referenced by both the resource and every service that queries it:
 
 ```ts
-export default module('my-app', ({ provision }) => {
-  const auth = provision(authModule);
-  provision(storefrontService, { deps: { auth: auth.rpc } });
-});
+// src/data.ts
+import { pnContract } from '@prisma/composer-prisma-cloud/prisma-next';
+import type { Contract } from '../contract.d.ts';
+import contractJson from '../contract.json' with { type: 'json' };
+
+export const catalogData = pnContract<Contract>(contractJson);
 ```
 
-**A reusable Module** — declares a boundary (what it needs and what it
-offers) in the second argument, wires its internals in the builder, and
-returns its exposed ports:
+The service depends on it:
+
+```ts
+deps: { db: pnPostgres(catalogData) }
+```
+
+And the module that owns the database provisions it, also naming the
+`prisma-next.config.ts` path so the deploy can find `migrations/`:
+
+```ts
+const db = provision(pnPostgres({ name: 'database', contract: catalogData, config }));
+```
+
+Because both ends share the contract value, the deploy refuses to wire a
+service against a database whose schema doesn't match.
+[`examples/pn-widgets`](../../examples/pn-widgets/) is the minimal working
+version;
+[`examples/store/modules/catalog`](../../examples/store/modules/catalog/) is
+the full pattern inside a reusable Module.
+
+## Reusable Modules
+
+When a service and its database belong together, package them as a
+**Module**: a unit that owns its internals and offers only typed ports. A
+consumer provisions the Module and wires its exposed contract — it never
+sees, and can never reach, the database inside.
+
+A Module declares its boundary (what it needs, what it offers) in the second
+argument, wires its internals in the builder function, and returns the ports
+it promised:
 
 ```ts
 import { module, secret } from '@prisma/composer';
@@ -157,38 +168,48 @@ export default module(
 );
 ```
 
-A consumer provisions this Module and wires `auth.rpc` — it never sees the
-database. A Module can also declare boundary `deps`: inputs the parent
-supplies, wired exactly like a service's.
-
-`provision(node, opts?)` accepts:
-
-- `id` — the provision's name in the graph; defaults to the node's own name.
-  Give an explicit id when the default would stutter (`auth.auth`).
-- `deps` — wire each declared dependency slot to a provisioned ref or an
-  exposed port.
-- `secrets` — bind each secret need (see § Secrets).
-
-One naming rule bites: the platform rejects provision names shorter than
-three characters, so name a database `'database'`, not `'db'`. (The wiring
-key — the service's own input name — can still be `db`.)
-
-## Shared modules
-
-First-party reusable Modules ship under `@prisma/composer-prisma-cloud`:
-
-| Import | What it provisions | Exposes |
-| --- | --- | --- |
-| `cron` from `/cron` | An always-on scheduler firing your schedule at your runner service | nothing |
-| `storage` from `/storage` | An S3-backed blob store (own Postgres + minted credentials) | `store` |
-| `streams` from `/streams` | Durable append-only event streams, backed by a `store` | `streams` |
-
-Cron end to end. The schedule is the one source of truth for job ids and
-intervals; `serveSchedule` is exhaustive over its ids at compile time, so an
-unhandled job doesn't compile:
+The root then treats it like any other node:
 
 ```ts
-// service.ts — the runner declares what the jobs need
+const auth = provision(authModule, {
+  secrets: { signingKey: envSecret('AUTH_SIGNING_SECRET') },
+});
+provision(storefrontService, { deps: { auth: auth.rpc } });
+```
+
+A Module can also declare boundary `deps` — inputs its parent must supply,
+wired exactly like a service's. The root module you already have is just the
+outermost Module, with no boundary at all.
+
+`provision(node, opts?)` takes:
+
+- `id` — the node's name in the graph, defaulting to its own `name`. Set it
+  explicitly when the default stutters (a service named `auth` inside a
+  module named `auth` would read as `auth.auth`).
+- `deps` — a value for each declared dependency slot: another provision, or
+  an exposed port.
+- `secrets` — a binding for each secret need (below).
+
+Two naming rules the platform enforces: provision names must be at least
+three characters (call a database `'database'`, not `'db'` — the wiring key
+on the service side can still be `db`), and ids must be unique within their
+module.
+
+## The modules that ship with the framework
+
+| Import | What you get | Exposes |
+| --- | --- | --- |
+| `cron` from `@prisma/composer-prisma-cloud/cron` | A scheduler that fires your jobs at your service on an interval | nothing |
+| `storage` from `@prisma/composer-prisma-cloud/storage` | An S3-backed blob store, credentials included | `store` |
+| `streams` from `@prisma/composer-prisma-cloud/streams` | Durable append-only event streams, backed by a `store` | `streams` |
+
+Cron is the one most apps want first. You supply two things — a schedule and
+a runner service that exposes the `trigger` contract — and the module does
+the rest:
+
+```ts
+// service.ts — the runner. The schedule is the single source of truth
+// for job ids and intervals.
 import { defineSchedule, triggerContract } from '@prisma/composer-prisma-cloud/cron';
 
 export const schedule = defineSchedule({ rotateSpecial: '30s' });
@@ -199,31 +220,36 @@ export default compute({
   build: node({ module: import.meta.url, entry: '../dist/server.mjs' }),
   expose: { trigger: triggerContract },
 });
+```
 
-// server.ts — map each job id to work
+```ts
+// server.ts — map each job id to work. serveSchedule checks the map
+// against the schedule, so an unhandled job doesn't compile.
 import { serveSchedule } from '@prisma/composer-prisma-cloud/cron';
+
 const handler = serveSchedule(service, schedule, {
   rotateSpecial: (deps) => deps.catalog.rotateSpecial({}),
 });
+```
 
-// module.ts — the cron module's boundary deps mirror the runner's own,
-// so the root wires them like any other edge
+```ts
+// module.ts — the cron module needs whatever your runner needs, so the
+// root wires it like any other edge.
 provision(cron({ schedule, runner: promotionsService }), {
   deps: { catalog: catalog.rpc },
 });
 ```
 
-Storage and streams compose the same way —
 [`examples/storage`](../../examples/storage/) and
-[`examples/streams`](../../examples/streams/) show the wiring, including the
-streams module's secret binding.
+[`examples/streams`](../../examples/streams/) show the other two, including
+the streams module's secret binding.
 
 ## Config params
 
-Params are caller-owned schemas on the declaration
-([ADR-0018](../design/90-decisions/ADR-0018-config-params-carry-a-caller-owned-schema.md)):
-the schema types the param and validates the value at boot. `string()` and
-`number()` cover the scalars; `param(schema)` wraps any Standard Schema:
+A param is a value you want to configure per environment without a redeploy
+of code: a region, a feature flag, a job list. Declare it with a schema —
+that schema gives you the TypeScript type *and* validates the stored value at
+boot, so garbage config is a loud startup failure, not a runtime surprise:
 
 ```ts
 import { param, string } from '@prisma/composer';
@@ -239,38 +265,48 @@ compute({
 });
 ```
 
-Read them with `service.config()`. Facets are `default` and `optional` — they
-describe how a value is handled, not what it is. Every service has a reserved
-`port` param (default 3000); declaring your own `port` is an authoring error.
+`string()` and `number()` cover the scalars; `param(schema)` takes any
+Standard Schema. Params can have a `default` or be `optional`. Read them with
+`service.config()` — they never appear in `load()`.
+
+Every service gets a reserved `port` param (default 3000); declaring your own
+`port` is an authoring error, caught immediately.
 
 ## Secrets
 
-Secret values never travel through framework config
-([ADR-0029](../design/90-decisions/ADR-0029-secrets-are-a-forwardable-slot.md)).
-A service declares a nameless **need**; the root binds it to a platform
-env-var name; the value stays only in that platform variable:
+Credentials get their own channel, separate from params, with one rule:
+**the value never enters framework config**. The service declares a nameless
+need, the root binds that need to a platform environment-variable name, and
+the value only ever lives in that platform variable:
 
 ```ts
-// the need (service.ts)
+// the service: "I need a signing key" — no name, no value
 compute({ /* ... */ secrets: { signingKey: secret() } });
 
-// the binding (module.ts root)
+// the root: "that need is the platform variable AUTH_SIGNING_SECRET"
 provision(authModule, { secrets: { signingKey: envSecret('AUTH_SIGNING_SECRET') } });
 
-// the read (server.ts)
+// the server: the only way to the value is an explicit expose()
 const { signingKey } = service.secrets(); // SecretBox<string>
-signingKey.expose();                      // the only way to the value
+signingKey.expose();
 ```
 
-The `SecretBox` redacts everywhere except `.expose()` — logging it, rendering
-it, or JSON-serializing it never leaks the value. Modules forward needs
-without ever learning the platform name (the auth Module above). A secret is
-not a param; don't put credentials in `params`.
+The `SecretBox` redacts on logging, rendering, and JSON-serialization —
+leaking it takes a deliberate `.expose()`. A Module forwards a need up to its
+parent without ever learning the platform name, which is what lets a reusable
+Module require credentials without dictating your naming.
+
+At deploy time, the value is provisioned from the deploying shell's
+environment — so CI (or you) exports `AUTH_SIGNING_SECRET`, and it never
+appears in code, state, or generated config.
 
 ## Builds
 
-The framework assembles only what you built. For plain server processes, the
-shipped tsdown preset makes each entry self-contained (everything inlined
+The framework never bundles your code — it assembles what your build
+produced, byte for byte. Two build adapters ship:
+
+**`node` — any plain server process.** Point `entry` at a self-contained ESM
+file. The shipped tsdown preset produces exactly that (everything inlined
 except runtime built-ins):
 
 ```ts
@@ -278,23 +314,32 @@ import { prismaTsDownConfig } from '@prisma/composer/tsdown';
 export default prismaTsDownConfig({ entry: { server: 'src/server.ts' }, outDir: 'dist' });
 ```
 
-Two services in one package = two separate builds into separate `outDir`s.
+Building two services from one package? Two separate builds into two
+`outDir`s, so shared code lands in both.
 
-For Next.js, `next build` with `output: 'standalone'` is the whole build;
-declare it with `nextjs({ module: import.meta.url, appDir: '..' })` from
-`@prisma/composer/nextjs`, and add `nextjsBuild()` from
-`@prisma/composer/nextjs/control` to the deploy config's `extensions`. One
-Next-specific rule: a page that calls `service.load()` needs
-`export const dynamic = 'force-dynamic'` — the runtime environment doesn't
-exist at build time.
+**`nextjs` — a Next.js app.** `next build` with `output: 'standalone'` is the
+whole build; the adapter just needs to know where the app lives:
 
-## Further reading
+```ts
+build: nextjs({ module: import.meta.url, appDir: '..' })
+```
 
-- [`docs/design/10-domains/core-model.md`](../design/10-domains/core-model.md)
-  — the complete type-level design.
-- [`docs/design/10-domains/connection-contracts.md`](../design/10-domains/connection-contracts.md)
-  — contracts in depth.
-- [`docs/design/10-domains/module-composition.md`](../design/10-domains/module-composition.md)
-  — boundaries, forwarding, nesting.
-- [`docs/design/10-domains/config-params.md`](../design/10-domains/config-params.md)
-  — the config round trip, end to end.
+Add `nextjsBuild()` from `@prisma/composer/nextjs/control` to the deploy
+config's `extensions`. And remember: any page or action that calls
+`service.load()` needs `export const dynamic = 'force-dynamic'`.
+
+## Digging deeper
+
+The design record explains *why* the model is shaped this way:
+
+- [`core-model.md`](../design/10-domains/core-model.md) — the complete
+  type-level design.
+- [`connection-contracts.md`](../design/10-domains/connection-contracts.md) —
+  contracts in depth.
+- [`module-composition.md`](../design/10-domains/module-composition.md) —
+  boundaries, forwarding, nesting.
+- [`config-params.md`](../design/10-domains/config-params.md) — the config
+  round trip, and [ADR-0029](../design/90-decisions/ADR-0029-secrets-are-a-forwardable-slot.md)
+  for the secrets model.
+- [ADR-0005](../design/90-decisions/ADR-0005-users-build-the-framework-assembles.md)
+  — why you build and the framework assembles.
