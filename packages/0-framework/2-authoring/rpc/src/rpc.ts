@@ -36,7 +36,10 @@ export function rpc(
   return dependency({
     type: 'rpc',
     connection: {
-      params: { url: string(), serviceKey: string({ optional: true }) },
+      params: {
+        url: string(),
+        serviceKey: string({ optional: true, autoProvision: 'per-binding-key' }),
+      },
       hydrate: ({ url, serviceKey }) => makeClient(arg, url, { serviceKey }),
     },
     required: arg,

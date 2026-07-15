@@ -26,6 +26,12 @@ export interface ConfigParam<S extends StandardSchemaV1 = StandardSchemaV1> {
   readonly schema: S;
   readonly optional?: boolean;
   readonly default?: StandardSchemaV1.InferOutput<S>;
+  /**
+   * Opaque to core — a facet a deploy target may react to. `'per-binding-key'`
+   * marks a param whose value the target mints and wires per dependency edge
+   * (ADR-0030's service key); core never interprets what that means.
+   */
+  readonly autoProvision?: 'per-binding-key';
 }
 
 export type Params = Record<string, ConfigParam>;
@@ -175,6 +181,7 @@ const numberSchema = scalarSchema<number>(
 export interface ParamOptions<T> {
   readonly optional?: boolean;
   readonly default?: T;
+  readonly autoProvision?: 'per-binding-key';
 }
 
 function withFacets<S extends StandardSchemaV1>(
@@ -185,6 +192,7 @@ function withFacets<S extends StandardSchemaV1>(
     schema,
     ...(opts.optional !== undefined ? { optional: opts.optional } : {}),
     ...(opts.default !== undefined ? { default: opts.default } : {}),
+    ...(opts.autoProvision !== undefined ? { autoProvision: opts.autoProvision } : {}),
   };
 }
 

@@ -17,7 +17,7 @@ describe('rpc(contract) — the dependency end', () => {
     expect(end.type).toBe('rpc');
     expect(end.connection.params).toEqual({
       url: string(),
-      serviceKey: string({ optional: true }),
+      serviceKey: string({ optional: true, autoProvision: 'per-binding-key' }),
     });
   });
 
@@ -25,6 +25,12 @@ describe('rpc(contract) — the dependency end', () => {
     const end = rpc(authContract);
 
     expect(end.connection.params['serviceKey']?.optional).toBe(true);
+  });
+
+  test('serviceKey carries the per-binding-key auto-provision facet (ADR-0030)', () => {
+    const end = rpc(authContract);
+
+    expect(end.connection.params['serviceKey']?.autoProvision).toBe('per-binding-key');
   });
 
   test('hydrate synchronously binds a client with a callable method per contract method', () => {

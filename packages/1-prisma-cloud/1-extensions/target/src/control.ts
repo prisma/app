@@ -7,6 +7,7 @@ import type { ExtensionDescriptor } from '@internal/core/config';
 import * as Prisma from '@internal/lowering';
 /** The Prisma Cloud–hosted deploy state store; its implementation lives in @internal/lowering. */
 import { prismaState } from '@internal/lowering/state';
+import type * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import { computeDescriptor } from './descriptors/compute.ts';
@@ -19,6 +20,7 @@ import { PgWarmProvider } from './pg-warm-resource.ts';
 import { PnMigrationProvider } from './pn-migration-resource.ts';
 import { runPreflight } from './preflight.ts';
 import { S3CredentialsProvider } from './s3-credentials-resource.ts';
+import { serviceKeyEdges } from './service-keys.ts';
 
 export { prismaState };
 
@@ -86,6 +88,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
           PgWarmProvider(),
           PnMigrationProvider(),
           S3CredentialsProvider(),
+          Prisma.ServiceKeyProvider(),
         ),
       ),
 
@@ -98,7 +101,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     // Project, with the poison DATABASE_URL variables written immediately so
     // nothing can ever rely on the platform default.
     application: {
-      provision: () =>
+      provision: ({ graph }) =>
         Effect.gen(function* () {
           const projectId = o.projectId;
           if (projectId === undefined || projectId.length === 0) {
@@ -118,7 +121,18 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
               ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
             });
           }
-          return { outputs: { projectId } };
+
+          // ADR-0030: mint one ServiceKey per faceted RPC edge, graph-wide, so
+          // both the consumer's serviceKey param and the provider's accepted
+          // set (descriptors/compute.ts's serialize) read the same value —
+          // both reach it via ctx.application, with no cross-node ordering.
+          const serviceKeys: Record<string, Output.Output<string>> = {};
+          for (const edge of serviceKeyEdges(graph)) {
+            const key = yield* Prisma.ServiceKey(`servicekey-${edge.edgeId}`, {});
+            serviceKeys[edge.edgeId] = key.value;
+          }
+
+          return { outputs: { projectId, serviceKeys } };
         }),
     },
 

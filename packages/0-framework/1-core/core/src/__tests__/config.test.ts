@@ -171,3 +171,39 @@ describe('provisionManifest', () => {
     expect(provisionManifest(graph)).toEqual([]);
   });
 });
+
+describe('autoProvision facet — opaque to core, carried through by string()/number()/param()', () => {
+  test('is absent by default — no key on the returned ConfigParam', () => {
+    expect(string()).not.toHaveProperty('autoProvision');
+    expect(number()).not.toHaveProperty('autoProvision');
+  });
+
+  test("string({ autoProvision: 'per-binding-key' }) carries the facet through to the ConfigParam", () => {
+    const param = string({ optional: true, autoProvision: 'per-binding-key' });
+
+    expect(param.autoProvision).toBe('per-binding-key');
+    expect(param.optional).toBe(true);
+  });
+
+  test('configOf never surfaces autoProvision — it is not part of the enumerable ConfigDeclaration shape', () => {
+    const root = service({
+      name: 'test-service',
+      extension: 'test/pack',
+      type: 'fake/app',
+      inputs: {
+        auth: dependency({
+          name: 'auth',
+          type: 'fake/rpc',
+          connection: conn(
+            { serviceKey: string({ optional: true, autoProvision: 'per-binding-key' }) },
+            () => ({}),
+          ),
+        }),
+      },
+      params: {},
+      build,
+    });
+
+    expect(JSON.stringify(configOf(root))).not.toContain('autoProvision');
+  });
+});

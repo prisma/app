@@ -2,9 +2,12 @@
 
 import type { ServiceNode } from '@internal/core';
 import type { NodeDescriptor } from '@internal/core/config';
+import { blindCast } from '@internal/foundation/casts';
 import * as Prisma from '@internal/lowering';
+import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import { configKey, encode, paramEntries, secretPointerRows } from '../serializer.ts';
+import { serviceKeyEdges, serviceKeyEnvName } from '../service-keys.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
 export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
@@ -30,7 +33,7 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
     // provisioning refs passed through, keeping their ordering edge) and SECRETS
     // (a POINTER row per slot holding the bound platform NAME, never a value —
     // ADR-0029). The class/branch scope is identical for both.
-    serialize: ({ address, node, graph }, provisioned, config) =>
+    serialize: ({ address, node, graph, application }, provisioned, config) =>
       Effect.gen(function* () {
         const cls = o.branchId ? ('preview' as const) : ('production' as const);
         const branch = o.branchId !== undefined ? { branchId: o.branchId } : {};
@@ -64,6 +67,49 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
               key,
               // The pointer: the platform env-var NAME the root bound the slot to.
               value: name,
+              class: cls,
+              ...branch,
+            }),
+          );
+        }
+
+        // ADR-0030: application.provision minted one ServiceKey Output per
+        // faceted edge into outputs.serviceKeys, keyed by edge id — the
+        // contract between control.ts (writer) and this serialize (reader).
+        const serviceKeys = blindCast<
+          Record<string, Output.Output<string>>,
+          "application.provision (control.ts) is this node's only writer of outputs.serviceKeys — the only shape it ever holds"
+        >(application.outputs['serviceKeys'] ?? {});
+
+        // Consumer side: this node's own faceted inputs get their edge's key.
+        for (const edge of serviceKeyEdges(graph).filter((e) => e.consumerAddress === address)) {
+          const keyOut = serviceKeys[edge.edgeId];
+          if (keyOut === undefined) continue; // no key minted — not a wired edge
+          const key = configKey(address, { owner: { input: edge.input }, name: 'serviceKey' });
+          records.push(
+            yield* Prisma.EnvironmentVariable(`${key}-var`, {
+              projectId,
+              key,
+              value: keyOut,
+              class: cls,
+              ...branch,
+            }),
+          );
+        }
+
+        // Provider side: every inbound edge's key, aggregated into one set.
+        const inbound = serviceKeyEdges(graph).filter((e) => e.providerAddress === address);
+        if (inbound.length > 0) {
+          const keyOuts = inbound
+            .map((e) => serviceKeys[e.edgeId])
+            .filter((value): value is Output.Output<string> => value !== undefined);
+          const acceptedJson = Output.map(Output.all(...keyOuts), (vals) => JSON.stringify(vals));
+          const key = serviceKeyEnvName(address);
+          records.push(
+            yield* Prisma.EnvironmentVariable(`${key}-var`, {
+              projectId,
+              key,
+              value: acceptedJson,
               class: cls,
               ...branch,
             }),
