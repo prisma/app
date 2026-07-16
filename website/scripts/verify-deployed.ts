@@ -8,8 +8,9 @@
  * generated service id, so without printing it a CI run gives no way to tell
  * where it just published.
  *
- * The app and service names come from the app itself, not string literals, so
- * renaming either can't silently break this.
+ * The project and service names are read off module.ts / src/service.ts rather
+ * than repeated here as strings, so each name has one definition instead of a
+ * second copy to keep in sync.
  */
 import { appendFile } from 'node:fs/promises';
 import { createManagementApiClient } from '@prisma/management-api-sdk';
@@ -91,8 +92,10 @@ async function probe(path: string): Promise<string | undefined> {
     const res = await fetch(`${url}${path}`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     if (!res.ok) return `${path} -> HTTP ${res.status}`;
     const body = await res.text();
-    // The brand is in every page's header; its absence means something other
-    // than the docs answered (an edge 404 page, a placeholder region).
+    // Every page carries this in its <title>, meta description and footer —
+    // all from template.ts's shell, never from a guide's markdown, so editing
+    // the docs cannot break this check. Its absence means something other than
+    // the site answered: an edge 404 page, or a placeholder region (PRO-200).
     if (!body.includes('Prisma Composer')) return `${path} -> 200 but did not serve the docs`;
     return undefined;
   } catch (err) {
