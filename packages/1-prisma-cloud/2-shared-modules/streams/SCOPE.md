@@ -43,9 +43,12 @@ token (ADR-0030), not an ADR-0029 secret: the module provisions a
 `bearer-key` resource, the framework mints its value once at deploy and
 keeps it stable in deploy state, and the `streams` node kind's extended
 deploy outputs deliver it to consumers alongside the URL. One key per
-module instance — the upstream server authenticates a single `API_KEY`;
-per-edge keys (rpc-service-key slice 2's `ServiceKey`) need an upstream
-accepted-key-set change and are recorded as future work.
+module instance — the upstream server authenticates a single `API_KEY`.
+Per-edge keys (ADR-0031's `ProvisionNeed`/`provisions` registry, shipped for
+RPC) need the upstream server to accept a key set first; the recorded
+migration is: upstream accepted-key-set PR, swap `durableStreams()`'s
+`apiKey` param to a `ProvisionNeed` with a registered streams provisioner,
+delete the module-level mint (design-notes.md).
 
 ## Config surface
 

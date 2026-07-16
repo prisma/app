@@ -44,9 +44,15 @@ root. Every endpoint, including `/health`, requires
 
 One key per module instance: the upstream server authenticates a single
 `API_KEY`, so every consumer of a `streams()` instance holds the same key.
-Distinct per-edge keys (the full ADR-0030 slice-2 shape, `ServiceKey` in the
-rpc-service-key project) need an upstream accepted-key-set change — recorded
-as future work in design-notes.md.
+Per-edge keys are minted per consumer→provider edge (ADR-0031's
+`ProvisionNeed`/`provisions` registry, shipped for RPC), which cannot apply
+until the upstream server accepts a key set. The migration path when it
+does: an accepted-key-set PR to `@prisma/streams-server` (mirroring what RPC's
+`serve()` gained), swap `durableStreams()`'s `apiKey` param to a
+`ProvisionNeed` with a registered streams provisioner whose provider-side
+landing feeds the accepted set, then delete the module-level mint
+([ADR-0031](../../../../docs/design/90-decisions/ADR-0031-provisioned-param-values-are-a-need-resolved-through-a-target-registry.md);
+recorded in design-notes.md).
 
 ## Wiring
 

@@ -125,3 +125,17 @@ per-edge value channel):** re-shape streams to match — drop the module's
 binding; distinct per-edge keys need an upstream accepted-key-set change
 (mirroring what #89 slice 1 added to rpc's serve()) — candidate minimal
 upstream PR. Do this before S7 (open-chat port) consumes the module.
+
+**ADR-0031 comparison (2026-07-16, streams-minted-key rebase).** #93 landed
+ADR-0031 (provisioned param values as a `ProvisionNeed` resolved through the
+deploy target's `provisions` registry) while the streams re-shape was in
+review. Compared and kept the provider-scoped `BearerKey` design: core's
+provision semantics mint one value per consumer→provider EDGE, and
+`@prisma/streams-server` authenticates a single `API_KEY` — per-edge values
+cannot apply until the upstream server accepts a key set. Migration path when
+it does: (a) upstream accepted-key-set PR to `@prisma/streams-server`
+(mirroring what #89 added to rpc's `serve()`); (b) swap `durableStreams()`'s
+`apiKey` connection param to a `ProvisionNeed` with a registered streams
+provisioner whose provider-side landing feeds the server's accepted set;
+(c) delete `BearerKey` and the `streams` descriptor
+(ADR-0031-provisioned-param-values-are-a-need-resolved-through-a-target-registry.md).

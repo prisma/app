@@ -898,7 +898,11 @@ describe("prismaCloud().nodes['streams'] — the service descriptor surfacing th
     await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
       const node = streamsCompute({ name: 'streams', deps: {}, build });
-      const ctx = { address: 'streams', node, graph: { secrets: [] } } as unknown as LowerContext;
+      const ctx = {
+        address: 'streams',
+        node,
+        graph: { secrets: [], edges: [] },
+      } as unknown as LowerContext;
       const provisioned: LoweredNode = {
         outputs: { serviceId: 'streams-svc#cloud-id', projectId: 'shop-project#cloud-id' },
       };
@@ -924,7 +928,11 @@ describe("prismaCloud().nodes['streams'] — the service descriptor surfacing th
     await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
       const node = streamsCompute({ name: 'streams', deps: {}, build });
-      const ctx = { address: 'streams', node, graph: { secrets: [] } } as unknown as LowerContext;
+      const ctx = {
+        address: 'streams',
+        node,
+        graph: { secrets: [], edges: [] },
+      } as unknown as LowerContext;
       const provisioned: LoweredNode = { outputs: { projectId: 'shop-project#cloud-id' } };
       expect(() =>
         run<LoweredNode>(
