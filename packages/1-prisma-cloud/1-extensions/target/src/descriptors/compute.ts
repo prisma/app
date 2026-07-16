@@ -1,12 +1,19 @@
 /** The `compute` node kind's descriptor: the four service hooks — provision, serialize, package, deploy. */
 
-import type { ServiceNode } from '@internal/core';
+import { isParamSource, type ServiceNode } from '@internal/core';
 import type { NodeDescriptor } from '@internal/core/config';
 import { blindCast } from '@internal/foundation/casts';
 import * as Prisma from '@internal/lowering';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
-import { configKey, encode, paramEntries, secretPointerRows } from '../serializer.ts';
+import { paramBindingFor, paramName } from '../param.ts';
+import {
+  configKey,
+  encode,
+  encodeParamPointer,
+  paramEntries,
+  secretPointerRows,
+} from '../serializer.ts';
 import { serviceKeyEdges, serviceKeyEnvName } from '../service-keys.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
@@ -50,11 +57,19 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
           // Mirrors stash(), keeping writer and reader consistent.
           if (value === undefined) continue;
           const key = configKey(address, d);
+          // A service's own param resolved (buildConfig) to an opaque
+          // ParamSource — env-sourced (ADR-0029's param sibling) — writes a
+          // POINTER row (the bound platform NAME), never a value; everything
+          // else (literals; dependency-input provisioning refs) is unchanged.
+          const rowValue =
+            d.owner === 'service' && isParamSource(value)
+              ? encodeParamPointer(paramName(paramBindingFor(graph.params, address, d.name)))
+              : encode(d.owner, value);
           records.push(
             yield* Prisma.EnvironmentVariable(`${key}-var`, {
               projectId,
               key,
-              value: encode(d.owner, value),
+              value: rowValue,
               class: cls,
               ...branch,
             }),

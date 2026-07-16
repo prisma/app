@@ -8,6 +8,7 @@
 export { compute } from './compute.ts';
 export type { HttpClient } from './http.ts';
 export { http } from './http.ts';
+export { envParam, paramName } from './param.ts';
 export type { PostgresConfig } from './postgres.ts';
 export { postgres, postgresContract } from './postgres.ts';
 export type { CredentialsConfig, CredentialsContract } from './s3-credentials.ts';

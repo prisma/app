@@ -1,7 +1,9 @@
 /**
- * Deploy preflight (ADR-0029): before Alchemy runs, verify every secret binding
- * in the app's provision manifest (each a platform env-var NAME) exists on Prisma
- * Cloud for the target stage.
+ * Deploy preflight (ADR-0029, extended for env-sourced params): before Alchemy
+ * runs, verify every secret binding AND every env-sourced param binding in the
+ * app's manifests (each a platform env-var NAME) exists on Prisma Cloud for
+ * the target stage. A literal-bound param never touches the platform — only
+ * `envParam(...)` sources are checked here.
  * A name absent on the platform but present in the deploy shell is provisioned
  * via a direct Management API POST — NEVER an Alchemy resource, so the value
  * never lands in hosted deploy state. A name absent from both fails the deploy,
@@ -11,7 +13,7 @@
  * in the CLI parent, so it builds its own Management API client from env — the
  * same credential path `ensureContainers` uses.
  */
-import { provisionManifest } from '@internal/core';
+import { paramManifest, provisionManifest } from '@internal/core';
 import type { PreflightInput } from '@internal/core/config';
 import { blindCast } from '@internal/foundation/casts';
 import {
@@ -22,6 +24,7 @@ import {
 } from '@internal/lowering';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
+import { isEnvParamSource, paramName } from './param.ts';
 import { secretName } from './secret.ts';
 
 type EnvClass = 'production' | 'preview';
@@ -128,7 +131,7 @@ async function fillMissing(
   }
 }
 
-interface MissingSecret {
+interface MissingBinding {
   readonly name: string;
   readonly serviceAddress: string;
 }
@@ -148,15 +151,16 @@ const fillFailedError = (key: string, error: unknown): Error =>
     `deploy preflight: failed to provision "${key}" from the deploy shell: ${JSON.stringify(error)}.`,
   );
 
-function missingError(missing: readonly MissingSecret[], input: PreflightInput): Error {
+function missingError(missing: readonly MissingBinding[], input: PreflightInput): Error {
   const scope =
     input.branchId === undefined
       ? 'the production class (project-level template)'
       : `the preview class of stage "${input.stage ?? input.branchId}" (branch override or template)`;
   const lines = missing.map((m) => `  - ${m.name}  (required by service "${m.serviceAddress}")`);
   return new Error(
-    `Deploy preflight failed — ${missing.length} secret env var(s) are not provisioned on Prisma ` +
-      `Cloud for ${scope}, and are absent from the deploy shell:\n${lines.join('\n')}\n\n` +
+    `Deploy preflight failed — ${missing.length} env var(s) (secret or env-sourced param) are not ` +
+      `provisioned on Prisma Cloud for ${scope}, and are absent from the deploy shell:\n` +
+      `${lines.join('\n')}\n\n` +
       'Set each in the deploy shell environment (the CLI will provision it on deploy), or create ' +
       `it on the platform (Prisma Console or the Management API) in ${scope}.`,
   );
@@ -173,7 +177,8 @@ async function managementClient(): Promise<ManagementApiClient> {
 
 /**
  * The Prisma Cloud extension's `preflight`. Aggregates the target-agnostic
- * manifest (core's `provisionManifest`), checks each pointer secret against the
+ * manifests (core's `provisionManifest` for secrets, `paramManifest` filtered
+ * to env-sourced bindings for params), checks each pointer name against the
  * platform, fills from the shell where possible, and fails loudly on anything
  * absent from both. Accepts an injected client for tests; otherwise builds one
  * from env.
@@ -182,23 +187,24 @@ export async function runPreflight(
   input: PreflightInput,
   deps?: { readonly client?: ManagementApiClient },
 ): Promise<void> {
-  const manifest = provisionManifest(input.graph);
-  if (manifest.length === 0) return;
-
-  // One check per platform NAME (many slots/services may bind the same one).
-  // Every wired secret is required — the forwarding model has no optional slot.
-  const names = new Map<string, MissingSecret>();
-  for (const binding of manifest) {
-    if (!names.has(secretName(binding))) {
-      names.set(secretName(binding), {
-        name: secretName(binding),
-        serviceAddress: binding.serviceAddress,
-      });
-    }
+  // One check per platform NAME (many slots/services, secret or param, may
+  // bind the same one). Every wired secret is required — the forwarding model
+  // has no optional slot; a param binding is only checked when it is
+  // env-sourced — a literal-bound param never touches the platform.
+  const names = new Map<string, MissingBinding>();
+  for (const binding of provisionManifest(input.graph)) {
+    const name = secretName(binding);
+    if (!names.has(name)) names.set(name, { name, serviceAddress: binding.serviceAddress });
   }
+  for (const binding of paramManifest(input.graph)) {
+    if (!isEnvParamSource(binding.binding)) continue;
+    const name = paramName(binding);
+    if (!names.has(name)) names.set(name, { name, serviceAddress: binding.serviceAddress });
+  }
+  if (names.size === 0) return;
 
   const client = deps?.client ?? (await managementClient());
-  const missing: MissingSecret[] = [];
+  const missing: MissingBinding[] = [];
   for (const meta of names.values()) {
     if (await existsOnPlatform(client, input.projectId, input.branchId, meta.name)) continue;
     const shellValue = process.env[meta.name];

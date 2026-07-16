@@ -98,6 +98,26 @@ function decode(owner: ParamEntry['owner'], raw: string): unknown {
   return owner === 'service' ? JSON.parse(raw) : raw;
 }
 
+// ——— Env-sourced param pointer rows: the non-secret sibling of the secret
+// pointer channel below. A service's own param is EITHER literal-bound
+// (JSON-encoded via `encode` above, unchanged) OR env-source-bound (a pointer
+// to a platform var, this marker) for a given deploy — never both — so the
+// two need to be told apart from the stored row alone, with no separate
+// channel to consult. `JSON.stringify` output always starts with one of
+// `"{[-0123456789tfn` (string/object/array/number/bool/null); the marker
+// starts with `@`, which no JSON.stringify output can start with, so the two
+// never collide.
+const PARAM_POINTER_PREFIX = '@composer-param-pointer:';
+
+/** True iff `raw` is a param pointer row (as opposed to a JSON-encoded literal). */
+export const isParamPointerRow = (raw: string): boolean => raw.startsWith(PARAM_POINTER_PREFIX);
+
+/** Builds a param pointer row's stored value from the platform var NAME it points to. */
+export const encodeParamPointer = (name: string): string => `${PARAM_POINTER_PREFIX}${name}`;
+
+/** Reverses `encodeParamPointer`: the platform var NAME a pointer row points to. */
+export const decodeParamPointer = (raw: string): string => raw.slice(PARAM_POINTER_PREFIX.length);
+
 function coerce(raw: string | undefined, d: ParamEntry, key: string): unknown {
   // "" is UNRESOLVED, not a value — falls to the default or, if required, is
   // a loud boot failure; a NON-EMPTY value that fails its param's declared
@@ -109,11 +129,42 @@ function coerce(raw: string | undefined, d: ParamEntry, key: string): unknown {
     if (d.param.optional === true) return undefined;
     throw new Error(`missing required config param "${d.name}" (env ${key})`);
   }
+  if (d.owner === 'service' && isParamPointerRow(raw)) {
+    return coerceEnvSourcedParam(raw, d, key);
+  }
   try {
     return standardValidateSync(d.param.schema, decode(d.owner, raw));
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     throw new Error(`invalid value for config param "${d.name}" (env ${key}): ${message}`);
+  }
+}
+
+/**
+ * Boot resolution for an env-sourced param: double-lookup (pointer → platform
+ * var), then the param's own schema on the raw string — no JSON decode, and
+ * no redaction (it's config, not a secret). An UNSET platform var is a loud
+ * boot failure naming both the param and the platform var; an EMPTY string is
+ * not special-cased here — it reaches the schema like any other value, so it
+ * passes iff the schema accepts it (deliberately unlike a literal param's own
+ * ""-means-absent rule, and unlike a secret's non-empty requirement).
+ */
+function coerceEnvSourcedParam(raw: string, d: ParamEntry, key: string): unknown {
+  const platformVar = decodeParamPointer(raw);
+  const value = process.env[platformVar];
+  if (value === undefined) {
+    throw new Error(
+      `env-sourced config param "${d.name}" (env ${key} → ${platformVar}) is unset: the platform ` +
+        `variable "${platformVar}" was not injected — the deploy did not provision it.`,
+    );
+  }
+  try {
+    return standardValidateSync(d.param.schema, value);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `invalid value for env-sourced config param "${d.name}" (env ${key} → ${platformVar}): ${message}`,
+    );
   }
 }
 

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { Load, module, secret } from '@internal/core';
+import { Load, module, secret, string } from '@internal/core';
 import type { ManagementApiClient } from '@internal/lowering';
 import { compute } from '../index.ts';
+import { envParam } from '../param.ts';
 import { runPreflight } from '../preflight.ts';
 import { envSecret } from '../secret.ts';
 
@@ -86,6 +87,27 @@ const sharedSecretGraph = () =>
       provision(compute({ name: 'ingest', deps: {}, secrets: { key: secret() }, build }), {
         id: 'ingest',
         secrets: { key: envSecret('STRIPE_SECRET_KEY') },
+      });
+    }),
+  );
+
+const paramGraph = () =>
+  Load(
+    module('app', ({ provision }) => {
+      provision(compute({ name: 'web', deps: {}, params: { appOrigin: string() }, build }), {
+        id: 'web',
+        params: { appOrigin: envParam('APP_ORIGIN') },
+      });
+    }),
+  );
+
+/** A literal-bound param never touches the platform — preflight must not check it. */
+const literalParamGraph = () =>
+  Load(
+    module('app', ({ provision }) => {
+      provision(compute({ name: 'web', deps: {}, params: { appOrigin: string() }, build }), {
+        id: 'web',
+        params: { appOrigin: 'https://literal.example.com' },
       });
     }),
   );
@@ -317,5 +339,62 @@ describe('runPreflight — secret manifest verification (ADR-0029)', () => {
     expect((error as Error).message).toMatch(/service "(web|ingest)"/);
     // The shared name is deduped to a single platform existence check.
     expect(state.gets).toHaveLength(1);
+  });
+
+  test('env-sourced param: missing on the platform and absent from the shell fails, naming the platform var', async () => {
+    delete process.env['APP_ORIGIN'];
+    state.rows = [];
+
+    const error: unknown = await runPreflight(
+      { graph: paramGraph(), projectId: 'proj', branchId: undefined, stage: undefined },
+      { client: fakeClient(state) },
+    ).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain('APP_ORIGIN');
+    expect(message).toContain('service "web"');
+    expect(state.posts).toEqual([]);
+  });
+
+  test('env-sourced param: absent on the platform but present in the shell is shell-filled', async () => {
+    state.rows = [];
+
+    await withEnv({ APP_ORIGIN: 'https://preview.example.com' }, () =>
+      runPreflight(
+        { graph: paramGraph(), projectId: 'proj', branchId: undefined, stage: undefined },
+        { client: fakeClient(state) },
+      ),
+    );
+
+    expect(state.posts).toEqual([
+      {
+        projectId: 'proj',
+        class: 'production',
+        key: 'APP_ORIGIN',
+        value: 'https://preview.example.com',
+      },
+    ]);
+  });
+
+  test('env-sourced param: present on the platform passes with no writes', async () => {
+    state.rows = [{ projectId: 'proj', class: 'production', key: 'APP_ORIGIN', branchId: null }];
+
+    await runPreflight(
+      { graph: paramGraph(), projectId: 'proj', branchId: undefined, stage: undefined },
+      { client: fakeClient(state) },
+    );
+
+    expect(state.posts).toEqual([]);
+  });
+
+  test('a literal-bound param never reaches the platform — no calls at all', async () => {
+    await runPreflight(
+      { graph: literalParamGraph(), projectId: 'proj', branchId: undefined, stage: undefined },
+      { client: fakeClient(state) },
+    );
+
+    expect(state.gets).toEqual([]);
+    expect(state.posts).toEqual([]);
   });
 });

@@ -101,7 +101,7 @@ mock.module('../pg-warm-resource.ts', () => ({
 }));
 
 const { prismaCloud } = await import('../control.ts');
-const { compute, envSecret, postgres, postgresContract, s3StoreService } = await import(
+const { compute, envParam, envSecret, postgres, postgresContract, s3StoreService } = await import(
   '../index.ts'
 );
 const { dependency, module, provisionNeed, secret, string } = await import('@internal/core');
@@ -497,6 +497,100 @@ describe("prismaCloud().nodes['compute'] — the service descriptor", () => {
         expect(JSON.stringify(writes)).not.toContain('sk_live');
       },
     );
+  });
+
+  test('an env-sourced param serializes a POINTER row — value is the bound platform NAME, never a value', async () => {
+    await withEnv(
+      // The real value is present in the deploy shell, proving it still cannot
+      // reach the serialized row — buildConfig never resolved a source's value.
+      { PRISMA_BRANCH_ID: undefined, APP_ORIGIN: 'https://should-not-leak.example.com' },
+      () => {
+        const target = prismaCloud({ workspaceId: 'ws_1' });
+        const node = compute({
+          name: 'web',
+          deps: {},
+          params: { appOrigin: string() },
+          build: {
+            extension: '@prisma/composer/node',
+            type: 'node',
+            module: 'file:///test/service.ts',
+            entry: 'server.js',
+          },
+        });
+        // The root bound the slot to APP_ORIGIN — it rides on graph.params.
+        const graph = {
+          secrets: [],
+          params: [{ serviceAddress: 'web', slot: 'appOrigin', binding: envParam('APP_ORIGIN') }],
+          edges: [],
+        };
+        const ctx = {
+          address: 'web',
+          node,
+          graph,
+          application: { outputs: {} },
+        } as unknown as LowerContext;
+        const provisioned: LoweredNode = { outputs: { projectId: 'shop-project#cloud-id' } };
+        // buildConfig resolved the param to the opaque ParamSource, unvalidated — exactly what
+        // deploy.ts's resolveParam does for a source-bound param.
+        const config = { service: { port: 3000, appOrigin: envParam('APP_ORIGIN') }, inputs: {} };
+        const before = recorded.envVar.length;
+
+        run<LoweredNode>(
+          serviceDescriptorOf(target, 'compute').serialize(ctx, provisioned, config),
+        );
+
+        const writes = recorded.envVar.slice(before).map(([, props]) => props);
+        // The pointer row holds the bound platform NAME, never a value.
+        expect(writes).toContainEqual({
+          projectId: 'shop-project#cloud-id',
+          key: 'COMPOSER_WEB_APPORIGIN',
+          value: '@composer-param-pointer:APP_ORIGIN',
+          class: 'production',
+        });
+        // No serialized EnvironmentVariable output carries the actual value.
+        expect(JSON.stringify(writes)).not.toContain('should-not-leak');
+      },
+    );
+  });
+
+  test('a literal-bound param still serializes as a plain JSON-encoded value row (unchanged)', async () => {
+    await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
+      const target = prismaCloud({ workspaceId: 'ws_1' });
+      const node = compute({
+        name: 'web',
+        deps: {},
+        params: { appOrigin: string() },
+        build: {
+          extension: '@prisma/composer/node',
+          type: 'node',
+          module: 'file:///test/service.ts',
+          entry: 'server.js',
+        },
+      });
+      const graph = { secrets: [], params: [], edges: [] };
+      const ctx = {
+        address: 'web',
+        node,
+        graph,
+        application: { outputs: {} },
+      } as unknown as LowerContext;
+      const provisioned: LoweredNode = { outputs: { projectId: 'shop-project#cloud-id' } };
+      const config = {
+        service: { port: 3000, appOrigin: 'https://literal.example.com' },
+        inputs: {},
+      };
+      const before = recorded.envVar.length;
+
+      run<LoweredNode>(serviceDescriptorOf(target, 'compute').serialize(ctx, provisioned, config));
+
+      const writes = recorded.envVar.slice(before).map(([, props]) => props);
+      expect(writes).toContainEqual({
+        projectId: 'shop-project#cloud-id',
+        key: 'COMPOSER_WEB_APPORIGIN',
+        value: '"https://literal.example.com"',
+        class: 'production',
+      });
+    });
   });
 
   test('named stage (PRISMA_BRANCH_ID set): serialize writes env vars with class "preview" and branchId', async () => {

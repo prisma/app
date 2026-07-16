@@ -7,9 +7,11 @@ read back at boot. Rests on
 [ADR-0019](../90-decisions/ADR-0019-the-target-owns-config-serialization.md) (the
 deploy target owns serialization),
 [ADR-0021](../90-decisions/ADR-0021-params-are-read-through-config-not-load.md)
-(params are read through `config()`), and
+(params are read through `config()`),
 [ADR-0029](../90-decisions/ADR-0029-secrets-are-a-forwardable-slot.md) (a secret
-is a distinct forwardable slot, read through `secrets()`).
+is a distinct forwardable slot, read through `secrets()`), and
+[ADR-0032](../90-decisions/ADR-0032-params-bind-at-provision-env-sourcing-is-a-target-source.md)
+(a param binds at provision — a literal or an env source).
 
 ## The problem in one example
 
@@ -57,6 +59,48 @@ framework enum of permitted types.
 This mirrors how RPC handles message types: the caller's schema lives on the
 declaration, and the value may be any object Standard Schema accepts. Getting that
 value into storage is a separate job, and not the param's.
+
+## Binding a param at provision
+
+A declaration carries no value beyond its `default`. The value is bound where
+the composition decision is made — the `provision()` call — as either a
+**literal** (schema-validated when config is built at deploy; beats the
+`default`) or a target-owned **source** naming where the value lives
+(ADR-0032):
+
+```ts
+// A literal — per-application configuration without touching the service:
+provision(web, { params: { appOrigin: 'https://example.com' } });
+
+// An env source — the value lives in a platform env var, per stage
+// (envParam is the TARGET's, from @prisma/composer-prisma-cloud):
+provision(web, { params: { appOrigin: envParam('APP_ORIGIN') } });
+```
+
+Resolution order per param: binding, else `default`, else absent (only legal
+for an `optional` param) — a required param nothing binds fails the deploy
+loudly, naming the param and the service.
+
+An **env-sourced** param mirrors the secrets rail (§ Secrets): the stored row is
+a pointer to the platform variable's NAME (discriminated from a JSON-encoded
+literal by the `@composer-param-pointer:` value prefix, which no JSON output
+can start with), deploy preflight verifies the name exists per stage (filling
+it from the deploy shell when absent, failing early otherwise), and boot does
+the double-lookup — pointer, then platform variable. The differences from a
+secret are deliberate: the value reads back through `config()`, **unredacted**;
+the platform variable's **raw string** is handed to the param's own schema (no
+decode — a `number()` param bound to `envParam` fails at boot); and an empty
+string is a value, valid iff the schema accepts it. A module boundary forwards
+a binding down to a child through a nameless `paramNeed()` slot, the same way
+it forwards a secret need. Value changes need a redeploy, same as secret
+rotation.
+
+Three out-of-band value channels, by who supplies the value: a **secret**
+(ADR-0029, provisioned out-of-band, redacted), a **framework-minted** value (a
+`provision` need per dependency edge, ADR-0031, kept in deploy state), and
+**operator-supplied platform config** (`envParam`, ADR-0032, per stage, never
+in deploy state, read at boot). A param claiming both a `provision` need and a
+provision-time binding is a loud lowering error.
 
 ## Serialization belongs to the target
 
@@ -233,6 +277,9 @@ Three lines the model holds everywhere:
   the decisions this documents.
 - [ADR-0029](../90-decisions/ADR-0029-secrets-are-a-forwardable-slot.md) — the
   secrets model this document's § Secrets summarizes.
+- [ADR-0032](../90-decisions/ADR-0032-params-bind-at-provision-env-sourcing-is-a-target-source.md)
+  — provision-time binding and env-sourcing, summarized in § Binding a param at
+  provision.
 - [`core-model.md`](core-model.md) — where params sit in the node → graph → Config
   model.
 - [`ADR-0020`](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)

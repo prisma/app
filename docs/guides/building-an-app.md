@@ -149,17 +149,21 @@ import contractJson from '../contract.json' with { type: 'json' };
 export const catalogData = pnContract<Contract>(contractJson);
 ```
 
-The service depends on it:
+`pnPostgres` is both ends of the edge, told apart by what you pass it. The
+contract alone is the dependency end — the service declaring what it queries:
 
 ```ts
 deps: { db: pnPostgres(catalogData) }
 ```
 
-And the module that owns the database provisions it, also naming the
-`prisma-next.config.ts` path so the deploy can find `migrations/`:
+An options object is the resource end — the module that owns the database
+provisions it, naming the `prisma-next.config.ts` path (relative to the
+module file) so the deploy can find `migrations/`:
 
 ```ts
-const db = provision(pnPostgres({ name: 'database', contract: catalogData, config }));
+const db = provision(
+  pnPostgres({ name: 'database', contract: catalogData, config: './prisma-next.config.ts' }),
+);
 ```
 
 Because both ends share the contract value, the deploy refuses to wire a
@@ -294,8 +298,20 @@ than a catalogue that already has what you need.
 
 ## Config params
 
-A param is a value you want to configure per environment without a redeploy
-of code: a region, a feature flag, a job list. Declare it with a schema —
+Everything a running service receives arrives through one of three channels,
+and choosing the channel is most of the decision:
+
+| The value is… | Declare it as | Provide it | Read it |
+| --- | --- | --- | --- |
+| produced by another node — a database, another service | a dependency: `deps: { db: postgres() }` | wire it at `provision()` | `service.load()` |
+| plain configuration — a region, a flag, an app origin | a param: `params: { region: string() }` | a `default`, a literal at `provision()`, or a per-stage platform variable via `envParam()` | `service.config()` |
+| a credential | a secret: `secrets: { key: secret() }` | `envSecret('NAME')` at the root | `service.secrets()`, redacted |
+
+Dependencies are covered above; [secrets below](#secrets). This section is
+the middle row.
+
+A param is a value you want to configure without touching code: a region, a
+feature flag, a job list. Declare it with a schema —
 that schema gives you the TypeScript type *and* validates the stored value at
 boot, so garbage config is a loud startup failure, not a runtime surprise:
 
@@ -314,11 +330,55 @@ compute({
 ```
 
 `string()` and `number()` cover the scalars; `param(schema)` takes any
-Standard Schema. Params can have a `default` or be `optional`. Read them with
+[Standard Schema](https://standardschema.dev) validator (arktype, zod,
+valibot — anything implementing the interface). Params can have a `default`
+or be `optional`. Read them with
 `service.config()` — they never appear in `load()`.
 
 Every service gets a reserved `port` param (default 3000); declaring your own
 `port` is an authoring error, caught immediately.
+
+### Binding a param at provision
+
+A `default` is the fallback, not the only source: the `provision()` call can
+bind the value, and the binding wins. The service declares what it needs; the
+place that provisions it decides where the value comes from:
+
+```ts
+// the service declares the param
+const web = compute({
+  name: 'web',
+  params: { appOrigin: string() },
+  // ...
+});
+
+// a literal — the app knows the value, so it lives in the app's code:
+provision(web, { params: { appOrigin: 'https://example.com' } });
+
+// or a platform environment variable, per stage:
+import { envParam } from '@prisma/composer-prisma-cloud';
+provision(web, { params: { appOrigin: envParam('APP_ORIGIN') } });
+```
+
+`envParam('NAME')` is for values the code *can't* know. An app origin is the
+canonical case: it's different on production and on every preview stage, and
+a stage's public URL doesn't exist until that stage first deploys. Each stage
+keeps its own copy of the variable, so one topology serves them all.
+
+How the value travels: **the stage's platform variable is the store; the
+deploying shell only seeds it.** At deploy, preflight checks the name exists
+for the target stage — a name the stage is missing is copied up from the
+deploying shell's environment, and a name absent from both fails the deploy
+early, naming the variable. Once the stage has it, your shell no longer
+matters. At boot the service reads the variable and hands it to the param's
+schema as a raw string — so bind `envParam` to string params. To change the
+value later, set it on the platform and redeploy; a running instance's
+environment is frozen when the instance is created.
+
+It's still a param: read through `config()`, never redacted. Credentials
+belong in secrets, below.
+[`examples/env-param`](../../examples/env-param/) is the minimal working
+version, including a smoke script that proves the per-stage split.
 
 ## Secrets
 
@@ -344,9 +404,13 @@ leaking it takes a deliberate `.expose()`. A Module forwards a need up to its
 parent without ever learning the platform name, which is what lets a reusable
 Module require credentials without dictating your naming.
 
-At deploy time, the value is provisioned from the deploying shell's
-environment — so CI (or you) exports `AUTH_SIGNING_SECRET`, and it never
-appears in code, state, or generated config.
+The platform variable is seeded exactly the way an `envParam` one is
+([above](#binding-a-param-at-provision)): preflight copies it from the
+deploying shell when the stage doesn't have it yet — so CI (or you) exports
+`AUTH_SIGNING_SECRET` for a first deploy. The framework itself never holds
+the value: not in code, not in deploy state, not in generated config — it
+carries only the variable's *name*, and the platform injects the value
+straight into the running instance.
 
 ## Builds
 
@@ -387,8 +451,10 @@ The design record explains *why* the model is shaped this way:
 - [`module-composition.md`](../design/10-domains/module-composition.md) —
   boundaries, forwarding, nesting.
 - [`config-params.md`](../design/10-domains/config-params.md) — the config
-  round trip, and [ADR-0029](../design/90-decisions/ADR-0029-secrets-are-a-forwardable-slot.md)
-  for the secrets model.
+  round trip, [ADR-0029](../design/90-decisions/ADR-0029-secrets-are-a-forwardable-slot.md)
+  for the secrets model, and
+  [ADR-0032](../design/90-decisions/ADR-0032-params-bind-at-provision-env-sourcing-is-a-target-source.md)
+  for provision-time binding and `envParam`.
 - [ADR-0030](../design/90-decisions/ADR-0030-rpc-callers-verified-with-an-auto-provisioned-service-key.md)
   — why service keys work the way they do.
 - [ADR-0005](../design/90-decisions/ADR-0005-users-build-the-framework-assembles.md)
