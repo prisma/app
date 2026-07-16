@@ -3,6 +3,9 @@
 node_modules
 dist
 dist-*
+
+# Docs site content, rendered from docs/guides/ at build time (website/).
+website/src/generated/
 coverage
 .prisma
 *.log

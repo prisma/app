@@ -1,0 +1,176 @@
+/**
+ * The HTML shell and the two page bodies (landing, guide). Pure string
+ * builders — no framework, no client JS. Styling is one embedded stylesheet;
+ * code blocks are pre-highlighted by shiki with light/dark CSS variables, so
+ * the theme rule here is all the runtime theming there is.
+ */
+import type { Guide } from './generated/content.ts';
+
+const REPO = 'https://github.com/prisma/composer';
+
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const STYLE = `
+:root {
+  --bg: #ffffff; --fg: #1a1f36; --muted: #5a6478; --border: #e5e8ef;
+  --accent: #16a394; --accent-fg: #ffffff; --card: #f7f8fa; --code-bg: #f6f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161c; --fg: #e6e8ee; --muted: #9aa3b5; --border: #262a35;
+    --accent: #2dd4bf; --accent-fg: #06231f; --card: #1b1e26; --code-bg: #1b1e26;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 5rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+header.top {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center;
+  justify-content: space-between; gap: 1rem; padding: 0.9rem 1.5rem;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+}
+header.top .brand { font-weight: 700; color: var(--fg); letter-spacing: -0.01em; }
+header.top .brand span { color: var(--accent); }
+header.top nav a { color: var(--muted); margin-left: 1.25rem; font-size: 0.92rem; }
+.layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 2.5rem;
+  max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
+aside.sidebar { position: sticky; top: 5rem; align-self: start; }
+aside.sidebar .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); margin: 0 0 0.6rem; }
+aside.sidebar ul { list-style: none; margin: 0; padding: 0; }
+aside.sidebar li { margin: 0.1rem 0; }
+aside.sidebar a { display: block; padding: 0.35rem 0.6rem; border-radius: 6px; color: var(--fg);
+  font-size: 0.94rem; }
+aside.sidebar a:hover { background: var(--card); text-decoration: none; }
+aside.sidebar a.active { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+main { min-width: 0; }
+main.content h1 { font-size: 2rem; letter-spacing: -0.02em; margin: 0 0 1.2rem; }
+main.content h2 { font-size: 1.4rem; letter-spacing: -0.01em; margin: 2.4rem 0 0.8rem;
+  padding-top: 0.4rem; }
+main.content h3 { font-size: 1.1rem; margin: 1.8rem 0 0.6rem; }
+main.content table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.94rem; }
+main.content th, main.content td { border: 1px solid var(--border); padding: 0.5rem 0.75rem;
+  text-align: left; vertical-align: top; }
+main.content th { background: var(--card); }
+main.content blockquote { margin: 1rem 0; padding: 0.2rem 1rem; border-left: 3px solid var(--accent);
+  color: var(--muted); }
+main.content :not(pre) > code {
+  background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+main.content pre { padding: 1rem 1.15rem; border-radius: 8px; overflow-x: auto;
+  border: 1px solid var(--border); font-size: 0.86rem; line-height: 1.55; }
+.shiki, .shiki span { color: var(--shiki-light); background-color: var(--shiki-light-bg); }
+@media (prefers-color-scheme: dark) {
+  .shiki, .shiki span { color: var(--shiki-dark); background-color: var(--shiki-dark-bg); }
+}
+/* hero + cards (landing) */
+.hero { max-width: 820px; margin: 0 auto; padding: 4.5rem 1.5rem 2rem; text-align: center; }
+.hero h1 { font-size: clamp(2.2rem, 5vw, 3.2rem); letter-spacing: -0.03em; margin: 0 0 1rem; }
+.hero p { font-size: 1.15rem; color: var(--muted); max-width: 620px; margin: 0 auto 2rem; }
+.install { display: inline-flex; align-items: center; gap: 0.75rem; background: var(--card);
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1.1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92rem; }
+.install .prompt { color: var(--accent); }
+.cards { max-width: 900px; margin: 2.5rem auto; padding: 0 1.5rem;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.card { display: block; padding: 1.25rem 1.4rem; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card); color: var(--fg); transition: border-color 0.15s; }
+.card:hover { border-color: var(--accent); text-decoration: none; }
+.card .n { font-weight: 650; margin-bottom: 0.3rem; letter-spacing: -0.01em; }
+.card .d { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+footer.foot { border-top: 1px solid var(--border); text-align: center; color: var(--muted);
+  font-size: 0.86rem; padding: 2rem 1.5rem; }
+@media (max-width: 720px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: static; }
+}
+`;
+
+function shell(title: string, bodyHtml: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<meta name="description" content="Getting-started documentation for Prisma Composer — build and deploy multi-service TypeScript apps to Prisma Cloud.">
+<style>${STYLE}</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Prisma <span>Composer</span></a>
+  <nav>
+    <a href="/guides/getting-started">Guides</a>
+    <a href="${REPO}">GitHub</a>
+  </nav>
+</header>
+${bodyHtml}
+<footer class="foot">Prisma Composer · rendered from <a href="${REPO}/tree/main/docs/guides">docs/guides</a></footer>
+</body>
+</html>`;
+}
+
+function sidebar(guides: readonly Guide[], activeSlug: string): string {
+  const items = guides
+    .map(
+      (g) =>
+        `<li><a href="/guides/${g.slug}"${g.slug === activeSlug ? ' class="active"' : ''}>${escapeHtml(
+          g.title,
+        )}</a></li>`,
+    )
+    .join('\n');
+  return `<aside class="sidebar"><p class="label">Guides</p><ul>${items}</ul></aside>`;
+}
+
+const CARD_BLURB: Record<string, string> = {
+  'getting-started':
+    'Empty directory to a deployed two-service app. Plus porting an app you already have.',
+  'building-an-app':
+    'Contracts, databases, reusable Modules, cron and storage, config, and secrets.',
+  testing: 'Unit tests with mockService; integration tests with bootstrapService.',
+  deploying: 'Stages, destroy, CI, and how your app behaves in production.',
+};
+
+export function landingPage(guides: readonly Guide[]): string {
+  const cards = guides
+    .map(
+      (g) =>
+        `<a class="card" href="/guides/${g.slug}"><div class="n">${escapeHtml(
+          g.title,
+        )}</div><div class="d">${escapeHtml(CARD_BLURB[g.slug] ?? '')}</div></a>`,
+    )
+    .join('\n');
+
+  const body = `
+<section class="hero">
+  <h1>Build multi-service apps, deploy them with one command.</h1>
+  <p>Prisma Composer deploys multi-service TypeScript apps to Prisma Cloud from a description you write in TypeScript. Declare your services and how they depend on each other; the framework provisions the rest.</p>
+  <div class="install"><span class="prompt">$</span> pnpm add @prisma/composer @prisma/composer-prisma-cloud</div>
+</section>
+<div class="cards">
+${cards}
+</div>`;
+  return shell('Prisma Composer — Docs', body);
+}
+
+export function guidePage(guide: Guide, guides: readonly Guide[]): string {
+  const body = `<div class="layout">
+${sidebar(guides, guide.slug)}
+<main class="content">${guide.html}</main>
+</div>`;
+  return shell(`${guide.title} — Prisma Composer`, body);
+}
+
+export function notFoundPage(guides: readonly Guide[]): string {
+  const body = `<div class="hero"><h1>Not found</h1><p>That page doesn't exist. Try the <a href="/guides/getting-started">getting-started guide</a>.</p></div>`;
+  void guides;
+  return shell('Not found — Prisma Composer', body);
+}

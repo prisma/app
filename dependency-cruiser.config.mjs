@@ -189,17 +189,17 @@ const createSinkAndConsumerRules = () => {
   forbidden.push({
     name: 'examples-import-public-only',
     comment:
-      'Examples and integration tests import only the 9-public packages (ADR-0028), so every example is an honest demo of what a user can write',
+      'Examples, the docs website, and integration tests import only the 9-public packages (ADR-0028), so every one is an honest demo of what a user can write',
     severity: 'error',
-    from: { path: '^(examples|test)/' },
+    from: { path: '^(examples|website|test)/' },
     to: { path: '^packages/(0-framework|1-prisma-cloud)/' },
   });
   forbidden.push({
     name: 'packages-cannot-import-examples',
-    comment: 'packages/** cannot import from examples/** or test/**',
+    comment: 'packages/** cannot import from examples/**, website/**, or test/**',
     severity: 'error',
     from: { path: '^packages/' },
-    to: { path: '^(examples|test)/' },
+    to: { path: '^(examples|website|test)/' },
   });
 };
 
@@ -222,7 +222,7 @@ export default {
       exportsFields: ['exports'],
       conditionNames: ['import', 'require', 'node', 'default'],
     },
-    includeOnly: '^(packages|examples|test)/',
+    includeOnly: '^(packages|examples|website|test)/',
     exclude: {
       // Tests inside packages are excluded (they legitimately cross plane
       // boundaries); build tooling configs are excluded by NAME, deliberately
