@@ -26,6 +26,8 @@ const fixtureEntry = path.join(
 );
 
 describe('prisma-composer deploy — real extension-config resolution of prisma-cloud + node', () => {
+  // Spawns the real CLI, which resolves /control entries and evaluates a config —
+  // inherently slower than bun test's default 5000ms, so give it real headroom.
   test('resolves both /control entries for real and fails at the missing built entry, not at resolution', () => {
     const result = spawnSync('bun', [prismaAppBin, 'deploy', fixtureEntry], {
       cwd: integrationDir,
@@ -38,7 +40,7 @@ describe('prisma-composer deploy — real extension-config resolution of prisma-
     expect(result.stderr).not.toContain('environment variable PRISMA_WORKSPACE_ID is required');
     expect(result.stderr).toContain('no built entry at');
     expect(result.stderr).toContain('run your build first');
-  });
+  }, 30_000);
 
   test('without PRISMA_WORKSPACE_ID, fails at the real prismaCloud() env check during config evaluation — proving the /control entry actually resolved and ran', () => {
     const env = { ...process.env };
@@ -53,5 +55,5 @@ describe('prisma-composer deploy — real extension-config resolution of prisma-
     expect(result.status).not.toBe(0);
     expect(result.stderr).not.toContain('Cannot resolve');
     expect(result.stderr).toContain('environment variable PRISMA_WORKSPACE_ID is required');
-  });
+  }, 30_000);
 });
