@@ -15,17 +15,34 @@ const STYLE = `
 :root {
   --bg: #ffffff; --fg: #1a1f36; --muted: #5a6478; --border: #e5e8ef;
   --accent: #16a394; --accent-fg: #ffffff; --card: #f7f8fa; --code-bg: #f6f8fa;
+  /* Ambient background wash. Light mode stays faint — over white, teal reads
+     loud fast, so these are deliberately weaker than their dark counterparts. */
+  --glow-a: rgba(22, 163, 148, 0.18);
+  --glow-b: rgba(45, 212, 191, 0.14);
+  --glow-c: rgba(26, 31, 54, 0.07);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #14161c; --fg: #e6e8ee; --muted: #9aa3b5; --border: #262a35;
     --accent: #2dd4bf; --accent-fg: #06231f; --card: #1b1e26; --code-bg: #1b1e26;
+    --glow-a: rgba(45, 212, 191, 0.16);
+    --glow-b: rgba(20, 184, 166, 0.12);
+    --glow-c: rgba(76, 110, 245, 0.10);
   }
 }
 * { box-sizing: border-box; }
 html { scroll-padding-top: 5rem; }
 body {
-  margin: 0; background: var(--bg); color: var(--fg);
+  margin: 0; color: var(--fg);
+  background-color: var(--bg);
+  /* Three soft clouds, anchored to the viewport rather than the page, so they
+     read as ambient depth instead of a banner that scrolls away. */
+  background-image:
+    radial-gradient(58rem 30rem at 50% -12%, var(--glow-a), transparent 66%),
+    radial-gradient(42rem 26rem at 92% 4%, var(--glow-b), transparent 62%),
+    radial-gradient(46rem 30rem at 2% 26%, var(--glow-c), transparent 64%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 a { color: var(--accent); text-decoration: none; }
@@ -77,22 +94,27 @@ main.content pre { padding: 1rem 1.15rem; border-radius: 8px; overflow-x: auto;
   line-height: 1.08; text-wrap: balance; }
 .hero h1 .hl { color: var(--accent); }
 .hero p { font-size: 1.15rem; color: var(--muted); max-width: 620px; margin: 0 auto 2rem; }
-.install { display: inline-flex; align-items: center; gap: 0.75rem; background: var(--card);
+.install { display: inline-flex; align-items: center; gap: 0.75rem;
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  backdrop-filter: blur(6px);
   border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1.1rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92rem; }
 .install .prompt { color: var(--accent); }
 .hero .sub { font-size: 0.95rem; margin: 1.25rem auto 0; max-width: 560px; }
 .why { max-width: 900px; margin: 3rem auto 0; padding: 0 1.5rem;
   display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.75rem; }
-.why-item .n { font-weight: 650; margin-bottom: 0.35rem; letter-spacing: -0.01em; }
+.why-item .n { font-weight: 650; margin-bottom: 0.35rem; letter-spacing: -0.01em;
+  color: var(--accent); }
 .why-item .d { color: var(--muted); font-size: 0.9rem; line-height: 1.55; }
 .why-item code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px;
   font-size: 0.9em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cards { max-width: 900px; margin: 2.5rem auto; padding: 0 1.5rem;
   display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
 .card { display: block; padding: 1.25rem 1.4rem; border: 1px solid var(--border); border-radius: 10px;
-  background: var(--card); color: var(--fg); transition: border-color 0.15s; }
-.card:hover { border-color: var(--accent); text-decoration: none; }
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--fg); transition: border-color 0.15s, transform 0.15s; }
+.card:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-2px); }
 .card .n { font-weight: 650; margin-bottom: 0.3rem; letter-spacing: -0.01em; }
 .card .d { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
 footer.foot { border-top: 1px solid var(--border); text-align: center; color: var(--muted);
@@ -160,7 +182,7 @@ export function landingPage(guides: readonly Guide[]): string {
 
   const body = `
 <section class="hero">
-  <h1>The <span class="hl">fastest</span>, <span class="hl">most reliable</span> way to build an app with your agent.</h1>
+  <h1>The <span class="hl">fastest</span>, <span class="hl">most reliable</span> way to <span class="hl">build an app</span> with your agent.</h1>
   <p>Start from scratch and deploy the whole thing — services, databases, and the wiring between them — to Prisma Cloud in minutes.</p>
   <div class="install"><span class="prompt">$</span> npx skills add prisma/composer --skill prisma-composer</div>
   <p class="sub">Start here. Your agent arrives knowing the whole API and the building blocks it can snap together — then you describe what you want.</p>
