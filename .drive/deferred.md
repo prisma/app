@@ -109,6 +109,43 @@
   review 2026-07-12 (during stage-as-branch); operator directive not to roll our
   own auth.
 
+# RPC service keys — deferred at project close (2026-07-16)
+
+Shipped: ADR-0030 (every RPC binding carries an auto-provisioned per-binding
+key; `serve()` 401s a caller without one) and ADR-0031 (the generic mechanism —
+an opaque branded `ProvisionNeed` resolved through the target's `provisions`
+registry). What we deliberately didn't do:
+
+- **Cross-extension provisioned edges.** An edge whose consumer and provider
+  belong to different extensions fails closed (`crossExtensionProvisionError`).
+  The real shape is a cross-target contract (who mints, who validates) and there
+  is no second target to design it against. ADR-0031's registry +
+  resolve-against-the-consumer's-extension rule is chosen so lifting this adds a
+  code path, not a redesign.
+- **More than one provisioned param on one connection** — also fails closed
+  (`multipleProvisionedParamsError`). One edge mints one value keyed by
+  `${consumer}.${input}`, so a second need on the same connection would silently
+  take the first's value under the first's brand. If a second need ever appears,
+  design per-param keying (note: that churns the `servicekey-${edgeId}` resource
+  id, so it re-mints keys).
+- **Rotation UX.** Rotation is "remove the binding (or destroy the stack) and
+  redeploy" — no rotate command, and no way to rotate without a redeploy.
+- **Per-method / per-contract authorization.** The key authorizes at the service
+  level: any valid key reaches every method the service exposes. Splitting into
+  two services is the workaround (operator: out of scope, "easily mimickable by
+  creating multiple RPC contracts").
+- **Publishing the provisioning SPI.** `provisionNeed` / `ProvisionNeed` /
+  `ProvisionerDescriptor` live in `@internal/*`, so only first-party authoring
+  kinds and targets can use ADR-0031's mechanism. This is *consistent* with
+  secrets — `secretSource` is equally internal — so it's not a regression; if
+  third-party extensions ever land, both SPIs publish together.
+- **Mock/in-memory contract bindings must assume enforcement is on.** A mock
+  binding has no edge and therefore no minted key; it works because an
+  *unprovisioned* service passes through, which is now a deliberate distinction
+  (absent var = local/test → pass; `"[]"` = deployed with zero peers → deny).
+  Design the mock-bindings slice against that distinction rather than relying on
+  it accidentally.
+
 # Prisma Next data contract — deferred at project close (2026-07-12)
 
 - **Multi-contract / contract-space extension** — full design preserved in
