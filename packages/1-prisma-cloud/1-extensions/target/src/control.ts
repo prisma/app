@@ -5,10 +5,12 @@
 
 import type { ExtensionDescriptor } from '@internal/core/config';
 import type { ProvisionerDescriptor } from '@internal/core/deploy';
+import { blindCast } from '@internal/foundation/casts';
 import * as Prisma from '@internal/lowering';
 /** The Prisma Cloud–hosted deploy state store; its implementation lives in @internal/lowering. */
 import { prismaState } from '@internal/lowering/state';
 import { RPC_PEER_KEY } from '@internal/rpc';
+import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import { computeDescriptor } from './descriptors/compute.ts';
@@ -16,12 +18,13 @@ import { postgresDescriptor } from './descriptors/postgres.ts';
 import { prismaNextDescriptor } from './descriptors/prisma-next.ts';
 import { s3CredentialsDescriptor } from './descriptors/s3-credentials.ts';
 import { s3StoreDescriptor } from './descriptors/s3-store.ts';
-import type { ResolvedCloudOptions } from './descriptors/shared.ts';
+import type { ProvisionLanding, ResolvedCloudOptions } from './descriptors/shared.ts';
 import { PgWarmProvider } from './pg-warm-resource.ts';
 import { PnMigrationProvider } from './pn-migration-resource.ts';
 import { runPreflight } from './preflight.ts';
 import { S3CredentialsProvider } from './s3-credentials-resource.ts';
-import { STREAMS_API_KEY } from './streams-keys.ts';
+import { serviceKeyEnvName } from './service-keys.ts';
+import { STREAMS_API_KEY, streamsApiKeyEnvName } from './streams-keys.ts';
 
 /**
  * ADR-0031's registered provisioner for RPC_PEER_KEY: mints one `ServiceKey`
@@ -41,6 +44,39 @@ const serviceKeyProvisioner: ProvisionerDescriptor = {
 };
 
 /**
+ * `ctx.provisioned`'s refs are typed `unknown` — core forwards a provisioner's
+ * ref without inspecting it. Each landing below is the sole reader of its own
+ * provisioner's output, so the shape is asserted here, once, rather than
+ * checked.
+ */
+const asKeyOutputs = (refs: readonly unknown[]): Output.Output<string>[] =>
+  refs.map((ref) =>
+    blindCast<
+      Output.Output<string>,
+      "the ref is keyed by an edge provisionedEdges matched on this landing's own brand, and the provisioner registered beside it is that brand's sole registrant — it returns a ServiceKey resource's `value`, an Output<string>"
+    >(ref),
+  );
+
+/**
+ * RPC's landing (ADR-0030): the provider accepts a SET — one key per inbound
+ * edge, JSON-encoded into the reserved accepted-keys var `serve()` reads.
+ * Paired with the provisioner above: mint per edge, aggregate every edge.
+ *
+ * Zero consumers still emits, and that is the whole point of #100: an ABSENT
+ * var means "never provisioned" and passes every caller through, so a deployed
+ * provider nobody wired must say "[]" — deny everything — rather than say
+ * nothing. Written as a literal because `Output.all()` with no arguments has
+ * nothing to resolve.
+ */
+const serviceKeyLanding: ProvisionLanding = ({ address, refs }) => ({
+  key: serviceKeyEnvName(address),
+  value:
+    refs.length > 0
+      ? Output.map(Output.all(...asKeyOutputs(refs)), (vals) => JSON.stringify(vals))
+      : JSON.stringify([]),
+});
+
+/**
  * ADR-0031's registered provisioner for STREAMS_API_KEY — the same `ServiceKey`
  * mint, keyed PER PROVIDER instead of per edge: the resource id is the
  * provider's address, so every consumer edge of one streams module resolves to
@@ -56,6 +92,41 @@ const streamsApiKeyProvisioner: ProvisionerDescriptor = {
       const key = yield* Prisma.ServiceKey(`streamskey-${edge.providerAddress}`, {});
       return key.value;
     }),
+};
+
+/**
+ * Streams' landing: ONE value, not a set — `@prisma/streams-server`
+ * authenticates a single `API_KEY`, which is why the provisioner above mints
+ * per provider. That pairing is the invariant this landing depends on, so it
+ * asserts rather than trusts it: a future per-edge flip without a paired
+ * accepted-set landing here would otherwise ship whichever key came first and
+ * leave every other consumer 401ing, silently. The refs are lazy Outputs
+ * (not comparable at serialize time); inside `Output.map` they are resolved
+ * strings, the same seam RPC's set aggregates on.
+ */
+const streamsApiKeyLanding: ProvisionLanding = ({ address, refs }) => {
+  // Zero consumers emits NOTHING — the streams counterpart to RPC's "[]".
+  // @prisma/streams-server has no deny-all mode: it either authenticates a key
+  // or runs --no-auth, so there is no value here that means "refuse everyone".
+  // Writing no key is what fails closed — the entrypoint refuses to boot with
+  // a named error rather than serve unauthenticated.
+  if (refs.length === 0) return undefined;
+  return {
+    key: streamsApiKeyEnvName(address),
+    value: Output.map(Output.all(...asKeyOutputs(refs)), (vals) => {
+      const distinct = [...new Set(vals)];
+      if (distinct.length > 1) {
+        throw new Error(
+          `streams service "${address}" was provisioned ${distinct.length} distinct keys across ` +
+            `its ${refs.length} inbound bindings, but it can only be given one ` +
+            '(@prisma/streams-server authenticates a single API_KEY). Its provisioner must mint ' +
+            'per provider, not per edge — or this landing must write an accepted-key set, once ' +
+            'the server accepts one.',
+        );
+      }
+      return distinct[0] ?? '';
+    }),
+  };
 };
 
 export { prismaState };
@@ -82,6 +153,23 @@ function asProvidersLayer<A, E, R>(layer: Layer.Layer<A, E, R>): Layer.Layer<nev
 }
 
 /**
+ * This extension's brands, each with the two halves ADR-0031 splits: the
+ * PROVISIONER core resolves a mint through, and the LANDING that puts the
+ * minted values on the provider. Declared together so a brand's two halves
+ * can never drift, and so this file stays the only place a brand is named —
+ * `descriptors/compute.ts` just looks a landing up by brand.
+ */
+const PROVISIONERS: ReadonlyMap<symbol, ProvisionerDescriptor> = new Map([
+  [RPC_PEER_KEY, serviceKeyProvisioner],
+  [STREAMS_API_KEY, streamsApiKeyProvisioner],
+]);
+
+const LANDINGS: ReadonlyMap<symbol, ProvisionLanding> = new Map([
+  [RPC_PEER_KEY, serviceKeyLanding],
+  [STREAMS_API_KEY, streamsApiKeyLanding],
+]);
+
+/**
  * Resolves the factory's env-or-option inputs, failing fast with the exact
  * variable name. `projectId`/`branchId` aren't required here — `prismaCloud()`
  * also runs in the CLI parent, before they're set; the required check lives in `application.provision`.
@@ -95,11 +183,13 @@ function resolveOptions(opts: PrismaCloudOptions): ResolvedCloudOptions {
   const projectId = process.env['PRISMA_PROJECT_ID'] || undefined;
   const branchId = process.env['PRISMA_BRANCH_ID'] || undefined;
 
-  if (opts.region !== undefined) return { workspaceId, region: opts.region, projectId, branchId };
+  if (opts.region !== undefined) {
+    return { workspaceId, region: opts.region, projectId, branchId, provisionLandings: LANDINGS };
+  }
 
   const region = process.env['PRISMA_REGION'];
   if (region === undefined || region.length === 0) {
-    return { workspaceId, projectId, branchId };
+    return { workspaceId, projectId, branchId, provisionLandings: LANDINGS };
   }
   if (!isComputeRegion(region)) {
     throw new Error(
@@ -107,7 +197,7 @@ function resolveOptions(opts: PrismaCloudOptions): ResolvedCloudOptions {
         `(expected one of: ${Prisma.COMPUTE_REGIONS.join(', ')}).`,
     );
   }
-  return { workspaceId, region, projectId, branchId };
+  return { workspaceId, region, projectId, branchId, provisionLandings: LANDINGS };
 }
 
 /** The Prisma Cloud extension descriptor — `prisma-composer.config.ts` lists it under `extensions`. */
@@ -167,10 +257,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     // ADR-0031: this extension's param provisioners, keyed by need brand.
     // Core resolves a provisioned param's `need.brand` against the CONSUMER
     // node's extension — the same registry this one is.
-    provisions: new Map<symbol, ProvisionerDescriptor>([
-      [RPC_PEER_KEY, serviceKeyProvisioner],
-      [STREAMS_API_KEY, streamsApiKeyProvisioner],
-    ]),
+    provisions: PROVISIONERS,
 
     nodes: {
       postgres: postgresDescriptor(o),

@@ -2,11 +2,10 @@
 
 import { isParamSource, type ServiceNode } from '@internal/core';
 import type { NodeDescriptor } from '@internal/core/config';
-import { blindCast } from '@internal/foundation/casts';
 import * as Prisma from '@internal/lowering';
-import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import { paramBindingFor, paramName } from '../param.ts';
+import { provisionedEdges } from '../provisioned-edges.ts';
 import {
   configKey,
   encode,
@@ -14,8 +13,6 @@ import {
   paramEntries,
   secretPointerRows,
 } from '../serializer.ts';
-import { serviceKeyEdges, serviceKeyEnvName } from '../service-keys.ts';
-import { streamsApiKeyEdges, streamsApiKeyEnvName } from '../streams-keys.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
 export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
@@ -95,88 +92,41 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
         // fills a provisioned param like any other, so there is no
         // consumer-side special case left to write here.
 
-        // Provider side: a service that serves anything gets an accepted-keys
-        // var, even with zero wired consumers — otherwise an unprovisioned
-        // var reads as "no enforcement" (serve.ts's pass-through state) and a
-        // zero-consumer RPC provider would accept every caller. A pure
-        // consumer (no `expose`) never serves, so it gets no such var.
+        // Provider side (ADR-0031). Driven by the PROVIDER, not by its edges:
+        // every registered landing is asked, even when this service has no
+        // inbound edge for that brand, because "no edges" and "no var" are not
+        // the same thing — an absent var reads as "never provisioned" (local
+        // dev, tests), so a deployed provider with zero wired consumers must
+        // still be able to emit a deny-everything value. Whether an empty set
+        // means deny-all or emit-nothing is the BRAND's call, so the landing
+        // decides and may return undefined to write no row at all. Compute
+        // never names a brand — it looks one up.
+        //
+        // The gate is main's and stays: a service that exposes nothing can
+        // never be any binding's provider, so it gets no landing rows.
         if (svc.expose !== undefined && Object.keys(svc.expose).length > 0) {
-          const inbound = serviceKeyEdges(graph).filter((e) => e.providerAddress === address);
-          // `ctx.provisioned` is typed `unknown` — core forwards a provisioner's
-          // ref without inspecting it. The filter only drops absent edges; the
-          // shape of what survives is asserted, not checked.
-          const keyOuts = inbound
-            .map((e) => ctx.provisioned.get(e.edgeId))
-            .filter((value) => value !== undefined)
-            .map((value) =>
-              blindCast<
-                Output.Output<string>,
-                "these refs are keyed by an edge serviceKeyEdges matched on RPC_PEER_KEY, and control.ts's serviceKeyProvisioner is the sole registrant of that brand — it returns a ServiceKey resource's `value`, an Output<string>"
-              >(value),
+          const refsByBrand = new Map<symbol, unknown[]>();
+          for (const edge of provisionedEdges(graph)) {
+            if (edge.providerAddress !== address) continue;
+            const ref = ctx.provisioned.get(edge.edgeId);
+            if (ref === undefined) continue;
+            const refs = refsByBrand.get(edge.brand) ?? [];
+            refs.push(ref);
+            refsByBrand.set(edge.brand, refs);
+          }
+          for (const [brand, landing] of o.provisionLandings) {
+            const row = landing({ address, refs: refsByBrand.get(brand) ?? [] });
+            if (row === undefined) continue;
+            records.push(
+              yield* Prisma.EnvironmentVariable(`${row.key}-var`, {
+                projectId,
+                key: row.key,
+                value: row.value,
+                class: cls,
+                ...branch,
+              }),
             );
-          // Zero consumers: no refs to resolve, so write the literal "[]"
-          // directly rather than calling Output.all() with no arguments.
-          const acceptedJson =
-            keyOuts.length > 0
-              ? Output.map(Output.all(...keyOuts), (vals) => JSON.stringify(vals))
-              : JSON.stringify([]);
-          const key = serviceKeyEnvName(address);
-          records.push(
-            yield* Prisma.EnvironmentVariable(`${key}-var`, {
-              projectId,
-              key,
-              value: acceptedJson,
-              class: cls,
-              ...branch,
-            }),
-          );
-        }
-
-        // Provider side, streams' need (ADR-0031): the upstream server
-        // authenticates a single API_KEY, so its provisioner mints ONE value
-        // per provider and every inbound edge's ref must be that same key.
-        // This landing writes one value, which is only correct while that
-        // holds — so assert it rather than trust it: a future per-edge flip
-        // without the paired accepted-set landing would otherwise ship the
-        // wrong key silently. The refs are lazy Outputs here (not comparable
-        // at serialize time), but inside Output.map they are resolved
-        // strings, which is the same seam RPC's accepted set aggregates on.
-        const inboundStreams = streamsApiKeyEdges(graph).filter(
-          (e) => e.providerAddress === address,
-        );
-        const streamsRefs = inboundStreams
-          .map((e) => ctx.provisioned.get(e.edgeId))
-          .filter((value) => value !== undefined)
-          .map((value) =>
-            blindCast<
-              Output.Output<string>,
-              "these refs are keyed by an edge streamsApiKeyEdges matched on STREAMS_API_KEY, and control.ts's streamsApiKeyProvisioner is the sole registrant of that brand — it returns a ServiceKey resource's `value`, an Output<string>"
-            >(value),
-          );
-        if (streamsRefs.length > 0) {
-          const key = streamsApiKeyEnvName(address);
-          const oneKey = Output.map(Output.all(...streamsRefs), (vals) => {
-            const distinct = [...new Set(vals)];
-            if (distinct.length > 1) {
-              throw new Error(
-                `streams service "${address}" was provisioned ${distinct.length} distinct keys ` +
-                  `across its ${streamsRefs.length} inbound bindings, but it can only be given ` +
-                  'one (@prisma/streams-server authenticates a single API_KEY). Its provisioner ' +
-                  'must mint per provider, not per edge — or this landing must write an ' +
-                  'accepted-key set, once the server accepts one.',
-              );
-            }
-            return distinct[0] ?? '';
-          });
-          records.push(
-            yield* Prisma.EnvironmentVariable(`${key}-var`, {
-              projectId,
-              key,
-              value: oneKey,
-              class: cls,
-              ...branch,
-            }),
-          );
+          }
         }
 
         // Carries the resolved port to deploy() via serialize's outputs; falls back to 3000 if unset.
