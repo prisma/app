@@ -73,7 +73,9 @@ main.content pre { padding: 1rem 1.15rem; border-radius: 8px; overflow-x: auto;
 }
 /* hero + cards (landing) */
 .hero { max-width: 820px; margin: 0 auto; padding: 4.5rem 1.5rem 2rem; text-align: center; }
-.hero h1 { font-size: clamp(2.2rem, 5vw, 3.2rem); letter-spacing: -0.03em; margin: 0 0 1rem; }
+.hero h1 { font-size: clamp(2.2rem, 5vw, 3.2rem); letter-spacing: -0.03em; margin: 0 0 1rem;
+  line-height: 1.08; text-wrap: balance; }
+.hero h1 .hl { color: var(--accent); }
 .hero p { font-size: 1.15rem; color: var(--muted); max-width: 620px; margin: 0 auto 2rem; }
 .install { display: inline-flex; align-items: center; gap: 0.75rem; background: var(--card);
   border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1.1rem;
@@ -158,7 +160,7 @@ export function landingPage(guides: readonly Guide[]): string {
 
   const body = `
 <section class="hero">
-  <h1>The fastest, most reliable way to build an app with your agent.</h1>
+  <h1>The <span class="hl">fastest</span>, <span class="hl">most reliable</span> way to build an app with your agent.</h1>
   <p>Start from scratch and deploy the whole thing — services, databases, and the wiring between them — to Prisma Cloud in minutes.</p>
   <div class="install"><span class="prompt">$</span> npx skills add prisma/composer --skill prisma-composer</div>
   <p class="sub">Start here. Your agent arrives knowing the whole API and the building blocks it can snap together — then you describe what you want.</p>
