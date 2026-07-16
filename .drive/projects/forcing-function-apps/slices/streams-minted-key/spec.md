@@ -14,7 +14,15 @@ predecessor slice: streams-composed-module (merged, PR #84).
 
 > **Amended 2026-07-16 (design session with Will, post-#93/ADR-0031).** The
 > original design below (BearerKey resource + `streams` descriptor + outputs
-> rail) was built before ADR-0031 landed and is superseded. ADR-0031's
+> rail) was built before ADR-0031 landed and is superseded.
+>
+> **Deciding rationale: consistency.** A module must build on the framework's
+> general internals, not invent per-module ones. ADR-0031 is the framework's
+> answer for a framework-minted param value; a second, streams-shaped
+> mechanism beside it means two ways to audit one concept and one more thing
+> a maintainer must learn per module. The narrower technical comparison
+> (below) only ever showed the resource route was *possible*, never that it
+> was *right*. ADR-0031's
 > provisioner explicitly owns per-edge vs per-provider cardinality, and the
 > zero-consumer case that seemed to require a module-owned resource is a
 > configuration error, not a scenario (a streams module with no consumers
