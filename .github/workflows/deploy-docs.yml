@@ -1,0 +1,56 @@
+name: Deploy docs
+
+# Redeploys the docs site (website/) to production on Prisma Compute when the
+# site or the guides it renders change on main. The guides are rendered into
+# the bundle at build time, so a docs/guides/ edit needs a redeploy to reach
+# the site.
+#
+# Credentials: repo secret CI_SITE_DEPLOY_TOKEN (the site's own deploy token,
+# separate from the E2E workflow's PRISMA_SERVICE_TOKEN) and repo variable
+# PRISMA_WORKSPACE_ID. The CLI reads the token from PRISMA_SERVICE_TOKEN, so
+# the secret is mapped onto that name below.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/guides/**'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Fixed group (not per-ref): only one real-cloud deploy of the docs runs at a
+# time. cancel-in-progress stays false so a kill mid-deploy can't leave the
+# stack half-applied — the deploy is idempotent, an interrupted one is not.
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy the docs site
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PRISMA_SERVICE_TOKEN: ${{ secrets.CI_SITE_DEPLOY_TOKEN }}
+      PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # Renders docs/guides/*.md into the bundle, then builds the entry.
+      # `prisma-composer deploy` never builds for you (ADR-0005).
+      - name: Build
+        run: pnpm turbo run build --filter composer-docs-website
+      # No --stage: this targets production. The CLI is invoked directly rather
+      # than through the package's `deploy` script, which sources a local .env
+      # that does not exist on a runner (the credentials are already in env).
+      - name: Deploy to production
+        working-directory: website
+        run: bun node_modules/.bin/prisma-composer deploy module.ts
