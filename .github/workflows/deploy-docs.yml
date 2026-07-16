@@ -54,3 +54,8 @@ jobs:
       - name: Deploy to production
         working-directory: website
         run: bun node_modules/.bin/prisma-composer deploy module.ts
+      # A green deploy is not a serving site (PRO-200), and the URL is a
+      # generated service id — so resolve it, print it, and prove it answers.
+      - name: Print the URL and smoke-check the site
+        working-directory: website
+        run: pnpm run verify:deployed
