@@ -46,6 +46,8 @@ You'll need:
 - pnpm (or npm).
 - For the deploy at the end: a Prisma Cloud workspace, plus a service token
   and your workspace id from the [Prisma Console](https://console.prisma.io).
+  (Naming, once: **Prisma Cloud** is the platform; **Prisma Compute** runs
+  your services on it, and **Prisma Postgres** hosts the databases.)
 
 ## 1. Project setup
 
@@ -92,8 +94,9 @@ my-app/
 ## 2. The quotes service
 
 Three files. First, the **contract** — the API other services will call,
-written as schemas. It lives with the service that owns it. Any Standard
-Schema validator works; the examples use arktype:
+written as schemas. It lives with the service that owns it. Any
+[Standard Schema](https://standardschema.dev) validator works (arktype, zod,
+valibot…); the examples use arktype:
 
 ```ts
 // src/quotes/contract.ts
@@ -153,13 +156,16 @@ Bun.serve({ port, hostname: '0.0.0.0', fetch: handler });
 ```
 
 Notice what's missing: no port constant, no URL of anything, no
-`process.env`. Configuration arrives through `service.config()`, dependencies
+`process.env`. Configuration arrives through `service.config()` (the `port`
+it reads is a param every service gets for free, default 3000), dependencies
 through `service.load()` — that's the whole framework contract with your
 code.
 
 ## 3. The gateway service
 
-The gateway depends on the quotes contract. Declaring
+The gateway depends on the quotes contract. Notice the asymmetry with §2:
+the quotes service *exposed* the bare contract (its offer); the gateway wraps
+it in `rpc()` (its need — "a client of this contract"). Declaring
 `deps: { quotes: rpc(quotesContract) }` means `service.load()` hands the
 server a ready-made, typed client — calling it is just an async function
 call:
@@ -201,7 +207,9 @@ it's an ordinary HTTP server that happens to receive a typed client.
 ## 4. Compose the app
 
 The root module is the app. It provisions both services and wires the quotes
-service's exposed port into the gateway's dependency slot:
+service's exposed port into the gateway's dependency slot — `provision()`
+returns a ref carrying one port per exposed contract, so `quotes.rpc` exists
+because the service declared `expose: { rpc: … }`:
 
 ```ts
 // module.ts
@@ -234,10 +242,16 @@ export default defineConfig({
 
 There's no dev server yet (it's on the roadmap) — but a server entry is just
 a program, and locally `service.load()` and `service.config()` read plain
-environment variables named after the slot: `COMPOSER_PORT` for the service's
-own `port` param, `COMPOSER_QUOTES_URL` for the `quotes` dependency's URL. A
+environment variables. The naming rule: `COMPOSER_` + the slot's name (+ the
+connection param, for dependencies), uppercased — `COMPOSER_PORT` for the
+service's own `port` param, `COMPOSER_QUOTES_URL` for the `quotes`
+dependency's URL, and a `db` dependency would read `COMPOSER_DB_URL`. A
 missing required value fails loudly at boot with the exact variable name it
 wanted.
+
+These are the same `COMPOSER_*` variables a deploy writes for the running
+service. Locally they're yours to set; in a deployed environment they belong
+to the deploy, which rewrites them every time.
 
 Two terminals:
 
@@ -317,17 +331,18 @@ pnpm exec prisma-composer destroy module.ts --stage demo
 You don't rewrite an app to put it on Composer — you declare it. The server
 code you already have stays the server; you add the declaration around it.
 
-**A Node/Bun service.** Add a `service.ts` with `compute({ name, deps, build,
-entry })` pointing at your built entry, then make three changes to the server
-itself:
+**A Node/Bun service.** Add a `service.ts` with
+`compute({ name, deps, build: node({ module, entry }) })` pointing `entry` at
+your built server file, then make three changes to the server itself:
 
 1. Read the port from `service.config()` instead of `process.env.PORT`, and
    bind `0.0.0.0`.
-2. Replace every `process.env` read with a declared param (values you
-   configure — per stage, if you bind it with `envParam`; see
-   [Building an app § Binding a param at provision](building-an-app.md#binding-a-param-at-provision)),
-   a secret (credentials — see
-   [Building an app § Secrets](building-an-app.md#secrets)), or a dependency.
+2. Replace every `process.env` read with what it really is: a param for plain
+   config, a secret for credentials, or a dependency for anything another
+   service provides. If a param's value differs per stage — an app origin, an
+   external URL — bind it with `envParam`.
+   [Building an app § Config params](building-an-app.md#config-params) has
+   the how-to-choose table and all three shapes.
 3. If it talks to Postgres: declare `deps: { db: postgres() }` and build your
    existing client (`pg`, Bun's `SQL`, whatever you use today) from the
    injected `db.url` instead of a connection-string env var.

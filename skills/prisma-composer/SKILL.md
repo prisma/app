@@ -166,8 +166,8 @@ or locally.
 
 It's a capability token ("I'm a service this app wired to you"), not a secret,
 and its value lives in deploy state — deliberately unlike `secret()`, whose
-value the framework never holds. `docs/design/90-decisions/ADR-0030…` and
-`ADR-0031…` in the prisma/composer repo carry the reasoning.
+value the framework never holds. `docs/design/90-decisions/ADR-0030…` in the
+prisma/composer repo carries the reasoning.
 
 ## The root module
 
@@ -192,8 +192,8 @@ and `secrets` (bind secret needs — see § Secrets).
 
 ## Builds are yours
 
-The framework assembles only what you built (ADR-0005: users build, the
-framework assembles). For a plain server process, build each entry
+The framework assembles only what you built — users build, the framework
+assembles. For a plain server process, build each entry
 self-contained with the shipped tsdown preset:
 
 ```ts
@@ -235,10 +235,10 @@ when the app contains a Next.js service.
 
 Two kinds of Postgres dependency:
 
-**`postgres()`** — the binding is `{ url }` and the app owns its client
-(ADR-0015). Construct it in your server entry, as in the auth example above.
+**`postgres()`** — the binding is `{ url }` and the app owns its client.
+Construct it in your server entry, as in the auth example above.
 
-**`pnPostgres(...)`** — a Prisma Next-typed database (ADR-0022): `load()`
+**`pnPostgres(...)`** — a Prisma Next-typed database: `load()`
 returns the typed client the framework constructs from your data contract, so
 queries like `db.orm.public.Product.all()` are compile-time checked. The
 contract is emitted from `contract.prisma` by `prisma-next contract emit` and
@@ -259,8 +259,13 @@ end (inside the module that owns the database) also names the
 `migrations/` — migrations are applied at deploy, before the service starts:
 
 ```ts
-const db = provision(pnPostgres({ name: 'database', contract: catalogData, config }));
+const db = provision(
+  pnPostgres({ name: 'database', contract: catalogData, config: './prisma-next.config.ts' }),
+);
 ```
+
+(`pnPostgres` is both ends: the contract alone is the dependency end; the
+options object is the resource end.)
 
 See `examples/store/modules/catalog` in the prisma/composer repo for the
 complete pattern.
@@ -342,8 +347,17 @@ provision(cron({ schedule, runner: runnerService }), { deps: { worker: worker.rp
 
 ## Config params
 
-Params are caller-owned schemas on the declaration (ADR-0018/0021). `string()`
-and `number()` cover the scalars; `param(schema)` wraps anything else:
+Choosing the channel is most of the decision:
+
+| The value is… | Declare | Provide | Read |
+| --- | --- | --- | --- |
+| produced by another node | `deps: { db: postgres() }` | wire at `provision()` | `load()` |
+| plain config | `params: { region: string() }` | `default`, literal at `provision()`, or `envParam()` per stage | `config()` |
+| a credential | `secrets: { key: secret() }` | `envSecret('NAME')` at the root | `secrets()`, redacted |
+
+Params are caller-owned schemas on the declaration. `string()`
+and `number()` cover the scalars; `param(schema)` wraps any
+[Standard Schema](https://standardschema.dev) validator:
 
 ```ts
 import { param, string } from '@prisma/composer';
@@ -364,7 +378,7 @@ separate namespaces. Facets are `default` and `optional`. Every service has a
 reserved `port` param (default 3000); declaring your own `port` is an
 authoring error.
 
-**Binding at provision (ADR-0032).** A param's value doesn't have to be its
+**Binding at provision.** A param's value doesn't have to be its
 authoring-time `default` — the `provision()` call can bind it, and the
 binding wins:
 
@@ -381,15 +395,17 @@ provision(web, { params: { appOrigin: envParam('APP_ORIGIN') } });
 
 An `envParam` value is read at boot from the named platform variable and
 handed to the param's schema as a **raw string** — so bind it to `string()`
-params (a `number()` schema fails at boot). Deploy preflight checks the name
-exists for the target stage, fills it from the deploy shell when absent, and
-fails early naming it otherwise — same as secrets. Changing the platform
+params (a `number()` schema fails at boot). The stage's platform variable is
+the store; the deploying shell only seeds it: preflight copies a name the
+stage is missing up from the shell, and fails early (naming the variable)
+when both lack it — the same mechanism as secrets. Changing the platform
 value needs a redeploy to take effect. Unlike a secret it reads back through
 `config()`, unredacted; use `secret()`/`envSecret` for credentials.
+`examples/env-param` in the prisma/composer repo is the working version.
 
 ## Secrets
 
-Secret values never travel through framework config (ADR-0029). A service
+Secret values never travel through framework config. A service
 declares a nameless **need**; the root binds it to a platform env-var name;
 the value stays only in that platform variable:
 
@@ -490,7 +506,7 @@ command line, never in code:
 | Tear down an isolated environment | `prisma-composer destroy module.ts --stage <name>` |
 | Tear down production's resources | `prisma-composer destroy module.ts --production` |
 
-A Prisma App is one Project; a stage is a Branch of it (ADR-0023/0024) — its
+A Prisma App is one Project; a stage is a Branch of it — its
 own compute, its own empty database, its own configuration. Deploys are
 idempotent: re-deploying a stage updates the resources inside it. A stage name
 must be a valid git ref name; an invalid name is a hard error.

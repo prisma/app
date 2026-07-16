@@ -92,14 +92,16 @@ prisma-composer destroy module.ts --stage "pr-$PR_NUMBER"   # on close
 ```
 
 One extra: if your app declares secrets (see
-[Building an app § Secrets](building-an-app.md#secrets)) or binds params to
-platform variables with `envParam` (see
-[Building an app § Binding a param at provision](building-an-app.md#binding-a-param-at-provision)),
-their values are provisioned from the deploying shell's environment — so CI
-must export those variables too (e.g. `AUTH_SIGNING_SECRET`, `APP_ORIGIN`),
-alongside the two credentials. Each stage keeps its own values: preflight
-fills the target stage's scope, and a name absent from both the platform and
-the shell fails the deploy early, naming it.
+[Building an app § Secrets](building-an-app.md#secrets)) or binds params with
+`envParam` (see
+[§ Binding a param at provision](building-an-app.md#binding-a-param-at-provision)),
+each stage keeps its own copy of those platform variables, and the platform
+copy is the store — the deploying shell only seeds it. A fresh stage (a new
+`pr-42`) has none of them yet, so CI must export the values
+(e.g. `AUTH_SIGNING_SECRET`, `APP_ORIGIN`) alongside the two credentials;
+preflight copies missing ones up on that first deploy. A name absent from
+both the platform and the shell fails the deploy early, naming the missing
+variable.
 
 ## Production behavior
 
@@ -127,9 +129,10 @@ What deployed apps actually run into, and what to do about it:
   them — editing one by hand doesn't survive.
 - **Calls into a sleeping service can get `ECONNRESET`** while it cold-starts.
   Retry them.
-- **Streaming responses don't stream.** The ingress buffers the response until
-  it completes, so an open SSE tail delivers nothing and times out at 60s.
-  Don't build on streamed HTTP responses.
+- **Streaming responses don't stream.** The platform's HTTP front door (the
+  ingress) buffers a response until it completes, so an open SSE tail
+  delivers nothing and times out at 60s. Don't build on streamed HTTP
+  responses.
 - **Next.js: pages that call `service.load()` need
   `export const dynamic = 'force-dynamic'`.** The runtime environment doesn't
   exist at build time, and Next won't re-read it for prerendered routes.
