@@ -79,6 +79,13 @@ main.content pre { padding: 1rem 1.15rem; border-radius: 8px; overflow-x: auto;
   border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1.1rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92rem; }
 .install .prompt { color: var(--accent); }
+.hero .sub { font-size: 0.95rem; margin: 1.25rem auto 0; max-width: 560px; }
+.why { max-width: 900px; margin: 3rem auto 0; padding: 0 1.5rem;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.75rem; }
+.why-item .n { font-weight: 650; margin-bottom: 0.35rem; letter-spacing: -0.01em; }
+.why-item .d { color: var(--muted); font-size: 0.9rem; line-height: 1.55; }
+.why-item code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px;
+  font-size: 0.9em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cards { max-width: 900px; margin: 2.5rem auto; padding: 0 1.5rem;
   display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
 .card { display: block; padding: 1.25rem 1.4rem; border: 1px solid var(--border); border-radius: 10px;
@@ -151,10 +158,16 @@ export function landingPage(guides: readonly Guide[]): string {
 
   const body = `
 <section class="hero">
-  <h1>Build multi-service apps, deploy them with one command.</h1>
-  <p>Prisma Composer deploys multi-service TypeScript apps to Prisma Cloud from a description you write in TypeScript. Declare your services and how they depend on each other; the framework provisions the rest.</p>
-  <div class="install"><span class="prompt">$</span> pnpm add @prisma/composer @prisma/composer-prisma-cloud</div>
+  <h1>The fastest, most reliable way to build an app with your agent.</h1>
+  <p>Start from scratch and deploy the whole thing — services, databases, and the wiring between them — to Prisma Cloud in minutes.</p>
+  <div class="install"><span class="prompt">$</span> npx skills add prisma/composer --skill prisma-composer</div>
+  <p class="sub">Start here. Your agent arrives knowing the whole API and the building blocks it can snap together — then you describe what you want.</p>
 </section>
+<div class="why">
+  <div class="why-item"><div class="n">Modules snap together</div><div class="d">A capability arrives as a Module that owns its internals behind a typed port. Composition, not an integration your agent has to invent.</div></div>
+  <div class="why-item"><div class="n">Everything is typechecked</div><div class="d">A wrong wire, a missing handler, a bad config shape — none of it compiles. Mistakes fail <code>tsc</code> in seconds, not a deploy ten minutes later.</div></div>
+  <div class="why-item"><div class="n">Deploys are deterministic</div><div class="d">One command, no infrastructure config to hallucinate, and re-running it converges instead of drifting.</div></div>
+</div>
 <div class="cards">
 ${cards}
 </div>`;
