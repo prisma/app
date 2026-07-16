@@ -72,7 +72,7 @@ const res = await app.fetch(new Request(app.url));
 expect(await res.text()).toContain('Signed in: true');
 ```
 
-Four things to know:
+Five things to know:
 
 - **Build first.** It boots the *built* entry, so the test task must depend
   on the build (in the examples, turbo's `test` task depends on `build`).
@@ -82,6 +82,10 @@ Four things to know:
   process — bun test does this per file — and the server dies with it.
 - **The service's code is untouched.** If you find yourself editing
   `server.ts` to make it testable, something upstream is wrong.
+- **RPC auth is inert here.** Deployed RPC bindings carry an auto-provisioned
+  service key and `serve()` rejects callers without one — but nothing
+  provisions a key locally, so `serve()` passes every call through and you
+  never supply one in `inputs`. You're testing your handlers, not the wire.
 
 **Next.js services need a third argument** — a boot function — because the
 built entry lives inside Next's standalone output. Resolve it with

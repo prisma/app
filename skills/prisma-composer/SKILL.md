@@ -144,6 +144,31 @@ export default async function Home() {
 }
 ```
 
+**Service-to-service calls are authenticated for you.** At deploy the
+framework mints a distinct, unguessable **service key** per consumer→provider
+binding: the consumer's client sends it on every call, and `serve()` returns
+`401` to anything else *before* the handler runs. Nothing declares it — no key
+in the contract, the service, the module, or the app's code.
+
+Two rules follow for you specifically: **don't build your own
+service-to-service auth** on top of this, and **don't tell a user to `curl` a
+deployed `/rpc/<method>` to check it works** — an unwired caller always gets
+`401`, which looks like a broken deploy and isn't. Debug through a consumer,
+or locally.
+
+| | |
+| --- | --- |
+| Locally / in tests | nothing is provisioned, so `serve()` passes every call through — never supply a key in `inputs` |
+| Per binding | two consumers of one provider hold different keys, so one leaking can't impersonate the other |
+| Scope | service-level — any valid key reaches every method that service exposes; split into two services to gate separately |
+| Rotation | remove the binding (or destroy the stack) and redeploy — a plain redeploy is a no-op, not a rotation |
+| Storage | `COMPOSER_*` variables the deploy owns and rewrites; never hand-edit one |
+
+It's a capability token ("I'm a service this app wired to you"), not a secret,
+and its value lives in deploy state — deliberately unlike `secret()`, whose
+value the framework never holds. `docs/design/90-decisions/ADR-0030…` and
+`ADR-0031…` in the prisma/composer repo carry the reasoning.
+
 ## The root module
 
 The root module provisions the pieces and wires exposed ports into dependency
@@ -467,6 +492,11 @@ turbo run build && prisma-composer deploy module.ts --stage pr-42
 - **Next.js pages that call `load()` need `export const dynamic =
   'force-dynamic'`** — the runtime environment doesn't exist at build time,
   and Next ignores runtime env for prerendered routes.
+- **A deployed `/rpc/<method>` returns `401` to anything but a wired peer.**
+  Every RPC binding carries an auto-provisioned service key, so a hand-rolled
+  `curl` is never authorized, and a provider with no wired consumers rejects
+  everything. Not a broken deploy — reach it through a consumer, or run it
+  locally where nothing is enforced.
 - **Cold starts reset service-to-service connections.** A call into a
   scaled-to-zero service can get `ECONNRESET`; retry it.
 - **The ingress buffers streaming responses.** An open SSE tail delivers

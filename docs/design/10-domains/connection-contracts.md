@@ -123,6 +123,28 @@ covers test mocks, the dependency-inversion swap, local dev with no deploy, and
 wrapping a legacy server. A Connection is a port; *where* the provider runs is a
 wiring decision the consumer never sees.
 
+### The network binding authenticates itself
+
+A network-bound provider answers a public URL, so the RPC kind secures that hop
+rather than leaving it to the app: each consumer→provider binding carries a
+distinct, framework-minted **service key**. The generated client sends it; the
+generated server rejects a caller without a valid one with `401`, before it
+parses or dispatches. Neither side's code declares or reads it.
+
+The property that matters at this layer: **the key rides the binding, not the
+contract.** A Contract says nothing about authentication, so it stays the same
+port across all three adapters — an in-memory or mock binding has no edge and
+no minted key, and is simply unaffected. Authentication is a fact about *how*
+this provider is reached, which is exactly the wiring decision the consumer
+never sees.
+
+[ADR-0030](../90-decisions/ADR-0030-rpc-callers-verified-with-an-auto-provisioned-service-key.md)
+decides the per-binding key and its `401`;
+[ADR-0031](../90-decisions/ADR-0031-provisioned-param-values-are-a-need-resolved-through-a-target-registry.md)
+generalizes the mechanism — the `serviceKey` connection param declares an opaque
+provisioning *need* that the deploy target resolves through its own registry, so
+core mints nothing and knows nothing about RPC.
+
 ## How compatibility is checked
 
 Enforcement happens in three places:
@@ -275,3 +297,5 @@ contract's identity-based `satisfies()` is enough today.
 - [`core-model.md`](core-model.md) — the Connection primitive (`http()`,
   `DependencyEnd`, the Module) this types.
 - [`../03-domain-model/authoring-surface.md`](../03-domain-model/authoring-surface.md) — ports, direction-from-position.
+- [`../90-decisions/ADR-0030-rpc-callers-verified-with-an-auto-provisioned-service-key.md`](../90-decisions/ADR-0030-rpc-callers-verified-with-an-auto-provisioned-service-key.md) — the per-binding service key the network binding carries.
+- [`../90-decisions/ADR-0031-provisioned-param-values-are-a-need-resolved-through-a-target-registry.md`](../90-decisions/ADR-0031-provisioned-param-values-are-a-need-resolved-through-a-target-registry.md) — the opaque provisioning need + target registry that mints it.

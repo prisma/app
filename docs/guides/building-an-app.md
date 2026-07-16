@@ -66,6 +66,39 @@ the boundary, against the same schemas.
 The only contract kind today is RPC over HTTP — no gRPC, WebSockets, or
 streaming contracts yet.
 
+### Calls are authenticated for you
+
+A deployed service is reachable at a public HTTPS URL, so an exposed
+`/rpc/<method>` would otherwise answer anyone on the internet. It doesn't.
+At deploy the framework mints a distinct, unguessable **service key** for
+every consumer→provider edge, hands it to that consumer's client, and tells
+the provider which keys to accept. The client sends it on every call;
+`serve()` rejects anything else with `401` before your handler runs.
+
+You declare nothing. There is no key in your code, your contract, or your
+module — the only reason to know it exists is that two of its consequences
+look like bugs if you don't:
+
+- **A provider answers only its wired peers.** `curl`ing a deployed
+  `/rpc/<method>` yourself returns `401`, because you aren't a service the app
+  wired to it. That's the feature working. To exercise a provider by hand, call
+  it through a consumer, or run it locally.
+- **Nothing is provisioned locally, so nothing is enforced.** Services you run
+  in a terminal, fakes, and `bootstrapService` all pass calls through, and you
+  never supply a key. Enforcement only exists where the deploy created it.
+
+Keys are per *binding*, not per provider: two consumers of the same service
+hold different keys, so a leak from one can't impersonate the other. They're
+stable across redeploys — a redeploy is a no-op, not a rotation. To rotate,
+remove the binding (or destroy the stack) and deploy again; both ends re-wire
+from the same deploy, so they're never out of step.
+
+The key is a capability token, not a secret: it proves "I'm a service this app
+wired to you," nothing more. It authorizes at the *service* level, so any valid
+key reaches every method the service exposes — if you need two independently
+gated surfaces, expose two services. The reasoning is in
+[`ADR-0030`](../design/90-decisions/ADR-0030-rpc-callers-verified-with-an-auto-provisioned-service-key.md).
+
 ## Databases
 
 There are two ways for a service to get a Postgres, depending on how much you

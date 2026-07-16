@@ -113,6 +113,15 @@ What deployed apps actually run into, and what to do about it:
 
 - **Bind `0.0.0.0`, not loopback.** Compute routes external HTTP to the VM; a
   `localhost` listener is unreachable from outside.
+- **RPC endpoints answer only wired peers.** Every RPC binding carries an
+  auto-provisioned service key, so `curl`ing a deployed `/rpc/<method>` by hand
+  returns `401` — you aren't one of the services wired to it. A provider with no
+  wired consumers rejects everything, by design. Nothing is enforced locally or
+  in tests, where no key is provisioned.
+- **The `COMPOSER_*` variables in your project are the framework's, not yours.**
+  Config, secret pointers, and service keys all land there; the deploy rewrites
+  them. Don't hand-edit one to rotate a key — remove the binding (or destroy the
+  stack) and deploy again.
 - **Calls into a sleeping service can get `ECONNRESET`** while it cold-starts.
   Retry them.
 - **Streaming responses don't stream.** The ingress buffers the response until
