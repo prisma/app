@@ -4,10 +4,11 @@
  */
 
 import type { ExtensionDescriptor } from '@internal/core/config';
+import type { ProvisionerDescriptor } from '@internal/core/deploy';
 import * as Prisma from '@internal/lowering';
 /** The Prisma Cloud–hosted deploy state store; its implementation lives in @internal/lowering. */
 import { prismaState } from '@internal/lowering/state';
-import type * as Output from 'alchemy/Output';
+import { RPC_PEER_KEY } from '@internal/rpc';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import { computeDescriptor } from './descriptors/compute.ts';
@@ -20,7 +21,23 @@ import { PgWarmProvider } from './pg-warm-resource.ts';
 import { PnMigrationProvider } from './pn-migration-resource.ts';
 import { runPreflight } from './preflight.ts';
 import { S3CredentialsProvider } from './s3-credentials-resource.ts';
-import { serviceKeyEdges } from './service-keys.ts';
+
+/**
+ * ADR-0031's registered provisioner for RPC_PEER_KEY: mints one `ServiceKey`
+ * resource per edge (ADR-0030) and forwards its value as the opaque ref core
+ * writes into the consumer's `serviceKey` param. The resource id keeps the
+ * `servicekey-${edgeId}` scheme byte-identical to slice 2's, so an existing
+ * deploy's keys are found, not re-minted. Defined here, not in service-keys.ts:
+ * that module is also reachable from the runtime/authoring side, which must
+ * never import `@internal/lowering` or `effect`.
+ */
+const serviceKeyProvisioner: ProvisionerDescriptor = {
+  provision: (edge) =>
+    Effect.gen(function* () {
+      const key = yield* Prisma.ServiceKey(`servicekey-${edge.edgeId}`, {});
+      return key.value;
+    }),
+};
 
 export { prismaState };
 
@@ -99,9 +116,11 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
 
     // Runs once per lowering, before any service: references the CLI-ensured
     // Project, with the poison DATABASE_URL variables written immediately so
-    // nothing can ever rely on the platform default.
+    // nothing can ever rely on the platform default. Per-binding service keys
+    // are no longer minted here (ADR-0031): core's provision phase invokes
+    // `provisions` below, graph-wide, before any service lowers.
     application: {
-      provision: ({ graph }) =>
+      provision: () =>
         Effect.gen(function* () {
           const projectId = o.projectId;
           if (projectId === undefined || projectId.length === 0) {
@@ -122,19 +141,14 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
             });
           }
 
-          // ADR-0030: mint one ServiceKey per faceted RPC edge, graph-wide, so
-          // both the consumer's serviceKey param and the provider's accepted
-          // set (descriptors/compute.ts's serialize) read the same value —
-          // both reach it via ctx.application, with no cross-node ordering.
-          const serviceKeys: Record<string, Output.Output<string>> = {};
-          for (const edge of serviceKeyEdges(graph)) {
-            const key = yield* Prisma.ServiceKey(`servicekey-${edge.edgeId}`, {});
-            serviceKeys[edge.edgeId] = key.value;
-          }
-
-          return { outputs: { projectId, serviceKeys } };
+          return { outputs: { projectId } };
         }),
     },
+
+    // ADR-0031: this extension's param provisioners, keyed by need brand.
+    // Core resolves a provisioned param's `need.brand` against the CONSUMER
+    // node's extension — the same registry this one is.
+    provisions: new Map([[RPC_PEER_KEY, serviceKeyProvisioner]]),
 
     nodes: {
       postgres: postgresDescriptor(o),

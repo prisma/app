@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { configOf, number, provisionManifest, string } from '../config.ts';
 import { Load } from '../graph.ts';
-import { dependency, module, secret, secretSource, service } from '../node.ts';
+import { dependency, module, provisionNeed, secret, secretSource, service } from '../node.ts';
 import { conn, scalarDeclaration } from './helpers.ts';
 
 const build = {
@@ -172,20 +172,21 @@ describe('provisionManifest', () => {
   });
 });
 
-describe('autoProvision facet — opaque to core, carried through by string()/number()/param()', () => {
+describe('provision need (ADR-0031) — opaque to core, carried through by string()/number()/param()', () => {
   test('is absent by default — no key on the returned ConfigParam', () => {
-    expect(string()).not.toHaveProperty('autoProvision');
-    expect(number()).not.toHaveProperty('autoProvision');
+    expect(string()).not.toHaveProperty('provision');
+    expect(number()).not.toHaveProperty('provision');
   });
 
-  test("string({ autoProvision: 'per-binding-key' }) carries the facet through to the ConfigParam", () => {
-    const param = string({ optional: true, autoProvision: 'per-binding-key' });
+  test('string({ provision }) carries the need through to the ConfigParam', () => {
+    const need = provisionNeed(Symbol('test-need'));
+    const param = string({ optional: true, provision: need });
 
-    expect(param.autoProvision).toBe('per-binding-key');
+    expect(param.provision).toBe(need);
     expect(param.optional).toBe(true);
   });
 
-  test('configOf never surfaces autoProvision — it is not part of the enumerable ConfigDeclaration shape', () => {
+  test('configOf never surfaces provision — it is not part of the enumerable ConfigDeclaration shape', () => {
     const root = service({
       name: 'test-service',
       extension: 'test/pack',
@@ -195,7 +196,9 @@ describe('autoProvision facet — opaque to core, carried through by string()/nu
           name: 'auth',
           type: 'fake/rpc',
           connection: conn(
-            { serviceKey: string({ optional: true, autoProvision: 'per-binding-key' }) },
+            {
+              serviceKey: string({ optional: true, provision: provisionNeed(Symbol('test-need')) }),
+            },
             () => ({}),
           ),
         }),
@@ -204,6 +207,6 @@ describe('autoProvision facet — opaque to core, carried through by string()/nu
       build,
     });
 
-    expect(JSON.stringify(configOf(root))).not.toContain('autoProvision');
+    expect(JSON.stringify(configOf(root))).not.toContain('provision');
   });
 });

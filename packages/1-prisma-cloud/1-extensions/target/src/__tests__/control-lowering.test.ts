@@ -104,8 +104,9 @@ const { prismaCloud } = await import('../control.ts');
 const { compute, envSecret, postgres, postgresContract, s3StoreService } = await import(
   '../index.ts'
 );
-const { dependency, module, secret, string } = await import('@internal/core');
+const { dependency, module, provisionNeed, secret, string } = await import('@internal/core');
 const { lowering } = await import('@internal/core/deploy');
+const { RPC_PEER_KEY } = await import('@internal/rpc');
 
 const run = <A>(eff: Effect.Effect<A, unknown, unknown>): A =>
   Effect.runSync(eff as Effect.Effect<A>);
@@ -163,7 +164,7 @@ describe('prismaCloud().application.provision (once-per-lowering hook)', () => {
         applicationOf(target).provision({ graph: { edges: [] } } as unknown as LowerContext),
       );
 
-      expect(result.outputs).toEqual({ projectId: 'shop-project-id', serviceKeys: {} });
+      expect(result.outputs).toEqual({ projectId: 'shop-project-id' });
       // "-", not "": the API rejects empty env-var values (verified at the R4 deploy proof).
       expect(recorded.envVar.slice(before)).toEqual([
         [
@@ -197,7 +198,7 @@ describe('prismaCloud().application.provision (once-per-lowering hook)', () => {
         applicationOf(target).provision({ graph: { edges: [] } } as unknown as LowerContext),
       );
 
-      expect(result.outputs).toEqual({ projectId: 'shop-project-id', serviceKeys: {} });
+      expect(result.outputs).toEqual({ projectId: 'shop-project-id' });
       expect(recorded.envVar.slice(before)).toEqual([
         [
           'DATABASE_URL-poison',
@@ -862,8 +863,10 @@ describe('ADR-0030: per-binding RPC service keys — mint (control.ts) + wire (d
     entry: 'server.js',
   };
   // A fake RPC-shaped Contract (mirrors extension.test.ts's fakeContract) — not
-  // @internal/rpc. Proves the target reacts to the `serviceKey` param's facet
-  // alone, never to "rpc" by name (ADR-0030's not-RPC-special-cased promise).
+  // @internal/rpc. Proves the target reacts to the `serviceKey` param's
+  // provision need alone, never to "rpc" by name (ADR-0030's
+  // not-RPC-special-cased promise) — it still carries RPC_PEER_KEY as its
+  // brand, since that's the only brand this target's control.ts registers.
   const fakeRpcContract: Contract<'rpc', Record<never, never>> = {
     kind: 'rpc',
     __cmp: {},
@@ -875,7 +878,7 @@ describe('ADR-0030: per-binding RPC service keys — mint (control.ts) + wire (d
       connection: {
         params: {
           url: string(),
-          serviceKey: string({ optional: true, autoProvision: 'per-binding-key' }),
+          serviceKey: string({ optional: true, provision: provisionNeed(RPC_PEER_KEY) }),
         },
         hydrate: (v) => v,
       },
