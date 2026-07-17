@@ -2,11 +2,11 @@
 
 import { isParamSource, type ServiceNode } from '@internal/core';
 import type { ServiceLowering } from '@internal/core/deploy';
-import { blindCast } from '@internal/foundation/casts';
 import * as Prisma from '@internal/lowering';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import { paramBindingFor, paramName } from '../param.ts';
+import { provisionedEdges } from '../provisioned-edges.ts';
 import {
   configKey,
   encode,
@@ -14,7 +14,6 @@ import {
   paramEntries,
   secretPointerRows,
 } from '../serializer.ts';
-import { serviceKeyEdges, serviceKeyEnvName } from '../service-keys.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
 /**
@@ -121,41 +120,50 @@ export function computeDescriptor(
         // fills a provisioned param like any other, so there is no
         // consumer-side special case left to write here.
 
-        // Provider side: a service that serves anything gets an accepted-keys
-        // var, even with zero wired consumers — otherwise an unprovisioned
-        // var reads as "no enforcement" (serve.ts's pass-through state) and a
-        // zero-consumer RPC provider would accept every caller. A pure
-        // consumer (no `expose`) never serves, so it gets no such var.
+        // Provider side (ADR-0031). Driven by the PROVIDER, not by its edges:
+        // every registered reserved provider param is asked, even when this
+        // service has no inbound edge for that brand, because "no edges" and
+        // "no var" are not the same thing — an absent var reads as "never
+        // provisioned" (local dev, tests), so a deployed provider with zero
+        // wired consumers must still be able to emit a deny-everything value.
+        // Whether an empty set means deny-all or emit-nothing is that param's
+        // own call, so it decides and may return undefined to write no row at
+        // all. Compute never names a brand — it looks one up.
+        //
+        // The check is main's and stays: a service that exposes nothing can
+        // never be any binding's provider, so it gets no provider param rows.
         if (svc.expose !== undefined && Object.keys(svc.expose).length > 0) {
-          const inbound = serviceKeyEdges(graph).filter((e) => e.providerAddress === address);
-          // `ctx.provisioned` is typed `unknown` — core forwards a provisioner's
-          // ref without inspecting it. The filter only drops absent edges; the
-          // shape of what survives is asserted, not checked.
-          const keyOuts = inbound
-            .map((e) => ctx.provisioned.get(e.edgeId))
-            .filter((value) => value !== undefined)
-            .map((value) =>
-              blindCast<
-                Output.Output<string>,
-                "these refs are keyed by an edge serviceKeyEdges matched on RPC_PEER_KEY, and control.ts's serviceKeyProvisioner is the sole registrant of that brand — it returns a ServiceKey resource's `value`, an Output<string>"
-              >(value),
+          const refsByBrand = new Map<symbol, unknown[]>();
+          for (const edge of provisionedEdges(graph)) {
+            if (edge.providerAddress !== address) continue;
+            const ref = ctx.provisioned.get(edge.edgeId);
+            if (ref === undefined) continue;
+            const refs = refsByBrand.get(edge.brand) ?? [];
+            refs.push(ref);
+            refsByBrand.set(edge.brand, refs);
+          }
+          for (const [brand, entry] of o.providerParams) {
+            const raw = entry.value(refsByBrand.get(brand) ?? []);
+            if (raw === undefined) continue;
+            const key = configKey(address, { owner: 'service', name: entry.name });
+            // The value may still be an unresolved deploy-time Output (a
+            // minted key isn't known until Alchemy applies it) or already a
+            // plain value (e.g. a zero-refs deny-all literal) — either way it
+            // is JSON-encoded through the same `encode` a declared param's
+            // own literal takes, never a brand-invented format.
+            const value = Output.isOutput(raw)
+              ? Output.map(raw, (v) => encode('service', v))
+              : encode('service', raw);
+            records.push(
+              yield* Prisma.EnvironmentVariable(`${key}-var`, {
+                projectId,
+                key,
+                value,
+                class: cls,
+                ...branch,
+              }),
             );
-          // Zero consumers: no refs to resolve, so write the literal "[]"
-          // directly rather than calling Output.all() with no arguments.
-          const acceptedJson =
-            keyOuts.length > 0
-              ? Output.map(Output.all(...keyOuts), (vals) => JSON.stringify(vals))
-              : JSON.stringify([]);
-          const key = serviceKeyEnvName(address);
-          records.push(
-            yield* Prisma.EnvironmentVariable(`${key}-var`, {
-              projectId,
-              key,
-              value: acceptedJson,
-              class: cls,
-              ...branch,
-            }),
-          );
+          }
         }
 
         // Carries the resolved port to deploy(); falls back to 3000 if unset.

@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import type { Contract } from '@internal/core';
+import type { NodeDescriptor } from '@internal/core/config';
 import type { LowerContext, LoweredResult, Outputs } from '@internal/core/deploy';
 // Import the REAL modules the mocks below stub, so each mock can spread them.
 // This matters beyond convenience: `bun test` runs every test file in ONE
@@ -11,13 +12,20 @@ import type { LowerContext, LoweredResult, Outputs } from '@internal/core/deploy
 // mode regardless of the (filesystem-dependent) test-file order.
 import * as RealPrismaAlchemy from '@internal/lowering';
 import * as RealOutput from 'alchemy/Output';
+import { type } from 'arktype';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
 import type { ComputeProvisioned, ComputeSerialized } from '../descriptors/compute.ts';
+import { computeDescriptor } from '../descriptors/compute.ts';
 import type { S3StoreSerialized } from '../descriptors/s3-store.ts';
 // shared.ts's only @internal/lowering import is type-only, so pulling
 // projectIdOf in statically doesn't drag the mocked runtime module in early.
-import { type CloudApplication, projectIdOf } from '../descriptors/shared.ts';
+import {
+  type CloudApplication,
+  type ProviderParam,
+  projectIdOf,
+  type ResolvedCloudOptions,
+} from '../descriptors/shared.ts';
 import * as RealPgWarm from '../pg-warm-resource.ts';
 import * as RealS3Credentials from '../s3-credentials-resource.ts';
 
@@ -127,6 +135,7 @@ const { compute, envParam, envSecret, postgres, postgresContract, s3StoreService
 const { dependency, module, provisionNeed, secret, string } = await import('@internal/core');
 const { lowering } = await import('@internal/core/deploy');
 const { RPC_PEER_KEY } = await import('@internal/rpc');
+const { STREAMS_API_KEY } = await import('../streams-keys.ts');
 
 // The node registry erases each descriptor's P/S to `unknown`, so every hook
 // hands back Effect<unknown>. `A` is the caller's claim about what the hook
@@ -1264,6 +1273,259 @@ describe('ADR-0030: per-binding RPC service keys — mint (control.ts) + wire (d
         expect(writtenKeys).not.toContain('COMPOSER_STOREFRONT_RPC_ACCEPTED_KEYS');
       },
     );
+  });
+});
+
+describe("streams' provisioned bearer key — one value per PROVIDER, stored on the provider", () => {
+  const build = {
+    extension: '@prisma/composer/node',
+    type: 'node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  };
+  // A fake streams-shaped Contract + dependency: the target reacts to the
+  // `apiKey` param's need brand alone, never to "streams" by name.
+  const fakeStreamsContract: Contract<'streams', Record<never, never>> = {
+    kind: 'streams',
+    __cmp: {},
+    satisfies: () => true,
+  };
+  const streamsLikeDep = () =>
+    dependency({
+      type: 'streams',
+      connection: {
+        params: { url: string(), apiKey: string({ provision: provisionNeed(STREAMS_API_KEY) }) },
+        hydrate: (v) => v,
+      },
+    });
+
+  test('two consumers of one streams module share ONE key; the provider stores that same key', async () => {
+    await withEnv(
+      { PRISMA_PROJECT_ID: 'shop-project#cloud-id', PRISMA_BRANCH_ID: undefined },
+      () => {
+        const target = prismaCloud({ workspaceId: 'ws_1' });
+        const root = module('shop', {}, ({ provision }) => {
+          const events = provision(
+            compute({ name: 'events', deps: {}, build, expose: { streams: fakeStreamsContract } }),
+            { id: 'events' },
+          );
+          provision(compute({ name: 'reader', deps: { events: streamsLikeDep() }, build }), {
+            id: 'reader',
+            deps: { events: events.streams },
+          });
+          provision(compute({ name: 'writer', deps: { events: streamsLikeDep() }, build }), {
+            id: 'writer',
+            deps: { events: events.streams },
+          });
+          return {};
+        });
+        const before = { envVar: recorded.envVar.length, serviceKey: recorded.serviceKey.length };
+
+        run<undefined>(
+          lowering(root, configFor(target), {
+            name: 'shop',
+            bundles: {
+              events: { dir: 'modules/events/dist/bundle', entry: 'server.js' },
+              reader: { dir: 'modules/reader/dist/bundle', entry: 'server.js' },
+              writer: { dir: 'modules/writer/dist/bundle', entry: 'server.js' },
+            },
+          }),
+        );
+
+        // Both edges resolve to ONE resource id — the PROVIDER's address, not
+        // the edge's — so the mint is shared (upstream auths a single API_KEY).
+        expect([
+          ...new Set(recorded.serviceKey.slice(before.serviceKey).map(([id]) => id)),
+        ]).toEqual(['streamskey-events']);
+
+        const writes = recorded.envVar.slice(before.envVar).map(([, props]) => props);
+        const writtenValue = (envName: string): unknown =>
+          (
+            writes.find((w) => (w as { key: string }).key === envName) as
+              | { value?: unknown }
+              | undefined
+          )?.value;
+        expect(writtenValue('COMPOSER_READER_EVENTS_APIKEY')).toBe('key-for-streamskey-events');
+        expect(writtenValue('COMPOSER_WRITER_EVENTS_APIKEY')).toBe('key-for-streamskey-events');
+
+        // The provider's own reserved provider param: the same key, under the
+        // name the streams entrypoint reads (address-scoped; compute's run
+        // validates and re-stashes it), JSON-encoded like any service-own
+        // literal param.
+        expect(writes).toContainEqual({
+          projectId: 'shop-project#cloud-id',
+          key: 'COMPOSER_EVENTS_STREAMS_API_KEY',
+          value: '"key-for-streamskey-events"',
+          class: 'production',
+        });
+      },
+    );
+  });
+
+  test('the reserved provider param refuses two disagreeing keys for one provider (a per-edge flip would be loud)', () => {
+    // The provider param writes ONE key, which is only correct while the
+    // provisioner mints per provider. Drive serialize directly with two
+    // inbound edges whose refs disagree — the shape a per-edge flip would
+    // produce without a paired accepted-set provider param.
+    const target = prismaCloud({ workspaceId: 'ws_1' });
+    const node = compute({
+      name: 'events',
+      deps: {},
+      build,
+      expose: { streams: fakeStreamsContract },
+    });
+    const consumerNode = compute({ name: 'reader', deps: { events: streamsLikeDep() }, build });
+    const graph = {
+      nodes: [
+        { id: 'events', node },
+        { id: 'reader', node: consumerNode },
+        { id: 'writer', node: consumerNode },
+      ],
+      edges: [
+        { kind: 'dependency', from: 'events', to: 'reader', input: 'events' },
+        { kind: 'dependency', from: 'events', to: 'writer', input: 'events' },
+      ],
+      secrets: [],
+    };
+    const ctx = {
+      address: 'events',
+      node,
+      graph,
+      provisioned: new Map([
+        ['reader.events', 'key-one'],
+        ['writer.events', 'key-two'],
+      ]),
+    } as unknown as LowerContext;
+
+    expect(() =>
+      run<MockedSerialized>(
+        serviceDescriptorOf(target, 'compute').serialize(
+          ctx,
+          { outputs: { projectId: 'shop-project#cloud-id' } },
+          { service: { port: 3000 }, inputs: {} } as Parameters<
+            ReturnType<typeof serviceDescriptorOf>['serialize']
+          >[2],
+        ),
+      ),
+    ).toThrow(/provisioned 2 distinct keys/);
+  });
+
+  test('a streams provider with no consumers mints nothing and stores no key', async () => {
+    await withEnv(
+      { PRISMA_PROJECT_ID: 'shop-project#cloud-id', PRISMA_BRANCH_ID: undefined },
+      () => {
+        const target = prismaCloud({ workspaceId: 'ws_1' });
+        const root = module('shop', {}, ({ provision }) => {
+          provision(
+            compute({ name: 'lonely', deps: {}, build, expose: { streams: fakeStreamsContract } }),
+            { id: 'lonely' },
+          );
+          return {};
+        });
+        const before = { envVar: recorded.envVar.length, serviceKey: recorded.serviceKey.length };
+
+        run<undefined>(
+          lowering(root, configFor(target), {
+            name: 'shop',
+            bundles: { lonely: { dir: 'modules/lonely/dist/bundle', entry: 'server.js' } },
+          }),
+        );
+
+        expect(recorded.serviceKey.slice(before.serviceKey)).toEqual([]);
+        const keys = recorded.envVar
+          .slice(before.envVar)
+          .map(([, props]) => (props as { key: string }).key);
+        expect(keys).not.toContain('COMPOSER_LONELY_STREAMS_API_KEY');
+      },
+    );
+  });
+});
+
+describe("descriptors/compute.ts's provider-param loop is generic over the registry it is handed — adding a brand is control.ts's edit alone", () => {
+  const build = {
+    extension: '@prisma/composer/node',
+    type: 'node',
+    module: 'file:///test/service.ts',
+    entry: 'server.js',
+  };
+  const anyContract: Contract<'rpc', Record<never, never>> = {
+    kind: 'rpc',
+    __cmp: {},
+    satisfies: () => true,
+  };
+
+  test('three independently-registered provider params — including a brand this test invents — each write their own row through the same unmodified serialize()', async () => {
+    await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
+      // Neither of these two symbols is RPC_PEER_KEY or STREAMS_API_KEY —
+      // `computeDescriptor` is handed this registry as plain data and never
+      // imports a brand's module, so it cannot tell a real brand from a made-
+      // up one. That is the property this test pins: the loop in
+      // descriptors/compute.ts needs no edit to support a new registrant.
+      const brandOne = Symbol('provider-param-test/one');
+      const brandTwo = Symbol('provider-param-test/two');
+      const brandThree = Symbol('provider-param-test/three');
+      const providerParams: ReadonlyMap<symbol, ProviderParam> = new Map([
+        [
+          brandOne,
+          { name: 'PARAM_ONE', schema: type('string'), brand: brandOne, value: () => 'value-one' },
+        ],
+        [
+          brandTwo,
+          { name: 'PARAM_TWO', schema: type('string'), brand: brandTwo, value: () => 'value-two' },
+        ],
+        // A third registrant may also decline to write a row at all.
+        [
+          brandThree,
+          {
+            name: 'PARAM_THREE',
+            schema: type('string'),
+            brand: brandThree,
+            value: () => undefined,
+          },
+        ],
+      ]);
+      const o: ResolvedCloudOptions = {
+        workspaceId: 'ws_1',
+        projectId: 'shop-project#cloud-id',
+        branchId: undefined,
+        providerParams,
+      };
+      const node = compute({ name: 'multi', deps: {}, build, expose: { any: anyContract } });
+      const ctx = {
+        address: 'multi',
+        node,
+        graph: { secrets: [], edges: [] },
+        application: { outputs: {} },
+        provisioned: new Map(),
+      } as unknown as LowerContext;
+      const provisioned = { serviceId: 'multi-svc#cloud-id', projectId: 'shop-project#cloud-id' };
+      const config = { service: { port: 3000 }, inputs: {} };
+      const before = recorded.envVar.length;
+
+      // The three-brand options can't ride the shared registry, so erase the
+      // precise descriptor to the registry's own type — the same assignment
+      // control.ts makes when it registers the real one.
+      const descriptor: NodeDescriptor = computeDescriptor(o);
+      if (descriptor.kind !== 'service') throw new Error('expected a service descriptor');
+      run<MockedSerialized>(descriptor.serialize(ctx, provisioned, config));
+
+      const writes = recorded.envVar.slice(before).map(([, props]) => props);
+      expect(writes).toContainEqual({
+        projectId: 'shop-project#cloud-id',
+        key: 'COMPOSER_MULTI_PARAM_ONE',
+        value: '"value-one"',
+        class: 'production',
+      });
+      expect(writes).toContainEqual({
+        projectId: 'shop-project#cloud-id',
+        key: 'COMPOSER_MULTI_PARAM_TWO',
+        value: '"value-two"',
+        class: 'production',
+      });
+      expect(writes.map((w) => (w as { key: string }).key)).not.toContain(
+        'COMPOSER_MULTI_PARAM_THREE',
+      );
+    });
   });
 });
 
