@@ -115,8 +115,8 @@ interface RecordedCall {
 
 interface FakeState {
   calls: RecordedCall[];
-  /** When set, GET /v1/compute-services/{computeServiceId} resolves to this — the observed path. */
-  observed?: { id: string; name: string; serviceEndpointDomain?: string };
+  /** When set, GET /v1/apps/{appId} resolves to this — the observed path. */
+  observed?: { id: string; name: string; appEndpointDomain?: string };
 }
 
 const okResponse = <T>(data: T, status = 200) => ({
@@ -142,7 +142,7 @@ const notFoundResponse = () => ({
 const fakeClient = (state: FakeState): ManagementApiClient => {
   const GET = (path: string) => {
     state.calls.push({ method: 'GET', path });
-    if (path === '/v1/compute-services/{computeServiceId}') {
+    if (path === '/v1/apps/{appId}') {
       return Promise.resolve(
         state.observed ? okResponse({ data: state.observed }) : notFoundResponse(),
       );
@@ -152,7 +152,7 @@ const fakeClient = (state: FakeState): ManagementApiClient => {
 
   const POST = (path: string, init: { body?: Record<string, unknown> } = {}) => {
     state.calls.push({ method: 'POST', path, body: init.body });
-    if (path === '/v1/projects/{projectId}/compute-services') {
+    if (path === '/v1/apps') {
       return Promise.resolve(
         okResponse({ data: { id: 'cs-created', name: String(init.body?.['displayName']) } }, 201),
       );
@@ -162,7 +162,7 @@ const fakeClient = (state: FakeState): ManagementApiClient => {
 
   const PATCH = (path: string, init: { body?: Record<string, unknown> } = {}) => {
     state.calls.push({ method: 'PATCH', path, body: init.body });
-    if (path === '/v1/compute-services/{computeServiceId}') {
+    if (path === '/v1/apps/{appId}') {
       return Promise.resolve(okResponse({ data: { id: 'cs-created', name: 'compute' } }));
     }
     throw new Error(`fakeClient: unexpected PATCH ${path}`);
@@ -202,7 +202,11 @@ describe('ComputeService reconcile — Branch via the create body', () => {
 
     expect(result).toEqual({ id: 'cs-created', name: 'compute' });
     expect(state.calls.map((c) => c.method)).toEqual(['POST']);
-    expect(state.calls[0]?.body).toEqual({ displayName: 'compute', branchId: 'br-1' });
+    expect(state.calls[0]?.body).toEqual({
+      displayName: 'compute',
+      projectId: 'proj-1',
+      branchId: 'br-1',
+    });
     expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
   });
 
@@ -228,7 +232,7 @@ describe('ComputeService reconcile — Branch via the create body', () => {
 
     expect(result).toEqual({ id: 'cs-created', name: 'compute' });
     expect(state.calls.map((c) => c.method)).toEqual(['POST']);
-    expect(state.calls[0]?.body).toEqual({ displayName: 'compute' });
+    expect(state.calls[0]?.body).toEqual({ displayName: 'compute', projectId: 'proj-1' });
     expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
   });
 

@@ -8,7 +8,7 @@
  *   EXPECTED_GREETING=… [ENV_PARAM_STAGE=…] [ENV_PARAM_STACK_NAME=…] bun scripts/smoke.ts
  *
  * With ENV_PARAM_STAGE set, resolves that stage's Branch and its
- * branch-scoped compute service; without it, the production service.
+ * branch-scoped app; without it, the production app.
  * Requires PRISMA_SERVICE_TOKEN (run via `pnpm smoke:deployed`, which
  * sources the deploy env file).
  */
@@ -65,30 +65,19 @@ if (branch === undefined) {
 }
 const branchId = asId(branch['id'], 'branch.id');
 
-// Compute-service names are unique per Branch, so both stages hold an "echo"
-// service in the same project-level list — and that list omits branchId, so
-// each candidate's own detail read (which carries it) picks the right one.
-const candidates = rows(await get(`/projects/${projectId}/compute-services?limit=100`)).filter(
+// App names are unique per Branch, so both stages hold an "echo" app in the
+// same project-level list — each row carries its branchId, which picks the
+// right one.
+const candidates = rows(await get(`/apps?projectId=${projectId}&limit=100`)).filter(
   (s) => s['name'] === 'echo',
 );
-let service: Record<string, unknown> | undefined;
-for (const candidate of candidates) {
-  const detail = blindCast<
-    { data?: Record<string, unknown> },
-    'the compute-service detail endpoint returns { data: {...} }'
-  >(await get(`/compute-services/${asId(candidate['id'], 'service.id')}`)).data;
-  if (detail?.['branchId'] === branchId) {
-    service = detail;
-    break;
-  }
-}
+const service = candidates.find((s) => s['branchId'] === branchId);
 if (service === undefined) {
   throw new Error(
-    `no "echo" compute service on branch "${stage ?? 'production'}" ` +
-      `(candidates: ${candidates.length})`,
+    `no "echo" app on branch "${stage ?? 'production'}" ` + `(candidates: ${candidates.length})`,
   );
 }
-const domain = service['serviceEndpointDomain'];
+const domain = service['appEndpointDomain'];
 if (typeof domain !== 'string' || domain === '')
   throw new Error('service has no endpoint domain yet');
 const url = domain.startsWith('http') ? domain : `https://${domain}/`;

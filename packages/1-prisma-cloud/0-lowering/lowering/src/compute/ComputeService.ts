@@ -6,7 +6,7 @@ import { ManagementClient } from '../client.ts';
 import { call, callOptional, callVoid, type PrismaApiError } from '../http.ts';
 
 /**
- * Stopping a deployment before the compute service that owns it can be
+ * Stopping a deployment before the app that owns it can be
  * deleted is asynchronous on the platform's side: DELETE can 409 with this
  * message while the deployment is still winding down. Retrying blindly on
  * every API error would mask real failures (bad auth, a genuinely conflicting
@@ -72,11 +72,11 @@ export const ComputeServiceProvider = () =>
         stables: ['id'],
         list: () => Effect.succeed([] as ComputeServiceAttributes[]),
         reconcile: Effect.fn(function* ({ news, output }) {
-          // Observe — a compute service is only findable by its saved id.
+          // Observe — an app is only findable by its saved id.
           const observed = output?.id
             ? yield* callOptional(() =>
-                client.GET('/v1/compute-services/{computeServiceId}', {
-                  params: { path: { computeServiceId: output.id } },
+                client.GET('/v1/apps/{appId}', {
+                  params: { path: { appId: output.id } },
                 }),
               )
             : undefined;
@@ -84,19 +84,19 @@ export const ComputeServiceProvider = () =>
             return {
               id: observed.data.id,
               name: observed.data.name,
-              endpointDomain: observed.data.serviceEndpointDomain,
+              endpointDomain: observed.data.appEndpointDomain,
             };
           }
 
           // Create on the target Branch via the create body — NOT a later PATCH.
-          // Compute-service names are unique per Branch, so a project-scoped create
-          // lands on the default Branch and collides with the same-named production
-          // service there (a live-deploy find).
+          // App names are unique per Branch, so a create without a branchId
+          // lands on the default Branch and collides with the same-named
+          // production app there (a live-deploy find).
           const created = yield* call(() =>
-            client.POST('/v1/projects/{projectId}/compute-services', {
-              params: { path: { projectId: news.projectId } },
+            client.POST('/v1/apps', {
               body: {
                 displayName: news.name,
+                projectId: news.projectId,
                 ...(news.region && { regionId: news.region }),
                 ...(news.branchId !== undefined && { branchId: news.branchId }),
               },
@@ -105,25 +105,25 @@ export const ComputeServiceProvider = () =>
           return {
             id: created.data.id,
             name: created.data.name,
-            endpointDomain: created.data.serviceEndpointDomain,
+            endpointDomain: created.data.appEndpointDomain,
           };
         }),
         delete: Effect.fn(function* ({ output }) {
           yield* callVoid(() =>
-            client.DELETE('/v1/compute-services/{computeServiceId}', {
-              params: { path: { computeServiceId: output.id } },
+            client.DELETE('/v1/apps/{appId}', {
+              params: { path: { appId: output.id } },
             }),
           ).pipe(Effect.retry({ schedule: deleteSafeRetrySchedule, while: isDeleteNotSafeYet }));
         }),
         read: Effect.fn(function* ({ output }) {
           if (!output?.id) return undefined;
           const s = yield* callOptional(() =>
-            client.GET('/v1/compute-services/{computeServiceId}', {
-              params: { path: { computeServiceId: output.id } },
+            client.GET('/v1/apps/{appId}', {
+              params: { path: { appId: output.id } },
             }),
           );
           return s
-            ? { id: s.data.id, name: s.data.name, endpointDomain: s.data.serviceEndpointDomain }
+            ? { id: s.data.id, name: s.data.name, endpointDomain: s.data.appEndpointDomain }
             : undefined;
         }),
       };
