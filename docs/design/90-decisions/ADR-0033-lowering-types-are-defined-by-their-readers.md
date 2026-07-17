@@ -1,17 +1,17 @@
-# ADR-0033: Every lowering-SPI seam's type is declared by its consumer
+# ADR-0033: Every value in the lowering pipeline is typed by the code that reads it
 
 ## Decision
 
-The lowering SPI has several seams — points where one party's value becomes
-another party's input. **Each seam's type is declared by the party that reads
-it, not by the party that produces it.** No single shared record serves more
-than one seam.
+The lowering SPI has several places where one piece of code hands a value to
+another. **At each of them, the type is defined by the code that reads the
+value, not by the code that produces it.** No single shared record is used in
+more than one of those places.
 
 Concretely, replacing `LoweredNode` (`{ outputs: Record<string, unknown> }`):
 
 ```ts
-// SEAM 1 — a descriptor's own phase handoffs. Declared by the descriptor that
-// writes AND reads them; core threads P and S through without inspecting either.
+// 1 — a descriptor hands values between its own phases. Typed by the descriptor
+// that writes AND reads them; core passes P and S through without inspecting either.
 export interface ServiceLowering<P = unknown, S = unknown> {
   provision(ctx: LowerContext): Effect.Effect<P, unknown, unknown>;
   serialize(ctx: LowerContext, provisioned: P, config: Config): Effect.Effect<S, unknown, unknown>;
@@ -20,12 +20,14 @@ export interface ServiceLowering<P = unknown, S = unknown> {
     Effect.Effect<WiringOutputs, unknown, unknown>;
 }
 
-// SEAM 2 — the application seam. Core declares nothing; the owning extension
-// declares its own product and narrows with its own guard.
+// 2 — the extension's application hook hands its product to that extension's
+// own descriptors. Core types nothing here; the extension defines its own
+// product type and narrows to it with its own guard.
 readonly application: unknown;
 
-// SEAM 3 — inter-node wiring. Name-keyed, unknown-valued: the consumer's
-// connection declaration is the contract, resolved by param name at runtime.
+// 3 — one node hands values to the nodes wired downstream of it. Name-keyed and
+// unknown-valued: the consumer's connection declaration is the contract,
+// resolved by param name at runtime.
 export type WiringOutputs = Readonly<Record<string, unknown>>;
 ```
 
@@ -34,7 +36,7 @@ feeds `buildConfig` for dependent nodes. Descriptors do not know `buildConfig`
 exists. A future consumer of a descriptor's output must declare its own
 interface and appear as a visible routing edit in the loop.
 
-Two seams are decided here and implemented in later slices: the wiring
+Two of these are decided here and implemented in later slices: the wiring
 contract becomes **enforced** — a producer that fails to supply a param the
 consumer's connection declares fails the deploy naming the edge (S2) — and
 **deployment results** become core-declared types the loop assembles at full
@@ -96,9 +98,10 @@ computeServiceId: provisioned.serviceId,      // no cast; Input<string> accepts 
 
 The tempting conclusion — "a shared bag lets you lie; a typed handoff doesn't"
 — is refuted by our own code. `compute.serialize` keeps a `blindCast` that
-claims `Output<string>` for a provisioner ref, reached through a *different*
-`unknown`-typed seam ([ADR-0031](ADR-0031-provisioned-param-values-are-a-need-resolved-through-a-target-registry.md)
-makes those refs deliberately opaque). It is the same kind of unchecked claim
+claims `Output<string>` for a provisioner ref — a value that arrives through a
+different `unknown`-typed channel, which
+[ADR-0031](ADR-0031-provisioned-param-values-are-a-need-resolved-through-a-target-registry.md)
+keeps deliberately opaque. It is the same kind of unchecked claim
 that `as string` was. **We are keeping it.**
 
 The distinction that matters is not whether an unchecked claim exists. It is
@@ -115,27 +118,28 @@ whether the claim is **named, justified, and singular**:
 That is why `serviceId` survived code review and `keyOuts` is fine. The goal is
 not zero unchecked claims — it is that every one is deliberate and auditable.
 
-### Three seams, three mechanisms
+### Three handovers, three mechanisms
 
-The seams differ in what they claim and what defends the claim:
+The three places differ in what the type claims, and in what stops the claim
+from being wrong:
 
-| Seam | Claims | Defended by |
+| Where a value is handed over | The type claims | What checks it |
 | --- | --- | --- |
-| **Phase handoffs** (`P`, `S`) | Precise types | The **compiler** — same party writes and reads, so it can check both ends |
-| **Application seam** (`ctx.application`) | Precise: `CloudApplication.projectId: string` | A **runtime guard** (`isCloudApplication`) — the claim crosses core's `unknown` into an extension, where the compiler cannot reach |
-| **Wiring** (`WiringOutputs`) | **Nothing** — values are `unknown` | Nothing needed. `unknown` cannot lie |
+| **Between a descriptor's phases** (`P`, `S`) | Precise types | The **compiler** — the same descriptor writes and reads them, so it can check both ends |
+| **Application hook → its extension's descriptors** (`ctx.application`) | Precise: `CloudApplication.projectId: string` | A **runtime guard** (`isCloudApplication`) — the value passes through core as `unknown`, so the compiler cannot follow it |
+| **A node → the nodes wired downstream of it** (`WiringOutputs`) | **Nothing** — the values are `unknown` | Nothing needed. `unknown` cannot lie |
 
-The third row is the load-bearing observation. `warm.url` (postgres) and
+The third row is where the argument actually lands. `warm.url` (postgres) and
 `creds.accessKeyId` (s3-credentials) are *also* unresolved `Output<string>`s —
 exactly like `serviceId`. They were never mis-typed, and could not have been:
 they flow into `WiringOutputs`, which claims nothing about them. Core cannot
 know extension types, and which producer feeds which consumer is decided by the
-user's graph at runtime, so the wiring seam declares its ignorance honestly and
-resolves by name against the consumer's declared params.
+user's graph at runtime, so the wiring type says it does not know, and the
+value is resolved by name against the consumer's declared params instead.
 
 **The bug could only ever have lived where a precise claim was made with no
-mechanism defending it.** The application seam makes a precise claim too — it
-is defended by a guard rather than the compiler, which is why there are three
+mechanism checking it.** The application hook's product is a precise claim too
+— checked by a guard rather than by the compiler, which is why there are three
 mechanisms and not two.
 
 ## Consequences
@@ -249,7 +253,8 @@ For the same reason, `computeDescriptor` returns its precise descriptor type
 rather than the erased `NodeDescriptor`. The registry erases `P`/`S` on
 assignment anyway, but `s3-store` needs them visible; annotating
 `NodeDescriptor` would force `s3-store` to cast them straight back —
-re-creating the exact seam this ADR exists to remove.
+putting back into s3-store the exact cast-to-recover-your-own-type problem this
+ADR exists to remove.
 
 ### General
 
@@ -264,7 +269,8 @@ re-creating the exact seam this ADR exists to remove.
   would be a connection string.
 - An extension whose application hook does not run yields `ctx.application ===
   undefined` (previously `{ outputs: {} }`). Prisma-cloud's descriptors go
-  through `projectIdOf`'s guard, which fails naming the seam — correct, since
+  through `projectIdOf`'s guard, which fails and names the hook that did not run
+  — correct, since
   those descriptors require the hook.
 
 ## Alternatives considered
