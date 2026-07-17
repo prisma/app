@@ -52,6 +52,44 @@ bug, which I then found pre-emptively in S3's spec. A dispatch that had
 **Corollary:** zero-freedom specs need *more* halt discipline, not less. The
 freedom removed from implementation has to reappear as permission to stop.
 
+## A green check is a claim, and claims get controlled
+
+Four times in this project an agent refused to accept that a check passing
+meant the check worked. Each time the control was cheap and the finding was
+real:
+
+| Control | What it proved |
+| --- | --- |
+| S2-D2 mutated the real postgres descriptor to under-deliver | The guard reaches real descriptor pairs → the "no pair under-delivers" null result means something |
+| S3-D1 added a third deploy with the **same** nonce | The action noop is real → the nonce is precisely what defeats it, not "actions always run" |
+| S3-D2 made the Action unconditional | The sync test genuinely catches alchemy's `Stack` leaking into core's requirements |
+| S3-D3 introduced a deliberate plane violation into `report.ts` | **`lint:deps` was passing blind** — see below |
+
+The generalization: **a passing check and an absent check are indistinguishable
+from the outside.** Before a green gate is allowed to support a claim, make it
+go red once on purpose. This is the same epistemics as the project's central
+thesis — a claim nobody was asked to defend is not a claim that was checked.
+
+## `lint:deps` does not guard new public files (repo-wide, beyond this project)
+
+Surfaced by S3-D3's control. Two independent mechanisms each sufficient to
+let a layering violation land unnoticed:
+
+1. **`architecture.config.json` lists every `packages/9-public/composer/src/*`
+   file individually.** A *new* file matches no glob, joins no module group,
+   and therefore **no rule applies to it**. New public files are unguarded by
+   default — the config's per-file listing makes that the default failure mode,
+   not an oversight in any one PR.
+2. **`tsconfig.depcruise.json`'s paths must name each entry**, or the cruiser
+   cannot resolve the edge to source and cannot check it at all.
+
+S3-D3 fixed both *for its own file* and correctly did not change the
+mechanism — that's an audit, not a slice's work. **Filed as a follow-up.**
+
+Worth stating plainly: the architecture rules are the thing this whole project
+leans on to keep the seams honest (ADR-0033's consequences point at them), and
+for new public files they were decorative.
+
 ## Verification beats relay — twice, in both directions
 
 - The reviewer refuted the implementer's ergonomics claim with a compiled
