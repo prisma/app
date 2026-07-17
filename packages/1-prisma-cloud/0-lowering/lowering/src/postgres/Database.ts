@@ -49,23 +49,31 @@ export const DatabaseProvider = () =>
                 }),
               )
             : undefined;
-          let result: DatabaseAttributes;
-          if (observed) {
-            result = { id: observed.data.id, name: observed.data.name };
-          } else {
+          if (!observed) {
+            // Name the Branch in the create body — NOT a later PATCH. A
+            // database created without a branchId is born on the project's
+            // default Branch, which on a named stage is production's, so
+            // create-then-PATCH stranded the database there whenever the move
+            // failed or the CLI died in between. This flat route takes a
+            // branchId and validates it before creating the row; the
+            // project-scoped one takes no branch parameters at all. The
+            // platform still attaches in a second step of its own, so this
+            // narrows the window rather than closing it.
             const created = yield* call(() =>
-              client.POST('/v1/projects/{projectId}/databases', {
-                params: { path: { projectId: news.projectId } },
+              client.POST('/v1/databases', {
                 body: {
+                  projectId: news.projectId,
                   name: news.name,
                   region: news.region,
                   ...(news.isDefault !== undefined && { isDefault: news.isDefault }),
+                  ...(news.branchId !== undefined && { branchId: news.branchId }),
                 },
               }),
             );
-            result = { id: created.data.id, name: created.data.name };
+            return { id: created.data.id, name: created.data.name };
           }
 
+          const result: DatabaseAttributes = { id: observed.data.id, name: observed.data.name };
           if (news.branchId !== undefined) {
             const branchId = news.branchId;
             yield* call(() =>

@@ -33,6 +33,10 @@ const notFoundResponse = () => ({
  * recording every call it receives — the container.test.ts fake-client
  * idiom. `as unknown as ManagementApiClient` is acceptable here (test file
  * — exempt from the no-bare-cast rule).
+ *
+ * The project-scoped create route is deliberately absent: it cannot carry a
+ * branchId, so reaching for it is the bug these tests exist to catch, and the
+ * throw below turns that into a failure rather than a silent pass.
  */
 const fakeClient = (state: FakeState): ManagementApiClient => {
   const GET = (path: string) => {
@@ -47,7 +51,7 @@ const fakeClient = (state: FakeState): ManagementApiClient => {
 
   const POST = (path: string, init: { body?: Record<string, unknown> } = {}) => {
     state.calls.push({ method: 'POST', path, body: init.body });
-    if (path === '/v1/projects/{projectId}/databases') {
+    if (path === '/v1/databases') {
       return Promise.resolve(
         okResponse({ data: { id: 'db-created', name: String(init.body?.['name']) } }, 201),
       );
@@ -82,29 +86,58 @@ const reconcile = async (
   return Effect.runPromise(svc.reconcile(input as unknown as Parameters<typeof svc.reconcile>[0]));
 };
 
-describe('Database reconcile — Branch attachment via PATCH', () => {
+describe('Database reconcile — Branch attachment', () => {
   let state: FakeState;
 
   beforeEach(() => {
     state = { calls: [] };
   });
 
-  test('branchId set, no prior output: creates, then PATCHes the Branch', async () => {
+  test('branchId set, no prior output: names the Branch in the create, and issues no PATCH', async () => {
     const result = await reconcile(state, {
       news: { projectId: 'proj-1', name: 'db', region: 'us-east-1', branchId: 'br-1' },
       output: undefined,
     });
 
     expect(result).toEqual({ id: 'db-created', name: 'db' });
-    expect(state.calls.map((c) => c.method)).toEqual(['POST', 'PATCH']);
-    expect(state.calls[0]?.body).toEqual({ name: 'db', region: 'us-east-1' });
-    expect(state.calls[1]).toEqual({
-      method: 'PATCH',
-      path: '/v1/databases/{databaseId}',
-      body: { branchId: 'br-1' },
+    // One request, not create-then-PATCH: a create without a branchId lands
+    // the database on the project's default Branch — production's — and a
+    // failed PATCH would leave it there.
+    expect(state.calls).toEqual([
+      {
+        method: 'POST',
+        path: '/v1/databases',
+        body: { projectId: 'proj-1', name: 'db', region: 'us-east-1', branchId: 'br-1' },
+      },
+    ]);
+  });
+
+  test('isDefault set: rides the same create body', async () => {
+    await reconcile(state, {
+      news: {
+        projectId: 'proj-1',
+        name: 'db',
+        region: 'us-east-1',
+        branchId: 'br-1',
+        isDefault: true,
+      },
+      output: undefined,
+    });
+
+    expect(state.calls[0]?.body).toEqual({
+      projectId: 'proj-1',
+      name: 'db',
+      region: 'us-east-1',
+      isDefault: true,
+      branchId: 'br-1',
     });
   });
 
+  // The PATCH survives on the observed path only. There is no create here, so
+  // nothing can be stranded by a failed move; the database already exists and
+  // its id is already in state, so a failure fails the deploy and the next run
+  // retries. It stays because it is what moves a database that drifted off its
+  // Branch back onto it.
   test('branchId set, prior output exists: observes, and still PATCHes (idempotent/self-healing)', async () => {
     state.observed = { id: 'db-existing', name: 'db' };
 
@@ -122,15 +155,20 @@ describe('Database reconcile — Branch attachment via PATCH', () => {
     });
   });
 
-  test('branchId unset, no prior output: creates and issues no PATCH', async () => {
+  test('branchId unset, no prior output: creates without one and issues no PATCH', async () => {
     const result = await reconcile(state, {
       news: { projectId: 'proj-1', name: 'db', region: 'us-east-1' },
       output: undefined,
     });
 
     expect(result).toEqual({ id: 'db-created', name: 'db' });
-    expect(state.calls.map((c) => c.method)).toEqual(['POST']);
-    expect(state.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
+    expect(state.calls).toEqual([
+      {
+        method: 'POST',
+        path: '/v1/databases',
+        body: { projectId: 'proj-1', name: 'db', region: 'us-east-1' },
+      },
+    ]);
   });
 
   test('branchId unset, prior output exists: observes and issues no PATCH', async () => {
