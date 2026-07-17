@@ -115,7 +115,7 @@ describe('cronScheduler() deploy wrapper', () => {
     const nodeDef = cronScheduler(defineSchedule({ tick: '2s' }));
     expect(nodeDef.build.module).toMatch(/scheduler-service\.mjs$/);
 
-    const wrapper = await import('../scheduler-service.ts');
+    const wrapper = await import('../exports/scheduler-service.ts');
     expect(typeof wrapper.default.run).toBe('function');
     expect(typeof wrapper.default.load).toBe('function');
     expect(typeof wrapper.default.config).toBe('function');

@@ -223,19 +223,19 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-service.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/exports/scheduler-service.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-entrypoint.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/exports/scheduler-entrypoint.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/index.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/exports/index.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"

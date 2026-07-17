@@ -8,13 +8,16 @@ import { defineConfig } from 'tsdown';
 export default defineConfig([
   {
     ...baseConfig,
-    entry: { index: 'src/index.ts', 'scheduler-service': 'src/scheduler-service.ts' },
+    entry: {
+      index: 'src/exports/index.ts',
+      'scheduler-service': 'src/exports/scheduler-service.ts',
+    },
     exports: false,
     clean: true,
   },
   {
     ...baseConfig,
-    entry: { 'scheduler-entrypoint': 'src/scheduler-entrypoint.ts' },
+    entry: { 'scheduler-entrypoint': 'src/exports/scheduler-entrypoint.ts' },
     exports: false,
     clean: false,
     skipNodeModulesBundle: false,
