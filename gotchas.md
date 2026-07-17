@@ -381,7 +381,7 @@ The failure is a **thrown socket error, and only that**: it surfaces fast (~400 
 
 **Cause (observed, mechanism presumed).** The target service had scaled to zero. Instead of the edge holding the connection until the VM finishes booting (which it does do on most cold hits — those requests just take seconds), the connection is sometimes closed mid-establishment during the cold-start window, surfacing as a socket reset to the caller. Warm targets never reset.
 
-The window is small and measurable. In `examples/streams`' Compute version logs, `spark: starting bun with entrypoint: bootstrap.js` → the server's own "listening" line is **~3.5 s** for a service restoring little state and **~8 s** for one restoring more from its object store. That is how long the edge must hold — and when it does hold, the caller simply waits: a first request against a deliberately fresh instance returned `201` in 3.7 s with no error. The bug is not the wait; it is that the hold is unreliable.
+The window is small and measurable. In `examples/streams`' Compute version logs, `spark: starting bun with entrypoint: bootstrap.js` → the server's own "listening" line is **~3.5 s** for a service restoring little state and **~8 s** for one restoring more from its object store. That is the window a first request falls into. Usually the request simply blocks for it and succeeds — a first request against a deliberately fresh instance returned `201` in 3.7 s with no error. The bug is not the wait; it is that the same first request sometimes gets the ~400 ms socket close instead, and nothing on the caller's side predicts which.
 
 **Workaround.** No principled client-side fix for non-idempotent calls (blind retry could double-execute a write). Mitigations:
 
