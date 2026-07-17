@@ -20,11 +20,15 @@ export default defineConfig([
       'node-control': 'src/node-control.ts',
       nextjs: 'src/nextjs.ts',
       'nextjs-control': 'src/nextjs-control.ts',
-      tsdown: 'src/tsdown.ts',
     },
     exports: false,
     clean: true,
     skipNodeModulesBundle: false,
+    // esbuild's JS API refuses to run once bundled into another file (it
+    // checks __filename/__dirname against its own package layout and throws
+    // "The esbuild JavaScript API cannot be bundled" otherwise) — it must stay
+    // a real import, not inlined like the rest of node_modules.
+    external: ['esbuild'],
     noExternal: [/^@internal\//],
   },
   {
