@@ -1,6 +1,6 @@
 /** Routes each graph node to its extension descriptor (by node.extension/type) and runs provision → serialize → package → deploy in dependency order. */
 
-import type { StackServices } from 'alchemy';
+import type { Input, StackServices } from 'alchemy';
 import * as Alchemy from 'alchemy';
 import type { State } from 'alchemy/State/State';
 import * as Effect from 'effect/Effect';
@@ -77,13 +77,13 @@ export interface ServiceLowering<P = unknown, S = unknown> {
    * on redeploy.
    */
   package(ctx: LowerContext, input: PackageInput): Effect.Effect<Artifact, unknown, unknown>;
-  /** Ships the packaged artifact into the provisioned thing and runs it. Returns the trustworthy URL. */
+  /** Ships the packaged artifact into the provisioned thing and runs it. Returns the node's wiring outputs for dependents, plus the platform primitives it became. */
   deploy(
     ctx: LowerContext,
     provisioned: P,
     artifact: Artifact,
     serialized: S,
-  ): Effect.Effect<WiringOutputs, unknown, unknown>;
+  ): Effect.Effect<LoweredResult, unknown, unknown>;
 }
 
 /** Input to an extension's package() step: the built bundle and the node's graph address. */
@@ -95,7 +95,7 @@ export interface PackageInput {
 }
 
 /** One node's realization. Runs inside the Alchemy stack effect. */
-export type Lowering = (ctx: LowerContext) => Effect.Effect<WiringOutputs, unknown, unknown>;
+export type Lowering = (ctx: LowerContext) => Effect.Effect<LoweredResult, unknown, unknown>;
 
 export interface LowerContext {
   readonly id: NodeId;
@@ -129,6 +129,42 @@ export interface LowerContext {
  */
 export type WiringOutputs = Readonly<Record<string, unknown>>;
 
+/**
+ * One platform thing a node became, RESOLVED — what the report consumer sees.
+ * The descriptor names it; core never infers meaning from it. `url` is present
+ * ONLY when the descriptor declares the address publicly reachable — a
+ * connection string is never a `url`.
+ */
+export interface DeployedPrimitive {
+  readonly kind: string;
+  readonly id: string;
+  readonly url?: string;
+  readonly details?: Readonly<Record<string, string>>;
+}
+
+/**
+ * What a descriptor RETURNS: the same shape, but every field may still be an
+ * unresolved reference, because the stack effect runs before Alchemy applies
+ * anything — a descriptor holds `svc.id` / `deployment.deployedUrl`, which are
+ * `Output<T>`, not `T`. Alchemy's `Input<T>` mapping is deep and recursive, so
+ * this is exactly what the Action's input position accepts, and apply resolves
+ * it before the runner sees it.
+ */
+export type ReportedPrimitive = Input<DeployedPrimitive>;
+
+/** What a node's final lowering phase produces: wiring for dependents, primitives for reporting. */
+export interface LoweredResult {
+  readonly wiring: WiringOutputs;
+  readonly primitives?: readonly ReportedPrimitive[];
+}
+
+/** What one graph node became — the deploy subsystem's own result type. In-process only (it holds the node itself, so it never crosses the stack boundary). */
+export interface DeploymentResult {
+  readonly address: string;
+  readonly node: ServiceNode | ResourceNode;
+  readonly primitives: readonly DeployedPrimitive[];
+}
+
 export interface LowerOptions {
   /** Stack + root node id. */
   readonly name: string;
@@ -138,6 +174,13 @@ export interface LowerOptions {
   readonly stage?: string;
   /** Alchemy state store for the stack. Defaults to the config's own state layer. */
   readonly state?: AlchemyStateLayer;
+  /**
+   * Invoked once per deploy, during apply, with every node's resolved results
+   * in topo order. Presentation belongs to the caller (the CLI wires its
+   * renderer here); core never formats. Absent means no report is assembled
+   * and no Action is declared at all.
+   */
+  readonly report?: (results: readonly DeploymentResult[]) => void;
 }
 
 /** A build descriptor's normalized output: the produced bundle dir plus the app's runnable entry within it. */
@@ -304,6 +347,33 @@ export function buildConfig(
   return { service, inputs };
 }
 
+/**
+ * Joins resolved report entries back to their graph nodes — the last step of a
+ * deploy report, run inside the Action with apply's resolved values.
+ *
+ * The entries cross Alchemy's action-input boundary, so they carry addresses
+ * and plain primitives only; the graph is held by closure on this side. That
+ * split is why this join exists at all, and it is what keeps functions and
+ * Standard Schemas (which a node carries, and which the plan's input hash
+ * would have to serialize) out of the input.
+ *
+ * Skips an address the graph no longer holds: entries are data, the graph is
+ * truth.
+ */
+export function joinDeployment(
+  graph: Graph,
+  entries: readonly { address: string; primitives: readonly DeployedPrimitive[] }[],
+): readonly DeploymentResult[] {
+  const results: DeploymentResult[] = [];
+  for (const entry of entries) {
+    const found = graph.nodes.find((n) => n.id === entry.address);
+    const node = found?.node;
+    if (node === undefined || (node.kind !== 'service' && node.kind !== 'resource')) continue;
+    results.push({ address: entry.address, node, primitives: entry.primitives });
+  }
+  return results;
+}
+
 function missingBundleError(id: NodeId): LowerError {
   return new LowerError(
     `No bundle provided for service "${id}" (opts.bundles["${id}"] is required).`,
@@ -429,6 +499,22 @@ export function mergedProviders(config: PrismaAppConfig): Layer.Layer<never> {
 }
 
 /**
+ * The deployment-report Action's input, declared in RESOLVED terms — this is
+ * what the runner receives. The call site passes `ReportedPrimitive`s, whose
+ * fields may still be `Output` references; alchemy's deep `Input<>` mapping on
+ * the input position accepts them and apply resolves them before the runner
+ * runs. Addresses and primitives only — never graph nodes (see joinDeployment).
+ */
+interface ReportEntry {
+  readonly address: string;
+  readonly primitives: readonly DeployedPrimitive[];
+}
+interface ReportInput {
+  readonly nonce: number;
+  readonly entries: readonly ReportEntry[];
+}
+
+/**
  * Composable form for mixed stacks: hand-wired Alchemy resources alongside Prisma App nodes in one stack effect.
  * Fails with LowerError or whatever an extension's lowering raises — the error type is open.
  */
@@ -441,6 +527,11 @@ export function lowering(
     const graph = Load(root, { id: opts.name });
     const extensions = yield* extensionsById(config);
     const lowered = new Map<NodeId, WiringOutputs>();
+    // Each node's reported primitives, in topo order — the loop is the only
+    // party that holds both the node's identity and what it became. Collected
+    // unconditionally (it is a cheap array); only the Action below is
+    // conditional.
+    const entries: { address: string; primitives: readonly ReportedPrimitive[] }[] = [];
     // ADR-0031: every provisioned param value minted this lowering, keyed by
     // edge id. Populated by the provision phase below (after the application
     // hooks, before any node), then threaded read-only through every ctx and
@@ -544,7 +635,9 @@ export function lowering(
       const descriptor = yield* descriptorFor(extensions, node, id);
 
       if (descriptor.kind === 'resource') {
-        lowered.set(id, yield* descriptor(ctx));
+        const result = yield* descriptor(ctx);
+        lowered.set(id, result.wiring);
+        entries.push({ address: id, primitives: result.primitives ?? [] });
         continue;
       }
       if (descriptor.kind !== 'service') {
@@ -570,7 +663,34 @@ export function lowering(
         assembled: { dir: bundle.dir, entry: bundle.entry },
         address: id,
       });
-      lowered.set(id, yield* descriptor.deploy(ctx, provisionedNode, artifact, serialized));
+      const result = yield* descriptor.deploy(ctx, provisionedNode, artifact, serialized);
+      lowered.set(id, result.wiring);
+      entries.push({ address: id, primitives: result.primitives ?? [] });
+    }
+
+    // The report is assembled ONLY when a caller asked for one. This
+    // conditionality is required, not an optimization: without it every
+    // `lowering()` call would declare an Action and drag alchemy's Stack
+    // context into core's sync unit tests.
+    if (opts.report !== undefined) {
+      const report = opts.report;
+      const ReportAction = Alchemy.Action('composer-deployment-report', (input: ReportInput) =>
+        Effect.sync(() => {
+          // `input` arrives RESOLVED — apply evaluates the action's input
+          // against its tracker before invoking the runner, so the ids and
+          // URLs the descriptors handed over as Output references are real
+          // strings here. The graph rides in on the closure, never in the
+          // input: the plan hashes the resolved input, and a node carries
+          // functions and Standard Schemas.
+          report(joinDeployment(graph, input.entries));
+        }),
+      );
+      // `Date.now()` forces the report to run on an otherwise unchanged
+      // redeploy: alchemy noops an action whose resolved input hashes to what
+      // the last run persisted. A nonce is legitimate here because this input
+      // triggers a report — it is not artifact input, which determinism rules
+      // govern.
+      yield* ReportAction({ nonce: Date.now(), entries });
     }
 
     return undefined;
