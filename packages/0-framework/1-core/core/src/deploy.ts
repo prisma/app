@@ -26,7 +26,7 @@ export type AlchemyStateLayer = Layer.Layer<State, never, StackServices>;
  * SPI calls via LowerContext.application.
  */
 export interface ApplicationDescriptor {
-  provision(ctx: LowerContext): Effect.Effect<LoweredNode, unknown, unknown>;
+  provision(ctx: LowerContext): Effect.Effect<unknown, unknown, unknown>;
 }
 
 /**
@@ -50,20 +50,27 @@ export interface ProvisionerDescriptor {
   provision(edge: ProvisionEdge): Effect.Effect<unknown, unknown, unknown>;
 }
 
-/** The phased service SPI — the seam between the phases belongs to CORE. */
-export interface ServiceLowering {
+/**
+ * The phased service SPI. `P` and `S` are the descriptor's OWN intra-node
+ * handoff types — provision's product consumed by serialize/deploy, and
+ * serialize's product consumed by deploy. Core threads them through without
+ * inspection; only the descriptor that writes them reads them.
+ *
+ * Method syntax (not property-arrow) is required: the heterogeneous
+ * descriptor registry (`NodeDescriptor`) assigns concrete descriptors to
+ * this interface's `unknown` defaults through TypeScript's method
+ * bivariance — a property-arrow form is checked contravariantly and breaks
+ * that assignment.
+ */
+export interface ServiceLowering<P = unknown, S = unknown> {
   /** Makes the platform-specific thing that will host the service — identity-bearing infrastructure only, no code runs. */
-  provision(ctx: LowerContext): Effect.Effect<LoweredNode, unknown, unknown>;
+  provision(ctx: LowerContext): Effect.Effect<P, unknown, unknown>;
   /**
    * Encodes the typed Config into the service's runtime environment. Boot-side
    * deserialize reverses it through the same serializer. Returns the env-var
    * records so `deploy` can reference them.
    */
-  serialize(
-    ctx: LowerContext,
-    provisioned: LoweredNode,
-    config: Config,
-  ): Effect.Effect<LoweredNode, unknown, unknown>;
+  serialize(ctx: LowerContext, provisioned: P, config: Config): Effect.Effect<S, unknown, unknown>;
   /**
    * Prints the bootstrap and assembles the deployable artifact from the
    * app-built bundle. Must be byte-deterministic: an unchanged service noops
@@ -73,10 +80,10 @@ export interface ServiceLowering {
   /** Ships the packaged artifact into the provisioned thing and runs it. Returns the trustworthy URL. */
   deploy(
     ctx: LowerContext,
-    provisioned: LoweredNode,
+    provisioned: P,
     artifact: Artifact,
-    serialized: LoweredNode,
-  ): Effect.Effect<LoweredNode, unknown, unknown>;
+    serialized: S,
+  ): Effect.Effect<WiringOutputs, unknown, unknown>;
 }
 
 /** Input to an extension's package() step: the built bundle and the node's graph address. */
@@ -88,7 +95,7 @@ export interface PackageInput {
 }
 
 /** One node's realization. Runs inside the Alchemy stack effect. */
-export type Lowering = (ctx: LowerContext) => Effect.Effect<LoweredNode, unknown, unknown>;
+export type Lowering = (ctx: LowerContext) => Effect.Effect<WiringOutputs, unknown, unknown>;
 
 export interface LowerContext {
   readonly id: NodeId;
@@ -101,21 +108,26 @@ export interface LowerContext {
   readonly node: ServiceNode | ResourceNode;
   readonly graph: Graph;
   readonly opts: LowerOptions;
-  /** The owning extension's application hook outputs (`{ outputs: {} }` when it declares none). */
-  readonly application: LoweredNode;
+  /**
+   * The owning extension's application hook product; `undefined` when the
+   * extension declares no hook. Core never reads it; the extension narrows
+   * it with its own type guard.
+   */
+  readonly application: unknown;
   /** Already-lowered deps (topo order). */
-  readonly lowered: ReadonlyMap<NodeId, LoweredNode>;
+  readonly lowered: ReadonlyMap<NodeId, WiringOutputs>;
   /** Every provisioned param value minted this lowering, keyed by edge id (ADR-0031). */
   readonly provisioned: ReadonlyMap<string, unknown>;
 }
 
 /**
- * What a lowering hands downstream — e.g. a deployed URL a later node's env
- * wiring consumes. The inter-node config-wiring hook for Connections.
+ * A node's inter-node wiring outputs — the values downstream nodes' declared
+ * connection params resolve against (buildConfig reads them by param name).
+ * Name-keyed and unknown-valued of necessity: core cannot know extension
+ * types, and which producer feeds which consumer is decided by the user's
+ * graph at runtime. The connection declaration is the contract.
  */
-export interface LoweredNode {
-  readonly outputs: Readonly<Record<string, unknown>>;
-}
+export type WiringOutputs = Readonly<Record<string, unknown>>;
 
 export interface LowerOptions {
   /** Stack + root node id. */
@@ -227,7 +239,7 @@ export function buildConfig(
   node: ServiceNode,
   id: NodeId,
   graph: Graph,
-  lowered: ReadonlyMap<NodeId, LoweredNode>,
+  lowered: ReadonlyMap<NodeId, WiringOutputs>,
   provisioned: ReadonlyMap<string, unknown>,
 ): Config {
   const inputs: Record<string, Record<string, unknown>> = {};
@@ -236,7 +248,7 @@ export function buildConfig(
     const edge = graph.edges.find(
       (e) => e.to === id && e.input === inputName && e.kind === 'dependency',
     );
-    const producedOutputs = edge !== undefined ? (lowered.get(edge.from)?.outputs ?? {}) : {};
+    const producedOutputs = edge !== undefined ? (lowered.get(edge.from) ?? {}) : {};
     const values: Record<string, unknown> = {};
     for (const [name, param] of Object.entries(inputNode.connection.params)) {
       values[name] =
@@ -391,11 +403,11 @@ export function lowering(
   root: ModuleNode,
   config: PrismaAppConfig,
   opts: LowerOptions,
-): Effect.Effect<LoweredNode, LowerError, unknown> {
+): Effect.Effect<undefined, LowerError, unknown> {
   return Effect.gen(function* () {
     const graph = Load(root, { id: opts.name });
     const extensions = yield* extensionsById(config);
-    const lowered = new Map<NodeId, LoweredNode>();
+    const lowered = new Map<NodeId, WiringOutputs>();
     // ADR-0031: every provisioned param value minted this lowering, keyed by
     // edge id. Populated by the provision phase below (after the application
     // hooks, before any node), then threaded read-only through every ctx and
@@ -405,8 +417,7 @@ export function lowering(
     // Each extension's application hook runs ONCE, before any node, in config
     // order — its outputs reach that extension's own nodes via ctx.application
     // (the same threading the one-target model had).
-    const noApplication: LoweredNode = { outputs: {} };
-    const applications = new Map<string, LoweredNode>();
+    const applications = new Map<string, unknown>();
     for (const descriptor of config.extensions) {
       if (descriptor.application === undefined) continue;
       const appCtx: LowerContext = {
@@ -416,7 +427,7 @@ export function lowering(
         node: graph.root.node as never,
         graph,
         opts,
-        application: noApplication,
+        application: undefined,
         lowered,
         provisioned,
       };
@@ -492,7 +503,7 @@ export function lowering(
         node: node as ServiceNode | ResourceNode,
         graph,
         opts,
-        application: applications.get(node.extension) ?? noApplication,
+        application: applications.get(node.extension),
         lowered,
         provisioned,
       };
@@ -529,8 +540,8 @@ export function lowering(
       lowered.set(id, yield* descriptor.deploy(ctx, provisionedNode, artifact, serialized));
     }
 
-    return { outputs: {} };
-  }) as Effect.Effect<LoweredNode, LowerError, unknown>;
+    return undefined;
+  }) as Effect.Effect<undefined, LowerError, unknown>;
 }
 
 /**
@@ -541,10 +552,7 @@ export function lowering(
 export function lower(root: ModuleNode, config: PrismaAppConfig, opts: LowerOptions) {
   // A LowerError at deploy is fatal; orDie moves it off the error channel to
   // match what Alchemy.Stack accepts.
-  const stackEffect = Effect.orDie(lowering(root, config, opts)) as Effect.Effect<
-    LoweredNode,
-    never
-  >;
+  const stackEffect = Effect.orDie(lowering(root, config, opts)) as Effect.Effect<undefined, never>;
 
   return Alchemy.Stack(
     opts.name,
