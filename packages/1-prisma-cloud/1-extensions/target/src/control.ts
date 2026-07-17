@@ -18,7 +18,11 @@ import { postgresDescriptor } from './descriptors/postgres.ts';
 import { prismaNextDescriptor } from './descriptors/prisma-next.ts';
 import { s3CredentialsDescriptor } from './descriptors/s3-credentials.ts';
 import { s3StoreDescriptor } from './descriptors/s3-store.ts';
-import type { ProviderParam, ResolvedCloudOptions } from './descriptors/shared.ts';
+import type {
+  CloudApplication,
+  ProviderParam,
+  ResolvedCloudOptions,
+} from './descriptors/shared.ts';
 import { PgWarmProvider } from './pg-warm-resource.ts';
 import { PnMigrationProvider } from './pn-migration-resource.ts';
 import { runPreflight } from './preflight.ts';
@@ -300,7 +304,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
             });
           }
 
-          return { outputs: { projectId } };
+          return { projectId } satisfies CloudApplication;
         }),
     },
 

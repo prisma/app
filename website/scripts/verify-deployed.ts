@@ -54,35 +54,45 @@ if (projectId === undefined) {
   fail(`No project named '${app.name}' in this workspace — nothing has been deployed here.`);
 }
 
-const { data: services, error } = await client.GET('/v1/projects/{projectId}/compute-services', {
-  params: { path: { projectId } },
+const { data: services, error } = await client.GET('/v1/apps', {
+  params: { query: { projectId } },
 });
 if (error !== undefined || services === undefined) {
-  fail(`GET /v1/projects/${projectId}/compute-services failed: ${JSON.stringify(error)}`);
+  fail(`GET /v1/apps?projectId=${projectId} failed: ${JSON.stringify(error)}`);
 }
 
-const matches = services.data.filter((s) => s.name === siteService.name);
+let matches = services.data.filter((s) => s.name === siteService.name);
 if (matches.length === 0) {
-  fail(`Project '${app.name}' has no '${siteService.name}' compute service.`);
+  fail(`Project '${app.name}' has no '${siteService.name}' app.`);
 }
 if (matches.length > 1) {
-  // The API reports branchId: null for every compute service — production and
-  // stage alike — so a second one makes "which is production?" unanswerable
-  // here. Fail loudly rather than pick one and verify the wrong environment.
-  fail(
-    `Project '${app.name}' has ${matches.length} '${siteService.name}' compute services, and the API ` +
-      'reports branchId: null for each, so production cannot be identified. Tear down the stray ' +
-      'stage(s) (`prisma-composer destroy module.ts --stage <name>`) and re-run.\n' +
-      matches.map((s) => `  - ${s.id} ${s.serviceEndpointDomain}`).join('\n'),
+  // Same-named apps on other Branches are stage deploys; production is the
+  // one on the project's default Branch.
+  const { data: branches, error: branchesError } = await client.GET(
+    '/v1/projects/{projectId}/branches',
+    { params: { path: { projectId } } },
   );
+  if (branchesError !== undefined || branches === undefined) {
+    fail(`GET /v1/projects/${projectId}/branches failed: ${JSON.stringify(branchesError)}`);
+  }
+  const defaultBranchId = branches.data.find((b) => b.isDefault)?.id;
+  matches = matches.filter((s) => s.branchId === defaultBranchId);
+  if (matches.length !== 1) {
+    fail(
+      `Project '${app.name}' has ${matches.length} '${siteService.name}' apps on its default ` +
+        'Branch, so production cannot be identified. Tear down the stray stage(s) ' +
+        '(`prisma-composer destroy module.ts --stage <name>`) and re-run.\n' +
+        matches.map((s) => `  - ${s.id} ${s.appEndpointDomain}`).join('\n'),
+    );
+  }
 }
 
-const domain = matches[0]?.serviceEndpointDomain;
+const domain = matches[0]?.appEndpointDomain;
 if (domain === undefined || domain.length === 0) {
-  fail(`The '${siteService.name}' compute service has no endpoint domain yet.`);
+  fail(`The '${siteService.name}' app has no endpoint domain yet.`);
 }
 
-// serviceEndpointDomain may arrive with or without the scheme; tolerate either.
+// appEndpointDomain may arrive with or without the scheme; tolerate either.
 const url = /^https?:\/\//.test(domain) ? domain.replace(/\/$/, '') : `https://${domain}`;
 console.log(`Docs site: ${url}`);
 

@@ -1,7 +1,7 @@
 /** The `compute` node kind's descriptor: the four service hooks — provision, serialize, package, deploy. */
 
 import { isParamSource, type ServiceNode } from '@internal/core';
-import type { NodeDescriptor } from '@internal/core/config';
+import type { ServiceLowering } from '@internal/core/deploy';
 import * as Prisma from '@internal/lowering';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
@@ -16,7 +16,35 @@ import {
 } from '../serializer.ts';
 import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
 
-export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
+/**
+ * compute's provision → serialize/deploy handoff. `serviceId` is an
+ * `Output<string>`, not a `string`: the whole stack effect runs before Alchemy
+ * applies anything, so a yielded resource's attributes are lazy references
+ * that only resolve at apply time. It reaches `Deployment`'s
+ * `computeServiceId` unchanged — that prop takes `Input<string>`, which
+ * accepts the reference. `projectId` really is a `string`: it comes from the
+ * CLI's environment, not from a resource attribute.
+ */
+export interface ComputeProvisioned {
+  readonly serviceId: Output.Output<string>;
+  readonly projectId: string;
+}
+
+/** compute's serialize → deploy handoff: the env-var rows deploy must depend on, and the resolved port it routes to. */
+export interface ComputeSerialized {
+  readonly environment: readonly Prisma.EnvironmentVariable[];
+  readonly port: number;
+}
+
+/**
+ * Returns the PRECISE descriptor type, not the erased `NodeDescriptor`: the
+ * registry in control.ts erases it on assignment anyway (method bivariance),
+ * but s3-store composes over these hooks and needs their P/S to stay visible.
+ * Annotating this `NodeDescriptor` would force s3-store to cast them back.
+ */
+export function computeDescriptor(
+  o: ResolvedCloudOptions,
+): { readonly kind: 'service' } & ServiceLowering<ComputeProvisioned, ComputeSerialized> {
   return {
     kind: 'service' as const,
     // The service as a PLACE inside the application's Project: the App,
@@ -24,15 +52,14 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
     provision: ({ id, application }) =>
       Effect.gen(function* () {
         validateName(id, 'service name (from provision id)');
+        const projectId = projectIdOf(application);
         const svc = yield* Prisma.ComputeService(`${id}-svc`, {
-          projectId: projectIdOf(application),
+          projectId,
           name: id,
           region: o.region ?? DEFAULT_REGION,
           ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
         });
-        return {
-          outputs: { serviceId: svc.id, projectId: application.outputs['projectId'] },
-        };
+        return { serviceId: svc.id, projectId };
       }),
 
     // Two channels of rows: PARAMS (service-own literals JSON-encoded; dependency
@@ -44,7 +71,7 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
         const { address, node, graph } = ctx;
         const cls = o.branchId ? ('preview' as const) : ('production' as const);
         const branch = o.branchId !== undefined ? { branchId: o.branchId } : {};
-        const projectId = projectIdOf(provisioned);
+        const projectId = provisioned.projectId;
         const svc = node as ServiceNode;
         const records = [];
 
@@ -139,9 +166,11 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
           }
         }
 
-        // Carries the resolved port to deploy() via serialize's outputs; falls back to 3000 if unset.
+        // Carries the resolved port to deploy(); falls back to 3000 if unset.
+        // This is the only place the raw, untyped config is read, so it is the
+        // only place the fallback belongs — from here on `port` is a number.
         const port = typeof config.service['port'] === 'number' ? config.service['port'] : 3000;
-        return { outputs: { environment: records, port } };
+        return { environment: records, port };
       }),
 
     // Deterministic tar.gz (fixed mtimes/ordering) so unchanged inputs hash
@@ -160,17 +189,28 @@ export function computeDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
     deploy: ({ id }, provisioned, artifact, serialized) =>
       Effect.gen(function* () {
         const deployment = yield* Prisma.Deployment(`${id}-deploy`, {
-          computeServiceId: provisioned.outputs['serviceId'] as string,
+          computeServiceId: provisioned.serviceId,
           artifactPath: artifact.path,
           artifactHash: artifact.sha256,
-          environment: serialized.outputs['environment'] as readonly Prisma.EnvironmentVariable[],
+          environment: serialized.environment,
           // Route to the port the app actually binds (the service's `port`
           // param, resolved by serialize) — not a hardcoded constant.
-          port: typeof serialized.outputs['port'] === 'number' ? serialized.outputs['port'] : 3000,
+          port: serialized.port,
         });
+        // `url` IS published here: a Compute service's deployed URL is a
+        // public endpoint, and this descriptor is the only party that knows
+        // that. Both fields are still unresolved Output references at this
+        // point — apply resolves them before the report's runner sees them.
         return {
-          outputs: { url: deployment.deployedUrl, projectId: provisioned.outputs['projectId'] },
+          outputs: { url: deployment.deployedUrl, projectId: provisioned.projectId },
+          entities: [
+            {
+              kind: 'compute-service',
+              id: provisioned.serviceId,
+              url: deployment.deployedUrl,
+            },
+          ],
         };
       }),
-  };
+  } satisfies { readonly kind: 'service' } & ServiceLowering<ComputeProvisioned, ComputeSerialized>;
 }

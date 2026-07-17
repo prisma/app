@@ -2,13 +2,18 @@
 /**
  * Verifies a DEPLOYED env-param example: resolves the echo service's URL via
  * the Management API (state is hosted, not local files), polls it until it
- * responds, and asserts the greeting it serves is exactly the value the
- * target stage's platform var carries.
+ * responds, and asserts two things about what arrived:
+ *
+ * - the greeting it serves is exactly the value the target stage's platform
+ *   var carries (the param round trip), and
+ * - GET /logo.svg serves the asset that sits beside the entry in the built
+ *   directory (the build adapter's directory form — proving assemble copied
+ *   the whole tree, not just the entry).
  *
  *   EXPECTED_GREETING=… [ENV_PARAM_STAGE=…] [ENV_PARAM_STACK_NAME=…] bun scripts/smoke.ts
  *
  * With ENV_PARAM_STAGE set, resolves that stage's Branch and its
- * branch-scoped compute service; without it, the production service.
+ * branch-scoped app; without it, the production app.
  * Requires PRISMA_SERVICE_TOKEN (run via `pnpm smoke:deployed`, which
  * sources the deploy env file).
  */
@@ -65,34 +70,27 @@ if (branch === undefined) {
 }
 const branchId = asId(branch['id'], 'branch.id');
 
-// Compute-service names are unique per Branch, so both stages hold an "echo"
-// service in the same project-level list — and that list omits branchId, so
-// each candidate's own detail read (which carries it) picks the right one.
-const candidates = rows(await get(`/projects/${projectId}/compute-services?limit=100`)).filter(
+// App names are unique per Branch, so both stages hold an "echo" app in the
+// same project-level list — each row carries its branchId, which picks the
+// right one.
+const candidates = rows(await get(`/apps?projectId=${projectId}&limit=100`)).filter(
   (s) => s['name'] === 'echo',
 );
-let service: Record<string, unknown> | undefined;
-for (const candidate of candidates) {
-  const detail = blindCast<
-    { data?: Record<string, unknown> },
-    'the compute-service detail endpoint returns { data: {...} }'
-  >(await get(`/compute-services/${asId(candidate['id'], 'service.id')}`)).data;
-  if (detail?.['branchId'] === branchId) {
-    service = detail;
-    break;
-  }
-}
+const service = candidates.find((s) => s['branchId'] === branchId);
 if (service === undefined) {
   throw new Error(
-    `no "echo" compute service on branch "${stage ?? 'production'}" ` +
-      `(candidates: ${candidates.length})`,
+    `no "echo" app on branch "${stage ?? 'production'}" ` + `(candidates: ${candidates.length})`,
   );
 }
-const domain = service['serviceEndpointDomain'];
+const domain = service['appEndpointDomain'];
 if (typeof domain !== 'string' || domain === '')
   throw new Error('service has no endpoint domain yet');
 const url = domain.startsWith('http') ? domain : `https://${domain}/`;
 console.log(`echo URL (${stage ?? 'production'}): ${url}`);
+
+/** The marker inside src/assets/logo.svg — served only if the asset shipped beside the entry. */
+const assetMarker = 'prisma-composer-env-param-asset';
+const assetUrl = new URL('/logo.svg', url).href;
 
 // Poll: a version cold-starts after deploy (PRO-200).
 const deadline = Date.now() + 180_000;
@@ -106,6 +104,21 @@ while (Date.now() < deadline) {
     );
     if (res.ok && body.greeting === expected) {
       console.log(`ok - ${stage ?? 'production'} serves greeting ${JSON.stringify(expected)}`);
+
+      // The tree, not just the entry: fetch the entry's sibling asset. Only
+      // checked once the service is up, so a cold start can't read as a
+      // missing asset.
+      const assetRes = await fetch(assetUrl, { signal: AbortSignal.timeout(30_000) });
+      const asset = await assetRes.text();
+      if (!assetRes.ok || !asset.includes(assetMarker)) {
+        console.error(
+          `FAIL - ${assetUrl} did not serve the asset that sits beside the entry ` +
+            `(status ${assetRes.status}). The built directory did not arrive whole. ` +
+            `Body: ${asset.slice(0, 500)}`,
+        );
+        process.exit(1);
+      }
+      console.log(`ok - ${assetUrl} serves the entry's sibling asset — the whole tree arrived`);
       process.exit(0);
     }
   } catch {

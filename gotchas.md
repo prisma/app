@@ -30,6 +30,7 @@ The capture workflow is the Ignite `product-record-gotcha` skill.
 - [Idle direct-connection close kills pooled node-postgres clients — first query after idle 500s with "Connection terminated unexpectedly"](#idle-direct-connection-close-kills-pooled-node-postgres-clients--first-query-after-idle-500s-with-connection-terminated-unexpectedly)
 - [Service-to-service HTTP gets ECONNRESET while the target cold-starts from scale-to-zero](#service-to-service-http-gets-econnreset-while-the-target-cold-starts-from-scale-to-zero)
 - [Compute ingress buffers streaming responses until completion — an open SSE tail delivers nothing and 504s at 60s](#compute-ingress-buffers-streaming-responses-until-completion--an-open-sse-tail-delivers-nothing-and-504s-at-60s)
+- [planLimitReached is masked by the cold-start "not configured correctly yet" message](#planlimitreached-is-masked-by-the-cold-start-not-configured-correctly-yet-message)
 
 ---
 
@@ -441,3 +442,46 @@ Two more requirements for a trustworthy probe. **Leave ~60 s between samples** �
 - Upstream: [PRO-218](https://linear.app/prisma-company/issue/PRO-218/compute-ingress-buffers-streaming-responses-sse-cannot-deliver-edge)
 - Workaround + note: [`packages/1-prisma-cloud/2-shared-modules/streams/README.md`](packages/1-prisma-cloud/2-shared-modules/streams/README.md) — "Deployed live path: use long-poll"
 - Related: [PRO-217](https://linear.app/prisma-company/issue/PRO-217) (same ingress, cold-start face); server SSE handler: `@prisma/streams-server` `src/app_core.ts` (returns the stream `Response` immediately — upstream is not the buffer)
+
+---
+
+## planLimitReached is masked by the cold-start "not configured correctly yet" message
+
+**Filed upstream:** [FT-5227](https://linear.app/prisma-company/issue/FT-5227/planlimitreached-is-masked-by-the-cold-start-not-configured-correctly) — _"planLimitReached is masked by the cold-start 'not configured correctly yet' message"_
+**Product:** Prisma Postgres (edge proxy / plan enforcement)
+**Version:** Prisma Postgres direct connection via `postgres` (postgres.js) 3.4.9; Management API `https://api.prisma.io/v1`; observed 2026-07-16
+**First hit:** `examples/streams` — the streams module's live re-proof; the deploy died in the hosted state store's bootstrap
+**Cost:** ~40 min — two wasted deploy retries chasing a "wait a minute or two" message, then a probe to find the real cause
+
+**Symptom.** Every database in the workspace refuses connections, but the FIRST connect reports a transient-sounding problem:
+
+```
+Failed to identify your database: Your Prisma Postgres database is not configured
+correctly yet. Please contact Prisma support if the problem persists longer than a
+minute or two.
+```
+
+Retry the same DSN a few seconds later and the real, permanent cause appears:
+
+```
+Failed to identify your database: Your account has restrictions: planLimitReached
+```
+
+The Management API is no help: the project and database both read `status: "ready"`. Through Prisma Composer's hosted state store the failure surfaces two layers from its cause — `HostedStateBootstrapError: … finding/creating the prisma-composer-state project — ownership verification failed: … not configured correctly yet` — which points at the state store's own bootstrap rather than at the account.
+
+**Cause.** Two unrelated conditions share one error prefix and the first one wins on a cold database. The generic "not configured correctly yet" text is the same message [FT-5226](https://linear.app/prisma-company/issue/FT-5226) documents for a cold upstream; the plan restriction is only reported once the upstream is warm. The two want **opposite** responses — FT-5226 says retry, `planLimitReached` says stop and reclaim a database — so the message that arrives first tells you to do the wrong thing. Worse, any bounded cold-start retry (the documented FT-5226 workaround, and what deploy-time code does) spends its whole budget re-showing the misleading message and then reports the misleading message.
+
+**Workaround.** When a connect fails with "not configured correctly yet", **retry until the message changes, not just until it succeeds** — treat the text as provisional until a warm attempt confirms it. To disambiguate directly, connect to a **freshly created** database in the same workspace: a new DB connects on the first attempt while the existing ones keep failing, which points at a count limit rather than a broken database or a cold proxy. Then count databases (`GET /v1/projects` → each project's `/databases`) against the plan and reclaim or raise the limit; the restriction is workspace-wide, so an unrelated project's database fails identically — a useful second confirmation.
+
+**Reproduction.**
+
+1. Fill a workspace to its plan's database limit.
+2. Connect to any existing (idle, cold) database's direct DSN → "…not configured correctly yet…".
+3. Retry the same DSN for ~10s → `Your account has restrictions: planLimitReached`.
+4. Create a new project, connect to its default database → succeeds on attempt 1.
+
+**References.**
+
+- Upstream: [FT-5227](https://linear.app/prisma-company/issue/FT-5227/planlimitreached-is-masked-by-the-cold-start-not-configured-correctly)
+- Related: [FT-5226](https://linear.app/prisma-company/issue/FT-5226) (the cold-start message this is confused with, and whose retry workaround this defeats), [PRO-212](https://linear.app/prisma-company/issue/PRO-212) (the same API's habit of reporting the wrong field)
+- Surfaced through: [`packages/1-prisma-cloud/0-lowering/lowering/src/state/bootstrap.ts`](packages/1-prisma-cloud/0-lowering/lowering/src/state/bootstrap.ts) (`verifyOwnership`)

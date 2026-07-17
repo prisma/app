@@ -92,7 +92,7 @@ describe('assembleServices()', () => {
     expect(seen).toEqual([{ address: 'auth', cwd: CWD }]);
   });
 
-  test("the default RunAssembler routes through the config's build control — (build.extension, build.type), any community id — and forwards the address + cwd", async () => {
+  test("the default RunAssembler routes through the config's build descriptor — (build.extension, build.type), any community id — and forwards the address + cwd", async () => {
     // A made-up extension + type a community build adapter could use —
     // nothing in this package recognizes either specially; the registry the
     // config carries is the whole routing table.
@@ -141,15 +141,15 @@ describe('assembleServices()', () => {
     );
   });
 
-  test('a build routed to a non-build control throws AssembleError naming the kinds', async () => {
-    const resourceControl = Object.assign(
+  test('a build routed to a non-build descriptor throws AssembleError naming the kinds', async () => {
+    const resourceDescriptor = Object.assign(
       () => {
-        throw new Error('control body must not run');
+        throw new Error('descriptor body must not run');
       },
       { kind: 'resource' as const },
     );
     const config: PrismaAppConfig = {
-      extensions: [{ id: '@fixture/node-adapter', nodes: { node: resourceControl } }],
+      extensions: [{ id: '@fixture/node-adapter', nodes: { node: resourceDescriptor } }],
       state: emptyConfig.state,
     };
     const root = module('fixture-module', {}, ({ provision }) => {
@@ -159,7 +159,7 @@ describe('assembleServices()', () => {
     const graph = Load(root);
 
     await expect(assembleServices(graph, config, CWD)).rejects.toThrow(
-      /is a "resource" control — a service build descriptor needs a "build" control/,
+      /is a "resource" descriptor — assembling a service build needs a "build" descriptor/,
     );
   });
 });

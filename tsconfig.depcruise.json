@@ -7,6 +7,9 @@
       "@internal/foundation/assertions": [
         "./packages/0-framework/0-foundation/foundation/src/assertions.ts"
       ],
+      "@internal/foundation/secret": [
+        "./packages/0-framework/0-foundation/foundation/src/secret.ts"
+      ],
       "@internal/tsdown-config": ["./packages/0-framework/0-foundation/tsdown-config/base.ts"],
       "@internal/core/config": ["./packages/0-framework/1-core/core/src/app-config.ts"],
       "@internal/core/deploy": ["./packages/0-framework/1-core/core/src/deploy.ts"],
@@ -19,6 +22,7 @@
       "@internal/nextjs": ["./packages/0-framework/2-authoring/nextjs/src/index.ts"],
       "@internal/assemble": ["./packages/0-framework/3-tooling/assemble/src/index.ts"],
       "@internal/cli/bin": ["./packages/0-framework/3-tooling/cli/src/bin.ts"],
+      "@internal/cli/report": ["./packages/0-framework/3-tooling/cli/src/render-deployment.ts"],
       "@internal/cli": ["./packages/0-framework/3-tooling/cli/src/index.ts"],
       "@internal/lowering/postgres": [
         "./packages/1-prisma-cloud/0-lowering/lowering/src/postgres/index.ts"
@@ -39,7 +43,18 @@
       "@internal/prisma-cloud/testing": [
         "./packages/1-prisma-cloud/1-extensions/target/src/testing.ts"
       ],
+      "@internal/prisma-cloud/connection": [
+        "./packages/1-prisma-cloud/1-extensions/target/src/pg-connection.ts"
+      ],
       "@internal/prisma-cloud": ["./packages/1-prisma-cloud/1-extensions/target/src/index.ts"],
+      "@internal/storage/testing": [
+        "./packages/1-prisma-cloud/2-shared-modules/storage/src/testing.ts"
+      ],
+      "@internal/storage": ["./packages/1-prisma-cloud/2-shared-modules/storage/src/index.ts"],
+      "@internal/streams/testing": [
+        "./packages/1-prisma-cloud/2-shared-modules/streams/src/testing.ts"
+      ],
+      "@internal/streams": ["./packages/1-prisma-cloud/2-shared-modules/streams/src/index.ts"],
       "@internal/cron/scheduler-service": [
         "./packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-service.ts"
       ],
@@ -73,6 +88,7 @@
         "./packages/9-public/composer-prisma-cloud/src/cron.ts"
       ],
       "@prisma/composer-prisma-cloud": ["./packages/9-public/composer-prisma-cloud/src/index.ts"],
+      "@prisma/composer/report": ["./packages/9-public/composer/src/report.ts"],
       "@prisma/composer": ["./packages/9-public/composer/src/index.ts"]
     }
   }

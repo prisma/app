@@ -221,7 +221,7 @@ export async function run(argv: readonly string[], deps: RunDeps = {}): Promise<
     );
   }
 
-  // 4. Registry coverage: every node/build descriptor has a matching control in the config.
+  // 4. Registry coverage: every node/build in the graph has a matching descriptor in the config.
   validateRegistryCoverage(graph, config);
 
   // 5. Resolve the name.

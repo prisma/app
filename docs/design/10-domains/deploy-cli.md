@@ -168,8 +168,8 @@ every node already carries:
   imported by every adapter and by `@internal/assemble` itself).
 - **`@internal/assemble`** owns the orchestration this seam drives: routing
   every service node in the loaded graph to its registry's assemble entry
-  (one bundle per full address — the root is always a Module) and the
-  wrapper-inlining policy. The CLI is its first consumer; the future
+  (one bundle per full address — the root is always a Module). The CLI is
+  its first consumer; the future
   programmatic deploy API is its second — so its public surface carries no CLI
   concepts (no `CliError`, no argv/usage anything). It throws its own
   `AssembleError`; the CLI's `main.ts` maps it (the existing destroy-path

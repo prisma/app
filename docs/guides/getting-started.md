@@ -54,7 +54,7 @@ You'll need:
 ```sh
 mkdir my-app && cd my-app && pnpm init
 pnpm add @prisma/composer @prisma/composer-prisma-cloud arktype
-pnpm add -D tsdown typescript @types/bun
+pnpm add -D typescript @types/bun
 ```
 
 ```jsonc
@@ -80,7 +80,6 @@ This is what you're about to create:
 my-app/
 ├── module.ts                  # the root module — the app itself
 ├── prisma-composer.config.ts  # deploy config (read only by the CLI)
-├── tsdown.config.ts           # your build
 └── src/
     ├── quotes/
     │   ├── contract.ts        # the quotes service's public API, as types
@@ -271,24 +270,25 @@ them from the wiring in `module.ts`. Locally you *are* the deploy.
 
 ## 6. Build and deploy
 
-You own the build — the framework only assembles what you built. The shipped
-tsdown preset makes each entry a single self-contained file. Two services
-means two builds into two output directories (not one multi-entry build,
-which would split the shared contract code into a chunk neither output
-contains):
+You own the build — the framework only assembles what you built. It asks one
+thing of it: each entry must be a **single self-contained file**, with
+everything inlined except the runtime's own built-ins (`bun`, `bun:*`,
+`node:*`), which the deploy VM provides. Deploy copies that one file and never
+ships `node_modules`, so anything left un-inlined fails at boot.
 
-```ts
-// tsdown.config.ts
-import { prismaTsDownConfig } from '@prisma/composer/tsdown';
+Any bundler that produces such a file works; this guide uses bun. Two services
+means two separate builds — not one multi-entry build, which would split the
+shared contract code into a chunk neither output contains:
 
-export default [
-  prismaTsDownConfig({ entry: { server: 'src/quotes/server.ts' }, outDir: 'dist/quotes' }),
-  prismaTsDownConfig({ entry: { server: 'src/gateway/server.ts' }, outDir: 'dist/gateway' }),
-];
+```jsonc
+// package.json
+"scripts": {
+  "build": "bun build src/quotes/server.ts --target=bun --outfile dist/quotes/server.mjs && bun build src/gateway/server.ts --target=bun --outfile dist/gateway/server.mjs"
+}
 ```
 
 ```sh
-pnpm exec tsdown
+pnpm run build
 ```
 
 Deploying needs exactly two environment variables. Create a service token in
@@ -304,9 +304,21 @@ pnpm exec prisma-composer deploy module.ts
 
 The CLI creates a Project named `my-app` in your workspace, provisions both
 services on Prisma Compute, points the gateway's `quotes` dependency at the
-deployed quotes service, and starts everything. Each service's public URL is
-its Compute service endpoint, shown in the Console. Open the gateway's URL:
-you get a quote, served over one typed RPC hop.
+deployed quotes service, and starts everything.
+
+The deploy finishes by printing what it made — your own module names, the
+platform resource each became, and the public URLs:
+
+```
+my-app
+├─ quotes    compute-service cps_abc123
+│            https://xyz.ewr.prisma.build
+└─ gateway   compute-service cps_def456
+             https://uvw.ewr.prisma.build
+```
+
+Open the gateway's URL from that output: you get a quote, served over one
+typed RPC hop.
 
 Now try the *quotes* service directly — `curl <quotes-url>/rpc/random` — and
 you'll get `401`. That's deliberate. Deploying also gave the gateway a
@@ -347,8 +359,8 @@ your built server file, then make three changes to the server itself:
    existing client (`pg`, Bun's `SQL`, whatever you use today) from the
    injected `db.url` instead of a connection-string env var.
 
-Your build must produce a self-contained entry file — `prismaTsDownConfig`
-does that; keep your own build if it already does.
+Your build must produce a self-contained entry file — keep your own build if
+it already does.
 
 **A Next.js app.** Use the `nextjs` build adapter instead of `node`; `next
 build` with `output: 'standalone'` is the whole build:

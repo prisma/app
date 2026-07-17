@@ -247,6 +247,42 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/preflight.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "control"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/s3-credentials-resource.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "control"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/s3-credentials.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/s3-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/param.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/secret.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-service.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
@@ -295,7 +331,121 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/index.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/contract.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/storage-module.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/storage-service.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/storage-entrypoint.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/storage-server.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/handler.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/sigv4.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/pg-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/memory-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/testing.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/index.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/contract.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/streams-module.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/streams-service.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/streams-entrypoint.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/testing.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
       "glob": "packages/9-public/composer/src/deploy.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "control"
+    },
+    {
+      "glob": "packages/9-public/composer/src/report.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
@@ -389,6 +539,30 @@
       "domain": "public",
       "layer": "public",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/9-public/composer-prisma-cloud/src/storage.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/9-public/composer-prisma-cloud/src/streams.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/9-public/composer-prisma-cloud/src/storage-testing.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/9-public/composer-prisma-cloud/src/streams-testing.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "execution"
     }
   ],
   "rules": {

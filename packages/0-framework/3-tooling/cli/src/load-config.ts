@@ -105,7 +105,7 @@ export function validateConfigShape(loaded: unknown, configPath: string): Prisma
 
   return blindCast<
     PrismaAppConfig,
-    'the field-by-field checks above validate the runtime shape (extensions array with string ids + object registries, state a function); the control functions inside each registry cannot be structurally checked at runtime'
+    'the field-by-field checks above validate the runtime shape (extensions array with string ids + object registries, state a function); the descriptors inside each registry cannot be structurally checked at runtime'
   >(loaded);
 }
 

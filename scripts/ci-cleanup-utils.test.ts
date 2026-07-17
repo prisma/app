@@ -135,19 +135,19 @@ describe('deleteProjectDeep', () => {
     const log: string[] = [];
     const { http, calls } = scriptedHttp({
       'DELETE /projects/proj_1': [ACTIVE_DEPLOYMENT, OK],
-      'GET /projects/proj_1/compute-services': [SERVICES],
-      'DELETE /compute-services/svc_a': [OK],
-      'DELETE /compute-services/svc_b': [OK],
+      'GET /apps?projectId=proj_1': [SERVICES],
+      'DELETE /apps/svc_a': [OK],
+      'DELETE /apps/svc_b': [OK],
     });
     assert.equal(await deleteProjectDeep(http, PROJECT, fastOpts(log)), true);
     assert.deepEqual(calls, [
       'DELETE /projects/proj_1',
-      'GET /projects/proj_1/compute-services?limit=100',
-      'DELETE /compute-services/svc_a',
-      'DELETE /compute-services/svc_b',
+      'GET /apps?projectId=proj_1&limit=100',
+      'DELETE /apps/svc_a',
+      'DELETE /apps/svc_b',
       'DELETE /projects/proj_1',
     ]);
-    assert.ok(log.some((l) => l.includes('tearing its compute services down')));
+    assert.ok(log.some((l) => l.includes('tearing its apps down')));
     assert.ok(log.some((l) => l.includes('"widgets"')));
     assert.ok(log.some((l) => l.includes('"worker"')));
   });
@@ -155,12 +155,12 @@ describe('deleteProjectDeep', () => {
   it('retries a service delete only while the platform says "did not reach a delete-safe state"', async () => {
     const { http, calls } = scriptedHttp({
       'DELETE /projects/proj_1': [ACTIVE_DEPLOYMENT, OK],
-      'GET /projects/proj_1/compute-services': [SERVICES],
-      'DELETE /compute-services/svc_a': [NOT_DELETE_SAFE, NOT_DELETE_SAFE, OK],
-      'DELETE /compute-services/svc_b': [GONE],
+      'GET /apps?projectId=proj_1': [SERVICES],
+      'DELETE /apps/svc_a': [NOT_DELETE_SAFE, NOT_DELETE_SAFE, OK],
+      'DELETE /apps/svc_b': [GONE],
     });
     assert.equal(await deleteProjectDeep(http, PROJECT, fastOpts()), true);
-    assert.equal(calls.filter((c) => c === 'DELETE /compute-services/svc_a').length, 3);
+    assert.equal(calls.filter((c) => c === 'DELETE /apps/svc_a').length, 3);
   });
 
   it('does NOT retry a service delete on a non-delete-safe error — logs and moves on', async () => {
@@ -168,22 +168,22 @@ describe('deleteProjectDeep', () => {
     const boom: HttpResponse = { status: 500, ok: false, body: 'kaboom' };
     const { http, calls } = scriptedHttp({
       'DELETE /projects/proj_1': [ACTIVE_DEPLOYMENT, OK],
-      'GET /projects/proj_1/compute-services': [SERVICES],
-      'DELETE /compute-services/svc_a': [boom],
-      'DELETE /compute-services/svc_b': [OK],
+      'GET /apps?projectId=proj_1': [SERVICES],
+      'DELETE /apps/svc_a': [boom],
+      'DELETE /apps/svc_b': [OK],
     });
     // svc_b still gets deleted and the project delete still retried.
     assert.equal(await deleteProjectDeep(http, PROJECT, fastOpts(log)), true);
-    assert.equal(calls.filter((c) => c === 'DELETE /compute-services/svc_a').length, 1);
+    assert.equal(calls.filter((c) => c === 'DELETE /apps/svc_a').length, 1);
     assert.ok(log.some((l) => l.includes('"widgets" delete failed: 500')));
   });
 
   it('retries the post-teardown project delete (eventually consistent), bounded', async () => {
     const { http, calls } = scriptedHttp({
       'DELETE /projects/proj_1': [ACTIVE_DEPLOYMENT, ACTIVE_DEPLOYMENT, ACTIVE_DEPLOYMENT, OK],
-      'GET /projects/proj_1/compute-services': [SERVICES],
-      'DELETE /compute-services/svc_a': [OK],
-      'DELETE /compute-services/svc_b': [OK],
+      'GET /apps?projectId=proj_1': [SERVICES],
+      'DELETE /apps/svc_a': [OK],
+      'DELETE /apps/svc_b': [OK],
     });
     assert.equal(await deleteProjectDeep(http, PROJECT, fastOpts()), true);
     // first attempt + 3 post-teardown retries (attempts=3 → the 4th scripted OK lands on the 3rd retry)
@@ -199,9 +199,9 @@ describe('deleteProjectDeep', () => {
         ACTIVE_DEPLOYMENT,
         ACTIVE_DEPLOYMENT,
       ],
-      'GET /projects/proj_1/compute-services': [SERVICES],
-      'DELETE /compute-services/svc_a': [OK],
-      'DELETE /compute-services/svc_b': [OK],
+      'GET /apps?projectId=proj_1': [SERVICES],
+      'DELETE /apps/svc_a': [OK],
+      'DELETE /apps/svc_b': [OK],
     });
     assert.equal(await deleteProjectDeep(http, PROJECT, fastOpts(log)), false);
     assert.ok(log.some((l) => l.includes('still failing')));
@@ -216,13 +216,13 @@ describe('deleteProjectDeep', () => {
     assert.ok(log.some((l) => l.includes('403')));
   });
 
-  it('fails soft when the compute-service listing itself fails', async () => {
+  it('fails soft when the app listing itself fails', async () => {
     const log: string[] = [];
     const { http } = scriptedHttp({
       'DELETE /projects/proj_1': [ACTIVE_DEPLOYMENT],
-      'GET /projects/proj_1/compute-services': [{ status: 500, ok: false, body: 'oops' }],
+      'GET /apps?projectId=proj_1': [{ status: 500, ok: false, body: 'oops' }],
     });
     assert.equal(await deleteProjectDeep(http, PROJECT, fastOpts(log)), false);
-    assert.ok(log.some((l) => l.includes('could not list compute services')));
+    assert.ok(log.some((l) => l.includes('could not list apps')));
   });
 });

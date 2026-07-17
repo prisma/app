@@ -47,13 +47,13 @@ const originalCwd = process.cwd();
 
 /**
  * The fake config: registries covering the fixture's service + build
- * (extension, type) keys. The control bodies are never invoked here — run()
+ * (extension, type) keys. The descriptor bodies are never invoked here — run()
  * only validates coverage; the service SPI runs inside the (faked) alchemy
  * stack, and the build assemble is substituted by the runAssembler seam.
  */
 function fakeConfig(): PrismaAppConfig {
   const unused = () => {
-    throw new Error('control body must not run inside run() — only coverage is checked');
+    throw new Error('descriptor body must not run inside run() — only coverage is checked');
   };
   return {
     extensions: [
