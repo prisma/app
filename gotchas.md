@@ -391,6 +391,8 @@ The window is small and measurable. In `examples/streams`' Compute version logs,
 
 **But do not push this into application code as a matter of course.** Retrying costs every consumer of every Compute service a hand-rolled, platform-specific backoff; it cannot cover the non-idempotent calls, which is where this was actually observed to land; and it hides the defect from the people who would otherwise fix it. `examples/streams` carries no such retry deliberately — it calls the streams service with a plain `fetch` and lets a failure surface as a 502 naming its cause, so the platform behaviour stays visible. The consequence is that its first request after an idle spell may intermittently fail, which is the honest state of the platform today. The userspace-boilerplate cost is filed as [PRO-219](https://linear.app/prisma-company/issue/PRO-219/scale-to-zero-cold-starts-force-platform-specific-retry-boilerplate); an always-on / min-instances option, or a reliable hold, would remove the window and the boilerplate with it. Neither exists today.
 
+**Removal guard.** The CI "Cold-start canary (PRO-217)" job (`scripts/cold-start-canary.ts`, in the E2E deploy workflow) touches freshly promoted instances each run and passes only while a close still occurs — when it reports all touches held, that is the signal to remove `createStreamsClient`'s `IDEMPOTENT_BACKOFF` (the PRO-219 compensation) and the canary itself, the same contract as FT-5226's cold-connect canary.
+
 **Reproduction.**
 
 1. Deploy two Compute services, A calling B over HTTP on each request to A.

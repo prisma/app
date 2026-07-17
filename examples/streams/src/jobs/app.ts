@@ -31,29 +31,49 @@ export function createJobsApp(events: StreamsClient): (req: Request) => Promise<
     return created;
   };
 
-  const append = async (req: Request): Promise<Response> => {
+  const isStreamMissing = (error: unknown): boolean =>
+    typeof error === 'object' && error !== null && 'status' in error && error.status === 404;
+
+  // Ensure-then-run, healing a vanished stream: the memo says "created", but
+  // the durable tier is the truth — if an operation 404s, the stream is gone
+  // (a 404'd request provably applied nothing, so re-running is safe even for
+  // an append), so re-create and retry once.
+  const withStream = async <T>(op: () => Promise<T>): Promise<T> => {
     await ensureStream();
+    try {
+      return await op();
+    } catch (error) {
+      if (!isStreamMissing(error)) throw error;
+      created = undefined;
+      await ensureStream();
+      return op();
+    }
+  };
+
+  const append = async (req: Request): Promise<Response> => {
     const event = await req.json();
     // The client never retries appends (no idempotency key upstream — a
     // failed request is indistinguishable from one that applied). The caller
     // retries, because only it knows whether a duplicate is acceptable.
-    await events.append(STREAM, event);
+    await withStream(() => events.append(STREAM, event));
     return Response.json({ appended: event }, { status: 201 });
   };
 
   const read = async (url: URL): Promise<Response> => {
-    await ensureStream();
     const offset = url.searchParams.get('offset') ?? undefined;
-    const result = await events.read(STREAM, offset !== undefined ? { offset } : undefined);
+    const result = await withStream(() =>
+      events.read(STREAM, offset !== undefined ? { offset } : undefined),
+    );
     return Response.json({ events: result.events, nextOffset: result.nextOffset });
   };
 
   const tail = async (url: URL): Promise<Response> => {
-    await ensureStream();
     const timeout = url.searchParams.get('timeout');
-    const result = await events.tail(STREAM, {
-      ...(timeout !== null ? { timeoutMs: Number(timeout) * 1000 } : {}),
-    });
+    const result = await withStream(() =>
+      events.tail(STREAM, {
+        ...(timeout !== null ? { timeoutMs: Number(timeout) * 1000 } : {}),
+      }),
+    );
     return Response.json({ events: result.events, timedOut: result.timedOut });
   };
 

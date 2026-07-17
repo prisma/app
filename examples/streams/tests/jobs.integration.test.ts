@@ -128,6 +128,21 @@ describe('jobs app (against the local streams stand-in)', () => {
     expect(body.events).toEqual([{ kind: 'finished', id: 1 }]);
   }, 15_000);
 
+  test('a stream lost from the durable tier heals: the app re-creates and the append lands', async () => {
+    await app(post({ kind: 'before-loss' }));
+    // Delete the stream out from under the app's memoized create (the
+    // stand-in needs no auth). A fresh streams instance restoring an older
+    // store is the deployed shape of the same loss.
+    const del = await fetch(`${server.exports.http.url}/v1/stream/jobs`, { method: 'DELETE' });
+    expect(del.ok).toBe(true);
+
+    const res = await app(post({ kind: 'after-loss' }));
+    expect(res.status).toBe(201);
+    const read = await app(new Request('http://app/jobs'));
+    const body = (await read.json()) as { events: { kind: string }[] };
+    expect(body.events.map((e) => e.kind)).toEqual(['after-loss']);
+  });
+
   test('an unknown route is 404 and /health is served', async () => {
     expect((await app(new Request('http://app/nope'))).status).toBe(404);
     expect((await app(new Request('http://app/health'))).status).toBe(200);

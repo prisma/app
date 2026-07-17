@@ -70,7 +70,8 @@ const JSON_CONTENT_TYPE = 'application/json';
  * so a real protocol error (401, 404, 409) surfaces on the first try. The
  * bound is ATTEMPTS, not wall-clock: each wait is jittered up to the current
  * delay, and a server Retry-After acts as a per-wait floor (capped upstream
- * at 1h). Appends never get any of this (see `append`).
+ * at 1h). Appends never get any of this (see `append`). Remove when CI's
+ * "Cold-start canary (PRO-217)" goes clean — it exists to flag exactly that.
  */
 const IDEMPOTENT_BACKOFF = {
   ...BackoffDefaults,

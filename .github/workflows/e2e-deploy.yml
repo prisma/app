@@ -91,3 +91,30 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm install --frozen-lockfile
       - run: bun scripts/cold-connect-canary.ts
+
+  cold-start-canary:
+    name: Cold-start canary (PRO-217)
+    runs-on: ubuntu-latest
+    # After the FT-5226 canary for the same quota-serialization reason as the
+    # deploys. Fails when the ingress no longer closes first-touch connections
+    # to a booting instance — the signal to remove createStreamsClient's
+    # IDEMPOTENT_BACKOFF (the PRO-219 compensation) and this canary. The bug
+    # being PRESENT is today's normal and passes.
+    needs: cold-connect-canary
+    timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      PRISMA_SERVICE_TOKEN: ${{ secrets.PRISMA_SERVICE_TOKEN }}
+      PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-verify-destroy
+        with:
+          working-directory: examples/streams
+          build-filter: '@prisma/example-streams...'
+          stack-name: streams-canary-ci-${{ github.run_id }}
+          verify-command: bun "${{ github.workspace }}/scripts/cold-start-canary.ts"
+          destroy-label: 'streams-canary '
+          sweep-prefixes: storefront-auth pn-widgets hello canary streams-canary
