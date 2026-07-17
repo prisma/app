@@ -147,3 +147,24 @@ smoke, destroy).
   (slice 2's reserved shape)
 - Templates: `s3-credentials-resource.ts`, `s3-credentials.ts`,
   `descriptors/s3-store.ts`, `s3-store.ts` (service factory)
+
+> **Amendment 3 (2026-07-17, Will): protocol logic ships in OUR client lib.**
+> Requirement, verbatim in effect: the PR will not be accepted with Durable
+> Streams protocol logic (URL layout, bearer scheme, JSON-array appends,
+> offset conventions, long-poll dance) hand-rolled in a user application. It
+> must live in the client library Composer offers users — the same way RPC
+> users don't do their own request encoding (`rpc()` hydrates to a client via
+> `makeClient`).
+>
+> Shape (pending the upstream check's findings): wrap
+> `@durable-streams/client` (ElectricSQL's canonical protocol client;
+> supports per-poll headers for auth, live long-poll/sse, pluggable fetch) in
+> a streams client shipped by `@internal/streams`. `durableStreams()`
+> hydrates to that client (RPC parity); the factory is also exported
+> standalone so local dev/tests can wrap the stand-in URL without load().
+> The wrapper is the home for platform compensations, each annotated with its
+> ticket: auth from the binding, live tail defaults to long-poll while
+> PRO-218 stands, cold-start retry for idempotent calls only while PRO-219
+> stands (appends never retried — no idempotency key upstream). The example
+> reduces to app logic over the client. Conformance harnesses stay raw-fetch
+> (they test the server, not our client).
