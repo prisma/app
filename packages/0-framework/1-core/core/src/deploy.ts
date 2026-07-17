@@ -152,10 +152,20 @@ export interface DeployedPrimitive {
  */
 export type ReportedPrimitive = Input<DeployedPrimitive>;
 
-/** What a node's final lowering phase produces: wiring for dependents, primitives for reporting. */
+/**
+ * What a node's final lowering phase produces: wiring for dependents,
+ * primitives for reporting.
+ *
+ * `primitives` is REQUIRED, not optional. "This node became no reportable
+ * platform primitive" is a claim, and an optional field lets a descriptor make
+ * it by saying nothing at all — no error, no type complaint, no failing test.
+ * That is the shared bag's sin in miniature (ADR-0033): a claim made
+ * anonymously, with nothing recording that a claim was made. `[]` costs one
+ * token and puts the assertion on the record where a reviewer can see it.
+ */
 export interface LoweredResult {
   readonly wiring: WiringOutputs;
-  readonly primitives?: readonly ReportedPrimitive[];
+  readonly primitives: readonly ReportedPrimitive[];
 }
 
 /** What one graph node became — the deploy subsystem's own result type. In-process only (it holds the node itself, so it never crosses the stack boundary). */
@@ -637,7 +647,7 @@ export function lowering(
       if (descriptor.kind === 'resource') {
         const result = yield* descriptor(ctx);
         lowered.set(id, result.wiring);
-        entries.push({ address: id, primitives: result.primitives ?? [] });
+        entries.push({ address: id, primitives: result.primitives });
         continue;
       }
       if (descriptor.kind !== 'service') {
@@ -665,7 +675,7 @@ export function lowering(
       });
       const result = yield* descriptor.deploy(ctx, provisionedNode, artifact, serialized);
       lowered.set(id, result.wiring);
-      entries.push({ address: id, primitives: result.primitives ?? [] });
+      entries.push({ address: id, primitives: result.primitives });
     }
 
     // The report is assembled ONLY when a caller asked for one. This
