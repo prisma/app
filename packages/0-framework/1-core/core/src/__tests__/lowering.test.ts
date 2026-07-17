@@ -10,8 +10,10 @@ import {
   type Artifact,
   type Bundle,
   buildConfig,
+  joinDeployment,
   type LowerContext,
   LowerError,
+  type LoweredResult,
   type LowerOptions,
   lower,
   lowering,
@@ -140,9 +142,12 @@ function fakeExtension(opts: { provisions?: ReadonlyMap<symbol, ProvisionerDescr
     },
     nodes: {
       'fake/db': Object.assign(
-        (ctx: LowerContext): Effect.Effect<WiringOutputs, unknown, unknown> => {
+        (ctx: LowerContext): Effect.Effect<LoweredResult, unknown, unknown> => {
           calls.push({ phase: 'resource', id: ctx.id, type: ctx.node.type });
-          return Effect.succeed({ url: `db://${ctx.id}` });
+          return Effect.succeed({
+            wiring: { url: `db://${ctx.id}` },
+            primitives: [{ kind: 'fake-db', id: `${ctx.id}#db` }],
+          });
         },
         { kind: 'resource' as const },
       ),
@@ -185,8 +190,10 @@ function fakeExtension(opts: { provisions?: ReadonlyMap<symbol, ProvisionerDescr
             environment: serialized.environment,
           });
           return Effect.succeed({
-            url: `https://${ctx.id}.example`,
-            projectId: provisioned.projectId,
+            wiring: { url: `https://${ctx.id}.example`, projectId: provisioned.projectId },
+            primitives: [
+              { kind: 'fake-compute', id: provisioned.serviceId, url: `https://${ctx.id}.example` },
+            ],
           });
         },
       } satisfies { readonly kind: 'service' } & ServiceLowering<FakeProvisioned, FakeSerialized>,
@@ -1076,6 +1083,76 @@ describe('provision phase (ADR-0031): resolving a provisioned param against the 
     expect(error.message).toContain('secondToken');
     // Nothing is minted — the deploy fails before any provisioner runs.
     expect(provisioner.calls).toHaveLength(0);
+  });
+});
+
+describe('joinDeployment', () => {
+  // The Action's input carries addresses + plain primitives only — never graph
+  // nodes, because the plan hashes the resolved input and a node holds
+  // functions and Standard Schemas. This join is what puts the node back,
+  // reading it from the graph the runner holds by closure.
+  const twoNodeGraph = () => {
+    const root = module('shop', {}, (h) => {
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(app('fake/compute', { db: dbEnd() }), { id: 'auth', deps: { db } });
+      return {};
+    });
+    return Load(root);
+  };
+
+  test('puts each entry back together with its graph node, preserving entry order', () => {
+    const graph = twoNodeGraph();
+    const entries = [
+      { address: 'db', primitives: [{ kind: 'fake-db', id: 'db#1' }] },
+      { address: 'auth', primitives: [{ kind: 'fake-compute', id: 'svc#1', url: 'https://a' }] },
+    ];
+
+    const results = joinDeployment(graph, entries);
+
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.address)).toEqual(['db', 'auth']);
+    expect(results[0]?.node.name).toBe('db');
+    expect(results[1]?.node.name).toBe('test-service');
+    expect(results[1]?.primitives).toEqual([
+      { kind: 'fake-compute', id: 'svc#1', url: 'https://a' },
+    ]);
+  });
+
+  test('skips an address the graph no longer holds — entries are data, the graph is truth', () => {
+    const graph = twoNodeGraph();
+    const entries = [
+      { address: 'db', primitives: [] },
+      { address: 'ghost', primitives: [{ kind: 'fake-compute', id: 'gone#1' }] },
+    ];
+
+    const results = joinDeployment(graph, entries);
+
+    expect(results.map((r) => r.address)).toEqual(['db']);
+  });
+
+  test('a node that reported no primitives still yields a result — it deployed, it just published nothing', () => {
+    const graph = twoNodeGraph();
+
+    const results = joinDeployment(graph, [{ address: 'auth', primitives: [] }]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.primitives).toEqual([]);
+  });
+
+  test('no entries yields no results', () => {
+    expect(joinDeployment(twoNodeGraph(), [])).toEqual([]);
+  });
+});
+
+describe('lowering() — the report path', () => {
+  test('without opts.report, lowering declares no action and stays sync-runnable', () => {
+    const { config } = fakeExtension();
+    const root = singleServiceWithDbModule();
+
+    // The assertion IS that this runs synchronously: constructing the Action
+    // would drag alchemy's Stack context into the requirements and runSync
+    // would die. `run()` is Effect.runSync.
+    expect(run(lowering(root, config, opts(svcBundles)))).toBeUndefined();
   });
 });
 
