@@ -17,6 +17,12 @@
       "@internal/node": ["./packages/0-framework/2-authoring/node/src/index.ts"],
       "@internal/nextjs/control": ["./packages/0-framework/2-authoring/nextjs/src/control.ts"],
       "@internal/nextjs": ["./packages/0-framework/2-authoring/nextjs/src/index.ts"],
+      "@internal/tanstack-start/control": [
+        "./packages/0-framework/2-authoring/tanstack-start/src/control.ts"
+      ],
+      "@internal/tanstack-start": [
+        "./packages/0-framework/2-authoring/tanstack-start/src/index.ts"
+      ],
       "@internal/assemble": ["./packages/0-framework/3-tooling/assemble/src/index.ts"],
       "@internal/cli/bin": ["./packages/0-framework/3-tooling/cli/src/bin.ts"],
       "@internal/cli": ["./packages/0-framework/3-tooling/cli/src/index.ts"],
@@ -57,6 +63,10 @@
       "@prisma/composer/node": ["./packages/9-public/composer/src/node.ts"],
       "@prisma/composer/nextjs/control": ["./packages/9-public/composer/src/nextjs-control.ts"],
       "@prisma/composer/nextjs": ["./packages/9-public/composer/src/nextjs.ts"],
+      "@prisma/composer/tanstack-start/control": [
+        "./packages/9-public/composer/src/tanstack-start-control.ts"
+      ],
+      "@prisma/composer/tanstack-start": ["./packages/9-public/composer/src/tanstack-start.ts"],
       "@prisma/composer-prisma-cloud/control": [
         "./packages/9-public/composer-prisma-cloud/src/control.ts"
       ],

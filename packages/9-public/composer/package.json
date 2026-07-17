@@ -2,7 +2,7 @@
   "name": "@prisma/composer",
   "version": "0.1.0",
   "type": "module",
-  "description": "Prisma Composer — build a Prisma App by composing Modules. Core authoring, deploy pipeline, the prisma-composer CLI, and the rpc/node/nextjs authoring surfaces.",
+  "description": "Prisma Composer — build a Prisma App by composing Modules. Core authoring, deploy pipeline, the prisma-composer CLI, and the rpc/node/nextjs/tanstack-start authoring surfaces.",
   "bin": {
     "prisma-composer": "./dist/bin.mjs"
   },
@@ -18,6 +18,8 @@
     "./node/control": "./dist/node-control.mjs",
     "./nextjs": "./dist/nextjs.mjs",
     "./nextjs/control": "./dist/nextjs-control.mjs",
+    "./tanstack-start": "./dist/tanstack-start.mjs",
+    "./tanstack-start/control": "./dist/tanstack-start-control.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -48,6 +50,7 @@
     "@internal/nextjs": "workspace:0.1.0",
     "@internal/node": "workspace:0.1.0",
     "@internal/rpc": "workspace:0.1.0",
+    "@internal/tanstack-start": "workspace:0.1.0",
     "@internal/tsdown-config": "workspace:0.1.0",
     "@types/node": "^25.9.3",
     "tsdown": "^0.22.4",

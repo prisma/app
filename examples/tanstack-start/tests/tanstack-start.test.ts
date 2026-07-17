@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { assemble } from '@prisma/composer/node/control';
+import { assembleTanStackStart } from '@prisma/composer/tanstack-start/control';
 import webService from '../src/service.ts';
 
 const tmpDirs: string[] = [];
@@ -51,7 +51,11 @@ describe('TanStack Start directory build', () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'composer-tanstack-start-'));
     tmpDirs.push(cwd);
 
-    const artifact = await assemble({ build: webService.build, address: 'web', cwd });
+    const artifact = await assembleTanStackStart({
+      build: webService.build,
+      address: 'web',
+      cwd,
+    });
 
     expect(artifact.entry).toBe('bundle/server/index.mjs');
     expect(fs.existsSync(path.join(artifact.dir, 'main.mjs'))).toBe(true);
@@ -64,7 +68,11 @@ describe('TanStack Start directory build', () => {
   test('the built Nitro server renders SSR and serves its public tree', async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'composer-tanstack-start-'));
     tmpDirs.push(cwd);
-    const artifact = await assemble({ build: webService.build, address: 'web', cwd });
+    const artifact = await assembleTanStackStart({
+      build: webService.build,
+      address: 'web',
+      cwd,
+    });
 
     const port = await freePort();
     const child = Bun.spawn([process.execPath, path.join(artifact.dir, artifact.entry)], {

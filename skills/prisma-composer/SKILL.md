@@ -46,7 +46,7 @@ Two packages, and only two, appear in your `package.json`:
 
 | Package | Provides |
 | --- | --- |
-| `@prisma/composer` | Core authoring: `module`, `secret`, params, `/rpc`, `/node`, `/nextjs`, `/config`, `/testing`, the `prisma-composer` CLI |
+| `@prisma/composer` | Core authoring: `module`, `secret`, params, `/rpc`, `/node`, `/nextjs`, `/tanstack-start`, `/config`, `/testing`, the `prisma-composer` CLI |
 | `@prisma/composer-prisma-cloud` | The Prisma Cloud target: `compute`, `postgres`, `envSecret`, `envParam`, `/control`, `/testing`, and the shared `/cron`, `/storage`, `/streams`, `/prisma-next` modules |
 
 ## Anatomy of a service
@@ -224,21 +224,20 @@ contain no symlinks (the packager rejects them — assembly fails and names the
 link), and `entry` must be a file inside `dir` (`../` is an error, not an
 escape). Omit `dir` for the single-file form.
 
-TanStack Start's Nitro `node-server` build uses this directory form. Preserve
-the complete output — the server entry imports sibling chunks and serves
-client/public assets from the same tree:
+For TanStack Start, use the dedicated adapter and name the app root where
+Nitro writes `.output`:
 
 ```ts
-build: node({
+build: tanstackStart({
   module: import.meta.url,
-  dir: '../.output',
-  entry: 'server/index.mjs',
+  appDir: '..',
 })
 ```
 
-Run `vite build` first and register `nodeBuild()` in the deploy config. Never
-point the single-file form at `.output/server/index.mjs`; that drops the rest
-of Nitro's runnable output.
+Run `vite build` first and register `tanstackStartBuild()` from
+`@prisma/composer/tanstack-start/control` in the deploy config. It validates
+`.output/nitro.json`, requires the `node-server` preset, reads `serverEntry`,
+and preserves Nitro's complete server/client/public tree.
 
 For Next.js, `next build` with `output: 'standalone'` is the whole build;
 `nextjs({ module, appDir })` tells the deploy where the app root is.
@@ -265,6 +264,9 @@ export default defineConfig({
 
 Add `nextjsBuild()` from `@prisma/composer/nextjs/control` to `extensions`
 when the app contains a Next.js service.
+
+Add `tanstackStartBuild()` from `@prisma/composer/tanstack-start/control` when
+the app contains a TanStack Start service.
 
 ## Databases
 

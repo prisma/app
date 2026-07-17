@@ -20,6 +20,8 @@ export default defineConfig([
       'node-control': 'src/node-control.ts',
       nextjs: 'src/nextjs.ts',
       'nextjs-control': 'src/nextjs-control.ts',
+      'tanstack-start': 'src/tanstack-start.ts',
+      'tanstack-start-control': 'src/tanstack-start-control.ts',
     },
     exports: false,
     clean: true,

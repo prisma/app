@@ -1,8 +1,8 @@
 import { defineConfig } from '@prisma/composer/config';
-import { nodeBuild } from '@prisma/composer/node/control';
+import { tanstackStartBuild } from '@prisma/composer/tanstack-start/control';
 import { prismaCloud, prismaState } from '@prisma/composer-prisma-cloud/control';
 
 export default defineConfig({
-  extensions: [prismaCloud(), nodeBuild()],
+  extensions: [prismaCloud(), tanstackStartBuild()],
   state: () => prismaState(),
 });

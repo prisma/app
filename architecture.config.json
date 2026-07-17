@@ -115,6 +115,18 @@
       "plane": "control"
     },
     {
+      "glob": "packages/0-framework/2-authoring/tanstack-start/src/index.ts",
+      "domain": "framework",
+      "layer": "authoring",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/0-framework/2-authoring/tanstack-start/src/control.ts",
+      "domain": "framework",
+      "layer": "authoring",
+      "plane": "control"
+    },
+    {
       "glob": "packages/0-framework/3-tooling/assemble/src/**",
       "domain": "framework",
       "layer": "tooling",
