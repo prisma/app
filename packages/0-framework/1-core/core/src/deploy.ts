@@ -326,7 +326,7 @@ export function buildConfig(
       // (e.g. `deployment.deployedUrl`): lazy symbolic references that only
       // resolve when Alchemy applies the stack, which is strictly after this
       // whole effect runs. No Standard Schema can validate one. Checking that
-      // a value EXISTS is the most this seam can honestly do.
+      // a value EXISTS is the most that can honestly be checked here.
       //
       // `=== undefined` (not `name in producedOutputs`): a producer explicitly
       // writing `undefined` has supplied nothing, matching resolveParam.

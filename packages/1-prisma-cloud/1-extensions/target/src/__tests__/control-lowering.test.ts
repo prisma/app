@@ -211,7 +211,7 @@ const configFor = (descriptor: Descriptor) => ({
   },
 });
 
-describe('projectIdOf — the extension seam guard', () => {
+describe("projectIdOf — narrowing ctx.application to this extension's own product", () => {
   test("accepts this extension's own application product", () => {
     expect(projectIdOf({ projectId: 'shop-project-id' })).toBe('shop-project-id');
   });
@@ -219,15 +219,16 @@ describe('projectIdOf — the extension seam guard', () => {
   // ctx.application is `unknown`: core never reads the application hook's
   // product and cannot type it. Anything that isn't prisma-cloud's own product
   // — most importantly `undefined`, which is what core hands a node whose
-  // extension declares no application hook — must fail here, naming the seam,
-  // rather than surfacing as `undefined` inside a deployed service's env.
+  // extension declares no application hook — must fail here, naming the hook
+  // that didn't run, rather than surfacing as `undefined` inside a deployed
+  // service's env.
   test.each([
     ['undefined (the extension declared no application hook)', undefined],
     ['null', null],
     ['a non-object', 'shop-project-id'],
     ['an object without projectId', { branchId: 'b_1' }],
     ['an object whose projectId is not a string', { projectId: 42 }],
-  ])('throws its seam error on %s', (_label, value) => {
+  ])('throws, naming the hook that must run, on %s', (_label, value) => {
     expect(() => projectIdOf(value)).toThrow(/prisma-cloud: ctx\.application/);
     expect(() => projectIdOf(value)).toThrow(/application hook must run before any node lowers/);
   });

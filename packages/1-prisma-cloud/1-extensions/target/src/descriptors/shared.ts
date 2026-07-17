@@ -48,7 +48,7 @@ export function isCloudApplication(value: unknown): value is CloudApplication {
   );
 }
 
-/** Narrows ctx.application at the extension seam; throws naming the seam when the hook didn't run. */
+/** Narrows `ctx.application`, which core hands over as `unknown`, to this extension's own product; throws naming the hook when it hasn't run. */
 export function projectIdOf(application: unknown): string {
   if (!isCloudApplication(application)) {
     throw new Error(
