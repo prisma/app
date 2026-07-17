@@ -1,0 +1,57 @@
+---
+description: "Public package entrypoints live in src/exports/; the exports map is generated. Read before adding/moving a subpath or editing a tsdown.config.ts entry list."
+globs: ["packages/**/tsdown.config.ts", "packages/**/src/exports/**", "architecture.config.json"]
+alwaysApply: false
+---
+
+# Public entrypoints live in `src/exports/`
+
+The public surface of a package is exactly the files under `src/exports/` — one
+file per published subpath. Everything else under `src/` is internal. See
+[ADR-0033](../../docs/design/90-decisions/ADR-0033-public-entrypoints-live-in-src-exports.md).
+
+## Rules
+
+- **Only `src/exports/*` is public.** Internal implementation stays at the `src/`
+  root (or subdirs). Never add a public subpath by pointing tsdown at a root file.
+- **tsdown `entry` lists only `src/exports/*` files, as OBJECT entries with
+  explicit names.** The name is the subpath and the flat `dist/` filename:
+  `index` → `.` → `dist/index.mjs`; `control` → `./control` → `dist/control.mjs`.
+  Do not use array entries — the name is what keeps the published key and dist
+  filename stable across a move.
+- **Never hand-edit a generated `package.json#exports`.** The base config
+  `@internal/tsdown-config` generates it (strips the `exports/` prefix,
+  `enabled: 'local-only'`). The `exclude: [/^bin$/]` there keeps a `bin` entry
+  building but non-importable.
+
+## Adding a subpath
+
+1. Add `src/exports/<name>.ts`.
+2. Add the object entry `{ <name>: 'src/exports/<name>.ts' }` to the package's
+   `tsdown.config.ts`.
+3. Build; commit the regenerated `package.json#exports` (do not hand-edit it).
+4. Declare its plane in `architecture.config.json` with a **non-overlapping**
+   per-file glob (`src/exports/<name>.ts → <plane>`). There is no `src/**`
+   fallback — dependency-cruiser has no glob precedence, so overlapping globs put
+   a file in two planes and break enforcement.
+
+## Exceptions that keep `exports: false` + a hand-maintained map
+
+- **Multi-pass packages** (`cron`, `storage`, `streams`): several tsdown passes
+  build the `*-entrypoint` standalone; generation would clobber the map across
+  passes. Repoint only the entry SOURCE paths to `src/exports/…`; keep every pass.
+- **The two published packages** (`@prisma/composer`,
+  `@prisma/composer-prisma-cloud`): the published API contract (bin field / 9-pass
+  build). Keep the hand-maintained map and the multi-pass config.
+
+## Moving a file that backs a shared chunk
+
+Moving a service file (one both `index` and a sibling entry import) into
+`src/exports/` rehashes an internal content-hashed rolldown chunk — expected, not
+a regression. The invariant to hold is **entry filenames + `package.json#exports`
+byte-identical**; internal chunk names may churn (private packages never ship them).
+
+## After adding or editing a rule
+
+Run `pnpm rules:sync` (regenerates the `.claude`/`.cursor` symlink trees) and
+confirm `pnpm lint:rules:symlinks`.
