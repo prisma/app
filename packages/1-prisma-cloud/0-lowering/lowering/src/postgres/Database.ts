@@ -49,23 +49,26 @@ export const DatabaseProvider = () =>
                 }),
               )
             : undefined;
-          let result: DatabaseAttributes;
-          if (observed) {
-            result = { id: observed.data.id, name: observed.data.name };
-          } else {
+          if (!observed) {
+            // branchId goes in the create body: a database created without one
+            // is born on the project's default Branch — production's, on a
+            // named stage. The platform still attaches in a second step of its
+            // own, so this narrows that window rather than closing it.
             const created = yield* call(() =>
-              client.POST('/v1/projects/{projectId}/databases', {
-                params: { path: { projectId: news.projectId } },
+              client.POST('/v1/databases', {
                 body: {
+                  projectId: news.projectId,
                   name: news.name,
                   region: news.region,
                   ...(news.isDefault !== undefined && { isDefault: news.isDefault }),
+                  ...(news.branchId !== undefined && { branchId: news.branchId }),
                 },
               }),
             );
-            result = { id: created.data.id, name: created.data.name };
+            return { id: created.data.id, name: created.data.name };
           }
 
+          const result: DatabaseAttributes = { id: observed.data.id, name: observed.data.name };
           if (news.branchId !== undefined) {
             const branchId = news.branchId;
             yield* call(() =>
