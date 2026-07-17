@@ -234,6 +234,10 @@ function resolveParam(
  * it, the producer hands nothing over. The service's own params resolve via
  * `resolveParam` (provision-time binding, then default, then loud
  * unbound-required failure).
+ *
+ * This is also where the wiring contract is enforced: a producer that fails to
+ * supply a required param its consumer's connection declares fails the deploy
+ * here, naming the edge, rather than reaching the consumer as `undefined`.
  */
 export function buildConfig(
   node: ServiceNode,
@@ -251,10 +255,39 @@ export function buildConfig(
     const producedOutputs = edge !== undefined ? (lowered.get(edge.from) ?? {}) : {};
     const values: Record<string, unknown> = {};
     for (const [name, param] of Object.entries(inputNode.connection.params)) {
-      values[name] =
-        param.provision !== undefined
-          ? provisioned.get(`${id}.${inputName}`)
-          : producedOutputs[name];
+      // ADR-0031: the framework mints this value; the producer hands nothing
+      // over, so the wiring contract below doesn't apply to it.
+      if (param.provision !== undefined) {
+        values[name] = provisioned.get(`${id}.${inputName}`);
+        continue;
+      }
+
+      const value = producedOutputs[name];
+      // The wiring contract: the consumer's connection declaration says what it
+      // needs, and the producer must supply it (ADR-0033). Under-delivery used
+      // to reach the consumer as a silent `undefined`, serialized into its
+      // environment and failing at ITS boot — far from the mistake.
+      //
+      // PRESENCE ONLY — deliberately not schema-validated, and it cannot be.
+      // At lowering time these values are routinely alchemy `Output` proxies
+      // (e.g. `deployment.deployedUrl`): lazy symbolic references that only
+      // resolve when Alchemy applies the stack, which is strictly after this
+      // whole effect runs. No Standard Schema can validate one. Checking that
+      // a value EXISTS is the most this seam can honestly do.
+      //
+      // `=== undefined` (not `name in producedOutputs`): a producer explicitly
+      // writing `undefined` has supplied nothing, matching resolveParam.
+      // `edge === undefined` is left alone — with no producer there is nobody
+      // to hold to the contract; an unwired input is a graph concern.
+      if (value === undefined && param.optional !== true && edge !== undefined) {
+        throw new LowerError(
+          `Connection input "${id}.${inputName}" declares param "${name}", but its producer ` +
+            `"${edge.from}" did not supply it — the producer's wiring outputs carry ` +
+            `[${Object.keys(producedOutputs).join(', ') || 'nothing'}]. Add "${name}" to the ` +
+            `producer's returned wiring outputs, or declare the param optional on the connection.`,
+        );
+      }
+      values[name] = value;
     }
     inputs[inputName] = values;
   }
