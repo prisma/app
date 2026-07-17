@@ -137,6 +137,7 @@ export function createStreamsClient(config: StreamsConfig): StreamsClient {
         headers,
         offset: opts?.offset ?? '-1',
         live: false,
+        json: true, // JSON by contract; don't depend on a content-type header
         backoffOptions: IDEMPOTENT_BACKOFF,
       });
       const events = await res.json<T>();
@@ -160,6 +161,10 @@ export function createStreamsClient(config: StreamsConfig): StreamsClient {
           headers,
           offset: opts?.offset ?? 'now',
           live: 'long-poll',
+          // The deployed server's `offset=now` long-poll answers 204 with no
+          // content-type, which would defeat the client's JSON-mode
+          // detection; this module's streams are JSON by contract.
+          json: true,
           backoffOptions: IDEMPOTENT_BACKOFF,
           signal: abort.signal,
         });
