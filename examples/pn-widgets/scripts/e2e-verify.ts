@@ -45,20 +45,20 @@ const projectId = await findProjectId(stack);
 if (projectId === undefined) fail(`No project named '${stack}' in the workspace.`);
 
 // The post-promote endpoint domain is the servable one; by the time this runs,
-// deploy + promote have completed, so the service read returns the real domain.
-const { data: services, error } = await client.GET('/v1/projects/{projectId}/compute-services', {
-  params: { path: { projectId } },
+// deploy + promote have completed, so the app read returns the real domain.
+const { data: services, error } = await client.GET('/v1/apps', {
+  params: { query: { projectId } },
 });
 if (error !== undefined || services === undefined) {
-  fail(`GET /v1/projects/${projectId}/compute-services failed: ${JSON.stringify(error)}`);
+  fail(`GET /v1/apps?projectId=${projectId} failed: ${JSON.stringify(error)}`);
 }
 const service = services.data.find((s) => s.name === 'widgets');
-const domain = service?.serviceEndpointDomain;
+const domain = service?.appEndpointDomain;
 if (domain === undefined || domain.length === 0) {
-  fail(`Project ${projectId} has no 'widgets' compute service with an endpoint domain.`);
+  fail(`Project ${projectId} has no 'widgets' app with an endpoint domain.`);
 }
 
-// serviceEndpointDomain may arrive WITH the https:// scheme; tolerate either.
+// appEndpointDomain may arrive WITH the https:// scheme; tolerate either.
 const url = /^https?:\/\//.test(domain) ? domain : `https://${domain}/`;
 console.log(`pn-widgets URL: ${url}`);
 

@@ -77,7 +77,7 @@ const isActiveDeployment409 = (r: HttpResponse): boolean =>
   r.status === 409 && r.body.includes('active deployment');
 
 /**
- * The compute-service DELETE 409s with this exact wording while its
+ * The app DELETE 409s with this exact wording while its
  * deployment is still winding down — the same "not delete-safe yet" match
  * alchemy's ComputeService provider retries on (everything else is a real
  * failure and must surface, not be retried).
@@ -106,7 +106,7 @@ function parseServiceRows(body: string): { id: string; name: string }[] {
 
 /**
  * Delete a matched project. On a 409 "active deployment", deletes its
- * compute services first (retrying while "not delete-safe yet"), then
+ * apps first (retrying while "not delete-safe yet"), then
  * retries the project delete. Returns true once the project is gone (404 counts).
  */
 export async function deleteProjectDeep(
@@ -130,25 +130,23 @@ export async function deleteProjectDeep(
   }
 
   // Live compute blocks the project delete — enumerate and tear down.
-  opts.log(`  "${project.name}" has an active deployment — tearing its compute services down…`);
-  const listed = await http('GET', `/projects/${project.id}/compute-services?limit=100`);
+  opts.log(`  "${project.name}" has an active deployment — tearing its apps down…`);
+  const listed = await http('GET', `/apps?projectId=${project.id}&limit=100`);
   if (!listed.ok) {
-    opts.log(
-      `  could not list compute services for "${project.name}": ${listed.status} ${listed.body}`,
-    );
+    opts.log(`  could not list apps for "${project.name}": ${listed.status} ${listed.body}`);
     return false;
   }
   for (const service of parseServiceRows(listed.body)) {
-    opts.log(`    deleting compute service "${service.name}" (${service.id})…`);
+    opts.log(`    deleting app "${service.name}" (${service.id})…`);
     for (let attempt = 1; attempt <= serviceAttempts; attempt++) {
-      const res = await http('DELETE', `/compute-services/${service.id}`);
+      const res = await http('DELETE', `/apps/${service.id}`);
       if (res.ok || res.status === 404) break;
       if (isDeleteNotSafeYet409(res) && attempt < serviceAttempts) {
         // The deployment is still winding down — the one retryable state.
         await sleep(serviceDelayMs);
         continue;
       }
-      opts.log(`    compute service "${service.name}" delete failed: ${res.status} ${res.body}`);
+      opts.log(`    app "${service.name}" delete failed: ${res.status} ${res.body}`);
       break;
     }
   }

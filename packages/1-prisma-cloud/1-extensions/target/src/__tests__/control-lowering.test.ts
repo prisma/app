@@ -80,7 +80,7 @@ mock.module('@internal/lowering', () => ({
   },
   Deployment: (id: string, props: unknown) => {
     recorded.deploy.push([id, props]);
-    return Effect.succeed({ versionId: 'v1', deployedUrl: `https://${id}.example` });
+    return Effect.succeed({ deploymentId: 'v1', deployedUrl: `https://${id}.example` });
   },
   packageComputeArtifact: (opts: { id: string }) => {
     recorded.pkg.push([opts]);
