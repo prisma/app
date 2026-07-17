@@ -210,6 +210,32 @@ Close with a comment linking this slice's PR and one sentence: superseded
 by the consumer-declared-seams design (ADR-0033); `NodeReport` is
 withdrawn.
 
+## A bound S2's review established — the line rendering must not cross
+
+**S2's guard enforces that a producer *declared* a key. It does NOT enforce
+that the key resolves to anything real.** Presence-only against lazy proxies
+catches a missing key but not a mis-named attribute read: `{ url: svc.typoAttr }`
+returns a `PropExpr` — the resource proxy's `get` trap fabricates one for any
+absent property (`Resource.ts:283`) — so it is non-`undefined`, passes the
+guard, and fails at apply. That is inherent to the seam and consistent with
+the guard's own comment; it is not a defect.
+
+**The consequence for S3: rendering must never present a wiring value as
+verified.** S2's enforcement is not evidence a wiring value is trustworthy.
+This is another reason the reported primitives come from the descriptor
+naming them deliberately (`ReportedPrimitive`), resolved by apply, rather
+than from anything scraped out of `WiringOutputs`.
+
+## Docs debt — S3 owns its own
+
+`.agents/rules/user-facing-surface-changes.mdc` is `alwaysApply: true`.
+S3 changes what a user observes on every deploy (a rendered topology
+replacing alchemy's dump) and adds a public export path
+(`@prisma/composer/report`). **Both `docs/guides/**` and
+`skills/prisma-composer/SKILL.md` must be updated in this PR** — a named
+condition here because S2's review caught the project silently carrying this
+debt with no slice owning it.
+
 ## Specification warning inherited from S1 — read before trusting any type here
 
 **A cast in the code this spec is written against is evidence that someone

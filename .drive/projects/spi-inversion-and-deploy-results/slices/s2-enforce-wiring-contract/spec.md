@@ -113,7 +113,50 @@ inside the per-param check is correct either way, and defensive coding in
 core's loop is cheap. The observation is recorded, not acted on — see the
 project plan's § Open items.
 
+## The blast radius is USER apps, not just our descriptors (established in review)
+
+`dependency` is exported from `@internal/core`'s index (`index.ts:53`), and
+`packages/9-public/composer/src/index.ts` is `export * from '@internal/core'`.
+**App authors declare their own connections.** So the population this change
+affects is not "our five descriptors" — it is every user-authored connection
+declaration whose producer doesn't supply a declared required param.
+
+This corrects how the null result must be framed. "No existing descriptor
+pair under-delivers" is true and measured, but it covers **our** pairs and
+says nothing about user apps, which is where the real exposure is. State it
+that way in the PR; don't let the null result read as "nothing breaks."
+
+Two further precisions for the PR narrative, from review:
+
+- The postgres mutation proves the guard **can** fire through the real
+  pipeline. The green suite **with the guard live** is what proves nothing
+  under-delivers. The honest claim is therefore: *no descriptor pair the
+  suite exercises under-delivers.*
+- The residual is inverted by the slice itself — an untested
+  under-delivering pair now fails **loudly at deploy** instead of silently
+  at boot. The uncovered case is handled by the mechanism under review,
+  which is why the qualified claim suffices.
+
 ## Slice-DoD
+
+**Docs + skill (D3) — required, `.agents/rules/user-facing-surface-changes.mdc`
+is `alwaysApply: true`:**
+
+- [ ] `docs/guides/**` and `skills/prisma-composer/SKILL.md` both updated in
+      this PR.
+
+**Amended 2026-07-17 (F3, review).** My original DoD listed only test cases
+— a spec-authoring miss, not an implementation one. S2 is precisely the
+rule's named most-missed case ("behaviour a user hits without changing a
+line of their code — a new default, **failure mode**, or status code"), and
+the rule's own example is the same shape (RPC endpoints began returning 401
+to unwired callers and neither surface said so). The one-PR decision is why
+this is still catchable rather than already shipped: the "same PR" window is
+open, but **no slice owned the debt** — S2's DoD listed tests, S3's spec is
+primitives/rendering. It is now owned here, explicitly.
+
+Write the consequence, not the mechanism: the line worth writing is the one
+that stops a bug report from a user whose previously-green deploy now fails.
 
 New `lowering.test.ts` cases, all green:
 

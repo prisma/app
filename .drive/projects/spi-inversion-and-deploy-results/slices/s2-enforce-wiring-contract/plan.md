@@ -15,5 +15,22 @@ lands).
 all four cases green; dogfood/example lowering tests still green (any
 newly-exposed under-delivery fixed as its own commit, named in the PR body).
 **Builds on:** D1.
-**Hands to:** slice PR open.
-**Completed when:** full CI green.
+**Hands to:** D3 — a live guard whose user-visible consequence needs writing
+down.
+**Completed when:** full CI green. **DONE** (`ded15f4`, `49240bd`) — no
+existing pair under-delivers; reach proven by mutating the real postgres
+descriptor (3 e2e tests red, restored).
+
+## D3 — Document the new failure mode (F3)
+
+**Outcome:** `docs/guides/**` and `skills/prisma-composer/SKILL.md` both
+explain the new deploy-time failure — added because
+`.agents/rules/user-facing-surface-changes.mdc` (`alwaysApply: true`)
+requires it and no slice owned the debt.
+**Builds on:** D2 (documents behaviour that now exists).
+**Hands to:** S3 — the branch's docs obligation for S2 is closed, so S3's
+own surface changes are the only remaining debt.
+**Completed when:** both surfaces updated; guides and skill do not disagree;
+`website` content tests green; the guide explains the *consequence* (a
+previously-green deploy now fails, and what to do) rather than the
+mechanism.
