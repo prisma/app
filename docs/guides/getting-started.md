@@ -276,9 +276,9 @@ everything inlined except the runtime's own built-ins (`bun`, `bun:*`,
 `node:*`), which the deploy VM provides. Deploy copies that one file and never
 ships `node_modules`, so anything left un-inlined fails at boot.
 
-Any bundler that can do that works — this guide uses bun's. Two services means
-two separate builds (not one multi-entry build, which would split the shared
-contract code into a chunk neither output contains):
+Any bundler that produces such a file works; this guide uses bun. Two services
+means two separate builds — not one multi-entry build, which would split the
+shared contract code into a chunk neither output contains:
 
 ```jsonc
 // package.json

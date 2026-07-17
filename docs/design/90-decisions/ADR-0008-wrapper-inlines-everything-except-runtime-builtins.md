@@ -2,100 +2,104 @@
 
 ## Decision
 
-When assembly bundles the service module into the boot wrapper, it inlines
-every import except the hosting runtime's own modules: `bun`, `bun:*`, and
-`node:*` stay external; everything else — workspace packages, contract
-libraries, database clients — is bundled in. There are no per-app bundling
-options.
+Assembly bundles each service module into `main.mjs`, the boot wrapper that runs
+before the app's own entry. That bundle **inlines every import except the hosting
+runtime's own modules**: `bun`, `bun:*`, and `node:*` stay external; everything
+else — workspace packages, contract libraries, database clients — is bundled in.
+There are no per-app bundling options.
 
-## Reasoning
-
-A service module is not import-free. A typical one pulls in the pack's
+A service module is not import-free. A typical one reaches for the target's
 vocabulary, a database client factory, and whatever its contracts need:
 
 ```ts
 // src/service.ts
-import { compute, postgres } from "@prisma/composer-prisma-cloud";
-import { SQL } from "bun";
-import { authContract } from "@storefront-auth/auth/contract"; // evaluates arktype at import
+import { compute, postgres } from "@prisma/composer-prisma-cloud"; // inlined
+import { authContract } from "./contract.ts";                      // inlined — and arktype with it
+import { SQL } from "bun";                                         // stays external
 ```
 
-Assembly bundles this module into `main.mjs`, the boot wrapper that runs
-before the app's own entry (ADR-0005). The wrapper lands inside the deploy
-artifact next to the app's built output — and that artifact's `node_modules`
-contains only what the app's *own* build traced (a Next standalone tree
-carries Next's dependencies, not arktype). Any import the wrapper doesn't
-bundle is an import that fails at boot.
+Assembly turns that into a two-part artifact:
 
-So every wrapper import must be either bundled in or provided by the runtime,
-and something has to decide which is which. Per-app configuration is not
-available to make that call: the deploy path deliberately has no config file
-(ADR-0003), so there is no place for an app to declare "also inline these
-two packages" — and inventing one for bundling knobs would reopen the door
-ADR-0003 closed. The rule therefore has to be general, and only one general
-rule is safe: inline everything the hosting runtime does not itself provide.
-Runtime built-ins (`bun`, `bun:*` schemes, `node:*` builtins) resolve inside
-the deployed VM by definition; nothing else is guaranteed present, so
-everything else gets bundled.
+```text
+.prisma-composer/artifacts/<address>/
+├── main.mjs         the wrapper — everything above inlined, except `bun`
+└── bundle/
+    └── server.mjs   the app's own built entry, copied byte for byte
+```
 
-The rule needs no machinery to express, because it is already the bundler's
-default. Assembly bundles the service module with esbuild, which inlines every
-import it can resolve; `external` is the only way out. The implementation is
-therefore the rule written once — `external: ['bun', 'bun:*']`, with `node:*`
-left external by the node platform target.
+## Reasoning
 
-That the escape hatch stays exactly this narrow is verified empirically rather
-than assumed, since the whole boot path depends on it. The node build
-adapter's assemble test "the wrapper externalizes only runtime built-ins and
-inlines everything else" runs a real wrapper build and reads the emitted
-`main.mjs`. Its `bunyan-ish` case is the one that matters: a bare package
-whose name merely starts with `bun` is not a runtime module and must inline,
-so widening the escape hatch to a prefix match (`bun*`) would externalize it
-silently — the build still succeeds, and every other assertion in that test
-still holds. It is the only assertion that fails, which is why the fixture
-needs a bun-prefixed package that resolves for real.
+The wrapper lands beside the app's built output, and that artifact's
+`node_modules` holds only what the app's *own* build traced — a Next standalone
+tree carries Next's dependencies, not arktype. The wrapper's imports were never
+part of that trace. So an import the wrapper doesn't bundle is an import that
+isn't there at boot.
+
+Every wrapper import must therefore be either bundled in or provided by the
+runtime, and something has to decide which is which. Per-app configuration can't
+make that call: the deploy path deliberately has no config file (ADR-0003), so
+there is nowhere for an app to declare "also inline these two packages" — and
+inventing one for bundling knobs would reopen the door ADR-0003 closed.
+
+The rule has to be general, then, and only one general rule is safe: inline
+everything the hosting runtime does not itself provide. Runtime built-ins resolve
+inside the deployed VM by definition; nothing else is guaranteed present, so
+everything else is bundled. Invert it — externalize by default, inline by
+exception — and every new dependency becomes a chance to forget the exception,
+with a boot failure as the reminder.
+
+Expressing the rule costs nothing, because it is already how a bundler behaves:
+inline whatever resolves, and treat `external` as the only way out. The
+implementation is the rule written once — `external: ['bun', 'bun:*']`, with
+`node:*` left external by the node platform target — rather than a policy
+threaded through the deploy to argue with a tool's defaults.
+
+What remains is a deliberately narrow escape hatch, and the whole boot path
+depends on its width, so that width is verified rather than assumed: a test
+builds a real wrapper and reads the emitted `main.mjs`. The case that earns the
+test is a package whose name merely *begins* with `bun` — it is not a runtime
+module, so it must inline, and a widened match like `bun*` would externalize it
+while every other property still held.
 
 ## Consequences
 
-- Pure-JavaScript dependencies inline cleanly — workspace packages and
+- **Pure-JavaScript dependencies inline cleanly.** Workspace packages and
   import-time contract libraries need no declarations anywhere.
-- An import the wrapper cannot resolve stops the deploy instead of shipping,
-  as long as its specifier is written as a literal: the bundler treats it as
-  an error, so assembly fails with the offending specifier named and emits no
-  `main.mjs`. The wrapper that would have died at boot is a build that never
-  leaves the machine. A static `import` and an `import()` of a literal string
-  both resolve at build time and both get this. The two cases below are what
-  it does not reach; each still fails at boot.
-- Native addons do not survive inlining: a service module importing a package
-  with `.node` bindings gets its JavaScript bundled but not the binary, and
-  fails at boot rather than at assembly. Client factories should stick to
-  pure-JS drivers or runtime built-ins. Detecting addon-bearing dependencies
-  at assembly and failing loudly there is the strengthening this rule wants.
-- A computed specifier is outside the rule's reach: in `await import(name)`
-  with `name` a variable, there is no specifier to resolve at build time, so
-  the bundler emits the `import()` untouched and the build succeeds with no
-  error and no warning. The wrapper then dies at boot on whatever the
-  expression evaluates to. A client factory is where this shape turns up —
-  lazy driver loading is written exactly this way. Resolving the reachable set
-  at assembly, or rejecting the shape outright, is the other strengthening
-  this rule wants.
-- The wrapper's size grows with the service module's import graph. Service
-  modules are declarations plus client factories by design, so the graph
-  stays small — but a service module that imports an application's worth of
-  code will get an application's worth of wrapper.
+
+- **A specifier the bundler can read is checked before anything deploys.** An
+  import that cannot be resolved is an error, not a warning: assembly fails,
+  names the offending specifier, and emits no `main.mjs`. A wrapper that would
+  have died at boot becomes a build that never leaves the machine. Both a static
+  `import` and an `import()` of a literal string get this.
+
+- **Native addons do not survive inlining.** A package with `.node` bindings gets
+  its JavaScript bundled but not its binary, so it fails at boot rather than at
+  assembly. Client factories should stay on pure-JS drivers or runtime built-ins.
+  Detecting addon-bearing dependencies during assembly would close this.
+
+- **A computed specifier is invisible to the check.** In `await import(name)`
+  with `name` a variable there is no specifier to resolve at build time, so the
+  bundler emits the `import()` untouched and the build succeeds with no error and
+  no warning — then the wrapper dies at boot on whatever the expression evaluates
+  to. Lazy driver loading is written exactly this way. Resolving the reachable
+  set during assembly, or rejecting the shape outright, would close this.
+
+- **The wrapper's size tracks the service module's import graph.** Service
+  modules are declarations plus client factories by design, so the graph stays
+  small — but a service module that imports an application's worth of code will
+  get an application's worth of wrapper.
 
 ## Alternatives considered
 
-- **Per-app bundling configuration** (an externals/inline list the app
-  declares) — no home for it: the deploy path has no config file (ADR-0003),
-  and adding one for bundler knobs would be the tail wagging the dog.
-- **Deriving the external set from the artifact's `node_modules`** (inline
-  only what the app's build didn't trace) — couples the wrapper build to the
-  internals of each framework's output tracing, which is exactly the kind of
-  entanglement ADR-0005 exists to prevent.
+- **Per-app bundling configuration** (an externals/inline list the app declares)
+  — no home for it: the deploy path has no config file (ADR-0003), and adding one
+  for bundler knobs would be the tail wagging the dog.
+- **Deriving the external set from the artifact's `node_modules`** (inline only
+  what the app's build didn't trace) — couples the wrapper build to the internals
+  of each framework's output tracing, which is exactly the entanglement ADR-0005
+  exists to prevent.
 - **A curated allow-list of inlinable packages** — a maintenance burden that
-  breaks the first time a community app imports something the list hasn't
-  met.
+  breaks the first time a community app imports something the list hasn't met.
 
 ## Related
 

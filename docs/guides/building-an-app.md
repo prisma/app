@@ -421,7 +421,7 @@ produced, byte for byte. Two build adapters ship:
 file: everything inlined except runtime built-ins (`bun`, `bun:*`, `node:*`),
 which the deploy VM provides. Deploy copies that one file and never ships
 `node_modules`, so anything left un-inlined fails at boot. Any bundler that
-does that works — with bun:
+produces such a file works. With bun:
 
 ```sh
 bun build src/server.ts --target=bun --outfile dist/server.mjs

@@ -197,8 +197,8 @@ The framework assembles only what you built — users build, the framework
 assembles. For a plain server process, `entry` must point at a single
 self-contained ESM file: everything inlined except runtime built-ins (`bun`,
 `bun:*`, `node:*`), which the deploy VM provides. Deploy copies that one file
-and never ships `node_modules`, so anything left un-inlined fails at boot. Use
-any bundler that does that — with bun:
+and never ships `node_modules`, so anything left un-inlined fails at boot. Any
+bundler that produces such a file works. With bun:
 
 ```sh
 bun build src/server.ts --target=bun --outfile dist/server.mjs
