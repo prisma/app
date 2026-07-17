@@ -221,7 +221,35 @@ describe('buildConfig', () => {
     });
   });
 
-  test('a param the graph declares but the lowered outputs never produced resolves to undefined', () => {
+  // ——— The wiring contract (S2). The consumer's connection declaration IS the
+  // contract (ADR-0033): core resolves each declared param by name against the
+  // producer's wiring outputs. A producer that under-delivers used to hand the
+  // consumer a silent `undefined`, which serialized into its environment and
+  // failed at the consumer's boot — far from the mistake. It now fails the
+  // deploy, naming the edge.
+
+  test('a producer that omits a declared required param fails the deploy, naming the edge, the param, the producer, and what the producer DID supply', () => {
+    const auth = app('fake/compute', { db: dbEnd() });
+    const root = module('shop', {}, (h) => {
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(auth, { id: 'auth', deps: { db } });
+      return {};
+    });
+    const graph = Load(root);
+    // The producer lowered, but its wiring outputs carry no `url` — the exact
+    // param `dbEnd()`'s connection declares and does not mark optional.
+    const lowered = new Map<string, WiringOutputs>([['db', { host: 'db.internal' }]]);
+
+    const build = () => buildConfig(auth, 'auth', graph, lowered, new Map());
+
+    expect(build).toThrow(LowerError);
+    expect(build).toThrow(/"auth\.db"/); // the edge id
+    expect(build).toThrow(/"url"/); // the param
+    expect(build).toThrow(/"db"/); // the producer
+    expect(build).toThrow(/host/); // the producer's actual key list
+  });
+
+  test('a producer supplying nothing at all names an empty key list, not a confusing blank', () => {
     const auth = app('fake/compute', { db: dbEnd() });
     const root = module('shop', {}, (h) => {
       const db = h.provision(dbResource(), { id: 'db' });
@@ -230,7 +258,51 @@ describe('buildConfig', () => {
     });
     const graph = Load(root);
 
+    // `lowered` empty: the producer is wired but produced no outputs.
+    expect(() => buildConfig(auth, 'auth', graph, new Map(), new Map())).toThrow(/nothing/);
+  });
+
+  test('a declared param the consumer marked optional is exempt — absent stays undefined, no error', () => {
+    const optionalDbEnd = () =>
+      dependency({
+        name: 'db',
+        type: 'fake/db',
+        connection: conn({ url: string({ optional: true }) }, () => ({})),
+        required: providerContract('fake/db', { url: '' }),
+      });
+    const auth = app('fake/compute', { db: optionalDbEnd() });
+    const root = module('shop', {}, (h) => {
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(auth, { id: 'auth', deps: { db } });
+      return {};
+    });
+    const graph = Load(root);
+
+    // The consumer said absent is legal, so the producer under-delivering is
+    // not a contract breach — boot's coerce() reads a missing var as absent.
     expect(buildConfig(auth, 'auth', graph, new Map(), new Map())).toEqual({
+      service: {},
+      inputs: { db: { url: undefined } },
+    });
+  });
+
+  test('an unwired input (no dependency edge) keeps resolving to undefined — the guard only judges a producer that exists', () => {
+    const auth = app('fake/compute', { db: dbEnd() });
+    const root = module('shop', {}, (h) => {
+      const db = h.provision(dbResource(), { id: 'db' });
+      h.provision(auth, { id: 'auth', deps: { db } });
+      return {};
+    });
+    // The authoring API will not let a declared input go unwired —
+    // `h.provision(auth, { id: 'auth' })` does not type-check — so `db` is
+    // wired here and its edge then dropped. That reaches buildConfig's
+    // `edge === undefined` branch, which is defensive rather than authorable.
+    // With no edge there is no producer to hold to the contract, so the guard
+    // must stay out of it: an unwired input is a graph-construction concern.
+    const graph = Load(root);
+    const withoutEdges = { ...graph, edges: graph.edges.filter((e) => e.kind !== 'dependency') };
+
+    expect(buildConfig(auth, 'auth', withoutEdges, new Map(), new Map())).toEqual({
       service: {},
       inputs: { db: { url: undefined } },
     });
@@ -260,6 +332,33 @@ describe('buildConfig', () => {
     const provisioned = new Map<string, unknown>([['consumer.auth', 'minted-value']]);
 
     expect(buildConfig(consumer, 'consumer', graph, lowered, provisioned)).toEqual({
+      service: {},
+      inputs: { auth: { token: 'minted-value' } },
+    });
+  });
+
+  test('a REQUIRED provisioned param is exempt from the wiring contract — the mint supplies it, the producer hands nothing over (ADR-0031)', () => {
+    const BRAND = Symbol('test-provision-brand');
+    // Deliberately NOT optional: this pins that the provision branch is exempt
+    // on its own, rather than incidentally passing because it was optional.
+    const tokenEnd = () =>
+      dependency({
+        name: 'auth',
+        type: 'fake/rpc',
+        connection: conn({ token: string({ provision: provisionNeed(BRAND) }) }, () => ({})),
+      });
+    const consumer = app('fake/compute', { auth: tokenEnd() });
+    const root = module('shop', {}, (h) => {
+      const authRef = h.provision(app('fake/compute', {}), { id: 'auth' });
+      h.provision(consumer, { id: 'consumer', deps: { auth: authRef } });
+      return {};
+    });
+    const graph = Load(root);
+    // The producer supplies NOTHING — which for a non-provisioned required
+    // param would now be a LowerError. Here the mint is the source.
+    const provisioned = new Map<string, unknown>([['consumer.auth', 'minted-value']]);
+
+    expect(buildConfig(consumer, 'consumer', graph, new Map(), provisioned)).toEqual({
       service: {},
       inputs: { auth: { token: 'minted-value' } },
     });
