@@ -4,24 +4,32 @@ Durable append-only event streams as a Prisma Composer module. It wraps the
 production `@prisma/streams-server` runtime (npm, unmodified) as a Compute
 service behind a typed boundary: the module's `store` dependency takes a
 `storage()` module's port as its durable tier, and it exposes a single
-`streams` port. Consumers get a `{ url, apiKey }` binding — the key minted by
-the deploy — and speak the **Durable Streams HTTP protocol** directly.
+`streams` port. A consumer's `durableStreams()` dependency hydrates to a
+ready **`StreamsClient`** — like RPC's generated client, no app hand-rolls
+the protocol; the wire binding underneath is `{ url, apiKey }`, the key
+minted by the deploy.
 
 Ships as the `@prisma/composer-prisma-cloud/streams` subpath (like `/storage`).
 
 ## Contract scope
 
-The binding is the endpoint URL plus the minted bearer key:
+Hydration hands a consumer the client:
 
 ```ts
-interface StreamsConfig {
-  readonly url: string;
-  readonly apiKey: string;
+interface StreamsClient {
+  create(name, opts?): Promise<void>; // ensure-style: an existing stream is success
+  append(name, event): Promise<void>; // one JSON event; NEVER retried (no idempotency key)
+  read<T>(name, opts?): Promise<{ events: T[]; nextOffset: string }>;
+  tail<T>(name, opts?): Promise<{ events: T[]; nextOffset: string; timedOut: boolean }>;
 }
 ```
 
-Consumers build their own HTTP client (ADR-0015) against the Durable Streams
-surface:
+The wire binding underneath is the typed connection config (ADR-0015) —
+`{ url: string, apiKey: string }` — and the client wraps
+[`@durable-streams/client`](https://www.npmjs.com/package/@durable-streams/client)
+(ElectricSQL's canonical protocol client, pinned to the version
+`@prisma/streams-server` 0.1.11's own repo pairs with). The full protocol
+surface it drives:
 
 | Op | Notes |
 | --- | --- |
@@ -31,8 +39,8 @@ surface:
 | `GET …&live=long-poll&timeout=…` | held read — returns when fresh events arrive or timeout |
 | `GET …&live=sse` | SSE tail (see the deployed live path note below) |
 
-Offsets are **opaque cursors**, not numeric indices: take them from the
-`stream-next-offset` response header and pass them back verbatim.
+Offsets are **opaque cursors**, not numeric indices: take them from a read's
+`nextOffset` and pass them back verbatim.
 
 **Auth rides the binding.** The bearer key is not an ADR-0029 secret (there
 is no external value to bind) and not a producer output. The `apiKey`
@@ -90,26 +98,24 @@ export default compute({
 ```
 
 ```ts
-// src/worker/server.ts — append, then long-poll for what follows
+// src/worker/server.ts — append, then wait for what follows
 import service from './service.ts';
 
-const { streams } = service.load(); // StreamsConfig: { url, apiKey }
-const authed = { authorization: `Bearer ${streams.apiKey}` };
+const { streams } = service.load(); // StreamsClient, ready to call
 
-await fetch(`${streams.url}/v1/stream/jobs`, {
-  method: 'POST',
-  headers: { ...authed, 'content-type': 'application/json' },
-  body: JSON.stringify([{ kind: 'created' }]),
-});
+await streams.create('jobs');
+await streams.append('jobs', { kind: 'created' });
+const { events, nextOffset } = await streams.read('jobs');
+const next = await streams.tail('jobs'); // resolves on the next event (or timedOut)
+```
 
-const head = await fetch(`${streams.url}/v1/stream/jobs?offset=-1&format=json`, {
-  headers: authed,
-});
-const offset = head.headers.get('stream-next-offset');
-const next = await fetch(
-  `${streams.url}/v1/stream/jobs?offset=${offset}&format=json&live=long-poll&timeout=20s`,
-  { headers: authed },
-); // resolves when a fresh append lands (or 204 on timeout)
+For local development and tests, build the same client against the stand-in
+(no deployed binding, no auth):
+
+```ts
+import { createStreamsClient } from '@prisma/composer-prisma-cloud/streams';
+
+const client = createStreamsClient({ url: standIn.url, apiKey: 'unused' });
 ```
 
 [`examples/streams`](../../../../examples/streams) is the worked example — the
@@ -143,6 +149,6 @@ response completes. An open `?live=sse` tail therefore never delivers through
 a deployment's public URL — the client sees zero bytes and the edge returns a
 504 after ~60s — while the same request works locally and against the
 stand-in. `?live=long-poll` completes per response and delivers live events
-end to end through the ingress; use it for deployed live tailing. The deployed
-conformance harness keeps the SSE tests, so they flip green when the platform
-supports streaming responses.
+end to end through the ingress, so `StreamsClient.tail` long-polls. The
+deployed conformance harness keeps the SSE tests, so they flip green when the
+platform supports streaming responses.

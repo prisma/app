@@ -1,11 +1,11 @@
 // The jobs service's entrypoint (the build adapter's `entry`). After
 // main.run(address, boot) re-keys the environment, service.load() hands the
-// wired StreamsConfig binding directly; the app builds its own HTTP client
-// from it. Bind all interfaces — Compute routes external HTTP to the VM.
+// hydrated StreamsClient directly — no URL, no key, no protocol here. Bind
+// all interfaces — Compute routes external HTTP to the VM.
 import { createJobsApp } from './app.ts';
 import service from './service.ts';
 
-const { events } = service.load(); // StreamsConfig: { url, apiKey }
+const { events } = service.load(); // StreamsClient, ready to call
 const { port } = service.config();
 
 process.on('uncaughtException', (err) => console.error('uncaughtException', err));

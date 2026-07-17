@@ -31,9 +31,10 @@ interface StreamsConfig {
 ```
 
 `streamsContract` (`kind: 'streams'`) with `durableStreams()` as the consumer
-dependency factory. The binding is the endpoint URL plus the minted bearer
-key; consumers build their own HTTP client against the Durable Streams
-protocol (ADR-0015):
+dependency factory. The wire binding is the endpoint URL plus the minted
+bearer key (ADR-0015); hydration hands the consumer a `StreamsClient`
+(create/append/read/tail — wrapping `@durable-streams/client`), so no app
+hand-rolls the protocol:
 `PUT/POST/GET/HEAD/DELETE /v1/stream/{name}`, reads from an `offset`, live
 tail via `?live=sse` and `?live=long-poll`. No websockets — the server has
 none and the module adds none.

@@ -1,18 +1,15 @@
 /**
- * The jobs app's integration test: drives the consumer against the streams
- * module's local stand-in (`/streams/testing` — SQLite-only, loopback, no
- * cloud credentials) and asserts append → read-back and a live long-poll tail
- * through the same `createJobsApp` handler that runs behind `Bun.serve` in the
- * deployed service.
- *
- * The stand-in needs no auth, so the `apiKey` the app sends is a placeholder
- * here; in a deployment it is the value the target minted for the binding
- * (ADR-0031) and the server checks it.
+ * The jobs app's integration test: the app driven through the hydrated-style
+ * client (`createStreamsClient` pointed at the local stand-in — exactly what
+ * `load()` hands the deployed service) — append → read-back, a live long-poll
+ * tail, and error mapping. The stand-in needs no auth, so the key is a
+ * placeholder.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStreamsClient } from '@prisma/composer-prisma-cloud/streams';
 import {
   type LocalStreamsServer,
   startLocalStreamsServer,
@@ -36,7 +33,9 @@ beforeAll(async () => {
   prevDataRoot = process.env['DS_LOCAL_DATA_ROOT'];
   process.env['DS_LOCAL_DATA_ROOT'] = dataRoot;
   server = await startLocalStreamsServer({ name: 'jobs-example-test', port: 0 });
-  app = createJobsApp({ url: server.exports.http.url, apiKey: 'local-stand-in-needs-no-auth' });
+  app = createJobsApp(
+    createStreamsClient({ url: server.exports.http.url, apiKey: 'local-stand-in-needs-no-auth' }),
+  );
 });
 
 afterAll(async () => {
@@ -90,10 +89,10 @@ describe('jobs app vs an upstream that says no', () => {
       return new Response('nope', { status: 401 });
     });
     try {
-      const app = createJobsApp({ url: proxy.url, apiKey: 'wrong-key' });
+      const app = createJobsApp(createStreamsClient({ url: proxy.url, apiKey: 'wrong-key' }));
       const res = await app(new Request('http://app/jobs'));
       expect(res.status).toBe(502); // this app's "my upstream said no", not a 500
-      expect(calls).toBe(1); // called once — the app retries nothing
+      expect(calls).toBe(1); // called once — a real protocol error is never retried
     } finally {
       proxy.stop();
     }
@@ -118,7 +117,7 @@ describe('jobs app (against the local streams stand-in)', () => {
   });
 
   test('GET /jobs/tail long-polls and delivers an event appended after it opened', async () => {
-    const tail = app(new Request('http://app/jobs/tail?timeout=10s'));
+    const tail = app(new Request('http://app/jobs/tail?timeout=10'));
     await new Promise((r) => setTimeout(r, 300));
     await app(post({ kind: 'finished', id: 1 }));
 

@@ -1,9 +1,10 @@
 /**
  * The durable-streams contract: the binding a consumer's `durableStreams()`
  * dependency requires, and the streams service's `streams` port provides.
- * Mirrors `s3Contract`/`s3()`: `satisfies` compares kind only, and the binding
- * IS the typed connection config (ADR-0015) — the app builds its own HTTP
- * client against the Durable Streams protocol.
+ * `satisfies` compares kind only (mirrors `s3Contract`); the wire binding is
+ * the typed connection config (ADR-0015) — `{ url, apiKey }` — and hydration
+ * hands the consumer a ready `StreamsClient` built from it (RPC parity:
+ * `rpc()` hydrates through `makeClient`), so no app hand-rolls the protocol.
  *
  * The bearer key rides the binding as an ADR-0031 **provisioning need**: the
  * framework mints it at deploy and fills the param like any other input, so it
@@ -15,6 +16,8 @@
 import type { Contract, DependencyEnd } from '@internal/core';
 import { dependency, string } from '@internal/core';
 import { streamsApiKeyNeed } from '@internal/prisma-cloud';
+import type { StreamsClient } from './client.ts';
+import { createStreamsClient } from './client.ts';
 
 export interface StreamsConfig {
   readonly url: string;
@@ -29,13 +32,13 @@ export const streamsContract: Contract<'streams', StreamsConfig> = Object.freeze
 
 export type StreamsContract = typeof streamsContract;
 
-/** A consumer's dependency on a durable-streams server. */
-export function durableStreams(): DependencyEnd<StreamsConfig, typeof streamsContract> {
+/** A consumer's dependency on a durable-streams server — hydrates to a ready client. */
+export function durableStreams(): DependencyEnd<StreamsClient, typeof streamsContract> {
   return dependency({
     type: 'streams',
     connection: {
       params: { url: string(), apiKey: string({ provision: streamsApiKeyNeed() }) },
-      hydrate: (v): StreamsConfig => v,
+      hydrate: (v): StreamsClient => createStreamsClient(v),
     },
     required: streamsContract,
   });

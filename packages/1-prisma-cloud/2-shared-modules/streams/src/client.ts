@@ -1,0 +1,196 @@
+/**
+ * The streams client a consumer's `durableStreams()` binding hydrates to —
+ * the RPC parity: RPC users don't hand-roll request encoding (`rpc()` hydrates
+ * through `makeClient`), and streams users don't hand-roll the Durable Streams
+ * protocol. All protocol knowledge lives here: the URL layout, the bearer
+ * scheme, JSON-array append framing, opaque offsets, and the long-poll dance.
+ * The wire client is `@durable-streams/client` (ElectricSQL's canonical
+ * protocol client, Apache-2.0); this wrapper narrows it to what the module
+ * contract promises and adds the platform compensations, each annotated with
+ * the ticket it stands in for.
+ *
+ * Exported standalone (and via the umbrella) so local dev and tests can wrap
+ * the stand-in's URL without a deployed binding:
+ *
+ *   const client = createStreamsClient({ url: standIn.url, apiKey: 'unused' });
+ */
+import {
+  BackoffDefaults,
+  DurableStream,
+  DurableStreamError,
+  stream,
+} from '@durable-streams/client';
+import type { StreamsConfig } from './contract.ts';
+
+/** A catch-up read: the events from the requested offset, and the cursor to resume from. */
+export interface StreamsReadResult<T> {
+  readonly events: readonly T[];
+  /** Opaque resume cursor (the protocol's `stream-next-offset`); feed it back as `offset`. */
+  readonly nextOffset: string;
+}
+
+/** One live long-poll delivery, or a timeout with nothing new. */
+export interface StreamsTailResult<T> {
+  readonly events: readonly T[];
+  readonly nextOffset: string;
+  readonly timedOut: boolean;
+}
+
+export interface StreamsClient {
+  /** Creates the stream (idempotent: an existing stream of any content type is success). */
+  create(name: string, opts?: { contentType?: string }): Promise<void>;
+  /**
+   * Appends one JSON event. NEVER retried: the protocol has no idempotency
+   * key, so a failed request is indistinguishable from one that applied —
+   * the caller retries, because only it knows whether a duplicate is
+   * acceptable.
+   */
+  append(name: string, event: unknown): Promise<void>;
+  /** Reads the stream from `offset` (default: the beginning) to the current head. */
+  read<T = unknown>(name: string, opts?: { offset?: string }): Promise<StreamsReadResult<T>>;
+  /**
+   * Waits for the next live delivery after `offset` (default: the current
+   * head), via long-poll — SSE cannot traverse the Compute ingress (PRO-218).
+   * Resolves with the delivered events, or `timedOut: true` after `timeoutMs`
+   * (default 20s) with nothing new.
+   */
+  tail<T = unknown>(
+    name: string,
+    opts?: { offset?: string; timeoutMs?: number; signal?: AbortSignal },
+  ): Promise<StreamsTailResult<T>>;
+}
+
+const JSON_CONTENT_TYPE = 'application/json';
+
+/**
+ * PRO-219: a scale-to-zero streams service can reset the first connection
+ * while its instance boots (~3.5–8s observed), so IDEMPOTENT operations ride
+ * it out with a bounded backoff. The wire client only retries thrown network
+ * errors and 429/503 — a real protocol error (401, 404, 409) surfaces on the
+ * first try. Appends never get this (see `append`).
+ */
+const IDEMPOTENT_BACKOFF = {
+  ...BackoffDefaults,
+  initialDelay: 250,
+  maxDelay: 5_000,
+  multiplier: 2,
+  maxRetries: 5,
+};
+
+/** The wire client retries network errors by default — appends must not be (no idempotency key). */
+const NO_RETRY_BACKOFF = { ...BackoffDefaults, maxRetries: 0 };
+
+const DEFAULT_TAIL_TIMEOUT_MS = 20_000;
+
+function isAlreadyExists(error: unknown): boolean {
+  return error instanceof DurableStreamError && error.status === 409;
+}
+
+export function createStreamsClient(config: StreamsConfig): StreamsClient {
+  const base = config.url.replace(/\/$/, '');
+  const headers = { authorization: `Bearer ${config.apiKey}` };
+  const streamUrl = (name: string): string => `${base}/v1/stream/${encodeURIComponent(name)}`;
+
+  // One write handle per stream: batching off so one append() is one POST
+  // (the wire client's default coalescing would make a failure ambiguous
+  // across several callers' events), retries off per the append contract.
+  const writers = new Map<string, DurableStream>();
+  const writer = (name: string): DurableStream => {
+    let handle = writers.get(name);
+    if (handle === undefined) {
+      handle = new DurableStream({
+        url: streamUrl(name),
+        headers,
+        contentType: JSON_CONTENT_TYPE,
+        batching: false,
+        backoffOptions: NO_RETRY_BACKOFF,
+      });
+      writers.set(name, handle);
+    }
+    return handle;
+  };
+
+  return {
+    async create(name, opts) {
+      const handle = new DurableStream({
+        url: streamUrl(name),
+        headers,
+        contentType: opts?.contentType ?? JSON_CONTENT_TYPE,
+        backoffOptions: IDEMPOTENT_BACKOFF,
+      });
+      try {
+        await handle.create();
+      } catch (error) {
+        // PUT-create is create-only upstream; the module's create() is
+        // ensure-style, so an existing stream is success.
+        if (!isAlreadyExists(error)) throw error;
+      }
+    },
+
+    async append(name, event) {
+      await writer(name).append(JSON.stringify(event));
+    },
+
+    async read<T>(name: string, opts?: { offset?: string }) {
+      const res = await stream<T>({
+        url: streamUrl(name),
+        headers,
+        offset: opts?.offset ?? '-1',
+        live: false,
+        backoffOptions: IDEMPOTENT_BACKOFF,
+      });
+      const events = await res.json<T>();
+      return { events, nextOffset: res.offset };
+    },
+
+    async tail<T>(
+      name: string,
+      opts?: { offset?: string; timeoutMs?: number; signal?: AbortSignal },
+    ) {
+      // `offset: 'now'` is the protocol's own "from the current head" — no
+      // client-side head dance needed.
+      const abort = new AbortController();
+      const onCallerAbort = (): void => abort.abort();
+      opts?.signal?.addEventListener('abort', onCallerAbort, { once: true });
+      const timer = setTimeout(() => abort.abort(), opts?.timeoutMs ?? DEFAULT_TAIL_TIMEOUT_MS);
+
+      try {
+        const res = await stream<T>({
+          url: streamUrl(name),
+          headers,
+          offset: opts?.offset ?? 'now',
+          live: 'long-poll',
+          backoffOptions: IDEMPOTENT_BACKOFF,
+          signal: abort.signal,
+        });
+
+        return await new Promise<StreamsTailResult<T>>((resolve, reject) => {
+          abort.signal.addEventListener(
+            'abort',
+            () => resolve({ events: [], nextOffset: res.offset, timedOut: true }),
+            { once: true },
+          );
+          try {
+            res.subscribeJson<T>((batch) => {
+              if (batch.items.length === 0) return; // control-only delivery, keep waiting
+              // Resolve BEFORE aborting: the abort listener above also
+              // resolves (as a timeout), and a settled promise ignores it.
+              resolve({ events: batch.items, nextOffset: batch.offset, timedOut: false });
+              abort.abort(); // stop the session's follow loop
+            });
+          } catch (error) {
+            reject(error);
+          }
+        });
+      } catch (error) {
+        // Aborted before the first response: a timeout, not a failure.
+        if (abort.signal.aborted)
+          return { events: [], nextOffset: opts?.offset ?? 'now', timedOut: true };
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        opts?.signal?.removeEventListener('abort', onCallerAbort);
+      }
+    },
+  };
+}

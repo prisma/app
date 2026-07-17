@@ -808,6 +808,9 @@ importers:
 
   packages/1-prisma-cloud/2-shared-modules/streams:
     dependencies:
+      '@durable-streams/client':
+        specifier: 0.2.1
+        version: 0.2.1
       '@internal/core':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/1-core/core
@@ -1398,13 +1401,12 @@ packages:
     peerDependencies:
       effect: '>=4.0.0-beta.66 || >=4.0.0'
 
+  '@durable-streams/client@0.2.1':
+    resolution: {integrity: sha512-+mGdK6TuDR9fJPo8jw6DufPfoUv6g+27xoPES76GXQc6y3val9Oe/SK2o2FV9sqqLSE19HEUSxTp0D6CZebfZw==}
+    engines: {node: '>=18.0.0'}
+
   '@durable-streams/client@0.2.3':
     resolution: {integrity: sha512-609hWTqe8/OXzIFnv+oDdlT57QsCAc3F2c/nAQBcYhSLmmbXk5rHx7rnQSmk9MeGGQ8dsg9UCZf47dTJG3q3ig==}
-    engines: {node: '>=18.0.0'}
-    hasBin: true
-
-  '@durable-streams/client@0.2.6':
-    resolution: {integrity: sha512-uHKKbWpsKLhFMeGjG0PgM6LXE3oEIi7FHKlJZkmYGxcqd4Yjjd/QEvnQnDzteRP4Av1uJVM8qjTL7kfKsgeS/w==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -4949,12 +4951,12 @@ snapshots:
       '@distilled.cloud/core': 0.27.0(effect@4.0.0-beta.93)
       effect: 4.0.0-beta.93
 
-  '@durable-streams/client@0.2.3':
+  '@durable-streams/client@0.2.1':
     dependencies:
       '@microsoft/fetch-event-source': 2.0.1
       fastq: 1.20.1
 
-  '@durable-streams/client@0.2.6':
+  '@durable-streams/client@0.2.3':
     dependencies:
       '@microsoft/fetch-event-source': 2.0.1
       fastq: 1.20.1
@@ -5867,7 +5869,7 @@ snapshots:
 
   '@prisma/streams-server@0.1.11':
     dependencies:
-      '@durable-streams/client': 0.2.6
+      '@durable-streams/client': 0.2.1
       ajv: 8.20.0
       better-result: 2.9.2
       env-paths: 3.0.0
