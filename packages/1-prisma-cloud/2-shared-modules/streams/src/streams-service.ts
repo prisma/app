@@ -5,9 +5,9 @@
  * nothing is left for a bespoke lowering to extend. It declares the `store`
  * dependency (`s3()`, the storage module's port) and the `streams` expose; the
  * bearer key reaches this service through the target's reserved provider
- * param, not through a dependency. The deploy bootstrap runs the default-exported bare
- * node; the real wiring arrives through serialized config at runtime — exactly
- * like `storage-service.ts`.
+ * param, not through a dependency. The deploy bootstrap runs the
+ * default-exported bare node; the real wiring arrives through serialized
+ * config at runtime — exactly like `storage-service.ts`.
  */
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';

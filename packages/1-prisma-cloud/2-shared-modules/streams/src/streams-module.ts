@@ -5,7 +5,7 @@
  * (the first module-depends-on-module consumer of storage). The bearer key is
  * neither wired nor owned by the module: a consumer's `durableStreams()`
  * binding declares it as a provisioning need, and the target mints one value
- * per streams module (ADR-0031) and lands it on this service. Exposes a
+ * per streams module (ADR-0031) and stores it on this service. Exposes a
  * single `streams` port (`streamsContract`).
  */
 import type { DependencyEnd, ModuleNode } from '@internal/core';

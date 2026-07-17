@@ -463,6 +463,24 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     expect(seenAtBoot).toBe('"minted-key-abc"');
   });
 
+  test("run() validates and re-stashes a reserved provider param at a nested address — the streams module's real deployed shape (streams.service)", async () => {
+    const app = compute({ name: 'service', deps: {}, build });
+    let seenAtBoot: string | undefined;
+    await withEnv(
+      {
+        [providerParamKey('streams.service', STREAMS_API_KEY_PARAM.name)]: '"minted-key-abc"',
+        COMPOSER_STREAMS_SERVICE_PORT: '',
+        COMPOSER_PORT: '',
+        [STREAMS_API_KEY_ENV]: '',
+      },
+      () =>
+        app.run('streams.service', async () => {
+          seenAtBoot = process.env[STREAMS_API_KEY_ENV];
+        }),
+    );
+    expect(seenAtBoot).toBe('"minted-key-abc"');
+  });
+
   test('run() stashes nothing when a reserved provider param row is absent — absence stays "never provisioned"', async () => {
     const app = compute({ name: 'plain', deps: {}, build });
     let seenAtBoot: string | undefined;

@@ -104,11 +104,10 @@ export const compute = <
     async run(address: string, boot: () => Promise<unknown>) {
       const config = deserialize(node, address);
       stash(node, config);
-      // Validate and re-stash every reserved provider param address-free too
-      // (ADR-0031) — serve()'s accepted keys, the streams entrypoint's
-      // API_KEY — the provider-side sibling of the param re-stash above. An
-      // absent row stays absent (never provisioned); a present one is
-      // schema-checked exactly like a declared param before it moves.
+      // ADR-0031's provider-side sibling of the param re-stash above — the
+      // reader is serve()'s accepted keys or the streams entrypoint's
+      // API_KEY. An absent row stays absent (never provisioned); a present
+      // one is schema-checked exactly like a declared param before it moves.
       stashProviderParams(RESERVED_PROVIDER_PARAMS, address);
       // Re-emit the secret POINTERS address-free too, so secrets() double-looks-up
       // the same way with no address (the value stays only in its platform var).

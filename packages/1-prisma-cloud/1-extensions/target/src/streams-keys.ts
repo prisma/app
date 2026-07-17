@@ -1,8 +1,8 @@
 /**
  * The streams module's bearer key as an ADR-0031 provisioning need: the ONE
  * brand and the ONE reserved provider param — shared by control.ts (which
- * registers the deploy-side `value(refs)` that mints and lands it — see its
- * `streamsApiKeyProvisioner`/`streamsApiKeyParam`) and compute.ts (which
+ * registers the deploy-side `value(refs)` that mints and stores it — see its
+ * `streamsApiKeyProvisioner`/`streamsApiKeyValue`) and compute.ts (which
  * validates and stashes it at boot), so minting and wiring can never drift
  * apart. Finding the edges themselves is `provisioned-edges.ts`'s generic,
  * brand-blind scan. Mirrors `service-keys.ts` exactly.
@@ -39,10 +39,16 @@ export const STREAMS_API_KEY: unique symbol = Symbol.for('prisma:streams/api-key
  */
 export const streamsApiKeyNeed = (): ProvisionNeed => provisionNeed(STREAMS_API_KEY);
 
-/** The reserved provider param for the streams bearer key: the var name is `STREAMS_API_KEY`. */
+/**
+ * The reserved provider param for the streams bearer key: the var name is
+ * `STREAMS_API_KEY`. `brand` is `STREAMS_API_KEY` itself (the same symbol
+ * `streamsApiKeyNeed()`'s need carries) — control.ts looks its `value(refs)`
+ * up by this field.
+ */
 export const STREAMS_API_KEY_PARAM: ProviderParamEntry = {
   name: 'STREAMS_API_KEY',
   schema: type('string'),
+  brand: STREAMS_API_KEY,
 };
 
 /** The address-free name compute.ts re-stashes to and the streams entrypoint reads. */

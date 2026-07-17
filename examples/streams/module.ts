@@ -12,7 +12,7 @@ import jobsService from './src/jobs/service.ts';
  *
  * Nothing here mentions the bearer key: the `events` binding declares it as a
  * provisioning need, so the deploy mints one key for the streams module and
- * lands it on both ends (ADR-0031).
+ * writes it to both ends (ADR-0031).
  *
  * A closed root: no boundary argument, no return — it only provisions.
  */

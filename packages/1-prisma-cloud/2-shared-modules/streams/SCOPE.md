@@ -55,7 +55,7 @@ with no consumers gets no key and refuses to boot.
 
 - **Typed params: none** (v1). The service keeps only the reserved `port`.
 - **Secrets: none.** The bearer key is provisioned by the target for the
-  `durableStreams()` binding and landed on this service under a reserved
+  `durableStreams()` binding and written to this service under a reserved
   config key; the entrypoint reads it there and exports it to the runtime as
   `API_KEY` with `--auth-strategy api-key`. All endpoints including `/health`
   require `Authorization: Bearer <key>` (verified acceptable on Compute by

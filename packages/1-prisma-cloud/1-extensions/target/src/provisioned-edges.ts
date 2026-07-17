@@ -29,7 +29,7 @@ export interface ProvisionedEdge {
 /**
  * Every provisioned edge in the graph. Core resolves and mints these (one
  * value per edge, keyed by `edgeId`); this scan is how the target finds them
- * again when it lands a provider's inbound values.
+ * again when it gathers a provider's inbound values.
  */
 export function provisionedEdges(graph: Graph): readonly ProvisionedEdge[] {
   const edges: ProvisionedEdge[] = [];

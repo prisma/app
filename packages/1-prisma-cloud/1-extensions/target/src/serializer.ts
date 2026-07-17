@@ -304,10 +304,22 @@ export const stashSecrets = (node: ServiceNode, address: string): void => {
 // declaration comes from — the target's own registrations
 // (`descriptors/shared.ts`'s `ProviderParam`), not the node the app authored.
 
-/** One reserved provider param's declaration: the boot-relevant half (name + schema) of a `ProviderParam` — the half the target's runtime side needs, without the deploy-only `value(refs)` function control.ts adds on top. */
+/**
+ * One reserved provider param's declaration: the boot-relevant half (name +
+ * schema) of a `ProviderParam` — the half the target's runtime side needs,
+ * without the deploy-only `value(refs)` function control.ts adds on top.
+ *
+ * `brand` is the ADR-0031 need brand this param answers for (e.g.
+ * `RPC_PEER_KEY`, `STREAMS_API_KEY`). control.ts's `PROVIDER_PARAMS` is built
+ * by mapping over the boot-side list of these entries (`provider-params.ts`'s
+ * `RESERVED_PROVIDER_PARAMS`) and looking up each brand's `value(refs)` by
+ * this field — so a param can exist on the deploy side only if it already
+ * exists here.
+ */
 export interface ProviderParamEntry {
   readonly name: string;
   readonly schema: StandardSchemaV1;
+  readonly brand: symbol;
 }
 
 /**

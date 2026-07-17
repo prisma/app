@@ -28,8 +28,24 @@ if (raw === undefined || raw === '') {
   );
 }
 // The reserved provider param is JSON-encoded, the same wire format any
-// service-own literal param takes (ADR-0031) — decode it back to the bearer string.
-const apiKey: string = JSON.parse(raw);
+// service-own literal param takes (ADR-0031) — decode it back to the bearer
+// string. Re-checks the decoded shape after parsing, the same way rpc's
+// serve() does after its own JSON.parse (serve.ts's acceptedKeys()): a
+// malformed or wrongly-shaped stored value fails with the friendly message
+// above, not a bare SyntaxError.
+let parsed: unknown;
+try {
+  parsed = JSON.parse(raw);
+} catch {
+  parsed = undefined;
+}
+if (typeof parsed !== 'string' || parsed.length === 0) {
+  throw new Error(
+    'streams: the provisioned bearer key is not a valid JSON-encoded string — the deploy wrote ' +
+      'something this entrypoint cannot read back. Redeploy to re-mint the key.',
+  );
+}
+const apiKey = parsed;
 process.env['API_KEY'] = apiKey;
 process.env['PORT'] = String(port);
 // Bind beyond loopback so the Compute router can reach the server.

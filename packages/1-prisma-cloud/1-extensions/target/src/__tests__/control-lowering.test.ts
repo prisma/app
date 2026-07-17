@@ -1154,7 +1154,7 @@ describe('ADR-0030: per-binding RPC service keys — mint (control.ts) + wire (d
   });
 });
 
-describe("streams' provisioned bearer key — one value per PROVIDER, landed on the provider", () => {
+describe("streams' provisioned bearer key — one value per PROVIDER, stored on the provider", () => {
   const build = {
     extension: '@prisma/composer/node',
     type: 'node',
@@ -1177,7 +1177,7 @@ describe("streams' provisioned bearer key — one value per PROVIDER, landed on 
       },
     });
 
-  test('two consumers of one streams module share ONE key; the provider lands that same key', async () => {
+  test('two consumers of one streams module share ONE key; the provider stores that same key', async () => {
     await withEnv(
       { PRISMA_PROJECT_ID: 'shop-project#cloud-id', PRISMA_BRANCH_ID: undefined },
       () => {
@@ -1288,7 +1288,7 @@ describe("streams' provisioned bearer key — one value per PROVIDER, landed on 
     ).toThrow(/provisioned 2 distinct keys/);
   });
 
-  test('a streams provider with no consumers mints nothing and lands no key', async () => {
+  test('a streams provider with no consumers mints nothing and stores no key', async () => {
     await withEnv(
       { PRISMA_PROJECT_ID: 'shop-project#cloud-id', PRISMA_BRANCH_ID: undefined },
       () => {
@@ -1343,10 +1343,24 @@ describe("descriptors/compute.ts's provider-param loop is generic over the regis
       const brandTwo = Symbol('provider-param-test/two');
       const brandThree = Symbol('provider-param-test/three');
       const providerParams: ReadonlyMap<symbol, ProviderParam> = new Map([
-        [brandOne, { name: 'PARAM_ONE', schema: type('string'), value: () => 'value-one' }],
-        [brandTwo, { name: 'PARAM_TWO', schema: type('string'), value: () => 'value-two' }],
+        [
+          brandOne,
+          { name: 'PARAM_ONE', schema: type('string'), brand: brandOne, value: () => 'value-one' },
+        ],
+        [
+          brandTwo,
+          { name: 'PARAM_TWO', schema: type('string'), brand: brandTwo, value: () => 'value-two' },
+        ],
         // A third registrant may also decline to write a row at all.
-        [brandThree, { name: 'PARAM_THREE', schema: type('string'), value: () => undefined }],
+        [
+          brandThree,
+          {
+            name: 'PARAM_THREE',
+            schema: type('string'),
+            brand: brandThree,
+            value: () => undefined,
+          },
+        ],
       ]);
       const o: ResolvedCloudOptions = {
         workspaceId: 'ws_1',
