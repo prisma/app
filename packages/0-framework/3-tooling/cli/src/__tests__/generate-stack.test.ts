@@ -36,7 +36,7 @@ describe('renderStackFile() — a module root', () => {
     expect(content).not.toContain('stage:');
   });
 
-  test('wires the deploy report through, so the renderer runs in the alchemy child where the resolved results are', () => {
+  test('passes the deploy report through, so the renderer runs in the alchemy child where the resolved result is', () => {
     const content = renderStackFile({
       entryPath: '/repo/app/module.ts',
       cwd: '/repo/app',
@@ -46,8 +46,10 @@ describe('renderStackFile() — a module root', () => {
     });
 
     expect(content).toContain("import { deploymentReport } from '@prisma/composer/report';");
-    // The SAME name already rendered into `name:` — the tree's root label.
-    expect(content).toContain('report: deploymentReport("storefront-auth"),');
+    // The callback, not a call: the app name rides inside the DeploymentResult
+    // core assembles, so the template threads nothing to the report.
+    expect(content).toContain('report: deploymentReport,');
+    expect(content).not.toContain('deploymentReport(');
     expect(content).toContain('name: "storefront-auth"');
   });
 

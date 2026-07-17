@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { service } from '@internal/core';
-import type { DeploymentResult } from '@internal/core/deploy';
+import type { DeployedNode, DeploymentResult } from '@internal/core/deploy';
 import { deploymentReport, renderDeployment } from '../render-deployment.ts';
 
 /**
- * The renderer reads only `address` and `primitives` — `node` is along for the
- * ride (it is what makes a result joinable to the graph). A real ServiceNode
- * rather than a stub, so these fixtures cannot drift from the type.
+ * The renderer reads only `address` and `entities` — `node` is along for the
+ * ride (it is what makes a deployed node joinable to the graph). A real
+ * ServiceNode rather than a stub, so these fixtures cannot drift from the type.
  */
-const result = (address: string, primitives: DeploymentResult['primitives']): DeploymentResult => ({
+const deployed = (address: string, entities: DeployedNode['entities']): DeployedNode => ({
   address,
   node: service({
     name: address,
@@ -23,22 +23,24 @@ const result = (address: string, primitives: DeploymentResult['primitives']): De
       entry: 'server.js',
     },
   }),
-  primitives,
+  entities,
 });
 
+const result = (app: string, nodes: readonly DeployedNode[]): DeploymentResult => ({ app, nodes });
+
 describe('renderDeployment', () => {
-  test('renders the pinned tree: nested addresses, aligned primitives, urls on their own line', () => {
+  test('renders the pinned tree: nested addresses, aligned entities, urls on their own line', () => {
     const results = [
-      result('auth.api', [
+      deployed('auth.api', [
         { kind: 'compute-service', id: 'cps_abc123', url: 'https://xyz.ewr.prisma.build' },
       ]),
-      result('db', [{ kind: 'postgres-database', id: 'pdb_def456' }]),
-      result('web', [
+      deployed('db', [{ kind: 'postgres-database', id: 'pdb_def456' }]),
+      deployed('web', [
         { kind: 'compute-service', id: 'cps_ghi789', url: 'https://uvw.ewr.prisma.build' },
       ]),
     ];
 
-    expect(renderDeployment('storefront-auth', results)).toBe(
+    expect(renderDeployment(result('storefront-auth', results))).toBe(
       [
         'storefront-auth',
         '├─ auth',
@@ -51,35 +53,35 @@ describe('renderDeployment', () => {
     );
   });
 
-  test('a node that reported no primitives is listed, not silently dropped — it deployed, it just published nothing', () => {
+  test('a node that reported no entities is listed, not silently dropped — it deployed, it just published nothing', () => {
     const results = [
-      result('creds', []),
-      result('store', [{ kind: 'compute-service', id: 'cps_1' }]),
+      deployed('creds', []),
+      deployed('store', [{ kind: 'compute-service', id: 'cps_1' }]),
     ];
 
-    expect(renderDeployment('app', results)).toBe(
-      ['app', '├─ creds   (no primitives reported)', '└─ store   compute-service cps_1'].join('\n'),
+    expect(renderDeployment(result('app', results))).toBe(
+      ['app', '├─ creds   (no entities reported)', '└─ store   compute-service cps_1'].join('\n'),
     );
   });
 
-  test('an intermediate address segment is structure, not a deployed node — it carries no primitive column', () => {
+  test('an intermediate address segment is structure, not a deployed node — it carries no entity column', () => {
     // Only `auth.api` deployed; `auth` exists solely to hold it.
-    const results = [result('auth.api', [{ kind: 'compute-service', id: 'cps_1' }])];
+    const results = [deployed('auth.api', [{ kind: 'compute-service', id: 'cps_1' }])];
 
-    expect(renderDeployment('app', results)).toBe(
+    expect(renderDeployment(result('app', results))).toBe(
       ['app', '└─ auth', '   └─ api   compute-service cps_1'].join('\n'),
     );
   });
 
-  test('a node with several primitives puts each on its own line, aligned under the first', () => {
+  test('a node with several entities puts each on its own line, aligned under the first', () => {
     const results = [
-      result('svc', [
+      deployed('svc', [
         { kind: 'compute-service', id: 'cps_1', url: 'https://a.example' },
         { kind: 'postgres-database', id: 'pdb_1' },
       ]),
     ];
 
-    expect(renderDeployment('app', results)).toBe(
+    expect(renderDeployment(result('app', results))).toBe(
       [
         'app',
         '└─ svc   compute-service cps_1',
@@ -90,16 +92,16 @@ describe('renderDeployment', () => {
   });
 
   test('the app name alone when nothing deployed', () => {
-    expect(renderDeployment('app', [])).toBe('app');
+    expect(renderDeployment(result('app', []))).toBe('app');
   });
 
-  test('deep nesting keeps every primitive in one column', () => {
+  test('deep nesting keeps every entity in one column', () => {
     const results = [
-      result('a.b.c', [{ kind: 'compute-service', id: 'cps_1' }]),
-      result('z', [{ kind: 'postgres-database', id: 'pdb_1' }]),
+      deployed('a.b.c', [{ kind: 'compute-service', id: 'cps_1' }]),
+      deployed('z', [{ kind: 'postgres-database', id: 'pdb_1' }]),
     ];
 
-    expect(renderDeployment('app', results)).toBe(
+    expect(renderDeployment(result('app', results))).toBe(
       [
         'app',
         '├─ a',
@@ -119,7 +121,9 @@ describe('deploymentReport', () => {
       lines.push(value);
     };
     try {
-      deploymentReport('app')([result('db', [{ kind: 'postgres-database', id: 'pdb_1' }])]);
+      deploymentReport(
+        result('app', [deployed('db', [{ kind: 'postgres-database', id: 'pdb_1' }])]),
+      );
     } finally {
       console.log = original;
     }
