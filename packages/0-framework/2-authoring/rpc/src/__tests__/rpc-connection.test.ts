@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { isNode, string } from '@internal/core';
+import { oc } from '@orpc/contract';
 import { type } from 'arktype';
 import { contract } from '../contract.ts';
 import { perBindingToken, RPC_PEER_KEY, rpc } from '../rpc.ts';
 
 const authContract = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
 });
 
 describe('rpc(contract) — the dependency end', () => {

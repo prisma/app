@@ -53,7 +53,7 @@ function triggerRequest(jobId: string): Request {
   return new Request('http://cron.internal/rpc/trigger', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jobId }),
+    body: JSON.stringify({ json: { jobId } }),
   });
 }
 
@@ -74,7 +74,7 @@ describe('serveSchedule()', () => {
     const res = await handler(triggerRequest('tick'));
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ ok: true });
+    await expect(res.json()).resolves.toEqual({ json: { ok: true } });
     expect(tickCalls).toHaveLength(1);
     expect(mrrCalls).toHaveLength(0);
   });

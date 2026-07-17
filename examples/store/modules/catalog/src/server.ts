@@ -1,5 +1,5 @@
-import { serve } from '@prisma/composer/rpc';
-import type { Product } from './contract.ts';
+import { implement, serve } from '@prisma/composer/rpc';
+import { catalogContract, type Product } from './contract.ts';
 import service from './service.ts';
 
 // load() hydrates `db` into the typed Prisma Next client (ADR-0022) — no SQL,
@@ -42,35 +42,35 @@ for (const p of SEED) {
 }
 await db.orm.public.Special.upsert({ create: { id: 1, productId: SEED[0].id }, update: {} });
 
-const handler = serve(service, {
-  rpc: {
-    listProducts: async () => ({
-      products: await db.orm.public.Product.orderBy((p) => p.name.asc()).all(),
-    }),
-    getProduct: async ({ id }) => ({
-      product: (await db.orm.public.Product.where({ id }).first()) ?? null,
-    }),
-    getSpecial: async () => {
-      const special = await db.orm.public.Special.where({ id: 1 }).first();
-      if (!special) return { product: null };
-      const product = await db.orm.public.Product.where({ id: special.productId }).first();
-      return { product: product ?? null };
-    },
-    rotateSpecial: async () => {
-      const products = await db.orm.public.Product.orderBy((p) => p.name.asc()).all();
-      if (products.length === 0) return { product: null };
+const rpc = implement(catalogContract.router);
+const router = rpc.router({
+  listProducts: rpc.listProducts.handler(async () => ({
+    products: await db.orm.public.Product.orderBy((p) => p.name.asc()).all(),
+  })),
+  getProduct: rpc.getProduct.handler(async ({ input }) => ({
+    product: (await db.orm.public.Product.where({ id: input.id }).first()) ?? null,
+  })),
+  getSpecial: rpc.getSpecial.handler(async () => {
+    const special = await db.orm.public.Special.where({ id: 1 }).first();
+    if (!special) return { product: null };
+    const product = await db.orm.public.Product.where({ id: special.productId }).first();
+    return { product: product ?? null };
+  }),
+  rotateSpecial: rpc.rotateSpecial.handler(async () => {
+    const products = await db.orm.public.Product.orderBy((p) => p.name.asc()).all();
+    if (products.length === 0) return { product: null };
 
-      const special = await db.orm.public.Special.where({ id: 1 }).first();
-      const currentIdx = products.findIndex((p) => p.id === special?.productId);
-      const next = products[(currentIdx + 1) % products.length];
-      await db.orm.public.Special.upsert({
-        create: { id: 1, productId: next.id },
-        update: { productId: next.id },
-      });
-      return { product: next };
-    },
-  },
+    const special = await db.orm.public.Special.where({ id: 1 }).first();
+    const currentIdx = products.findIndex((p) => p.id === special?.productId);
+    const next = products[(currentIdx + 1) % products.length];
+    await db.orm.public.Special.upsert({
+      create: { id: 1, productId: next.id },
+      update: { productId: next.id },
+    });
+    return { product: next };
+  }),
 });
+const handler = serve(service, { rpc: router });
 export default handler;
 
 // Bind all interfaces — Compute routes external HTTP to the VM, so a

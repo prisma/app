@@ -1,36 +1,44 @@
 import { describe, expect, test } from 'bun:test';
+import { blindCast } from '@internal/foundation/casts';
+import { oc } from '@orpc/contract';
+import { getHiddenRouterContract, implement } from '@orpc/server';
 import { type } from 'arktype';
 import { contract } from '../contract.ts';
-import { rpc } from '../rpc.ts';
-
-describe('rpc()', () => {
-  test('carries the input/output schemas on the runtime value', () => {
-    const input = type({ token: 'string' });
-    const output = type({ ok: 'boolean' });
-
-    const verify = rpc({ input, output }) as unknown as { input: unknown; output: unknown };
-
-    expect(verify.input).toBe(input);
-    expect(verify.output).toBe(output);
-  });
-});
 
 describe('contract()', () => {
-  test('is branded with kind "rpc" and carries the function map as __cmp', () => {
-    const fns = {
-      verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  test('brands and retains the exact native oRPC router', () => {
+    const router = {
+      verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
     };
 
-    const authContract = contract(fns);
+    const authContract = contract(router);
 
     expect(authContract.kind).toBe('rpc');
-    expect(authContract.__cmp).toBe(fns);
+    expect(authContract.router).toBe(router);
+    expect(
+      blindCast<
+        unknown,
+        '__cmp has a deliberately erased runtime representation; this asserts it retains the router identity'
+      >(authContract.__cmp),
+    ).toBe(router);
+  });
+
+  test('the retained router works directly with native oRPC implement()', () => {
+    const authContract = contract({
+      verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
+    });
+    const os = implement(authContract.router);
+    const router = os.router({
+      verify: os.verify.handler(({ input }) => ({ ok: input.token.length > 0 })),
+    });
+
+    expect(getHiddenRouterContract(router)).toBe(authContract.router);
   });
 
   test('satisfies() is nominal — a contract only satisfies itself', () => {
     const build = () =>
       contract({
-        verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+        verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
       });
     const authContract = build();
     const structurallyEqual = build();
@@ -41,7 +49,7 @@ describe('contract()', () => {
 
   test('the returned contract is frozen', () => {
     const authContract = contract({
-      verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+      verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
     });
 
     expect(Object.isFrozen(authContract)).toBe(true);

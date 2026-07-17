@@ -41,7 +41,7 @@ describe('invariant: the entry is web-standard only — no bun/node coupling', (
 
     const js = await out.outputs[0]!.text();
     // Positive marker: the probe genuinely bundled this package's serve() logic.
-    expect(js).toContain('RPC dispatch is flat');
+    expect(js).toContain('no native oRPC router supplied');
     for (const token of ['from "bun"', '"node:']) {
       expect(js).not.toContain(token);
     }

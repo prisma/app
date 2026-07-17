@@ -10,7 +10,7 @@
 import type { ModuleNode } from '@internal/core';
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
-import { contract, rpc } from '@internal/rpc';
+import { contract, oc, rpc } from '@internal/rpc';
 import { type } from 'arktype';
 import { test } from 'vitest';
 import { triggerContract } from '../contract.ts';
@@ -20,7 +20,7 @@ import { defineSchedule } from '../schedule.ts';
 const build = node({ module: import.meta.url, entry: '../dist/service.mjs' });
 
 const workerContract = contract({
-  work: rpc({ input: type({ jobId: 'string' }), output: type({ ok: 'boolean' }) }),
+  work: oc.input(type({ jobId: 'string' })).output(type({ ok: 'boolean' })),
 });
 
 const runner = compute({

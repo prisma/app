@@ -1,87 +1,71 @@
 /**
- * Generates the RPC server from a service's `expose`: a web fetch handler
- * that dispatches `POST /rpc/<method>` across every exposed port, flattened
- * into one method namespace (method names must be unique across a service's
- * ports — there is no port segment in the route). `Handlers<S>` derives the
- * exhaustive, correctly-typed handler map straight off `S["expose"]` and
- * `S["load"]`'s return, so an incomplete or mistyped `serve(service,
- * handlers)` call does not compile; extra handler methods/ports are allowed
- * (width, same as a provider exposing more than a consumer requires).
- *
- * Per ADR-0030, every request is checked against the accepted service-key
- * set before dispatch: unset (never provisioned — local/test) passes
- * through; a provisioned `"[]"` (deployed, zero wired consumers) denies
- * every caller; a provisioned non-empty set requires membership via
- * `Authorization: Bearer <key>`.
+ * Mounts native oRPC routers for a Composer service. oRPC owns procedures,
+ * middleware, validation, typed errors, codecs, and dispatch. Composer owns
+ * topology-to-router verification, per-edge authorization, and body limits.
  */
 
-import type { Contract, Expose, RunnableServiceNode } from '@internal/core';
+import type { RunnableServiceNode } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { standardValidate } from './standard-schema.ts';
+import { ORPCError } from '@orpc/client';
+import {
+  type AnyRouter,
+  type ContractedRouter,
+  type DefaultInitialContext,
+  getHiddenRouterContract,
+  walkProcedureContractsSync,
+} from '@orpc/server';
+import { RPCHandler } from '@orpc/server/fetch';
+import { RequestLimitHandlerPlugin } from '@orpc/server/plugins';
+import { type AnyRpcContract, isRpcContract, type RpcContract } from './contract.ts';
 
 // The ambient environment of whatever runtime hosts the bundle. Declared
-// structurally so this entry imports no runtime's types.
+// structurally so this entry imports no runtime-specific types.
 declare const process: { env: Record<string, string | undefined> };
 
-/** The reserved env var the target (slice 2) writes the accepted key set to. */
+/** The reserved env var the target writes the accepted key set to. */
 export const RPC_ACCEPTED_KEYS_ENV = 'COMPOSER_RPC_ACCEPTED_KEYS';
 
-// biome-ignore lint/suspicious/noExplicitAny: accepts any concrete runnable service node — generics are invariant, so `any` is required (mirrors ModuleBuilder.provision in @prisma/composer).
+/** The default maximum encoded request body: one mebibyte. */
+export const DEFAULT_RPC_MAX_BODY_SIZE = 1024 * 1024;
+
+export interface ServeOptions {
+  /** Mount path for the RPC router. @default '/rpc' */
+  readonly prefix?: `/${string}`;
+  /** Maximum encoded request body in bytes. @default 1048576 */
+  readonly maxBodySize?: number;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: accepts every concrete runnable node; its generics are invariant.
 type AnyRunnable = RunnableServiceNode<any, any, any>;
 
-type CmpOf<C> = C extends Contract<string, infer Cmp> ? Cmp : never;
+type RouterFor<C> =
+  C extends RpcContract<infer R> ? ContractedRouter<R, DefaultInitialContext> : never;
 
-type HandlerFor<Fn, LoadedDeps> = Fn extends (input: infer I) => Promise<infer O>
-  ? (input: I, deps: LoadedDeps) => Promise<O>
-  : never;
-
-/** Every exposed port's methods, turned into a handler map typed off S's own `expose` and `load()`. */
-export type Handlers<S extends AnyRunnable> = {
-  [Port in keyof NonNullable<S['expose']>]: {
-    [M in keyof CmpOf<NonNullable<S['expose']>[Port]>]: HandlerFor<
-      CmpOf<NonNullable<S['expose']>[Port]>[M],
-      ReturnType<S['load']>
-    >;
-  };
+/** One native implemented oRPC router for every RPC port exposed by a service. */
+export type Routers<S extends AnyRunnable> = {
+  [Port in keyof NonNullable<S['expose']> as NonNullable<S['expose']>[Port] extends AnyRpcContract
+    ? Port
+    : never]: RouterFor<NonNullable<S['expose']>[Port]>;
 };
 
-interface MethodSchemas {
-  readonly input: StandardSchemaV1;
-  readonly output: StandardSchemaV1;
-}
-
-type RpcHandler = (input: unknown, deps: unknown) => Promise<unknown>;
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-/** The provisioned accepted key set, or undefined when the deploy never provisioned one (local/test — enforcement off). */
+/** The provisioned accepted key set, or undefined in unprovisioned local/test runs. */
 function acceptedKeys(): readonly string[] | undefined {
   const raw = process.env[RPC_ACCEPTED_KEYS_ENV];
-  if (raw === undefined || raw === '') return undefined; // unprovisioned → pass through
+  if (raw === undefined) return undefined;
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return []; // provisioned but unreadable → deny all
+    return [];
   }
-  return Array.isArray(parsed) && parsed.every((key): key is string => typeof key === 'string')
+  return Array.isArray(parsed) &&
+    parsed.every((key): key is string => typeof key === 'string' && key.length > 0)
     ? parsed
     : [];
 }
 
-/**
- * Length-independent constant-time string equality — no early exit on the
- * first mismatched character or on a length difference, so a caller cannot
- * time its way toward a valid key. No `node:crypto`, to keep this module
- * runtime-agnostic.
- */
+/** Runtime-agnostic length-independent equality for service capability keys. */
 function constantTimeEquals(a: string, b: string): boolean {
   const length = Math.max(a.length, b.length);
   let diff = a.length ^ b.length;
@@ -91,7 +75,6 @@ function constantTimeEquals(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** Whether `presented` is a member of `accepted` — always compares against every key. */
 function isAcceptedKey(presented: string, accepted: readonly string[]): boolean {
   let matched = false;
   for (const key of accepted) {
@@ -102,106 +85,132 @@ function isAcceptedKey(presented: string, accepted: readonly string[]): boolean 
 
 const BEARER_PREFIX = 'Bearer ';
 
-/** The bearer token on `Authorization`, or `''` if the header is missing or malformed. */
-function bearerToken(req: Request): string {
-  const header = req.headers.get('authorization');
-  return header?.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : '';
+function bearerToken(header: string | string[] | undefined): string {
+  const value = Array.isArray(header) ? header.at(-1) : header;
+  return value?.startsWith(BEARER_PREFIX) ? value.slice(BEARER_PREFIX.length) : '';
 }
 
-/**
- * Flattens every exposed port's methods into one method → {schemas, handler}
- * table. RPC dispatch is flat (`/rpc/<method>`), so a method name exposed by
- * more than one port is a construction-time error, as is a missing handler.
- */
-function methodTable(
-  expose: Expose,
-  handlers: Record<string, Record<string, RpcHandler>>,
-): Map<string, MethodSchemas & { handler: RpcHandler }> {
-  const table = new Map<string, MethodSchemas & { handler: RpcHandler }>();
+function validateOptions(options: ServeOptions | undefined): Required<ServeOptions> {
+  const prefix = options?.prefix ?? '/rpc';
+  const maxBodySize = options?.maxBodySize ?? DEFAULT_RPC_MAX_BODY_SIZE;
+  if (!prefix.startsWith('/')) {
+    throw new Error('serve(): prefix must start with "/".');
+  }
+  if (!Number.isSafeInteger(maxBodySize) || maxBodySize <= 0) {
+    throw new Error('serve(): maxBodySize must be a positive safe integer.');
+  }
+  return { prefix, maxBodySize };
+}
 
-  for (const [port, contract] of Object.entries(expose)) {
-    const portHandlers = handlers[port] ?? {};
-    for (const [method, fn] of Object.entries(contract.__cmp)) {
-      if (table.has(method)) {
+interface MountedRouter {
+  readonly port: string;
+  readonly handler: RPCHandler<DefaultInitialContext>;
+}
+
+function procedurePathKey(path: readonly string[]): string {
+  return JSON.stringify(path);
+}
+
+function procedureWirePath(path: readonly string[]): string {
+  return path.map(encodeURIComponent).join('/');
+}
+
+function mountRouters<S extends AnyRunnable>(
+  service: S,
+  routers: Routers<S>,
+  maxBodySize: number,
+): MountedRouter[] {
+  const mounted: MountedRouter[] = [];
+  const paths = new Map<string, string>();
+  const routersByPort = blindCast<
+    Record<string, AnyRouter | undefined>,
+    'Routers<S> is keyed by the string names of the service RPC ports'
+  >(routers);
+
+  for (const [port, exposedContract] of Object.entries(service.expose ?? {})) {
+    if (!isRpcContract(exposedContract)) continue;
+
+    const router = routersByPort[port];
+    if (router === undefined) {
+      throw new Error(`serve(): no native oRPC router supplied for exposed port "${port}".`);
+    }
+    if (getHiddenRouterContract(router) !== exposedContract.router) {
+      throw new Error(
+        `serve(): router for port "${port}" was not implemented from that port's exact contract.router.`,
+      );
+    }
+
+    walkProcedureContractsSync(exposedContract.router, (_procedure, path) => {
+      const key = procedurePathKey(path);
+      const owner = paths.get(key);
+      if (owner !== undefined) {
         throw new Error(
-          `serve(): method "${method}" is exposed by more than one port — RPC dispatch is flat ` +
-            "(POST /rpc/<method>), so method names must be unique across a service's exposed ports.",
+          `serve(): procedure path "${procedureWirePath(path)}" is exposed by both "${owner}" and "${port}"; ` +
+            "paths must be unique across a service's RPC ports.",
         );
       }
-      const handler = portHandlers[method];
-      if (handler === undefined) {
-        throw new Error(`serve(): no handler supplied for exposed method "${port}.${method}".`);
-      }
-      const { input, output } = blindCast<
-        MethodSchemas,
-        'rpc() stores the method input/output Standard Schemas on the function value; the Cmp type models only the call signature'
-      >(fn);
-      table.set(method, { input, output, handler });
-    }
+      paths.set(key, port);
+    });
+
+    const declaredPaths = new Set(
+      [...paths.entries()].filter(([, owner]) => owner === port).map(([path]) => path),
+    );
+
+    mounted.push({
+      port,
+      handler: new RPCHandler(router, {
+        // `ContractedRouter` deliberately permits richer structural router
+        // types. Only publish procedures declared by this topology contract,
+        // even if an implementation object carries additional procedures.
+        filter: (_procedure, path) => declaredPaths.has(procedurePathKey(path)),
+        plugins: [new RequestLimitHandlerPlugin({ maxBodySize })],
+        interceptors: [
+          async ({ next, request }) => {
+            const accepted = acceptedKeys();
+            const presented = bearerToken(request.headers['authorization']);
+            if (accepted !== undefined && !isAcceptedKey(presented, accepted)) {
+              throw new ORPCError('UNAUTHORIZED', {
+                message: 'Unauthorized: missing or invalid service key',
+              });
+            }
+            if (request.method !== 'POST') {
+              throw new ORPCError('METHOD_NOT_SUPPORTED', {
+                message: 'RPC procedures require POST',
+              });
+            }
+            return next();
+          },
+        ],
+      }),
+    });
   }
 
-  return table;
+  return mounted;
+}
+
+function notFound(req: Request): Response {
+  const { pathname } = new URL(req.url);
+  return Response.json({ error: `Not found: ${pathname}` }, { status: 404 });
 }
 
 /**
- * Routes `POST /rpc/<method>`: parses JSON, validates input, calls the
- * handler with `service.load()`'s deps, validates the output, and responds
- * JSON. An unknown method or invalid input is a 4xx; a handler (or output
- * validation) failure is a 5xx — either way the process does not crash.
- * `load()` is called exactly once, here, before the handler ever runs.
+ * Returns a Web Fetch handler for the supplied native oRPC routers. Matching
+ * and authorization happen before body decoding. Nested oRPC paths remain
+ * intact below the `/rpc` prefix.
  */
-export function serve<S extends AnyRunnable, H extends Handlers<S>>(
+export function serve<S extends AnyRunnable>(
   service: S,
-  handlers: H,
+  routers: Routers<NoInfer<S>>,
+  options?: ServeOptions,
 ): (req: Request) => Promise<Response> {
-  const table = methodTable(
-    service.expose ?? {},
-    blindCast<
-      Record<string, Record<string, RpcHandler>>,
-      'Handlers<S> is the exhaustive typed handler map; methodTable indexes it by the runtime port/method strings'
-    >(handlers),
-  );
-  const deps = service.load();
+  const { prefix, maxBodySize } = validateOptions(options);
+  const mounted = mountRouters(service, routers, maxBodySize);
 
   return async (req: Request): Promise<Response> => {
-    const accepted = acceptedKeys();
-    if (accepted !== undefined && !isAcceptedKey(bearerToken(req), accepted)) {
-      return jsonResponse({ error: 'Unauthorized: missing or invalid service key' }, 401);
+    for (const { handler } of mounted) {
+      const result = await handler.handle(req, { context: {}, prefix });
+      if (result.matched) return result.response;
     }
-
-    const { pathname } = new URL(req.url);
-    const methodName = /^\/rpc\/([^/]+)$/.exec(pathname)?.[1];
-    if (methodName === undefined) {
-      return jsonResponse({ error: `Not found: ${pathname}` }, 404);
-    }
-
-    const method = table.get(methodName);
-    if (method === undefined) {
-      return jsonResponse({ error: `Unknown RPC method "${methodName}"` }, 404);
-    }
-    if (req.method !== 'POST') {
-      return jsonResponse({ error: `Method "${methodName}" requires POST` }, 405);
-    }
-
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return jsonResponse({ error: 'Request body must be JSON' }, 400);
-    }
-
-    let input: unknown;
-    try {
-      input = await standardValidate(method.input, body);
-    } catch (err) {
-      return jsonResponse({ error: err instanceof Error ? err.message : String(err) }, 400);
-    }
-
-    try {
-      const result = await method.handler(input, deps);
-      return jsonResponse(await standardValidate(method.output, result));
-    } catch (err) {
-      return jsonResponse({ error: err instanceof Error ? err.message : String(err) }, 500);
-    }
+    return notFound(req);
   };
 }

@@ -6,7 +6,7 @@
  * the same contracts the real modules serve.
  */
 import node from '@prisma/composer/node';
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import fakeCatalogHandler, { FAKE_PRODUCTS } from '@store/catalog/fake';
 import { type Order, ordersContract } from '@store/orders/contract';
@@ -21,27 +21,27 @@ const ordersNode = compute({
   build: node({ module: import.meta.url, entry: 'dev.ts' }),
   expose: { rpc: ordersContract },
 });
+const rpc = implement(ordersContract.router);
+const router = rpc.router({
+  placeOrder: rpc.placeOrder.handler(({ input }) => {
+    const product = FAKE_PRODUCTS.find((p) => p.id === input.productId);
+    if (!product || input.quantity < 1) return { order: null };
+    const order: Order = {
+      id: crypto.randomUUID(),
+      productId: product.id,
+      productName: product.name,
+      quantity: input.quantity,
+      totalCents: product.priceCents * input.quantity,
+      placedAt: new Date().toISOString(),
+    };
+    placed.unshift(order);
+    return { order };
+  }),
+  listOrders: rpc.listOrders.handler(() => ({ orders: placed })),
+});
 const orders = Bun.serve({
   port: 0,
-  fetch: serve(ordersNode, {
-    rpc: {
-      placeOrder: async ({ productId, quantity }) => {
-        const product = FAKE_PRODUCTS.find((p) => p.id === productId);
-        if (!product || quantity < 1) return { order: null };
-        const order: Order = {
-          id: crypto.randomUUID(),
-          productId: product.id,
-          productName: product.name,
-          quantity,
-          totalCents: product.priceCents * quantity,
-          placedAt: new Date().toISOString(),
-        };
-        placed.unshift(order);
-        return { order };
-      },
-      listOrders: async () => ({ orders: placed }),
-    },
-  }),
+  fetch: serve(ordersNode, { rpc: router }),
 });
 
 console.log(`fake catalog  ${catalog.url}`);

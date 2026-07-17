@@ -16,6 +16,9 @@
   "dependencies": {
     "@internal/core": "workspace:0.1.0",
     "@internal/foundation": "workspace:0.1.0",
+    "@orpc/client": "2.0.0-beta.18",
+    "@orpc/contract": "2.0.0-beta.18",
+    "@orpc/server": "2.0.0-beta.18",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "^2.2.3"
   },

@@ -32,30 +32,37 @@ production, a stage, a test — just a different set of injected values.
 
 ## Contracts
 
-A **contract** is a service's API written as schemas, and it types both ends
-of the edge: the producer's handlers and the consumer's client. Define it
-once, in the package of the service that owns it:
+A **contract** is a service's API written as a native oRPC contract router. It
+types both ends of the edge: the producer's handlers and the consumer's
+client. Composer's `contract()` keeps that router intact and adds the topology
+identity used while wiring services. Define it once, in the package of the
+service that owns it:
 
 ```ts
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, oc } from '@prisma/composer/rpc';
 import { type } from 'arktype';
 
 export const authContract = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
 });
 ```
 
-On the producer, `serve()` turns the service's `expose` into a fetch handler.
-The handler map must cover every method — a missing or wrong-shaped handler
-doesn't compile. Each handler receives the validated input (and the service's
-own loaded deps as a second argument):
+On the producer, native oRPC `implement()` makes the implementation exhaustive
+and infers the validated handler input and output. `serve()` verifies that the
+router came from the exact contract exposed on that port, then returns a Web
+Fetch handler:
 
 ```ts
-const handler = serve(service, {
-  rpc: {
-    verify: async ({ token }) => ({ ok: await check(token) }),
-  },
+import { implement, serve } from '@prisma/composer/rpc';
+
+const rpc = implement(authContract.router);
+const router = rpc.router({
+  verify: rpc.verify.handler(async ({ input }) => ({
+    ok: await check(input.token),
+  })),
 });
+
+const handler = serve(service, { rpc: router });
 ```
 
 On the consumer, declare `deps: { auth: rpc(authContract) }` and
@@ -65,6 +72,59 @@ the boundary, against the same schemas.
 
 The only contract kind today is RPC over HTTP — no gRPC, WebSockets, or
 streaming contracts yet.
+
+### Production RPC behavior
+
+Composer deliberately exposes oRPC v2's contract-first syntax through
+`@prisma/composer/rpc`: `oc` for contracts and `implement()` for routers.
+oRPC owns procedures, nested routing, middleware, Standard Schema execution,
+the wire codec, structured errors, and cancellation. Composer owns the
+application graph, contract identity, dependency hydration, per-edge service
+keys, mount policy, and request limits. Import from Composer's entry point so
+every package uses the exact oRPC version Composer supports.
+
+Schema transforms run exactly once in native oRPC. A handler receives the
+**output** of its input schema and returns the **input** of its output schema;
+the provider validates/transforms that result and the generated client receives
+the output schema's transformed value.
+
+Expected public failures are structured `RpcError`s:
+
+```ts
+import { RpcError } from '@prisma/composer/rpc';
+
+throw new RpcError('CONFLICT', { message: 'The order was already submitted' });
+```
+
+The consumer receives a `RpcError` with the same stable `code` and intentional
+message. An ordinary unexpected `Error` becomes `INTERNAL_SERVER_ERROR`; its
+message and stack are not sent to the caller.
+
+Every client method accepts an optional cancellation signal:
+
+```ts
+await auth.verify({ token }, { signal: request.signal });
+```
+
+`serve()` accepts a third options argument. Request bodies are limited to one
+mebibyte by default; set a smaller or larger positive byte limit explicitly
+when the contract needs it:
+
+```ts
+serve(service, { rpc: router }, { maxBodySize: 256 * 1024 });
+```
+
+The default mount is `/rpc/<procedure/path>`, including native nested routers.
+A framework can call the returned Fetch handler directly, or mount it at an
+explicit prefix with
+`{ prefix: '/api/v1/rpc' }`; Composer never guesses or rewrites application
+paths. Full procedure paths must be unique across all RPC ports exposed by one
+service because those routers share the mount.
+
+[`examples/hono-rpc`](../../examples/hono-rpc/) is a complete framework
+example: a public Hono gateway calls a second Compute service through a typed
+Composer RPC dependency, with an integration test that boots both compiled
+entries and drives the whole chain over real HTTP.
 
 ### Calls are authenticated for you
 

@@ -10,9 +10,9 @@ edges, no infrastructure config anywhere. Point at the wiring:
 
 ## 2. A contract — [modules/catalog/src/contract.ts](modules/catalog/src/contract.ts)
 
-The edge type. arktype schemas → a typed client on the consumer side and a
-type-checked handler map on the producer side. Validated at the boundary at
-runtime.
+The edge type. Native oRPC + arktype schemas produce a typed client on the
+consumer side and a type-checked `implement()` router on the producer side.
+Validated at the boundary at runtime.
 
 ## 3. A module — [modules/catalog/src/module.ts](modules/catalog/src/module.ts)
 
@@ -72,8 +72,8 @@ against in-memory fakes on loopback — same contracts, zero cloud.
 ## 8. Testing story (if time)
 
 [page.test.tsx](modules/storefront/app/page.test.tsx): `mockService` swaps
-`load()` for typed fakes — the handler maps are type-checked against the same
-contracts the real modules serve. No Postgres, no server, no cloud.
+`load()` for typed fakes — their native oRPC routers are type-checked against
+the same contracts the real modules serve. No Postgres, no server, no cloud.
 
 ## Likely questions
 

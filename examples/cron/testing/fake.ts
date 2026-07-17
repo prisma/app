@@ -1,7 +1,7 @@
 /**
  * A fake worker for TESTING a module that depends on it — injected in place
  * of the real one so the runner's integration test needs no deployed worker.
- * Serves the real `workerContract` (so its handler map is type-checked
+ * Implements the real `workerContract` (so its native router is type-checked
  * against the same contract the real worker exposes) and records which
  * methods were called, so the test can assert the cron pipeline actually
  * reached the target. Not a build entry, so tsdown never bundles it into the
@@ -13,7 +13,7 @@
  */
 
 import node from '@prisma/composer/node';
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { workerContract } from '../src/worker/contract.ts';
 
@@ -31,17 +31,17 @@ export interface FakeWorker {
 
 export function createFakeWorker(): FakeWorker {
   const calls: string[] = [];
-  const fetch = serve(fakeWorker, {
-    rpc: {
-      tick: async () => {
-        calls.push('tick');
-        return { ok: true };
-      },
-      refreshMrr: async () => {
-        calls.push('refreshMrr');
-        return { ok: true };
-      },
-    },
+  const rpc = implement(workerContract.router);
+  const router = rpc.router({
+    tick: rpc.tick.handler(() => {
+      calls.push('tick');
+      return { ok: true };
+    }),
+    refreshMrr: rpc.refreshMrr.handler(() => {
+      calls.push('refreshMrr');
+      return { ok: true };
+    }),
   });
+  const fetch = serve(fakeWorker, { rpc: router });
   return { fetch, calls };
 }

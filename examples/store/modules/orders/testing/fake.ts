@@ -1,11 +1,11 @@
 /**
  * An in-memory orders service for TESTING a module that depends on it — no
- * Postgres, no catalog, no deploy. It serves the real `ordersContract`, so its
- * handler map is type-checked against the same contract the real orders
+ * Postgres, no catalog, no deploy. It implements the real `ordersContract`, so
+ * its native router is type-checked against the same contract the real orders
  * exposes. Test-only, deliberately outside `src/`.
  */
 import node from '@prisma/composer/node';
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { type Order, ordersContract } from '../src/contract.ts';
 
@@ -27,18 +27,19 @@ const fakeOrders = compute({
   expose: { rpc: ordersContract },
 });
 
-export default serve(fakeOrders, {
-  rpc: {
-    placeOrder: async ({ productId, quantity }) => ({
-      order: {
-        id: `order-${FAKE_ORDERS.length + 1}`,
-        productId,
-        productName: productId,
-        quantity,
-        totalCents: 100 * quantity,
-        placedAt: '2026-07-13T09:00:00.000Z',
-      },
-    }),
-    listOrders: async () => ({ orders: FAKE_ORDERS }),
-  },
+const rpc = implement(ordersContract.router);
+const router = rpc.router({
+  placeOrder: rpc.placeOrder.handler(({ input }) => ({
+    order: {
+      id: `order-${FAKE_ORDERS.length + 1}`,
+      productId: input.productId,
+      productName: input.productId,
+      quantity: input.quantity,
+      totalCents: 100 * input.quantity,
+      placedAt: '2026-07-13T09:00:00.000Z',
+    },
+  })),
+  listOrders: rpc.listOrders.handler(() => ({ orders: FAKE_ORDERS })),
 });
+
+export default serve(fakeOrders, { rpc: router });

@@ -100,11 +100,11 @@ valibot…); the examples use arktype:
 
 ```ts
 // src/quotes/contract.ts
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, oc } from '@prisma/composer/rpc';
 import { type } from 'arktype';
 
 export const quotesContract = contract({
-  random: rpc({ input: type({}), output: type({ quote: 'string' }) }),
+  random: oc.input(type({})).output(type({ quote: 'string' })),
 });
 ```
 
@@ -127,13 +127,15 @@ export default compute({
 ```
 
 Third, the **server** — the code your build turns into `dist/quotes/server.mjs`
-and the platform boots. `serve()` generates the HTTP handler from the
-contract; if you forget a handler or return the wrong shape, it doesn't
-compile:
+and the platform boots. `implement()` is oRPC's contract-first implementer: it
+infers each handler from the contract and refuses missing handlers or wrong
+outputs. `serve()` mounts that implemented router for the service's exposed
+port:
 
 ```ts
 // src/quotes/server.ts
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
+import { quotesContract } from './contract.ts';
 import service from './service.ts';
 
 const { port } = service.config();
@@ -143,11 +145,14 @@ const QUOTES = [
   'Make it work, make it right, make it fast.',
 ];
 
-const handler = serve(service, {
-  rpc: {
-    random: async () => ({ quote: QUOTES[Math.floor(Math.random() * QUOTES.length)]! }),
-  },
+const rpc = implement(quotesContract.router);
+const router = rpc.router({
+  random: rpc.random.handler(() => ({
+    quote: QUOTES[Math.floor(Math.random() * QUOTES.length)]!,
+  })),
 });
+
+const handler = serve(service, { rpc: router });
 export default handler;
 
 // Bind all interfaces — Compute routes external HTTP to the VM, so a

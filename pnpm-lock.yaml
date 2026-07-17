@@ -89,6 +89,31 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  examples/hono-rpc:
+    dependencies:
+      '@prisma/composer':
+        specifier: workspace:0.1.0
+        version: link:../../packages/9-public/composer
+      '@prisma/composer-prisma-cloud':
+        specifier: workspace:0.1.0
+        version: link:../../packages/9-public/composer-prisma-cloud
+      arktype:
+        specifier: ^2.2.3
+        version: 2.2.3
+      hono:
+        specifier: ^4.12.30
+        version: 4.12.30
+    devDependencies:
+      '@types/bun':
+        specifier: ^1.3.13
+        version: 1.3.14
+      tsdown:
+        specifier: ^0.22.4
+        version: 0.22.4(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/pn-widgets:
     dependencies:
       '@prisma-next/postgres':
@@ -537,6 +562,15 @@ importers:
       '@internal/foundation':
         specifier: workspace:0.1.0
         version: link:../../0-foundation/foundation
+      '@orpc/client':
+        specifier: 2.0.0-beta.18
+        version: 2.0.0-beta.18
+      '@orpc/contract':
+        specifier: 2.0.0-beta.18
+        version: 2.0.0-beta.18
+      '@orpc/server':
+        specifier: 2.0.0-beta.18
+        version: 2.0.0-beta.18
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -845,6 +879,15 @@ importers:
 
   packages/9-public/composer:
     dependencies:
+      '@orpc/client':
+        specifier: 2.0.0-beta.18
+        version: 2.0.0-beta.18
+      '@orpc/contract':
+        specifier: 2.0.0-beta.18
+        version: 2.0.0-beta.18
+      '@orpc/server':
+        specifier: 2.0.0-beta.18
+        version: 2.0.0-beta.18
       '@prisma/management-api-sdk':
         specifier: ^1.47.0
         version: 1.47.0
@@ -1978,6 +2021,28 @@ packages:
     resolution: {integrity: sha512-da6KbdNCV5sr1/txD896V+6W0iamFWrvVl8cHkBSPT+YlvmT3DwXa4jxZnQc+gnuTEqSWbBeoSZYTayXH9wXcw==}
     engines: {node: '>= 20'}
 
+  '@orpc/client@2.0.0-beta.18':
+    resolution: {integrity: sha512-PZengUM+bbElAV/ci+cxvpjbeQkxFYj+c72IfktOp5hz0gekq5hkdVPiz/YTsvGxqe4H1yjwRBOmDoeQOTWGNg==}
+
+  '@orpc/contract@2.0.0-beta.18':
+    resolution: {integrity: sha512-IAA3L5GCtnScsLqapJ+nJkfFK1T4YBJgR+aYbJQJdX4Gu+8Eb1u10kqddurZUWKk7wJgx7yuA0VNfzB0IPlC+g==}
+
+  '@orpc/server@2.0.0-beta.18':
+    resolution: {integrity: sha512-5GwkBpGYd5ekSFs/PNd5T9VXt02PA1HM1zgOOnIXZvHE2RWHqI4pcZQpnjEPrto70e14xHBg+OTNlbrbt7dyUQ==}
+    peerDependencies:
+      crossws: '>=0.3.4'
+    peerDependenciesMeta:
+      crossws:
+        optional: true
+
+  '@orpc/shared@2.0.0-beta.18':
+    resolution: {integrity: sha512-b7CTKKCmHutKAGKxFu9Gd4T1JEZ0yknLZbpQAbhrphcujkKFSdIBKBr4cDRP+Rif56phJ+2qmfVDbJ6fjj1D8A==}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.9.0'
+    peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
+
   '@oxc-project/types@0.130.0':
     resolution: {integrity: sha512-ibD2usx9JRu7f5pu2tMKMI4cpA4NgXJQoYRP4pQ7Pxmn1l6k/53qWtQWZayhYy3X4QZkt90Ot+mJEaeXouio6Q==}
 
@@ -2574,6 +2639,21 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@standardserver/core@0.5.0':
+    resolution: {integrity: sha512-c6vIXiJtQNVHm0G8vJCCdZ7G4ObgWj71n89HvKvVR5RnajxEEb+wVcIn10rvrMJmd9sR9RtHR6HCubeCFY214A==}
+
+  '@standardserver/fetch@0.5.0':
+    resolution: {integrity: sha512-0Sosn0v2Cl2Vhcc1st2FKGxwdK0qPq84K40TtZFAePLGq+Zu6hJZ4VsrwOWfm3S7iZ0EeRo9OByp0oUhm8NiPw==}
+
+  '@standardserver/node@0.5.0':
+    resolution: {integrity: sha512-4OYFeVyVUZzWOjw9g2qf1lpWTNtjOYTr68w0zOy+AXEq3BiXoQweepoP7WgdYVJ4kmpmOwk1LOrJRqeqPrpTcQ==}
+
+  '@standardserver/peer@0.5.0':
+    resolution: {integrity: sha512-gsOgvknhj8XirAqJksDZlrzkppGU2WH4PyxzISwfG8Ug3TJyOYwWvNCY81HNe5PJWjDdelIkgHSyjb2apkN2CA==}
+
+  '@standardserver/shared@0.5.0':
+    resolution: {integrity: sha512-YPkkdqyKQ+6tvtP2pPLzIIrvhjrsvnI006tTTSWqFc2US6X8r1zfYVhfHf9Zpn4HsdhyhwpWwF4fIsN+nlr1Ow==}
+
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
@@ -3050,6 +3130,10 @@ packages:
     resolution: {integrity: sha512-rcQ1bsQO9799wq24uE5AM2tAILy4gXGIK/njFWcVQkGNZ96edlpY+A7bjwvzjYvLDyzmG1MmMLZhpcsb+klNMQ==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
+  cookie@2.0.1:
+    resolution: {integrity: sha512-yuToqVvRrj6pfDXREyQAAv8SkAEk/8GS3jQRTiUMm66TVtBYmqQeoEjL2Lmq8Rpo6271vH76InTChTitEAm65w==}
+    engines: {node: '>=22'}
+
   core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
 
@@ -3265,6 +3349,10 @@ packages:
 
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
+
+  hono@4.12.30:
+    resolution: {integrity: sha512-emn+JoJjrN9YTpRDS5it/UI2SO9BAE37T6I3d963RxcZ81G9A4pr2SZTEiiaiKbzx+NKRg5BZ89fCL7gCJCUog==}
+    engines: {node: '>=16.9.0'}
 
   hookable@6.1.1:
     resolution: {integrity: sha512-U9LYDy1CwhMCnprUfeAZWZGByVbhd54hwepegYTK7Pi5NvqEj63ifz5z+xukznehT7i6NIZRu89Ay1AZmRsLEQ==}
@@ -3796,6 +3884,10 @@ packages:
 
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
+
+  radash@12.1.1:
+    resolution: {integrity: sha512-h36JMxKRqrAxVD8201FrCpyeNuUY9Y5zZwujr20fFO77tpUtGa6EZzfKw/3WaiBX95fq7+MpsuMLNdSnORAwSA==}
+    engines: {node: '>=14.18.0'}
 
   rc9@3.0.1:
     resolution: {integrity: sha512-gMDyleLWVE+i6Sgtc0QbbY6pEKqYs97NGi6isHQPqYlLemPoO8dxQ3uGi0f4NiP98c+jMW6cG1Kx9dDwfvqARQ==}
@@ -5426,6 +5518,42 @@ snapshots:
       '@octokit/request-error': 7.1.0
       '@octokit/webhooks-methods': 6.0.0
 
+  '@orpc/client@2.0.0-beta.18':
+    dependencies:
+      '@orpc/shared': 2.0.0-beta.18
+      '@standardserver/core': 0.5.0
+      '@standardserver/fetch': 0.5.0
+      '@standardserver/peer': 0.5.0
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+
+  '@orpc/contract@2.0.0-beta.18':
+    dependencies:
+      '@orpc/client': 2.0.0-beta.18
+      '@orpc/shared': 2.0.0-beta.18
+      '@standard-schema/spec': 1.1.0
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+
+  '@orpc/server@2.0.0-beta.18':
+    dependencies:
+      '@orpc/client': 2.0.0-beta.18
+      '@orpc/contract': 2.0.0-beta.18
+      '@orpc/shared': 2.0.0-beta.18
+      '@standardserver/core': 0.5.0
+      '@standardserver/fetch': 0.5.0
+      '@standardserver/node': 0.5.0
+      '@standardserver/peer': 0.5.0
+      cookie: 2.0.1
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+
+  '@orpc/shared@2.0.0-beta.18':
+    dependencies:
+      '@standardserver/shared': 0.5.0
+      radash: 12.1.1
+      type-fest: 5.7.0
+
   '@oxc-project/types@0.130.0': {}
 
   '@oxc-project/types@0.139.0': {}
@@ -6096,6 +6224,28 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@standardserver/core@0.5.0':
+    dependencies:
+      '@standardserver/shared': 0.5.0
+
+  '@standardserver/fetch@0.5.0':
+    dependencies:
+      '@standardserver/core': 0.5.0
+      '@standardserver/shared': 0.5.0
+
+  '@standardserver/node@0.5.0':
+    dependencies:
+      '@standardserver/core': 0.5.0
+      '@standardserver/fetch': 0.5.0
+      '@standardserver/shared': 0.5.0
+
+  '@standardserver/peer@0.5.0':
+    dependencies:
+      '@standardserver/core': 0.5.0
+      '@standardserver/shared': 0.5.0
+
+  '@standardserver/shared@0.5.0': {}
+
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
@@ -6583,6 +6733,8 @@ snapshots:
 
   convert-to-spaces@2.0.1: {}
 
+  cookie@2.0.1: {}
+
   core-util-is@1.0.3: {}
 
   csstype@3.2.3: {}
@@ -6814,6 +6966,8 @@ snapshots:
   hast-util-whitespace@3.0.0:
     dependencies:
       '@types/hast': 3.0.5
+
+  hono@4.12.30: {}
 
   hookable@6.1.1: {}
 
@@ -7348,6 +7502,8 @@ snapshots:
   quansync@1.0.0: {}
 
   queue-microtask@1.2.3: {}
+
+  radash@12.1.1: {}
 
   rc9@3.0.1:
     dependencies:

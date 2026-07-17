@@ -59,11 +59,11 @@ validator types the messages; arktype is the house choice:
 
 ```ts
 // auth/src/contract.ts
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, oc } from '@prisma/composer/rpc';
 import { type } from 'arktype';
 
 export const authContract = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
 });
 ```
 
@@ -85,14 +85,15 @@ export default compute({
 ```
 
 **The server entry** is what your build produces and the platform boots. It
-reads its dependencies through `load()` and serves the contract with
-`serve()` — the handler map is keyed by the expose port's name and is
-exhaustive at compile time:
+reads its dependencies through `load()`, implements the native oRPC contract,
+and mounts that router with `serve()`. `implement()` makes the router
+exhaustive at compile time; `serve()` is keyed by the exposed port name:
 
 ```ts
 // auth/src/server.ts
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
 import { SQL } from 'bun';
+import { authContract } from './contract.ts';
 import service from './service.ts';
 
 const { db } = service.load();     // { url } — you build your own client
@@ -100,11 +101,13 @@ const { port } = service.config(); // params, separate namespace from deps
 
 const sql = new SQL({ url: db.url, max: 1, idleTimeout: 10 });
 
-const handler = serve(service, {
-  rpc: {
-    verify: async ({ token }) => ({ ok: token.length > 0 }),
-  },
+const rpc = implement(authContract.router);
+const router = rpc.router({
+  verify: rpc.verify.handler(async ({ input }) => ({
+    ok: input.token.length > 0,
+  })),
 });
+const handler = serve(service, { rpc: router });
 export default handler;
 
 // Bind all interfaces — Compute routes external HTTP to the VM; a
@@ -143,6 +146,32 @@ export default async function Home() {
   return <p>Signed in: {String(ok)}</p>;
 }
 ```
+
+Composer exposes oRPC v2's native contract-first API through
+`@prisma/composer/rpc`: author procedures with `oc` and implement routers with
+`implement()`. Keep imports on Composer's entry point so the oRPC version is
+consistent. oRPC owns procedure typing, nesting, middleware, schemas, errors,
+the codec, and cancellation; Composer owns topology, hydration, exact contract
+identity, service keys, mount policy, and bounded request parsing.
+
+Production rules:
+
+- Handler input is the input schema's transformed output. A handler returns
+  the output schema's input form; the client receives its transformed output.
+- Throw `RpcError` from `@prisma/composer/rpc` for an intentional public
+  failure. Its code and message cross the wire. Ordinary errors are masked as
+  `INTERNAL_SERVER_ERROR`; never rely on their message reaching a caller.
+- Pass `{ signal }` as the second argument to a generated client method to
+  propagate request cancellation.
+- `serve()` limits encoded bodies to 1 MiB by default. Its third argument can
+  set a positive `maxBodySize` and an explicit mount `prefix`; never infer a
+  framework's mount path.
+- Native nested routers map to `/rpc/<procedure/path>`. Full procedure paths
+  must be unique across the RPC ports exposed by one service.
+
+For a real framework pattern, use `examples/hono-rpc`: a Hono gateway and RPC
+provider are built as separate artifacts, and its integration test boots both
+compiled entries and drives the full chain over HTTP.
 
 **Service-to-service calls are authenticated for you.** At deploy the
 framework mints a distinct, unguessable **service key** per consumer→provider

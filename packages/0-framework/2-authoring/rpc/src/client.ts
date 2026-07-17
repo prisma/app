@@ -1,90 +1,49 @@
 /**
- * The RPC kind's network adapter — the client `rpc(contract)` hydrates to.
- * Reads each method's Standard Schema pair off the contract's `__cmp[method]`
- * runtime value (rpc()'s `{ input, output }`), POSTs JSON to
- * `<url>/rpc/<method>`, and validates the response against the output schema
- * before returning it (a provider can be typed-compatible and still lie at
- * runtime — this is the per-call layer that catches that). When a
- * `serviceKey` is supplied (ADR-0030), every request also carries
- * `Authorization: Bearer <serviceKey>`.
+ * Composer's oRPC client transport adapter. Composer supplies the provider URL
+ * and per-edge service key; the returned client is oRPC's native inferred
+ * client for the contract router.
  */
 
-import type { Contract } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { Client, RpcFns } from './rpc.ts';
-import { standardValidate } from './standard-schema.ts';
-
-/** rpc()'s runtime shape for one method: `{ input, output }` wearing a function's type. */
-interface MethodSchemas {
-  readonly input: StandardSchemaV1;
-  readonly output: StandardSchemaV1;
-}
+import { createORPCClient } from '@orpc/client';
+import { RPCLink } from '@orpc/client/fetch';
+import type { AnyRpcContract } from './contract.ts';
+import type { Client } from './rpc.ts';
 
 /**
- * A fetch-shaped transport. Defaults to the real `fetch`; a served handler
- * (`serve()`'s return value) works too — the binding does not have to be a
- * network hop.
+ * A fetch-shaped transport. Defaults to real `fetch`; a Composer `serve()`
+ * handler can be supplied directly for in-process tests.
  */
 export type Transport = (req: Request) => Promise<Response>;
 
-/** `<base>/rpc/<method>`, preserving a base URL's own path (e.g. a mount point). */
-function methodUrl(base: string, method: string): string {
-  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
-  return new URL(`rpc/${method}`, normalizedBase).toString();
+function baseUrl(url: string): string {
+  return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
-/** The server's `{ error }` body, if the response has one — undefined otherwise. */
-async function errorDetail(res: Response): Promise<string | undefined> {
-  try {
-    const body: unknown = await res.json();
-    return typeof body === 'object' && body !== null && 'error' in body
-      ? String(body.error)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function makeClient<C extends Contract<'rpc', RpcFns>>(
+export function makeClient<C extends AnyRpcContract>(
   contract: C,
   url: string,
   opts?: { fetch?: Transport; serviceKey?: string },
 ): Client<C> {
-  const send = opts?.fetch ?? fetch;
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (opts?.serviceKey !== undefined) {
-    headers['Authorization'] = `Bearer ${opts.serviceKey}`;
-  }
-  const client: Record<string, (input: unknown) => Promise<unknown>> = {};
-
-  for (const [method, schemas] of Object.entries(
-    blindCast<
-      Record<string, MethodSchemas>,
-      'rpc() stores each method input/output Standard Schemas on the function value; RpcFns types only the call signature'
-    >(contract.__cmp),
-  )) {
-    client[method] = async (input: unknown) => {
-      const res = await send(
-        new Request(methodUrl(url, method), {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(input),
+  const transport = opts?.fetch;
+  const link = new RPCLink({
+    origin: baseUrl(url),
+    url: '/rpc',
+    headers: opts?.serviceKey === undefined ? {} : { authorization: `Bearer ${opts.serviceKey}` },
+    ...(transport === undefined
+      ? {}
+      : {
+          fetch: (requestUrl: string, init: RequestInit) =>
+            transport(new Request(requestUrl, init)),
         }),
-      );
-      if (!res.ok) {
-        const detail = await errorDetail(res);
-        throw new Error(
-          `RPC call "${method}" failed: ${res.status} ${res.statusText}` +
-            (detail !== undefined ? ` — ${detail}` : ''),
-        );
-      }
-      return standardValidate(schemas.output, await res.json());
-    };
-  }
+  });
 
+  // The contract is intentionally a type-and-topology input here. Native oRPC
+  // performs input/output validation on the provider router and transports the
+  // already-transformed result with its RPC codec.
+  void contract;
   return blindCast<
     Client<C>,
-    'client is assembled dynamically from the contract methods; each entry matches Client<C> by construction'
-  >(client);
+    'createORPCClient dynamically proxies the exact native router carried by C'
+  >(createORPCClient(link));
 }

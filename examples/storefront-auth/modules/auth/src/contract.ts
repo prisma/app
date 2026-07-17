@@ -3,12 +3,12 @@
  * auth exposes and serves it (service.ts / server.ts); a consumer imports it and
  * depends on it via `rpc(authContract)`, getting back a typed client.
  */
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, oc } from '@prisma/composer/rpc';
 import { type } from 'arktype';
 
 export const authContract = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
   // Non-leaking proof that auth received its injected `AUTH_SIGNING_SECRET`
   // (ADR-0029): returns ONLY a boolean, never the secret value.
-  secretCheck: rpc({ input: type({}), output: type({ ok: 'boolean' }) }),
+  secretCheck: oc.input(type({})).output(type({ ok: 'boolean' })),
 });

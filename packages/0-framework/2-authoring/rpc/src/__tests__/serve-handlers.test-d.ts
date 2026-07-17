@@ -1,25 +1,21 @@
 /**
- * serve(service, handlers) forces an exhaustive, correctly-typed handler map
- * straight off the service's `expose` and `load()`'s return — a missing or
- * mistyped handler must not compile.
- *
- * Type-only (vitest `--typecheck`, never executed). The positive cases stay
- * direct `serve(...)` calls: the handler callbacks get their parameter types
- * by contextual inference from serve's signature, which `toBeCallableWith`
- * does not flow into a standalone argument — the call itself is the
- * assertion. The negative handler shapes keep a `// @ts-expect-error` on the
- * offending line.
+ * Native oRPC's implementer owns procedure exhaustiveness and handler typing;
+ * Composer's serve() owns the exhaustive mapping from exposed ports to those
+ * implemented routers.
  */
 import type { DependencyEnd, RunnableServiceNode } from '@internal/core';
 import { dependency, service } from '@internal/core';
+import { blindCast } from '@internal/foundation/casts';
+import { oc } from '@orpc/contract';
+import { implement } from '@orpc/server';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type } from 'arktype';
-import { test } from 'vitest';
+import { expectTypeOf, test } from 'vitest';
 import { contract } from '../contract.ts';
-import { rpc } from '../rpc.ts';
 import { serve } from '../serve.ts';
 
 const authContract = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
 });
 
 interface FakeDb {
@@ -52,36 +48,71 @@ declare const authService: RunnableServiceNode<
   { rpc: typeof authContract }
 >;
 
-test('the exhaustive, correctly-typed handler map is accepted', () => {
-  serve(authService, {
-    rpc: {
-      verify: async ({ token }, { db }) => ({ ok: token.length > 0 && db.validTokens.length >= 0 }),
-    },
+const os = implement(authContract.router);
+
+test('native implement() types input/output and serve() accepts the complete router', () => {
+  const router = os.router({
+    verify: os.verify.handler(({ input }) => {
+      expectTypeOf(input).toEqualTypeOf<{ token: string }>();
+      return { ok: input.token.length > 0 };
+    }),
+  });
+
+  serve(authService, { rpc: router });
+});
+
+test('native implement() rejects missing and mistyped procedures', () => {
+  // @ts-expect-error native oRPC requires the contract's verify procedure
+  os.router({});
+
+  os.router({
+    // @ts-expect-error output ok must be boolean
+    verify: os.verify.handler(() => ({ ok: 'yes' })),
+  });
+
+  os.verify.handler(({ input }) => {
+    // @ts-expect-error native oRPC inferred token as string
+    const token: number = input.token;
+    return { ok: token > 0 };
   });
 });
 
-test('extra handler methods/ports beyond what is exposed are allowed (width)', () => {
-  serve(authService, {
-    rpc: {
-      verify: async ({ token }, _deps) => ({ ok: token.length > 0 }),
-      extra: async (_input: { note: string }, _deps: unknown) => ({ handled: true }),
-    },
-    extraPort: {
-      anything: async (_input: unknown, _deps: unknown) => 1,
-    },
-  });
-});
-
-test('a missing or mistyped handler does not compile', () => {
-  // @ts-expect-error missing the required "verify" handler for the exposed "rpc" port
-  serve(authService, { rpc: {} });
-
-  // @ts-expect-error missing the exposed "rpc" port entirely
+test('serve() requires one native router for every exposed RPC port', () => {
+  // @ts-expect-error missing the exposed rpc port
   serve(authService, {});
+});
 
-  // @ts-expect-error wrong input shape (token must be a string, not a number)
-  serve(authService, { rpc: { verify: async (_input: { token: number }) => ({ ok: true }) } });
+declare const transformedInput: StandardSchemaV1<string, number>;
+declare const transformedOutput: StandardSchemaV1<{ doubled: number }, { doubled: string }>;
 
-  // @ts-expect-error wrong output shape (ok must be a boolean, not a string)
-  serve(authService, { rpc: { verify: async ({ token }, _deps) => ({ ok: token }) } });
+const transformedContract = contract({
+  transform: oc.input(transformedInput).output(transformedOutput),
+});
+const transformed = implement(transformedContract.router);
+
+declare const transformedService: RunnableServiceNode<
+  typeof node.inputs,
+  typeof node.params,
+  { rpc: typeof transformedContract }
+>;
+
+test('native handler and client honor Standard Schema transformations', () => {
+  const router = transformed.router({
+    transform: transformed.transform.handler(({ input }) => {
+      expectTypeOf(input).toEqualTypeOf<number>();
+      return { doubled: input * 2 };
+    }),
+  });
+  serve(transformedService, { rpc: router });
+
+  type TransformedClient = import('../rpc.ts').Client<typeof transformedContract>;
+  const client = blindCast<
+    TransformedClient,
+    'type-only placeholder used to assert the transformed client surface'
+  >(null);
+  expectTypeOf(client.transform).toBeCallableWith('21');
+  expectTypeOf(client.transform('21')).resolves.toEqualTypeOf<{ doubled: string }>();
+
+  // @ts-expect-error handler returns the output schema input, not transformed client output
+  transformed.transform.handler(({ input }) => ({ doubled: String(input * 2) }));
 });

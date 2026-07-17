@@ -11,6 +11,8 @@
  */
 import type { BuildAdapter, Contract, ModuleBuilder } from '@internal/core';
 import { dependency, service, string } from '@internal/core';
+import { blindCast } from '@internal/foundation/casts';
+import { oc } from '@orpc/contract';
 import { type } from 'arktype';
 import { expectTypeOf, test } from 'vitest';
 import { contract } from '../contract.ts';
@@ -24,31 +26,25 @@ const build: BuildAdapter = {
 };
 
 const authContract = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
 });
 
 // candidate providers (standing in for provisioned refs' exposed contracts)
 const exact = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
 });
 const extraOut = contract({
-  verify: rpc({
-    input: type({ token: 'string' }),
-    output: type({ ok: 'boolean', user: 'string' }),
-  }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean', user: 'string' })),
 });
 const extraMethod = contract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
-  refresh: rpc({ input: type({ rt: 'string' }), output: type({ token: 'string' }) }),
+  verify: oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' })),
+  refresh: oc.input(type({ rt: 'string' })).output(type({ token: 'string' })),
 });
 const extraInput = contract({
-  verify: rpc({
-    input: type({ token: 'string', tenant: 'string' }),
-    output: type({ ok: 'boolean' }),
-  }),
+  verify: oc.input(type({ token: 'string', tenant: 'string' })).output(type({ ok: 'boolean' })),
 });
 const missing = contract({
-  whoami: rpc({ input: type({}), output: type({ id: 'string' }) }),
+  whoami: oc.input(type({})).output(type({ id: 'string' })),
 });
 
 // a second protocol kind, standing in for one @prisma/composer/rpc knows nothing
@@ -58,7 +54,7 @@ declare function wsContract<
   Fns extends Record<string, (input: any) => Promise<any>>,
 >(fns: Fns): Contract<'ws', Fns>;
 const wrongKind = wsContract({
-  verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
+  verify: async (_input: { token: string }) => ({ ok: true }),
 });
 
 // an untyped dependency end — http()'s shape (Req = unknown, the escape hatch).
@@ -143,7 +139,10 @@ test('an incompatible ref-port for a required rpc slot does not compile', () => 
 });
 
 test('the derived client is typed both ways', () => {
-  const auth = null as unknown as Client<typeof authContract>;
+  const auth = blindCast<
+    Client<typeof authContract>,
+    'type-only placeholder used to assert the inferred client surface'
+  >(null);
   expectTypeOf(auth.verify).toBeCallableWith({ token: 't' });
   expectTypeOf(auth.verify({ token: 't' })).resolves.toExtend<{ ok: boolean }>();
   // @ts-expect-error unknown method

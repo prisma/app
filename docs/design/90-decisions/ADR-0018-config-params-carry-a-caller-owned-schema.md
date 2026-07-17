@@ -56,7 +56,7 @@ the caller's Standard Schema on the message and lets the transport handle the
 wire; the schema is the caller's, the serialization is the framework's:
 
 ```ts
-rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) })
+oc.input(type({ token: 'string' })).output(type({ ok: 'boolean' }))
 ```
 
 Params take the same shape. The schema is the caller's — it types the value and

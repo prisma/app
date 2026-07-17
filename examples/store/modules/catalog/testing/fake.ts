@@ -1,11 +1,11 @@
 /**
  * An in-memory catalog for TESTING a module that depends on it — no Postgres,
- * no deploy. It serves the real `catalogContract`, so its handler map is
+ * no deploy. It implements the real `catalogContract`, so its native router is
  * type-checked against the same contract the real catalog exposes. Test-only,
  * deliberately outside `src/`, so it never rides into the deployed artifact.
  */
 import node from '@prisma/composer/node';
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { catalogContract, type Product } from '../src/contract.ts';
 
@@ -23,16 +23,17 @@ const fakeCatalog = compute({
 
 let specialIdx = 0;
 
-export default serve(fakeCatalog, {
-  rpc: {
-    listProducts: async () => ({ products: FAKE_PRODUCTS }),
-    getProduct: async ({ id }) => ({
-      product: FAKE_PRODUCTS.find((p) => p.id === id) ?? null,
-    }),
-    getSpecial: async () => ({ product: FAKE_PRODUCTS[specialIdx] }),
-    rotateSpecial: async () => {
-      specialIdx = (specialIdx + 1) % FAKE_PRODUCTS.length;
-      return { product: FAKE_PRODUCTS[specialIdx] };
-    },
-  },
+const rpc = implement(catalogContract.router);
+const router = rpc.router({
+  listProducts: rpc.listProducts.handler(() => ({ products: FAKE_PRODUCTS })),
+  getProduct: rpc.getProduct.handler(({ input }) => ({
+    product: FAKE_PRODUCTS.find((p) => p.id === input.id) ?? null,
+  })),
+  getSpecial: rpc.getSpecial.handler(() => ({ product: FAKE_PRODUCTS[specialIdx] })),
+  rotateSpecial: rpc.rotateSpecial.handler(() => {
+    specialIdx = (specialIdx + 1) % FAKE_PRODUCTS.length;
+    return { product: FAKE_PRODUCTS[specialIdx] };
+  }),
 });
+
+export default serve(fakeCatalog, { rpc: router });

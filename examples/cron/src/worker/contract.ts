@@ -4,10 +4,10 @@
  * contract.ts); the runner imports it to depend on the worker via
  * `rpc(workerContract)`.
  */
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, oc } from '@prisma/composer/rpc';
 import { type } from 'arktype';
 
 export const workerContract = contract({
-  tick: rpc({ input: type({}), output: type({ ok: 'boolean' }) }),
-  refreshMrr: rpc({ input: type({}), output: type({ ok: 'boolean' }) }),
+  tick: oc.input(type({})).output(type({ ok: 'boolean' })),
+  refreshMrr: oc.input(type({})).output(type({ ok: 'boolean' })),
 });

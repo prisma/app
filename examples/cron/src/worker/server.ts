@@ -3,7 +3,8 @@
 // re-keyed the platform environment address-free, so service.load()/config()
 // below read it directly, with no address.
 
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
+import { workerContract } from './contract.ts';
 import service from './service.ts';
 
 const { port } = service.config();
@@ -11,12 +12,12 @@ const { port } = service.config();
 // The trivial target the schedule fires: both jobs just prove they were
 // reached (the real work — an ingest job, an MRR refresh, whatever — is the
 // app's, not this framework's, concern).
-const handler = serve(service, {
-  rpc: {
-    tick: async () => ({ ok: true }),
-    refreshMrr: async () => ({ ok: true }),
-  },
+const rpc = implement(workerContract.router);
+const router = rpc.router({
+  tick: rpc.tick.handler(() => ({ ok: true })),
+  refreshMrr: rpc.refreshMrr.handler(() => ({ ok: true })),
 });
+const handler = serve(service, { rpc: router });
 export default handler;
 
 // Bind all interfaces — Compute routes external HTTP to the VM, so a

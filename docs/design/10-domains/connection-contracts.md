@@ -21,8 +21,11 @@ both sides.
 
 ```ts
 // auth/contract.ts — the shared Contract value. Its identity is the Load-time key.
+import { contract, oc } from "@prisma/composer/rpc"
+import { type } from "arktype"
+
 export const authContract = contract({
-  verify: rpc({ input: type({ token: "string" }), output: type({ ok: "boolean" }) }),
+  verify: oc.input(type({ token: "string" })).output(type({ ok: "boolean" })),
 })
 
 // auth/service.ts — the provider DECLARES what it exposes. `expose` is a record of
@@ -32,13 +35,17 @@ export default compute({
   expose: { rpc: authContract },
 })
 
-// auth/server.ts — the provider IMPLEMENTS it. serve() reads the service's `expose`
-// and forces an exhaustive, correctly-typed handler map; it generates the server and
-// calls load() for the deps, passing them to each handler.
+// auth/server.ts — the provider IMPLEMENTS it with native oRPC. implement() forces
+// an exhaustive, correctly-typed router; serve() verifies and mounts that router.
+import { implement, serve } from "@prisma/composer/rpc"
+import { authContract } from "./contract"
 import service from "./service"
-export default serve(service, {
-  rpc: { verify: async ({ token }, { db }) => ({ ok: await check(db, token) }) },
+const { db } = service.load()
+const rpc = implement(authContract.router)
+const router = rpc.router({
+  verify: rpc.verify.handler(async ({ input }) => ({ ok: await check(db, input.token) })),
 })
+export default serve(service, { rpc: router })
 
 // storefront/service.ts — the consumer REQUIRES the contract: rpc(contract), not http().
 export default compute({
@@ -61,7 +68,8 @@ module("storefront-auth", (h) => {
 Each piece carries the type that makes the wiring check itself:
 
 - **`rpc(contract)`** on the consumer's dependency carries the *required* contract
-  and hydrates to `Client<C>` (`{ verify(input): Promise<output> }`). RPC is a
+  and hydrates to oRPC's inferred native client (`{ verify(input):
+  Promise<output> }`). RPC is a
   protocol the framework owns, so a dependency's binding IS a derived client — the
   most-derived thing the contract can construct; a resource kind (postgres)
   instead binds to its typed config and the app builds its own client
@@ -106,9 +114,9 @@ and the number of outputs are all open without the core changing.
 ## A Connection is a port
 
 The Contract is the port; the code on either side is an adapter. The provider's
-server and the consumer's client are both generated from the contract by the same
-target pack, so the wire format between them is private to the pack — not a
-framework concern.
+router and the consumer's client are both inferred from the same native oRPC
+contract. Composer layers topology and binding authorization around oRPC's wire
+runtime, so the core framework never inspects protocol details.
 
 Because the consumer holds a client generated from the contract, **the binding does
 not have to be a network hop.** Which adapter sits behind the client is a wiring
@@ -185,35 +193,29 @@ declare function provision<Deps extends Record<string, Contract<any, any>>>(
 ```
 
 The core never inspects `Cmp`. Correctness comes from the **kind**, which builds
-`Cmp` so that plain assignability means the right thing. For RPC, `Cmp` is a
-**concrete function map**: `rpc()` returns a concrete `(input: I) => Promise<O>`, so
-`contract()`'s `Cmp` is `{ verify: (input) => Promise<output>, … }`:
+`Cmp` so that plain assignability means the right thing. For RPC, Composer uses
+oRPC's `RouterContractClient<R>` for the exact native router retained by
+`contract()`:
 
 ```ts
-declare function rpc<I, O>(m: { input: Schema<I>; output: Schema<O> }): (input: I) => Promise<O>
-declare function contract<Fns extends Record<string, (i: any) => Promise<any>>>(fns: Fns): Contract<"rpc", Fns>
-type Client<C> = C extends Contract<any, infer Cmp> ? Cmp : never
+declare function contract<R extends RouterContract>(router: R):
+  Contract<"rpc", RouterContractClient<R>> & { readonly router: R }
+
+type Client<C> = C extends Contract<"rpc", infer Cmp> ? Cmp : never
 ```
 
-Because `Cmp` is a concrete function map, TypeScript applies real function variance
-to `provided extends required` — **contravariant input, covariant output**, plus
-width. A provider may expose extra methods and return richer outputs; a provider
-that requires an input field the consumer never sends is rejected; a wrong-kind
-provider is rejected by the brand.
-
-The comparison type **must** be a concrete function map, not a mapped type over the
-schema. If the contract were parameterised by its schema map `M` and the client
-derived as a mapped type over `M`, comparing two instantiations would relate the
-`M`s covariantly — silently dropping input-contravariance and accepting a provider
-that demands an input the consumer never sends. Materialising `Cmp` as concrete
-functions in the kind's builder is what makes plain assignability sound. (See
-`@prisma/composer/rpc`'s `contract-satisfaction.test-d.ts` for the full accept/reject
-matrix, typechecked in CI.)
+The inferred client is the comparison surface. TypeScript applies method width and
+function variance to `provided extends required`: a provider may expose extra
+methods and return richer outputs, while a provider that requires an input the
+consumer never sends is rejected. A wrong-kind provider is rejected by the brand.
+`@prisma/composer/rpc`'s `contract-satisfaction.test-d.ts` keeps the complete
+accept/reject matrix under CI because subtle generic refactors can otherwise erase
+input contravariance.
 
 Schemas are **Standard Schema** (arktype is the canonical authoring library; any
-Standard-Schema validator works, so an Effect provider and a plain consumer
-interoperate over one contract). They carry the runtime validators and drive the
-published spec; the *type* the core compares is the function map.
+Standard-Schema validator works). Native oRPC executes those schemas and retains
+their metadata, error maps, and nested router structure; the *type* the core
+compares is the inferred client.
 
 ### Growing the runtime check
 
@@ -231,18 +233,30 @@ engine as the Data Contract migration check — "a newly deployed provider must 
 satisfy every existing consumer." The in-build Module is fully covered by the
 three layers above.
 
-## Implementing — why the handler cannot skip the contract
+## Implementing — why the router cannot skip the contract
 
-`serve(service, handlers)` derives the required handler map from the service's
-`expose`, so an incomplete or mistyped implementation does not compile:
+Native oRPC's `implement(contract.router)` derives every procedure implementer
+from the contract, so an incomplete or mistyped router does not compile.
+Composer's `serve(service, routers)` separately derives one contracted router
+slot for every RPC port in the service's `expose`:
 
 ```ts
-function serve<S extends ServiceNode>(service: S, handlers: Handlers<ExposeOf<S>>): Server
+const rpc = implement(authContract.router)
+const router = rpc.router({
+  verify: rpc.verify.handler(({ input }) => ({ ok: input.token.length > 0 })),
+})
 
-type Handlers<E> = {
-  [Port in keyof E]: { [M in keyof E[Port]]: (input: In<E[Port][M]>, deps: Deps) => Promise<Out<E[Port][M]>> }
+serve(authService, { rpc: router })
+
+type Routers<S> = {
+  [Port in RpcPorts<S>]: ContractedRouter<RouterOf<S["expose"][Port]>>
 }
 ```
+
+At runtime, `serve()` also requires the router's hidden native contract to be the
+exact router retained by the exposed Composer contract. Its oRPC matcher filters
+out any structurally-added procedure that was not declared in that contract, and
+it rejects duplicate full procedure paths across exposed ports.
 
 The contract lives once, on the definition; the implementation is *handed* that
 definition and cannot compile unless it satisfies it. The import points
@@ -250,10 +264,9 @@ definition-ward only (`server.ts` → `service.ts`, never the reverse), so bundl
 `service.ts` into the runtime wrapper never pulls in the entry's app code — the
 acyclic bundle shape from core-model.md is preserved.
 
-The type system forces `serve(...)` to be complete and correct, but cannot force the
-entry to *call* `serve` at all. `serve` is strictly the easier path (fill handlers,
-no transport), and a deploy-time probe (call each method against the started server,
-check the shape) can close that gap at runtime if a hard guarantee is ever wanted.
+The type system forces `implement(...)` and `serve(...)` to be complete and
+correct, but cannot force the entry to call them at all. A deploy-time probe can
+close that final gap if a hard runtime guarantee is ever wanted.
 
 ## Ownership
 
@@ -280,10 +293,16 @@ contract's identity-based `satisfies()` is enough today.
   Comparing by value identity is enough while both sides import one contract, and it is
   the simplest thing that is correct. Structural comparison is additive (above) and only
   *required* for the distributed case, so the RPC contract defers it.
-- **Errors deferred** from the first contract shape (`{ input, output }` only).
-  Adding an `error` schema later is backward-compatible (an optional field).
-- **Wire format private to the target pack**, which owns both adapters — rather than
-  a framework-fixed wire format.
+- **Native oRPC contracts rather than a Composer procedure DSL.** This keeps
+  typed errors, middleware, metadata, nesting, and Standard Schema behavior on
+  the upstream ecosystem surface instead of recreating them in Composer.
+- **oRPC's wire format remains private to Composer's RPC kind.** Application
+  topology depends on a Contract, not on HTTP codec details. Provider and
+  consumer artifacts therefore need compatible Composer/oRPC versions.
+- **OpenAPI is compatible but not bundled.** `contract.router` is the native
+  router an opt-in oRPC OpenAPI adapter can consume. Composer's private
+  service-to-service `serve()` remains RPC-only until a public HTTP/OpenAPI
+  surface is designed deliberately.
 - **PDL as a later authoring surface.** A Contract is a value today (Standard Schema
   in TypeScript). Later it can be authored in Prisma Definition Language and compiled
   to the same value — the Data Contract is the natural first PDL output, the RPC

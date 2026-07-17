@@ -3,8 +3,9 @@
 // re-keyed the platform environment address-free, so service.load() below
 // reads it directly, with no address.
 
-import { serve } from '@prisma/composer/rpc';
+import { implement, serve } from '@prisma/composer/rpc';
 import { SQL } from 'bun';
+import { authContract } from './contract.ts';
 import service from './service.ts';
 
 const { db } = service.load(); // db: PostgresConfig — the app owns its client
@@ -35,22 +36,24 @@ process.on('unhandledRejection', (err) => console.error('unhandledRejection', er
 
 // Prove the DB is reachable; a failed ping returns `{ ok: false }` rather
 // than throwing, so the platform sees an unhealthy dependency, not a crash.
-const handler = serve(service, {
-  rpc: {
-    verify: async () => {
-      try {
-        await sql`select 1`;
-        return { ok: true };
-      } catch (err) {
-        console.error('db query failed', err);
-        return { ok: false };
-      }
-    },
-    // True iff the injected secret matches the expected marker — proof it was
-    // provisioned and double-looked-up, without ever returning the value.
-    secretCheck: async () => ({ ok: signingKey.expose() === EXPECTED_SIGNING_SECRET }),
-  },
+const rpc = implement(authContract.router);
+const router = rpc.router({
+  verify: rpc.verify.handler(async () => {
+    try {
+      await sql`select 1`;
+      return { ok: true };
+    } catch (err) {
+      console.error('db query failed', err);
+      return { ok: false };
+    }
+  }),
+  // True iff the injected secret matches the expected marker — proof it was
+  // provisioned and double-looked-up, without ever returning the value.
+  secretCheck: rpc.secretCheck.handler(() => ({
+    ok: signingKey.expose() === EXPECTED_SIGNING_SECRET,
+  })),
 });
+const handler = serve(service, { rpc: router });
 export default handler;
 
 // Bind all interfaces — Compute routes external HTTP to the VM, so a

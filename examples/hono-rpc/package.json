@@ -1,0 +1,27 @@
+{
+  "name": "@prisma/example-hono-rpc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test tests",
+    "dev:calculator": "bun run src/calculator.ts",
+    "dev:app": "bun run src/index.ts",
+    "deploy": "pnpm turbo run build --filter @prisma/example-hono-rpc... && ( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-composer deploy module.ts ${HONO_RPC_STACK_NAME:+--name \"$HONO_RPC_STACK_NAME\"} ${HONO_RPC_STAGE:+--stage \"$HONO_RPC_STAGE\"} )",
+    "destroy": "( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-composer destroy module.ts --production ${HONO_RPC_STACK_NAME:+--name \"$HONO_RPC_STACK_NAME\"} )",
+    "destroy:stage": "( set -a; . \"${PRISMA_DEPLOY_ENV:-../../.env}\"; set +a; bun node_modules/.bin/prisma-composer destroy module.ts --stage \"${HONO_RPC_STAGE:?HONO_RPC_STAGE is required}\" ${HONO_RPC_STACK_NAME:+--name \"$HONO_RPC_STACK_NAME\"} )"
+  },
+  "dependencies": {
+    "@prisma/composer": "workspace:0.1.0",
+    "@prisma/composer-prisma-cloud": "workspace:0.1.0",
+    "arktype": "^2.2.3",
+    "hono": "^4.12.30"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "tsdown": "^0.22.4",
+    "typescript": "^6.0.3"
+  }
+}
