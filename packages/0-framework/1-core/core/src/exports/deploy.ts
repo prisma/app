@@ -5,9 +5,8 @@ import * as Alchemy from 'alchemy';
 import type { State } from 'alchemy/State/State';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
-import type { ExtensionDescriptor, NodeDescriptor, PrismaAppConfig } from './app-config.ts';
-import type { Config, ConfigParam } from './config.ts';
-import { type Graph, Load, type NodeId } from './graph.ts';
+import type { Config, ConfigParam } from '../config.ts';
+import { type Graph, Load, type NodeId } from '../graph.ts';
 import {
   type BuildAdapter,
   isParamSource,
@@ -15,7 +14,8 @@ import {
   type ProvisionNeed,
   type ResourceNode,
   type ServiceNode,
-} from './node.ts';
+} from '../node.ts';
+import type { ExtensionDescriptor, NodeDescriptor, PrismaAppConfig } from './app-config.ts';
 
 /** The Layer shape every Alchemy state store must satisfy — what `LowerOptions.state` and `PrismaAppConfig.state` both traffic in. */
 export type AlchemyStateLayer = Layer.Layer<State, never, StackServices>;

@@ -1,4 +1,4 @@
-import { module, service } from '../../index.ts';
+import { module, service } from '../../exports/index.ts';
 
 // Importing this module must not increment this counter — only Loading the
 // module may run the body (the service node itself carries no behavior to run).

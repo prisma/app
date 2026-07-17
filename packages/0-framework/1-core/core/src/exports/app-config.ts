@@ -1,5 +1,6 @@
 /** The `prisma-composer.config.ts` surface (ADR-0017): statically imports each extension's node-descriptor registry plus the state store; core defines only the types. */
 import type * as Layer from 'effect/Layer';
+import type { Graph } from '../graph.ts';
 import type {
   AlchemyStateLayer,
   ApplicationDescriptor,
@@ -9,7 +10,6 @@ import type {
   ProvisionerDescriptor,
   ServiceLowering,
 } from './deploy.ts';
-import type { Graph } from './graph.ts';
 
 /**
  * One extension's control-plane registry: everything the deploy pipeline may

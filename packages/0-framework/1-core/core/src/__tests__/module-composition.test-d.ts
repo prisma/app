@@ -10,8 +10,8 @@ import { string } from '../config.ts';
  * so running this file would throw. `.test-d` (not `.test`) keeps it out of
  * `bun test`, mirroring @prisma/composer/rpc's contract-satisfaction.test-d.ts.
  */
-import type { BuildAdapter, Contract, InputRef } from '../index.ts';
-import { dependency, module, service } from '../index.ts';
+import type { BuildAdapter, Contract, InputRef } from '../exports/index.ts';
+import { dependency, module, service } from '../exports/index.ts';
 import { conn } from './helpers.ts';
 
 const build: BuildAdapter = {

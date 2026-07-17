@@ -7,19 +7,19 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/deploy.ts",
+      "glob": "packages/0-framework/1-core/core/src/exports/deploy.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "control"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/app-config.ts",
+      "glob": "packages/0-framework/1-core/core/src/exports/app-config.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "control"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/index.ts",
+      "glob": "packages/0-framework/1-core/core/src/exports/index.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "shared"
@@ -73,7 +73,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/testing.ts",
+      "glob": "packages/0-framework/1-core/core/src/exports/testing.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "shared"
