@@ -32,7 +32,33 @@ attempts, fresh-key-per-call, 5xx-not-cached, and exception-message-not-
 returned); both RPC-consuming example suites pass unchanged; repo checks
 green with casts delta ≤ 0; committed with DCO dual sign-off.
 
-## D2 — the canary (scripts + CI)
+## D2 — the canary (scripts + CI) — ATTEMPTED, THEN DROPPED (2026-07-20)
+
+**Outcome: no RPC canary ships.** The canary was built and run live; the
+evidence retired it (reverted in `a46abfa`). Two reasons, the second
+decisive:
+
+1. It cannot certify a cold start against `examples/storefront-auth`. The
+   auth service restores no state and boots in under ~1.5s — narrower than
+   the 2s clock-skew margin the coldness proof requires. The live run forced
+   14 genuine races (touch landed 376–1185ms before the listening line,
+   every sample) but certified none, correctly refusing to shrink the margin
+   to make its own numbers pass.
+2. A cold-start canary exists to signal when a platform workaround can be
+   deleted. The RPC idempotency retry is **permanent protocol semantics**
+   (ADR-0037), not a workaround — there is nothing for a canary to time the
+   removal of. PRO-217 itself is a platform ingress bug already watched by
+   the streams cold-start canary, which catches it well precisely because
+   streams has the long boot window RPC lacks.
+
+Superseded original intent (kept for the record): a sibling of the streams
+cold-start canary probing the auth service's rpc endpoint with a bare
+single-attempt `fetch`. If a future RPC edge with a real restore-from-store
+boot exists, and only if the retry ever becomes removable, revisit with an
+independently measured skew margin rather than the streams canary's borrowed
+constant.
+
+### Original D2 outcome (not shipped)
 
 **Outcome:** `scripts/rpc-cold-start-canary.ts` + `-classify.ts` + unit
 tests, inheriting the cold-start canary's proven contract wholesale

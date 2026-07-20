@@ -233,3 +233,15 @@ flight; the branch is rebased and all paths follow the new package and the
 
 ADR-0037 is the number for the keyed protocol (0033–0036 taken); it ships
 with the implementation in this slice's PR, never as a docs-only change.
+
+### RPC cold-start canary dropped (2026-07-20, Will accepted)
+
+The slice's own canary was built, run live, and dropped on the evidence
+(revert `a46abfa`). The auth service boots in under ~1.5s (no state to
+restore), narrower than the 2s coldness-proof margin, so 14 forced races
+certified as cold zero times. The decisive reason is not the margin, though:
+the RPC idempotency retry is permanent protocol semantics (ADR-0037), so
+there is no workaround for a canary to time the removal of — and PRO-217, a
+platform ingress bug, is already watched by the streams canary, which catches
+it well because streams has the long boot window RPC lacks. The slice ships
+the keyed protocol; the streams canary stays the platform-wide PRO-217 signal.
