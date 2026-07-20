@@ -24,11 +24,11 @@ describe('prismaCloud() — env read + validation at construction (config evalua
       const descriptor = prismaCloud();
       expect(descriptor.id).toBe('@prisma/composer-prisma-cloud');
       expect(Object.keys(descriptor.nodes).sort()).toEqual([
-        'bucket',
         'compute',
         'credentials',
         'postgres',
         'prisma-next',
+        's3',
         's3-store',
       ]);
     });
@@ -65,7 +65,7 @@ describe('prismaCloud() — env read + validation at construction (config evalua
       expect(descriptor.nodes['compute']?.kind).toBe('service');
       expect(descriptor.nodes['credentials']?.kind).toBe('resource');
       expect(descriptor.nodes['s3-store']?.kind).toBe('service');
-      expect(descriptor.nodes['bucket']?.kind).toBe('resource');
+      expect(descriptor.nodes['s3']?.kind).toBe('resource');
       expect(descriptor.application).toBeDefined();
       expect(descriptor.providers).toBeDefined();
     });

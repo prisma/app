@@ -413,7 +413,7 @@ describe("prismaCloud().nodes['credentials'] — the resource descriptor", () =>
   });
 });
 
-describe("prismaCloud().nodes['bucket'] — the resource descriptor", () => {
+describe("prismaCloud().nodes['s3'] — the real-bucket resource descriptor", () => {
   test('creates a Bucket + BucketKey; outputs carry the four S3Config names; entity carries the bucket id', async () => {
     await withEnv({ PRISMA_BRANCH_ID: undefined }, () => {
       const target = prismaCloud({ workspaceId: 'ws_1' });
@@ -423,7 +423,7 @@ describe("prismaCloud().nodes['bucket'] — the resource descriptor", () => {
       } as unknown as LowerContext;
       const before = { bucket: recorded.bucket.length, bucketKey: recorded.bucketKey.length };
 
-      const result = run<LoweredResult>(resourceDescriptorOf(target, 'bucket')(ctx));
+      const result = run<LoweredResult>(resourceDescriptorOf(target, 's3')(ctx));
 
       // The four S3Config outputs consumers' s3() slots resolve by name.
       expect(result.outputs).toEqual({
@@ -453,7 +453,7 @@ describe("prismaCloud().nodes['bucket'] — the resource descriptor", () => {
       } as unknown as LowerContext;
       const before = recorded.bucket.length;
 
-      run<LoweredResult>(resourceDescriptorOf(target, 'bucket')(ctx));
+      run<LoweredResult>(resourceDescriptorOf(target, 's3')(ctx));
 
       expect(recorded.bucket.slice(before)).toEqual([
         [

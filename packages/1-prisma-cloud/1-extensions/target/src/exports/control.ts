@@ -326,7 +326,10 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
       compute: computeDescriptor(o),
       credentials: s3CredentialsDescriptor(o),
       's3-store': s3StoreDescriptor(o),
-      bucket: bucketDescriptor(o),
+      // A resource node routes by its contract's kind (resource() sets type =
+      // provides.kind), and a real bucket provides the 's3' contract — so the
+      // bucket descriptor registers under 's3', not 'bucket'.
+      s3: bucketDescriptor(o),
     },
   };
 };
