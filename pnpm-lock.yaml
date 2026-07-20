@@ -42,8 +42,8 @@ importers:
   examples/cron:
     dependencies:
       '@effect/platform-bun':
-        specifier: 4.0.0-beta.93
-        version: 4.0.0-beta.93(effect@4.0.0-beta.93)
+        specifier: 4.0.0-beta.97
+        version: 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@prisma/composer':
         specifier: workspace:0.1.0
         version: link:../../packages/9-public/composer
@@ -52,7 +52,7 @@ importers:
         version: link:../../packages/9-public/composer-prisma-cloud
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -124,7 +124,7 @@ importers:
         version: link:../../packages/9-public/composer-prisma-cloud
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       effect:
         specifier: 4.0.0-beta.93
         version: 4.0.0-beta.93
@@ -139,8 +139,8 @@ importers:
   examples/store:
     dependencies:
       '@effect/platform-bun':
-        specifier: 4.0.0-beta.93
-        version: 4.0.0-beta.93(effect@4.0.0-beta.93)
+        specifier: 4.0.0-beta.97
+        version: 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@prisma/composer':
         specifier: workspace:0.1.0
         version: link:../../packages/9-public/composer
@@ -161,7 +161,7 @@ importers:
         version: link:modules/storefront
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -300,8 +300,8 @@ importers:
   examples/storefront-auth:
     dependencies:
       '@effect/platform-bun':
-        specifier: 4.0.0-beta.93
-        version: 4.0.0-beta.93(effect@4.0.0-beta.93)
+        specifier: 4.0.0-beta.97
+        version: 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@prisma/composer':
         specifier: workspace:0.1.0
         version: link:../../packages/9-public/composer
@@ -316,7 +316,7 @@ importers:
         version: link:modules/storefront
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -443,7 +443,7 @@ importers:
         version: 1.1.0
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       effect:
         specifier: 4.0.0-beta.93
         version: 4.0.0-beta.93
@@ -617,7 +617,7 @@ importers:
         version: 1.47.0
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       effect:
         specifier: 4.0.0-beta.93
         version: 4.0.0-beta.93
@@ -681,7 +681,7 @@ importers:
         version: 1.1.0
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -841,7 +841,7 @@ importers:
         version: 1.1.0
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -929,7 +929,7 @@ importers:
         version: 1.1.0
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -1017,7 +1017,7 @@ importers:
         version: link:../packages/9-public/composer-prisma-cloud
       alchemy:
         specifier: 2.0.0-beta.59
-        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
+        version: 2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1)
     devDependencies:
       '@prisma/management-api-sdk':
         specifier: ^1.47.0
@@ -1397,16 +1397,16 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  '@effect/platform-bun@4.0.0-beta.93':
-    resolution: {integrity: sha512-pny29d1NhJ7XLv19as7A0pIZr+QFi5KejnwB/lLW1c8P63t+PDMPEn21toy2vx2yzl9xRTo8heyiXPXRsqPN5w==}
+  '@effect/platform-bun@4.0.0-beta.97':
+    resolution: {integrity: sha512-WYjC7nKiWfNywIz1zeBEXnrpuHJM86DOi3lSZSSBeHCPz8HYw7IT2FL7u+aaJHHsJCyFiZVAgg2KFS8aMFSJBQ==}
     peerDependencies:
-      effect: ^4.0.0-beta.93
+      effect: ^4.0.0-beta.97
 
-  '@effect/platform-node-shared@4.0.0-beta.98':
-    resolution: {integrity: sha512-iySXaffnCJX1sNAIp79ghhIeui9E5qwUQyqd1VLPkB9UNO4vdpd9B5fTEXwe7S/GusL4jsk9vSvX38XJgRFG1w==}
+  '@effect/platform-node-shared@4.0.0-beta.99':
+    resolution: {integrity: sha512-POBAowafsAAb3bH1x1rJlWnv32yMAazFgEuRW5LhkW/JJA5VGoEk9OnuoUkIH1OW6K/X6IrdNpqcO+5e9lPQJA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.98
+      effect: ^4.0.0-beta.99
 
   '@effect/platform-node-shared@4.0.0-beta.99':
     resolution: {integrity: sha512-POBAowafsAAb3bH1x1rJlWnv32yMAazFgEuRW5LhkW/JJA5VGoEk9OnuoUkIH1OW6K/X6IrdNpqcO+5e9lPQJA==}
@@ -4882,39 +4882,39 @@ snapshots:
     transitivePeerDependencies:
       - workerd
 
-  '@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)':
+  '@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)':
     dependencies:
       '@alchemy.run/node-utils': 0.0.5
       '@distilled.cloud/cloudflare': 0.27.0(effect@4.0.0-beta.93)
       effect: 4.0.0-beta.93
       workerd: 1.20260617.1
     optionalDependencies:
-      '@effect/platform-bun': 4.0.0-beta.93(effect@4.0.0-beta.93)
+      '@effect/platform-bun': 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@effect/platform-node': 4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1)
 
-  '@distilled.cloud/cloudflare-vite-plugin@0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)':
+  '@distilled.cloud/cloudflare-vite-plugin@0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)':
     dependencies:
       '@distilled.cloud/cloudflare': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/cloudflare-rolldown-plugin': 0.11.3(rolldown@1.0.1)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
-      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
+      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
       effect: 4.0.0-beta.93
       vite: 8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)
     optionalDependencies:
-      '@effect/platform-bun': 4.0.0-beta.93(effect@4.0.0-beta.93)
+      '@effect/platform-bun': 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@effect/platform-node': 4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1)
     transitivePeerDependencies:
       - rolldown
       - workerd
 
-  '@distilled.cloud/cloudflare-vite-plugin@0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)':
+  '@distilled.cloud/cloudflare-vite-plugin@0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)':
     dependencies:
       '@distilled.cloud/cloudflare': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/cloudflare-rolldown-plugin': 0.11.3(rolldown@1.0.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
-      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
+      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
       effect: 4.0.0-beta.93
       vite: 8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)
     optionalDependencies:
-      '@effect/platform-bun': 4.0.0-beta.93(effect@4.0.0-beta.93)
+      '@effect/platform-bun': 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@effect/platform-node': 4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1)
     transitivePeerDependencies:
       - rolldown
@@ -4969,15 +4969,15 @@ snapshots:
       - msw
       - vite
 
-  '@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93)':
+  '@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-beta.98(effect@4.0.0-beta.93)
+      '@effect/platform-node-shared': 4.0.0-beta.99(effect@4.0.0-beta.93)
       effect: 4.0.0-beta.93
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node-shared@4.0.0-beta.98(effect@4.0.0-beta.93)':
+  '@effect/platform-node-shared@4.0.0-beta.99(effect@4.0.0-beta.93)':
     dependencies:
       '@types/ws': 8.18.1
       effect: 4.0.0-beta.93
@@ -6340,7 +6340,7 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
-  alchemy@2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1):
+  alchemy@2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@25.9.5)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@25.9.5)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1):
     dependencies:
       '@alchemy.run/node-utils': 0.0.5
       '@aws-sdk/credential-providers': 3.1077.0
@@ -6349,8 +6349,8 @@ snapshots:
       '@distilled.cloud/axiom': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/cloudflare': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/cloudflare-rolldown-plugin': 0.11.3(rolldown@1.0.1)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
-      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
-      '@distilled.cloud/cloudflare-vite-plugin': 0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
+      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
+      '@distilled.cloud/cloudflare-vite-plugin': 0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
       '@distilled.cloud/core': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/neon': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/planetscale': 0.27.0(effect@4.0.0-beta.93)
@@ -6380,7 +6380,7 @@ snapshots:
       undici: 7.28.0
       yaml: 2.9.0
     optionalDependencies:
-      '@effect/platform-bun': 4.0.0-beta.93(effect@4.0.0-beta.93)
+      '@effect/platform-bun': 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@effect/platform-node': 4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1)
       vite: 8.1.2(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)
       ws: 8.21.1
@@ -6394,7 +6394,7 @@ snapshots:
       - vitest
       - workerd
 
-  alchemy@2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1):
+  alchemy@2.0.0-beta.59(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(@types/node@26.1.1)(@types/react@19.2.17)(effect@4.0.0-beta.93)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(vitest@4.1.10(@types/node@26.1.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)))(workerd@1.20260617.1)(ws@8.21.1):
     dependencies:
       '@alchemy.run/node-utils': 0.0.5
       '@aws-sdk/credential-providers': 3.1077.0
@@ -6403,8 +6403,8 @@ snapshots:
       '@distilled.cloud/axiom': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/cloudflare': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/cloudflare-rolldown-plugin': 0.11.3(rolldown@1.0.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
-      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
-      '@distilled.cloud/cloudflare-vite-plugin': 0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.93(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
+      '@distilled.cloud/cloudflare-runtime': 0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)
+      '@distilled.cloud/cloudflare-vite-plugin': 0.11.3(@distilled.cloud/cloudflare-runtime@0.11.3(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93))(@distilled.cloud/cloudflare@0.27.0(effect@4.0.0-beta.93))(@effect/platform-bun@4.0.0-beta.97(effect@4.0.0-beta.93))(@effect/platform-node@4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1))(effect@4.0.0-beta.93)(rolldown@1.0.1)(vite@8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0))(workerd@1.20260617.1)
       '@distilled.cloud/core': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/neon': 0.27.0(effect@4.0.0-beta.93)
       '@distilled.cloud/planetscale': 0.27.0(effect@4.0.0-beta.93)
@@ -6434,7 +6434,7 @@ snapshots:
       undici: 7.28.0
       yaml: 2.9.0
     optionalDependencies:
-      '@effect/platform-bun': 4.0.0-beta.93(effect@4.0.0-beta.93)
+      '@effect/platform-bun': 4.0.0-beta.97(effect@4.0.0-beta.93)
       '@effect/platform-node': 4.0.0-beta.92(effect@4.0.0-beta.93)(ioredis@5.11.1)
       vite: 8.1.2(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.6.1)(yaml@2.9.0)
       ws: 8.21.1
