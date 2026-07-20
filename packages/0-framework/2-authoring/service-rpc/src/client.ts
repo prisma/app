@@ -35,6 +35,19 @@ export type Transport = (req: Request) => Promise<Response>;
  * because service-rpc is framework-layer and must not depend on
  * prisma-cloud. `maxRetries` counts retries after the first attempt, so a
  * persistently failing call sends 6 requests in total before giving up.
+ *
+ * Why 6 attempts covers a boot that can take up to ~22s even though the
+ * backoff sums to only ~8s: the close is intermittent. On a cold start the
+ * ingress usually HOLDS the connection and the request simply blocks until
+ * the server is listening (there is no client-side request timeout here), so
+ * a held attempt rides out the whole boot and succeeds on its own — the
+ * backoff budget only governs the case where an attempt is actively closed,
+ * and every close so far has been the fast (~400ms) kind. Spending six
+ * attempts against that means the call fails only if it is closed six times
+ * in a row, which the observed close rate makes rare. `maxDelayMs` is the
+ * ceiling the doubling would be clamped to; at maxRetries:5 the last wait is
+ * 4s, so the clamp never actually binds — it is kept so raising maxRetries
+ * stays safe.
  */
 const RETRY = {
   initialDelayMs: 250,

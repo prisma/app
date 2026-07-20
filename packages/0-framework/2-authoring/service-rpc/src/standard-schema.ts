@@ -1,8 +1,9 @@
 /**
  * Runs a Standard Schema validator over an unknown value, returning the
  * parsed output — or throwing with the validator's own issues on failure.
- * Shared by the RPC client (validating a response) and serve() (validating a
- * request and a handler's return).
+ * Used by serve() to validate a request's input and its handler's return;
+ * the client does not re-validate the response, since serve() already
+ * guaranteed it against the same schema.
  */
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 

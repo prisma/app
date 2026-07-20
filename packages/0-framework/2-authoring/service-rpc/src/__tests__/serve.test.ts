@@ -142,6 +142,76 @@ describe('serve()', () => {
     }
   });
 
+  test('a handler returning schema-violating output is a masked 500, and logs it as a provider bug', async () => {
+    const authService = fakeAuthService(() => ({ validTokens: [] }));
+    const handler = serve(authService, {
+      rpc: {
+        // `ok` must be a boolean; return a secret-bearing string instead.
+        // JSON.parse is typed `any`, so this defeats the output type at
+        // authoring without a cast — the runtime value is what serve()'s
+        // output validation must catch.
+        verify: async () => JSON.parse('{"ok":"leaked-secret-value"}'),
+      },
+    });
+
+    const logged: unknown[][] = [];
+    const originalConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      const res = await handler(verifyRequest({ token: 't' }));
+
+      expect(res.status).toBe(500);
+      const bodyText = await res.text();
+      expect(bodyText).not.toContain('leaked-secret-value');
+      expect(
+        logged.some((args) =>
+          args.some((a) => typeof a === 'string' && a.includes('provider bug')),
+        ),
+      ).toBe(true);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  test('a request body that errors mid-read is a masked 500, not a rejected promise or a leaked error', async () => {
+    const authService = fakeAuthService(() => ({ validTokens: [] }));
+    const handler = serve(authService, { rpc: { verify: async () => ({ ok: true }) } });
+
+    // A body stream that fails partway through with a secret-bearing error.
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"tok'));
+        controller.error(new Error('socket truncated: secret-xyz'));
+      },
+    });
+    const req = new Request('http://auth.internal/rpc/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'body-err-key' },
+      body,
+      duplex: 'half',
+    });
+
+    const logged: unknown[][] = [];
+    const originalConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      const res = await handler(req);
+      expect(res.status).toBe(500);
+      expect(await res.text()).not.toContain('secret-xyz');
+      expect(
+        logged.some((args) =>
+          args.some((a) => a instanceof Error && a.message.includes('secret-xyz')),
+        ),
+      ).toBe(true);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
   test('the wrong HTTP verb on a known method is a 405', async () => {
     const authService = fakeAuthService(() => ({ validTokens: [] }));
     const handler = serve(authService, { rpc: { verify: async () => ({ ok: true }) } });

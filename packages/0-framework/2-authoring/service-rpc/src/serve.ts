@@ -371,7 +371,12 @@ export function serve<S extends AnyRunnable, H extends Handlers<S>>(
         if (err instanceof RequestBodyTooLargeError) {
           return outcome({ error: `Request body exceeds the ${MAX_BODY_BYTES}-byte limit` }, 413);
         }
-        throw err;
+        // A stream I/O error mid-read (a truncated or reset request body): mask
+        // and log it like any other internal failure rather than letting it
+        // reject out of the handler, which would both break serve()'s
+        // Response contract and skip the console.error operators rely on.
+        console.error(`serve(): reading the request body for "${methodName}" failed:`, err);
+        return outcome({ error: INTERNAL_ERROR_MESSAGE }, 500);
       }
 
       let body: unknown;
