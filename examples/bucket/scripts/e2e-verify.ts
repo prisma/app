@@ -95,6 +95,17 @@ while (Date.now() < deadline) {
       );
     }
     console.log(`Round trip OK — PUT then GET /blobs/${testKey} returned the expected body.`);
+
+    // Leave the bucket empty: the destroy phase deletes the bucket itself,
+    // and the Management API rejects deleting a non-empty bucket.
+    const delRes = await fetch(`${url}/blobs/${testKey}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!delRes.ok) {
+      fail(`DELETE /blobs/${testKey} returned ${delRes.status} — bucket destroy would fail.`);
+    }
+    console.log('Cleanup OK — test object deleted; bucket is empty for destroy.');
     process.exit(0);
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err);
