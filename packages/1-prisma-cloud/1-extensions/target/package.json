@@ -42,7 +42,7 @@
     "@internal/tsdown-config": "workspace:0.1.0",
     "@types/bun": "^1.3.13",
     "@types/pg": "8.20.0",
-    "tsdown": "^0.22.4",
+    "tsdown": "^0.22.7",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
