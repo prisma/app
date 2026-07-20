@@ -42,7 +42,7 @@
     "pathe": "^2.0.3",
     "pg": "8.22.0",
     "postgres": "^3.4.9",
-    "tsdown": "^0.22.4"
+    "tsdown": "^0.22.7"
   },
   "devDependencies": {
     "@internal/core": "workspace:0.1.0",
