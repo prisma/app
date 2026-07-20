@@ -262,7 +262,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **Filed upstream:** [PRO-214](https://linear.app/prisma-company/issue/PRO-214/management-api-branch-create-has-no-idempotency-ifexists-409-on) — _"Management API: branch create has no idempotency (`ifExists`) — 409 on duplicate gitName"_
 **Product:** Prisma Postgres / Compute (Management API, branches)
 **Version:** `@prisma/management-api-sdk` 1.47.0
-**First hit:** the deploy CLI's ensure-containers step (`resolveBranch`), building stage-as-branch
+**First hit:** the Prisma Cloud extension's container resolution (`resolveBranch`), building stage-as-branch
 **Cost:** low — caught at implementation; the client-side dance is boilerplate every caller repeats.
 
 **Symptom.** `POST /v1/projects/{projectId}/branches` with a `gitName` that already exists returns `409`, full stop. Any "ensure this branch exists" step that runs on every deploy cannot just create.
@@ -274,7 +274,7 @@ process.on("unhandledRejection", (e) => console.error(e));
 **References.**
 
 - Upstream: [PRO-214](https://linear.app/prisma-company/issue/PRO-214/management-api-branch-create-has-no-idempotency-ifexists-409-on)
-- Fix: [`packages/alchemy/src/container.ts`](packages/alchemy/src/container.ts) (`resolveBranch`)
+- Fix: [`packages/1-prisma-cloud/0-lowering/lowering/src/container.ts`](packages/1-prisma-cloud/0-lowering/lowering/src/container.ts) (`resolveBranch`)
 
 ---
 

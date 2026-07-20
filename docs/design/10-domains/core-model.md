@@ -461,10 +461,18 @@ import type { Effect } from "effect"
 // is what keeps control-plane code out of the runtime artifact.
 interface PrismaAppConfig {
   readonly extensions: ExtensionDescriptor[]
-  readonly state: () => AlchemyStateLayer               // the ONE state store per deploy — explicit,
+  readonly state: StateDescriptor                       // the ONE state store per deploy — explicit,
                                                         // platform-agnostic, never defaulted by an extension
 }
 function defineConfig(config: PrismaAppConfig): PrismaAppConfig   // in @prisma/composer/config
+
+// The deploy's one state store, naming its owning extension so core can hand
+// that extension's own resolved container to create() (ADR-0037) — never
+// defaulted, never read from the environment.
+interface StateDescriptor {
+  readonly extension: string                            // matched against ExtensionDescriptor.id
+  create(container: ContainerInstance | undefined): AlchemyStateLayer
+}
 
 // One extension's control-plane registry: everything the deploy pipeline may look
 // up for a node whose `extension` field names this package. The extension is never
@@ -638,7 +646,7 @@ interface LowerOptions {
   readonly bundles: Record<string, Bundle>
   readonly stage?: string
   readonly state?: AlchemyStateLayer                     // explicit override — wins over the config's
-                                                         // own state store (PrismaAppConfig.state)
+                                                         // own state store (PrismaAppConfig.state.create())
   // Invoked once per deploy, during apply, with the Deploy operation's RESOLVED
   // result (app + every node, topo order). Presentation belongs to the caller
   // (the CLI wires its renderer here); core never formats. Absent means no report
@@ -669,9 +677,10 @@ function lowering(root: ModuleNode, config: PrismaAppConfig, opts: LowerOptions)
 ```
 
 `lower()` is nothing but the whole-stack wrapper:
-`Alchemy.Stack(opts.name, { providers: mergedProviders(config), state: opts.state ?? config.state() }, lowering(root, config, opts))`
-— Alchemy requires a state layer; the config supplies the deploy's one state store
-and an explicit `opts.state` always wins. Providers are **every configured
+`Alchemy.Stack(opts.name, { providers: mergedProviders(config), state: opts.state ?? config.state.create(containers.get(config.state.extension)) }, lowering(root, config, opts))`
+— Alchemy requires a state layer; the config supplies the deploy's one state store,
+built from its owning extension's own resolved container, and an explicit
+`opts.state` always wins. Providers are **every configured
 extension's** `providers()` merged in config-array order, with no
 used-extensions-only filtering (ADR-0017's pinned-providers rule); an extension
 that declares none is skipped. Two type-level notes the wrapper carries (both

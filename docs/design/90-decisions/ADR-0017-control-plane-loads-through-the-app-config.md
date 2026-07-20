@@ -14,7 +14,7 @@ import { nodeBuild } from "@prisma/composer/node/control";
 
 export default defineConfig({
   extensions: [prismaCloud(), nodeBuild()],
-  state: () => prismaState(),
+  state: prismaState(),
 });
 ```
 
