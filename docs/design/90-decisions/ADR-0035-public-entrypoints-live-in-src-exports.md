@@ -117,25 +117,21 @@ published API contract), not on a dts limitation.
   and so on. `dependency-cruiser.config.mjs` has **no glob precedence** — a file
   joins a plane group if *any* of that group's globs match it — so there is
   deliberately no `src/** → shared` fallback (it would overlap the specific
-  `src/exports/control.ts → control` glob and put one file in two planes). Root
-  internals therefore keep one glob per file. Collapsing them to a single
-  `src/*.ts → shared` is **not currently possible**: `normalizeGlob` (in
+  `src/exports/control.ts → control` glob and put one file in two planes).
+  Within that constraint, a package whose root internals all share one plane
+  collapses to a single `src/*.ts` glob — `normalizeGlob` (in
   `scripts/architecture-coverage.mjs`, shared by the cruiser config and the
-  coverage check) turns `src/*.ts` into `^…/src/[^/]*.ts` with no end-anchor and
-  an unescaped dot, so it matches `…/src/exports/deploy.ts`: `[^/]*` matches
-  `expo`, the unescaped `.` matches `r`, and `ts` matches the `ts` at the end of
-  `exports` (the missing anchor ignores the `/deploy.ts` tail). The collapse
-  would silently re-bucket entrypoints into a second plane. Fixing the
-  normalizer (anchor the pattern and escape literal dots for wildcard-file
-  globs) would make the collapse safe; that is a separate follow-up in the
-  enforcement engine, tracked outside this decision.
+  coverage check) anchors a file-like pattern and escapes literal dots, so
+  `src/*.ts` becomes `^…/src/[^/]*\.ts$` and matches root files only, never
+  `src/exports/…`. `core`, `cron`, and `streams` use it; `target` and `storage`
+  keep one glob per root file because their root internals span two planes, and
+  no single glob can say that.
 
 - **Every module is classified, and the check fails closed.** `pnpm lint:deps`
   runs the cruiser plus a coverage check that errors on any source file no glob
   matches, so a new `src/exports/` entrypoint cannot be added without declaring
   its plane. That makes a green `lint:deps` proof that the layout and the plane
-  map agree. The one open item is the `normalizeGlob` wildcard-file limitation
-  above: once fixed, it unblocks reducing the per-file glob count.
+  map agree.
 
 ## Alternatives considered
 
