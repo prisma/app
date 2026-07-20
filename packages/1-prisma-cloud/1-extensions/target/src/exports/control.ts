@@ -310,7 +310,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
             });
           }
 
-          return { projectId } satisfies CloudApplication;
+          return { projectId, branchId: o.branchId } satisfies CloudApplication;
         }),
     },
 
