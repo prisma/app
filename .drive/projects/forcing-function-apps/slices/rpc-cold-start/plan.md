@@ -1,51 +1,56 @@
-# Dispatch plan: rpc-cold-start
+# Dispatch plan: rpc-cold-start (idempotency keys)
 
 Contract source: [spec.md](spec.md). Branch:
 `claude/streams-cold-start-rpc-37e5c1` off merged main (`2bafbbf`). Three
-dispatches, sequential; reviewer round after D1+D2 together, then D3.
+dispatches, sequential; hostile reviewer round after D1+D2, then D3 closes.
 Orchestrator owns all docs (`gotchas.md`, `.drive/`, `docs/`) — implementers
 report staleness, never edit. Evidence rules from the streams slice apply
-verbatim: raw program output only; any number an implementer reports is
-checked against the code's real format strings before it is believed.
+verbatim: raw program output only; every reported number is checked against
+the code's real format strings before it is believed.
 
-## D1 — the flag and the client retry (rpc package)
+## D1 — the keyed protocol: client retry + serve() idempotency control
 
-**Outcome:** `rpc({ input, output, idempotent: true })` carried on
-`__cmp[method]`; `makeClient` applies the bounded idempotent-retry policy
-(streams numbers: 250 ms / ×2 / 5 s cap / 5 attempts / jitter; retry thrown
-network errors + 5xx + 429, never other 4xx) to marked methods only;
-unmarked methods byte-identical to today. Comments state the generic
-idempotence semantics, with PRO-217/PRO-219 + the canary named as the
-motivating urgency. No prisma-cloud imports.
+**Outcome:** `makeClient` mints one `Idempotency-Key` per logical call,
+reuses it across a bounded retry (250 ms / ×2 / 5 s cap / 5 attempts /
+jitter; retry network errors + 5xx + 429, never other 4xx). `serve()`
+enforces the key (keyless → loud 400), runs single-flight per in-flight
+key, replays completed 2xx/4xx answers for ~60 s under an LRU bound, does
+not cache 5xx/throws, and passes `ctx.idempotencyKey` as an optional second
+handler argument. No `idempotent` flag exists. No prisma-cloud imports —
+this is generic RPC semantics; PRO-217/PRO-219 are named as motivating
+urgency only.
 
-**Completed when:** the spec's wire-counted tests are green with teeth
-confirmed red-by-mutation (retry deleted → marked-method test fails;
-retry widened to unmarked → one-request test fails; 4xx retried → 404 test
-fails); `test-d` pins the signature; rpc + dependent packages green; repo
-checks green; committed with DCO dual sign-off.
+**Completed when:** every wire-counted and serve() test in the spec is
+green with teeth confirmed red-by-mutation (including the same-key-across-
+attempts and fresh-key-per-call assertions); one-argument handlers still
+typecheck (`test-d`); both rpc-consuming example suites pass unchanged;
+repo checks green; committed with DCO dual sign-off.
 
-## D2 — the canary (scripts + CI) and the example flags
+## D2 — the canary (scripts + CI)
 
-**Outcome:** `scripts/rpc-cold-start-canary.ts` + `-classify.ts` + tests,
-cloned from the cold-start canary's proven contract (spaced ≥60 s samples
-including before #0, promote-race trigger, log-confirmed coldness with the
-2 s margin, 14-hold bug-gone budget, first-close early exit, `MAX_RUN_MS`,
-requirable exits); job in `e2e-deploy.yml` over `examples/storefront-auth`,
-probing an unmarked method; `examples/store` catalog reads gain
-`idempotent: true`, writes stay unmarked. Live rounds during development
-must reproduce or honestly fail to reproduce the close, raw output only.
+**Outcome:** `scripts/rpc-cold-start-canary.ts` + `-classify.ts` + unit
+tests, inheriting the cold-start canary's proven contract wholesale
+(promote-race trigger, ≥60 s spacing including sample #0, log-confirmed
+coldness with the 2 s margin, 14-hold bug-gone budget, first-close early
+exit, `MAX_RUN_MS`, requirable exits, bug-gone message that retires the
+canary + gotchas entry but NEVER the retry or keys); job in
+`e2e-deploy.yml` over `examples/storefront-auth`, probing the auth
+service's rpc endpoint with a bare single-attempt `fetch` and a manually
+minted key — never through a framework client, which would mask the bug.
 
 **Completed when:** classify tests green with confirmed teeth;
-`test:scripts` green; a live canary run reports `bug-present` (or the
-implementer stops and reports why not — a clean run today means a broken
-canary, not a fixed platform); workspace left clean with counts; committed.
+`test:scripts` green; at least one live run reports `bug-present` with raw
+per-sample output (a clean run today means a broken canary — stop and
+report, do not ship); workspace left clean with project counts; committed.
 
-## D3 — review round, live re-proof, docs, PR
+## D3 — hostile review, live re-proof, docs, PR
 
-**Outcome:** hostile reviewer pass over D1+D2 (priorities: the retry can
-never touch an unmarked method; the canary cannot be masked by the
-compensation; the numbers in every report are real); findings closed; a
-full live round (deploy storefront-auth, canary verify, destroy); gotchas'
-PRO-217 entry gains the RPC face and removal guard (orchestrator writes
-it); PR opened against main with the slice narrative, review requested from
-Will. No auto-merge armed; merge only on his word.
+**Outcome:** reviewer pass over D1+D2 (attack priorities: a repeated key
+can never double-execute within an instance; the replay cannot leak one
+caller's response to a different logical call; keyless rejection cannot be
+bypassed; the canary cannot be masked by the retry machinery; every
+reported number is real). Findings closed. Full live round (deploy
+storefront-auth, canary verify, destroy, zero leaks). Orchestrator writes
+the gotchas PRO-217 RPC-face entry including the documented residual
+window, and the design-notes record. PR opened against main with the slice
+narrative; review requested from Will. No auto-merge; merge on his word.

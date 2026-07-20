@@ -191,3 +191,20 @@ shipped inside Part B's refactor (implicit create, read-creates, contentType
 dropped), the complete unenforced-invariant inventory (T1–T9), deviations
 from the design doc, and decisions R1–R6 awaiting his ruling. No further
 dispatches until he rules.
+
+## RPC idempotency keys — settled design (2026-07-17, Will)
+
+Supersedes the `idempotent: true` per-method boolean considered earlier the
+same day. The RPC protocol requires an `Idempotency-Key` on every call
+(client-minted per logical call, reused across retries); `serve()` enforces
+it, runs single-flight per key, and replays completed answers within the
+retry envelope; handlers may read `ctx.idempotencyKey` for their own durable
+control but need not. Rationale: a boolean is a human claim the framework
+cannot check — the key is a mechanism it enforces, making every method
+safely retryable with no declaration. Scope calibration from Will: this
+protocol serves same-network service-to-service calls and guards the
+cold-start bug specifically; in-memory control is sufficient, and the
+cross-instance residual window is documented and accepted, not closed.
+The bounded retry becomes permanent protocol semantics — the PRO-217 canary
+retires itself when the platform heals, never the retry or the keys.
+Slice: [slices/rpc-cold-start/](slices/rpc-cold-start/spec.md).

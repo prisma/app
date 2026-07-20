@@ -1,104 +1,123 @@
-# Slice: RPC cold-start handling — contract-declared idempotence, with its own canary
+# Slice: RPC idempotency keys — safe retries for every call, with the PRO-217 canary
 
 ## At a glance
 
 `rpc()`'s `makeClient` carries no cold-start handling: every service-to-service
 RPC edge hits PRO-217's intermittent socket close raw on a cold target — and
-PRO-217 is **live**, reproduced repeatedly during the streams slice
-(2026-07-17: multiple `502 … socket connection was closed` on log-confirmed
-cold starts). Unlike streams, every RPC call is a POST with no
-transport-level idempotency signal, so a blanket retry in `makeClient` would
-be exactly the double-execution hazard the streams append work fenced off.
+PRO-217 is live (reproduced repeatedly on 2026-07-17, log-confirmed cold
+starts). A blanket retry was off the table while a retried POST could
+double-execute a write.
 
-The safe shape, settled with Will (2026-07-17): **a method opts in at its
-definition** — `rpc({ input, output, idempotent: true })` — and `makeClient`
-applies a bounded cold-start backoff to marked methods only. Everything else
-keeps today's fail-fast behavior with the failure surfaced. Own canary,
-cloned from the (now trustworthy) cold-start canary's contract.
+Settled design (Will, 2026-07-17, superseding an earlier `idempotent: true`
+boolean proposal): **the RPC protocol requires an idempotency key on every
+call**, and the framework implements idempotency control on both ends. With
+the mechanism in place, every method is safely retryable and no per-method
+declaration exists — a boolean would be a human claim the framework cannot
+check; the key is a mechanism it enforces.
+
+Scope calibration (Will, verbatim intent): this protocol is primarily for
+service-to-service calls inside one network, guarding against the cold-start
+bug — not arbitrary distributed-systems failure. In-memory idempotency
+control is sufficient; exposing the key to handlers is good practice, and it
+is acceptable for users to ignore it.
 
 ## The design
 
-### The flag
+### Protocol
 
-- `rpc({ input, output, idempotent: true })` — optional, default absent
-  (= not idempotent, never retried). The flag rides on the method's runtime
-  value in `__cmp[method]` beside the two schemas, exactly where `makeClient`
-  already reads them.
-- Declaring it is the METHOD AUTHOR's claim ("calling this twice is the same
-  as calling it once"), stated where the method is defined — the one place
-  that claim can be reviewed. Nothing infers it; nothing upgrades it.
+- Every request `makeClient` sends carries an `Idempotency-Key` header:
+  a UUID minted **once per logical call** and reused byte-identically across
+  every retry of that call. Two separate calls never share a key.
+- The key is REQUIRED: `serve()` rejects a keyless request with a loud 400
+  naming the header — "requires" enforced, not suggested. (Manual `curl`
+  against an rpc endpoint must supply the header; document in the error.)
 
-### The retry (client-side only; serve() unchanged)
+### Client (`makeClient`)
 
-- `makeClient` wraps marked methods in a bounded backoff mirroring the
-  streams client's policy and numbers (250 ms initial, ×2, 5 s cap, 5
-  attempts, jittered): retry thrown network errors, 5xx, and 429; never any
-  other 4xx (a real protocol answer surfaces on the first try). Unmarked
-  methods get today's single attempt, byte-for-byte.
-- **Layering note, resolved:** rpc is framework-layer (target-agnostic), so
-  the policy is stated as generic idempotent-retry semantics — correct on
-  any transport for any method whose author declares idempotence — with the
-  comment naming PRO-217/PRO-219 as the motivating platform behavior and the
-  new canary as the removal trigger for the *urgency*, not the mechanism.
-  No prisma-cloud import enters the rpc package.
+- Every method gets a bounded retry: the streams client's numbers (250 ms
+  initial, ×2, 5 s cap, 5 attempts, jittered). Retry thrown network errors,
+  5xx, and 429; never any other 4xx — a real protocol answer surfaces on the
+  first try. Same key on every attempt.
+- No per-method configuration. No `idempotent` flag anywhere.
+
+### Server (`serve()`)
+
+- **Single-flight per key:** a duplicate arriving while the first attempt is
+  still executing waits for it and receives the same response — the handler
+  runs once.
+- **Replay window scoped to the retry envelope, not general replay:**
+  completed answers (2xx and 4xx — they are answers) are cached ~60 s with
+  an LRU bound and replayed byte-identically for a repeated key. 5xx and
+  thrown errors are not cached — they are the retryable outcomes, and a
+  retry re-executes.
+- **Handler context:** handlers gain an optional second argument —
+  `(input, ctx)` with `ctx.idempotencyKey` — non-breaking for existing
+  handlers. A handler with hard exactly-once needs can write the key into
+  its own transaction; the framework does not require it.
+
+### The residual, documented and accepted
+
+In-memory control protects within an instance's lifetime. If an instance
+applies a call, dies before responding, and the retry lands on a fresh
+instance, the handler runs again. Accepted per the scope calibration above
+(narrow window, same-network traffic, and PRO-217's specific failure — a
+close mid-connection-establishment — never reached a handler at all, so its
+retry was never the dangerous case). The gotchas entry states this window
+plainly; no design pretends it is closed.
+
+### Status of the retry: permanent, not a compensation
+
+Bounded retry over keyed calls is correct RPC semantics on any network —
+it does NOT get deleted when the platform fixes cold starts. The canary's
+bug-gone message therefore retires only the canary itself, the gotchas
+paragraph, and PRO-219's urgency framing — never the retry or the keys.
 
 ### The canary (PRO-217, RPC face)
 
-A sibling of `scripts/cold-start-canary.ts`, inheriting every hard-won rule
-of its 2026-07-17 rebuild — these are requirements, not suggestions:
+A sibling of `scripts/cold-start-canary.ts`, inheriting every rule of its
+2026-07-17 rebuild — requirements, not suggestions:
 
-- **Trigger:** fresh deployment of the target service via create → upload →
-  start → race the promote call (never wait for `running`); first-touch RPC
-  call through the consumer the instant promote succeeds.
-- **Cadence:** ≥60 s between samples, including before sample #0 —
-  back-to-back promotions produce ~1 s boots the bug does not live in.
-- **Coldness is proven, not inferred:** the touch counts only if the
-  deployment's own boot log shows it was sent before the server's listening
-  line, outside the 2 s cross-clock margin; no latency guessing.
-- **Statistical bug-gone rule:** `bug-gone` requires 14 confirmed cold-start
-  holds (20% target close rate, ≤5% false-clean chance); any close is
-  decisive `bug-present`; anything else inconclusive → warning, exit 0.
-- **Probe an UNMARKED method**, so the raw platform behavior stays
-  observable — the compensation must not be able to mask the canary.
-- Requirable exits: bug present → 0 (green), conclusively gone → 1 (red,
-  message names what to delete: the retry policy's cold-start framing, this
-  canary, the gotchas paragraph), inconclusive → 0 + `::warning::`.
-- Rides `examples/storefront-auth` (the minimal storefront → auth RPC edge)
-  through the existing deploy-verify-destroy action; own `-classify.ts`
-  module with unit tests, own job in `e2e-deploy.yml`, NOT in the required
-  set until Will adds it.
-
-### The example
-
-`examples/store`'s catalog contract gets the flag where it is true —
-`listProducts`, `getProduct`, `getSpecial` are idempotent reads;
-`rotateSpecial` and `placeOrder` stay unmarked — so the example documents
-the judgment call the flag exists to force.
+- Fresh target via create → upload → start → **race the promote call**
+  (never wait for `running`); ≥60 s between samples, including before
+  sample #0; coldness proven from the deployment's own boot log (2 s
+  cross-clock margin), never inferred from latency; `bug-gone` needs 14
+  confirmed cold-start holds (20% target close rate, ≤5% false-clean); any
+  close is decisive; first close exits early; `MAX_RUN_MS` self-stop under
+  the job timeout; requirable exits (present → 0, gone → 1 with the cleanup
+  message, inconclusive → 0 + `::warning::`).
+- **Probes the target's rpc endpoint DIRECTLY with a bare `fetch`** (single
+  attempt, manually-minted key): every framework edge now auto-retries, so
+  a probe through a consumer would be masked by the machinery this slice
+  ships. The raw platform behavior must stay observable.
+- Rides `examples/storefront-auth`'s deployed auth service through the
+  existing deploy-verify-destroy action; own `-classify.ts` + unit tests;
+  own job in `e2e-deploy.yml`; NOT required until Will adds it.
 
 ## Verification bar
 
-- **Wire-counted, mutation-verified tests** in the rpc package (the streams
-  append-test pattern): a marked method against a transport that 503s then
-  succeeds → resolves, with the retry counted at the stub transport; an
-  UNMARKED method against the same transport → rejects after exactly ONE
-  request, re-asserted after a settle window; a marked method against a 404
-  → rejects after exactly one request (4xx never retried). Each verified red
-  by deleting the behavior it pins.
-- Type-level: the flag is optional and absent-by-default; `test-d` pins that
-  marking a method does not change its call signature.
-- Canary classify tests extended from the cold-start suite's shapes,
-  including the never-went-cold and sample-budget rules; teeth confirmed.
-- Live round: the canary run against a fresh deploy, raw output only —
-  expected verdict today is `bug-present` (the bug is live). A `bug-gone`
-  from a run today means the canary is broken; investigate, do not report
-  it as a result.
+- **Wire-counted, mutation-verified client tests** (the streams append-test
+  pattern, counts asserted at a stub transport): 503-then-success →
+  resolves with exactly two requests carrying the SAME key; two separate
+  logical calls → different keys; 404 → rejects after exactly one request;
+  network-error-then-success → resolves. Teeth: delete the retry → red;
+  mint a fresh key per attempt → the same-key assertion reds.
+- **serve() tests:** repeated key after completion → handler ran once,
+  response replayed byte-identically; concurrent same-key → one execution
+  (single-flight); keyless → 400 naming the header; 5xx not cached (a
+  retry re-executes); cache eviction bounds. Teeth confirmed per test.
+- **Type-level:** existing one-argument handlers still typecheck; `ctx`
+  carries the key.
+- **Live round:** canary against a fresh deploy, raw output only; expected
+  verdict today is `bug-present`. A clean run today means a broken canary —
+  investigate, do not report it as a result.
 - Repo checks green: typecheck, lint, casts delta 0, depcruise,
-  `test:scripts`.
+  `test:scripts`; `examples/store` and `examples/storefront-auth` compile
+  and their integration tests pass unchanged (handlers ignore `ctx`).
 
 ## Out of scope
 
-- Retrying non-idempotent calls under any policy. Not negotiable — the
-  no-double-execution reasoning is recorded in the streams design docs.
-- Server-side (serve()) changes; the retry is a client concern.
+- Durable (cross-instance) idempotency storage — the handler's option via
+  `ctx.idempotencyKey`, never a framework requirement.
+- Server-initiated replay semantics beyond the retry envelope.
 - Adding the canary to the required-checks list (Will's manual step).
-- Typed `streamDef({ event })` and the streams follow-ups — separate slice.
+- The streams follow-ups (typed `streamDef`, audit debt items) — separate.
