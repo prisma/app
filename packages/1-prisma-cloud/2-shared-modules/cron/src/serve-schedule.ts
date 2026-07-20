@@ -8,8 +8,8 @@
  */
 import type { Deps, HydratedDeps, Params, RunnableServiceNode } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
-import type { Handlers } from '@internal/rpc';
-import { serve } from '@internal/rpc';
+import type { Handlers } from '@internal/service-rpc';
+import { serve } from '@internal/service-rpc';
 import type { TriggerContract } from './contract.ts';
 import type { Schedule } from './schedule.ts';
 

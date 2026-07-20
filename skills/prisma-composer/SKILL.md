@@ -60,7 +60,7 @@ validator types the messages; arktype is the house choice:
 
 ```ts
 // auth/src/contract.ts
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, rpc } from '@prisma/composer/service-rpc';
 import { type } from 'arktype';
 
 export const authContract = contract({
@@ -92,7 +92,7 @@ exhaustive at compile time:
 
 ```ts
 // auth/src/server.ts
-import { serve } from '@prisma/composer/rpc';
+import { serve } from '@prisma/composer/service-rpc';
 import { SQL } from 'bun';
 import service from './service.ts';
 
@@ -119,7 +119,7 @@ client back from `load()`:
 ```ts
 // storefront/src/service.ts
 import nextjs from '@prisma/composer/nextjs';
-import { rpc } from '@prisma/composer/rpc';
+import { rpc } from '@prisma/composer/service-rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { authContract } from '@my-app/auth/contract';
 

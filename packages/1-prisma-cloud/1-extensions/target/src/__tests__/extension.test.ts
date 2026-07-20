@@ -10,7 +10,7 @@ import {
   secret,
   string,
 } from '@internal/core';
-import { RPC_ACCEPTED_KEYS_ENV } from '@internal/rpc';
+import { RPC_ACCEPTED_KEYS_ENV } from '@internal/service-rpc';
 import { type } from 'arktype';
 import { compute, postgres, postgresContract } from '../index.ts';
 import { configKey, deserialize, deserializeSecrets, encode, secretKey } from '../serializer.ts';
@@ -441,7 +441,7 @@ describe('compute().run(address, boot) → load() — the round trip', () => {
     expect(seenAtBoot).toBe('');
   });
 
-  test("serviceKeyEnvName('') is @internal/rpc's RPC_ACCEPTED_KEYS_ENV — writer and reader cannot drift", () => {
+  test("serviceKeyEnvName('') is @internal/service-rpc's RPC_ACCEPTED_KEYS_ENV — writer and reader cannot drift", () => {
     expect(serviceKeyEnvName('')).toBe(RPC_ACCEPTED_KEYS_ENV);
   });
 });

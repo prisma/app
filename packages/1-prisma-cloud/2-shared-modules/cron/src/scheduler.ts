@@ -8,7 +8,7 @@
 import { param } from '@internal/core';
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
-import { rpc } from '@internal/rpc';
+import { rpc } from '@internal/service-rpc';
 import { type } from 'arktype';
 import { triggerContract } from './contract.ts';
 import type { Schedule } from './schedule.ts';

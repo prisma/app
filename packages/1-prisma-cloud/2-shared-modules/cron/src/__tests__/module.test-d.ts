@@ -10,7 +10,7 @@
 import type { ModuleNode } from '@internal/core';
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
-import { contract, rpc } from '@internal/rpc';
+import { contract, rpc } from '@internal/service-rpc';
 import { type } from 'arktype';
 import { test } from 'vitest';
 import { triggerContract } from '../contract.ts';

@@ -85,7 +85,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/2-authoring/rpc/src/**",
+      "glob": "packages/0-framework/2-authoring/service-rpc/src/**",
       "domain": "framework",
       "layer": "authoring",
       "plane": "shared"

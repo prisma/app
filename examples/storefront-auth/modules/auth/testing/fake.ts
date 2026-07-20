@@ -13,7 +13,7 @@
  */
 
 import node from '@prisma/composer/node';
-import { serve } from '@prisma/composer/rpc';
+import { serve } from '@prisma/composer/service-rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { authContract } from '../src/contract.ts';
 

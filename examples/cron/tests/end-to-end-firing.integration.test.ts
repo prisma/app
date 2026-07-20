@@ -10,7 +10,7 @@
  * promise — never real wall-clock `setInterval`. Run via `bun test`.
  */
 import { describe, expect, test } from 'bun:test';
-import { makeClient } from '@prisma/composer/rpc';
+import { makeClient } from '@prisma/composer/service-rpc';
 import { runScheduler, triggerContract } from '@prisma/composer-prisma-cloud/cron';
 import { bootstrapService } from '@prisma/composer-prisma-cloud/testing';
 import runnerService, { schedule } from '../src/runner/service.ts';

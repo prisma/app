@@ -8,7 +8,7 @@ import type { ProvisionerDescriptor } from '@internal/core/deploy';
 import * as Prisma from '@internal/lowering';
 /** The Prisma Cloud–hosted deploy state store; its implementation lives in @internal/lowering. */
 import { prismaState } from '@internal/lowering/state';
-import { RPC_PEER_KEY } from '@internal/rpc';
+import { RPC_PEER_KEY } from '@internal/service-rpc';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import { computeDescriptor } from './descriptors/compute.ts';

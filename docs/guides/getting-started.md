@@ -99,7 +99,7 @@ valibot…); the examples use arktype:
 
 ```ts
 // src/quotes/contract.ts
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, rpc } from '@prisma/composer/service-rpc';
 import { type } from 'arktype';
 
 export const quotesContract = contract({
@@ -132,7 +132,7 @@ compile:
 
 ```ts
 // src/quotes/server.ts
-import { serve } from '@prisma/composer/rpc';
+import { serve } from '@prisma/composer/service-rpc';
 import service from './service.ts';
 
 const { port } = service.config();
@@ -172,7 +172,7 @@ call:
 ```ts
 // src/gateway/service.ts
 import node from '@prisma/composer/node';
-import { rpc } from '@prisma/composer/rpc';
+import { rpc } from '@prisma/composer/service-rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { quotesContract } from '../quotes/contract.ts';
 

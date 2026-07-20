@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Load, LoadError, module } from '@internal/core';
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
-import { contract, rpc } from '@internal/rpc';
+import { contract, rpc } from '@internal/service-rpc';
 import { type } from 'arktype';
 import { triggerContract } from '../contract.ts';
 import { cron } from '../module.ts';

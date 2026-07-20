@@ -20,7 +20,7 @@ const build = {
   entry: 'server.js',
 };
 
-// A minimal Contract, nominal like @prisma/composer/rpc's own: satisfies() is
+// A minimal Contract, nominal like @prisma/composer/service-rpc's own: satisfies() is
 // identity, so a ref-port only satisfies the contract it was actually built
 // from — mirrors what a cast-bypassed wrong wiring would look like at
 // runtime (see module.test.ts's own copy of this pattern).

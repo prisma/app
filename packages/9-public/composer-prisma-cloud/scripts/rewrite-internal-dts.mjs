@@ -13,7 +13,7 @@ const MAP = [
   ['@internal/core/deploy', '@prisma/composer/deploy'],
   ['@internal/core/testing', '@prisma/composer/testing'],
   ['@internal/core', '@prisma/composer'],
-  ['@internal/rpc', '@prisma/composer/rpc'],
+  ['@internal/service-rpc', '@prisma/composer/service-rpc'],
   ['@internal/node/control', '@prisma/composer/node/control'],
   ['@internal/node', '@prisma/composer/node'],
   ['@internal/nextjs/control', '@prisma/composer/nextjs/control'],

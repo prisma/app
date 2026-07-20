@@ -1,4 +1,4 @@
-import { serve } from '@prisma/composer/rpc';
+import { serve } from '@prisma/composer/service-rpc';
 import type { Product } from './contract.ts';
 import service from './service.ts';
 

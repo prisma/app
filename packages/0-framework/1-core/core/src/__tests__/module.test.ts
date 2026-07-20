@@ -397,11 +397,11 @@ describe('importing a module module', () => {
 });
 
 describe('Load of a module root — typed wiring (the satisfies() backstop)', () => {
-  // A minimal Contract, nominal like @prisma/composer/rpc's own: satisfies() is
+  // A minimal Contract, nominal like @prisma/composer/service-rpc's own: satisfies() is
   // identity, so a ref-port only satisfies the contract it was actually built
   // from — mirrors what a cast-bypassed wrong wiring would look like at
   // runtime (TypeScript already rejects this at the call site — see
-  // @prisma/composer/rpc's contract-satisfaction.test-d.ts).
+  // @prisma/composer/service-rpc's contract-satisfaction.test-d.ts).
   const fakeContract = <Cmp>(cmp: Cmp): Contract<'rpc', Cmp> => {
     const value: Contract<'rpc', Cmp> = {
       kind: 'rpc',

@@ -5,7 +5,7 @@
  * fires on. Rotates the catalog's special of the day.
  */
 import node from '@prisma/composer/node';
-import { rpc } from '@prisma/composer/rpc';
+import { rpc } from '@prisma/composer/service-rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { defineSchedule, triggerContract } from '@prisma/composer-prisma-cloud/cron';
 import { catalogContract } from '@store/catalog/contract';

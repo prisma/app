@@ -511,7 +511,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/0-framework/2-authoring/rpc:
+  packages/0-framework/2-authoring/service-rpc:
     dependencies:
       '@internal/core':
         specifier: workspace:0.1.0
@@ -652,9 +652,9 @@ importers:
       '@internal/node':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/2-authoring/node
-      '@internal/rpc':
+      '@internal/service-rpc':
         specifier: workspace:0.1.0
-        version: link:../../../0-framework/2-authoring/rpc
+        version: link:../../../0-framework/2-authoring/service-rpc
       '@prisma-next/cli':
         specifier: 0.15.0
         version: 0.15.0(typanion@3.14.0)(typescript@6.0.3)
@@ -728,9 +728,9 @@ importers:
       '@internal/prisma-cloud':
         specifier: workspace:0.1.0
         version: link:../../1-extensions/target
-      '@internal/rpc':
+      '@internal/service-rpc':
         specifier: workspace:0.1.0
-        version: link:../../../0-framework/2-authoring/rpc
+        version: link:../../../0-framework/2-authoring/service-rpc
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -876,9 +876,9 @@ importers:
       '@internal/node':
         specifier: workspace:0.1.0
         version: link:../../0-framework/2-authoring/node
-      '@internal/rpc':
+      '@internal/service-rpc':
         specifier: workspace:0.1.0
-        version: link:../../0-framework/2-authoring/rpc
+        version: link:../../0-framework/2-authoring/service-rpc
       '@internal/tsdown-config':
         specifier: workspace:0.1.0
         version: link:../../0-framework/0-foundation/tsdown-config
@@ -964,9 +964,9 @@ importers:
       '@internal/prisma-cloud':
         specifier: workspace:0.1.0
         version: link:../../1-prisma-cloud/1-extensions/target
-      '@internal/rpc':
+      '@internal/service-rpc':
         specifier: workspace:0.1.0
-        version: link:../../0-framework/2-authoring/rpc
+        version: link:../../0-framework/2-authoring/service-rpc
       '@internal/storage':
         specifier: workspace:0.1.0
         version: link:../../1-prisma-cloud/2-shared-modules/storage

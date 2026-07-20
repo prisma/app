@@ -15,7 +15,7 @@ export default defineConfig([
       testing: 'src/testing.ts',
       casts: 'src/casts.ts',
       assertions: 'src/assertions.ts',
-      rpc: 'src/rpc.ts',
+      'service-rpc': 'src/service-rpc.ts',
       node: 'src/node.ts',
       'node-control': 'src/node-control.ts',
       nextjs: 'src/nextjs.ts',

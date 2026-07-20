@@ -30,7 +30,7 @@
     "@internal/foundation": "workspace:0.1.0",
     "@internal/node": "workspace:0.1.0",
     "@internal/prisma-cloud": "workspace:0.1.0",
-    "@internal/rpc": "workspace:0.1.0",
+    "@internal/service-rpc": "workspace:0.1.0",
     "arktype": "^2.2.3"
   },
   "devDependencies": {

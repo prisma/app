@@ -106,7 +106,7 @@ const { compute, envParam, envSecret, postgres, postgresContract, s3StoreService
 );
 const { dependency, module, provisionNeed, secret, string } = await import('@internal/core');
 const { lowering } = await import('@internal/core/deploy');
-const { RPC_PEER_KEY } = await import('@internal/rpc');
+const { RPC_PEER_KEY } = await import('@internal/service-rpc');
 
 const run = <A>(eff: Effect.Effect<A, unknown, unknown>): A =>
   Effect.runSync(eff as Effect.Effect<A>);
@@ -957,7 +957,7 @@ describe('ADR-0030: per-binding RPC service keys — mint (control.ts) + wire (d
     entry: 'server.js',
   };
   // A fake RPC-shaped Contract (mirrors extension.test.ts's fakeContract) — not
-  // @internal/rpc. Proves the target reacts to the `serviceKey` param's
+  // @internal/service-rpc. Proves the target reacts to the `serviceKey` param's
   // provision need alone, never to "rpc" by name (ADR-0030's
   // not-RPC-special-cased promise) — it still carries RPC_PEER_KEY as its
   // brand, since that's the only brand this target's control.ts registers.

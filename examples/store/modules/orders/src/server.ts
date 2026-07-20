@@ -1,4 +1,4 @@
-import { serve } from '@prisma/composer/rpc';
+import { serve } from '@prisma/composer/service-rpc';
 import service from './service.ts';
 
 // load() hydrates both deps: `db` is the Prisma Next typed client (ADR-0022),

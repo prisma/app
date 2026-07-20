@@ -1,5 +1,5 @@
 import node from '@prisma/composer/node';
-import { rpc } from '@prisma/composer/rpc';
+import { rpc } from '@prisma/composer/service-rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { pnPostgres } from '@prisma/composer-prisma-cloud/prisma-next';
 import { catalogContract } from '@store/catalog/contract';

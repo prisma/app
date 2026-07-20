@@ -5,7 +5,7 @@
  * deliberately outside `src/`, so it never rides into the deployed artifact.
  */
 import node from '@prisma/composer/node';
-import { serve } from '@prisma/composer/rpc';
+import { serve } from '@prisma/composer/service-rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { catalogContract, type Product } from '../src/contract.ts';
 

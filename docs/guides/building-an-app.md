@@ -37,7 +37,7 @@ of the edge: the producer's handlers and the consumer's client. Define it
 once, in the package of the service that owns it:
 
 ```ts
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, rpc } from '@prisma/composer/service-rpc';
 import { type } from 'arktype';
 
 export const authContract = contract({

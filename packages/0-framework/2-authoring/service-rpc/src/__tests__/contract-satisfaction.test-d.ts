@@ -51,7 +51,7 @@ const missing = contract({
   whoami: rpc({ input: type({}), output: type({ id: 'string' }) }),
 });
 
-// a second protocol kind, standing in for one @prisma/composer/rpc knows nothing
+// a second protocol kind, standing in for one @prisma/composer/service-rpc knows nothing
 // about — only to prove cross-protocol wiring is rejected by the brand.
 declare function wsContract<
   // biome-ignore lint/suspicious/noExplicitAny: mirrors contract-satisfaction.poc.ts's `wsContract` stub.

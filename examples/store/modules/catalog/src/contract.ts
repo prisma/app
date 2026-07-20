@@ -3,7 +3,7 @@
  * consumer imports it and depends on it via `rpc(catalogContract)`, getting
  * back a typed client.
  */
-import { contract, rpc } from '@prisma/composer/rpc';
+import { contract, rpc } from '@prisma/composer/service-rpc';
 import { type } from 'arktype';
 
 export const product = type({

@@ -13,7 +13,7 @@
  * provisioner itself lives in control.ts, the control-plane-only entry).
  */
 import type { Graph } from '@internal/core';
-import { RPC_PEER_KEY } from '@internal/rpc';
+import { RPC_PEER_KEY } from '@internal/service-rpc';
 import { configKey } from './serializer.ts';
 
 /** One faceted dependency edge: a consumer's input whose `serviceKey` param carries RPC's provisioning need. */
@@ -48,6 +48,6 @@ export function serviceKeyEdges(graph: Graph): readonly ServiceKeyEdge[] {
   return edges;
 }
 
-/** The reserved accepted-keys env var: COMPOSER_<addr>_RPC_ACCEPTED_KEYS ("" ↦ @internal/rpc's RPC_ACCEPTED_KEYS_ENV). */
+/** The reserved accepted-keys env var: COMPOSER_<addr>_RPC_ACCEPTED_KEYS ("" ↦ @internal/service-rpc's RPC_ACCEPTED_KEYS_ENV). */
 export const serviceKeyEnvName = (address: string): string =>
   configKey(address, { owner: 'service', name: 'RPC_ACCEPTED_KEYS' });

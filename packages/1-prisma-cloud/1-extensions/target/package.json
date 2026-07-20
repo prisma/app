@@ -38,7 +38,7 @@
     "@internal/foundation": "workspace:0.1.0",
     "@internal/lowering": "workspace:0.1.0",
     "@internal/node": "workspace:0.1.0",
-    "@internal/rpc": "workspace:0.1.0",
+    "@internal/service-rpc": "workspace:0.1.0",
     "@prisma-next/cli": "0.15.0",
     "@prisma-next/config-loader": "0.15.0",
     "@prisma-next/contract": "0.15.0",

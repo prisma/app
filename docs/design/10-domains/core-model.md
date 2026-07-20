@@ -62,7 +62,7 @@ The boundary is decided; only the carve is deferred.
 | `@prisma/composer` | node factories (`service`, `resource`, `dependency`, `module`), `Load`, `configOf`, `hydrate`, `BuildAdapter` type, model types (incl. `Config`) | nothing |
 | `@prisma/composer/deploy` | `lower()`, `lowering()`, `Target` types, `Bundle`/`AssembleInput` (the assembler seam's contract, defined once here) | `alchemy`, `effect` |
 | `@prisma/composer-prisma-cloud` | `compute()` (declares a service; carries `run`/`load`), `postgres()` (`{ name }` identity or `{ client }` dependency, by argument shape) + `postgresContract`, `http()` | `@prisma/composer` only |
-| `@prisma/composer/rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/composer` + a Standard Schema validator |
+| `@prisma/composer/service-rpc` | the RPC Contract kind — `contract()`, `rpc()`, `serve()`, the typed client binding (see [`connection-contracts.md`](connection-contracts.md)) | `@prisma/composer` + a Standard Schema validator |
 | `@prisma/composer-prisma-cloud/cron` | cron as a driver (see [ADR-0020](../90-decisions/ADR-0020-scheduled-work-is-a-driver-not-a-resource.md)) — `defineSchedule`, `serveSchedule`, `cronScheduler`, `cron()`, `triggerContract` | `@prisma/composer` + `app-node` + `app-rpc` |
 | `@prisma/composer-prisma-cloud/storage` | S3-compatible object storage as a module (S3 wire protocol on Compute + Postgres `bytea`; see [`README`](../../../packages/1-prisma-cloud/2-shared-modules/storage/README.md)) — `storage()`, `s3()` + `s3Contract`/`S3Config`, `storageService`; `/storage/testing` adds the `createPgStore` + `startStorageServer` local stand-in | `@prisma/composer` + `app-node` + `@prisma/composer-prisma-cloud` |
 | `@prisma/composer-prisma-cloud/target` | `prismaCloud()` | `@internal/lowering`, `alchemy`, `effect` |
@@ -1180,7 +1180,7 @@ producer from a resource — one mechanism.
   `service.load()`, the same mechanism the Hono entry uses. No separate `use()`
   accessor is needed; the earlier framework-DI gap is closed by `load()`.
 - **Typed connection interfaces — shipped as Contracts.** A service-to-service
-  dependency is declared against a Contract (`@prisma/composer/rpc`'s `contract()` +
+  dependency is declared against a Contract (`@prisma/composer/service-rpc`'s `contract()` +
   `rpc()`), compatibility is checked at the wiring site, at Load
   (`satisfies()`), and per call, and the consumer's `load()` returns a typed
   client. `http()` remains the untyped escape hatch. The mechanism — including
