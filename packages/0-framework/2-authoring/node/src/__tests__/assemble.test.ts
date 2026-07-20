@@ -3,8 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assemble } from '../control.ts';
-import node from '../index.ts';
+import { assemble } from '../exports/control.ts';
+import node from '../exports/index.ts';
 
 const tmpDirs: string[] = [];
 

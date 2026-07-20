@@ -7,79 +7,31 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/deploy.ts",
+      "glob": "packages/0-framework/1-core/core/src/*.ts",
+      "domain": "framework",
+      "layer": "core",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/0-framework/1-core/core/src/exports/deploy.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "control"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/app-config.ts",
+      "glob": "packages/0-framework/1-core/core/src/exports/app-config.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "control"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/index.ts",
+      "glob": "packages/0-framework/1-core/core/src/exports/index.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/1-core/core/src/config.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/contract.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/graph.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/graph-types.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/hydrate.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/load-module.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/load-service.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/node.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/testing.ts",
-      "domain": "framework",
-      "layer": "core",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/0-framework/1-core/core/src/toposort.ts",
+      "glob": "packages/0-framework/1-core/core/src/exports/testing.ts",
       "domain": "framework",
       "layer": "core",
       "plane": "shared"
@@ -91,25 +43,25 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/2-authoring/node/src/index.ts",
+      "glob": "packages/0-framework/2-authoring/node/src/exports/index.ts",
       "domain": "framework",
       "layer": "authoring",
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/2-authoring/node/src/control.ts",
+      "glob": "packages/0-framework/2-authoring/node/src/exports/control.ts",
       "domain": "framework",
       "layer": "authoring",
       "plane": "control"
     },
     {
-      "glob": "packages/0-framework/2-authoring/nextjs/src/index.ts",
+      "glob": "packages/0-framework/2-authoring/nextjs/src/exports/index.ts",
       "domain": "framework",
       "layer": "authoring",
       "plane": "shared"
     },
     {
-      "glob": "packages/0-framework/2-authoring/nextjs/src/control.ts",
+      "glob": "packages/0-framework/2-authoring/nextjs/src/exports/control.ts",
       "domain": "framework",
       "layer": "authoring",
       "plane": "control"
@@ -133,7 +85,7 @@
       "plane": "control"
     },
     {
-      "glob": "packages/1-prisma-cloud/1-extensions/target/src/control.ts",
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/exports/control.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
       "plane": "control"
@@ -169,12 +121,6 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/client.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
       "glob": "packages/1-prisma-cloud/1-extensions/target/src/provisioned-edges.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
@@ -199,7 +145,7 @@
       "plane": "control"
     },
     {
-      "glob": "packages/1-prisma-cloud/1-extensions/target/src/index.ts",
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/exports/index.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
       "plane": "shared"
@@ -217,7 +163,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/1-extensions/target/src/prisma-next.ts",
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/exports/prisma-next.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
       "plane": "shared"
@@ -229,7 +175,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/1-extensions/target/src/pg-connection.ts",
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/exports/pg-connection.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
       "plane": "shared"
@@ -241,7 +187,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/1-extensions/target/src/testing.ts",
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/exports/testing.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
       "plane": "shared"
@@ -289,55 +235,31 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-service.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/*.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/exports/scheduler-service.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler-entrypoint.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/exports/scheduler-entrypoint.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/index.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/exports/index.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/module.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/contract.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/schedule.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/scheduler.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/cron/src/serve-schedule.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/index.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/exports/index.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
@@ -355,7 +277,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/storage-service.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/exports/storage-service.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
@@ -367,7 +289,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/storage-entrypoint.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/exports/storage-entrypoint.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
@@ -403,169 +325,163 @@
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/testing.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/exports/testing.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/index.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/*.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/contract.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/exports/index.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/streams-module.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/exports/streams-service.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/streams-service.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/streams-entrypoint.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/exports/streams-entrypoint.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/testing.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/streams/src/exports/testing.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"
     },
     {
-      "glob": "packages/9-public/composer/src/deploy.ts",
+      "glob": "packages/9-public/composer/src/exports/deploy.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/composer/src/report.ts",
+      "glob": "packages/9-public/composer/src/exports/report.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/composer/src/config.ts",
+      "glob": "packages/9-public/composer/src/exports/config.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/composer/src/node-control.ts",
+      "glob": "packages/9-public/composer/src/exports/node-control.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/composer/src/nextjs-control.ts",
+      "glob": "packages/9-public/composer/src/exports/nextjs-control.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/composer/src/index.ts",
+      "glob": "packages/9-public/composer/src/exports/index.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer/src/testing.ts",
+      "glob": "packages/9-public/composer/src/exports/testing.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer/src/casts.ts",
+      "glob": "packages/9-public/composer/src/exports/casts.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer/src/assertions.ts",
+      "glob": "packages/9-public/composer/src/exports/assertions.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer/src/rpc.ts",
+      "glob": "packages/9-public/composer/src/exports/rpc.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer/src/node.ts",
+      "glob": "packages/9-public/composer/src/exports/node.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer/src/nextjs.ts",
+      "glob": "packages/9-public/composer/src/exports/nextjs.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/control.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/control.ts",
       "domain": "public",
       "layer": "public",
       "plane": "control"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/index.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/index.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/prisma-next.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/prisma-next.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/testing.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/testing.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/cron.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/cron.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/storage.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/storage.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/streams.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/streams.ts",
       "domain": "public",
       "layer": "public",
       "plane": "shared"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/storage-testing.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/storage-testing.ts",
       "domain": "public",
       "layer": "public",
       "plane": "execution"
     },
     {
-      "glob": "packages/9-public/composer-prisma-cloud/src/streams-testing.ts",
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/streams-testing.ts",
       "domain": "public",
       "layer": "public",
       "plane": "execution"

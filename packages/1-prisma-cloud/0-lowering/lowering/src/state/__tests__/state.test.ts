@@ -4,7 +4,7 @@ import * as Duration from 'effect/Duration';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
 import postgres from 'postgres';
-import { makePrismaStateService, migratePrismaState } from '../index.ts';
+import { makePrismaStateService, migratePrismaState } from '../../exports/state.ts';
 import { startTestPostgres, type TestPostgres } from './harness.ts';
 
 const pg: TestPostgres | undefined = startTestPostgres();

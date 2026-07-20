@@ -10,13 +10,13 @@ import { defineConfig } from 'tsdown';
 export default defineConfig([
   {
     ...baseConfig,
-    entry: { index: 'src/index.ts', 'storage-service': 'src/storage-service.ts' },
+    entry: { index: 'src/exports/index.ts', 'storage-service': 'src/exports/storage-service.ts' },
     exports: false,
     clean: true,
   },
   {
     ...baseConfig,
-    entry: { 'storage-entrypoint': 'src/storage-entrypoint.ts' },
+    entry: { 'storage-entrypoint': 'src/exports/storage-entrypoint.ts' },
     exports: false,
     clean: false,
     skipNodeModulesBundle: false,
@@ -31,7 +31,7 @@ export default defineConfig([
     // `@internal/prisma-cloud/connection` retry helper) so the bundle's only
     // externals stay `bun` + `node:` builtins.
     ...baseConfig,
-    entry: { testing: 'src/testing.ts' },
+    entry: { testing: 'src/exports/testing.ts' },
     exports: false,
     clean: false,
     skipNodeModulesBundle: false,

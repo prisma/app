@@ -4,6 +4,6 @@
  * authoring barrel and exposed only here, for a consumer's local dev and the
  * example's local smoke validation.
  */
-export { createPgStore } from './pg-store.ts';
-export type { StorageServer, StorageServerOptions } from './storage-server.ts';
-export { startStorageServer } from './storage-server.ts';
+export { createPgStore } from '../pg-store.ts';
+export type { StorageServer, StorageServerOptions } from '../storage-server.ts';
+export { startStorageServer } from '../storage-server.ts';

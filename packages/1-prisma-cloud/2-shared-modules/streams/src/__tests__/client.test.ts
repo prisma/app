@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StreamsClient } from '../client.ts';
-import { type LocalStreamsServer, startLocalStreamsServer } from '../testing.ts';
+import { type LocalStreamsServer, startLocalStreamsServer } from '../exports/testing.ts';
 
 let server: LocalStreamsServer;
 let client: StreamsClient;

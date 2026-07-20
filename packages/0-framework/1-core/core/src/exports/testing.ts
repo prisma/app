@@ -9,8 +9,8 @@
  * target's own testing entry (e.g. `@prisma/composer-prisma-cloud/testing`).
  */
 import { blindCast } from '@internal/foundation/casts';
-import type { Params, Values } from './config.ts';
-import type { Deps, Expose, HydratedDeps, RunnableServiceNode, Secrets } from './node.ts';
+import type { Params, Values } from '../config.ts';
+import type { Deps, Expose, HydratedDeps, RunnableServiceNode, Secrets } from '../node.ts';
 
 /**
  * `mockService`'s override argument: every declared dependency, typed against

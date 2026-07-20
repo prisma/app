@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import node from '../index.ts';
+import node from '../exports/index.ts';
 
 describe('node({ module, entry }) — the single-file form', () => {
   test('returns a plain { extension, type, module, entry } build adapter descriptor', () => {

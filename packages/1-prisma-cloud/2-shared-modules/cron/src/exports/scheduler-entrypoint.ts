@@ -3,7 +3,7 @@
 // its own bare scheduler node rather than importing the app's — S1's stash
 // keys config by owner+param-name, address-free, so a node with the same
 // `jobs`/`trigger` shape reads the same env keys the app's own node wrote.
-import { cronScheduler, runScheduler } from './scheduler.ts';
+import { cronScheduler, runScheduler } from '../scheduler.ts';
 
 const service = cronScheduler<string>({ jobs: [] });
 

@@ -1,5 +1,9 @@
 import { defineConfig } from '@internal/tsdown-config';
 
 export default defineConfig({
-  entry: { casts: 'src/casts.ts', assertions: 'src/assertions.ts', secret: 'src/secret.ts' },
+  entry: {
+    casts: 'src/exports/casts.ts',
+    assertions: 'src/exports/assertions.ts',
+    secret: 'src/exports/secret.ts',
+  },
 });

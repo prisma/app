@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { blindCast } from '@internal/foundation/casts';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
-import type { ExtensionDescriptor, PrismaAppConfig } from '../app-config.ts';
 import type { Config, Params } from '../config.ts';
 import { number, string } from '../config.ts';
+import type { ExtensionDescriptor, PrismaAppConfig } from '../exports/app-config.ts';
 import {
   type AlchemyStateLayer,
   type Artifact,
@@ -23,7 +23,7 @@ import {
   type ProvisionerDescriptor,
   resolveStateLayer,
   type ServiceLowering,
-} from '../deploy.ts';
+} from '../exports/deploy.ts';
 import { Load } from '../graph.ts';
 import {
   type BuildAdapter,

@@ -114,6 +114,9 @@ cruiser lands.
 
 ## Related
 
+- [ADR-0035](ADR-0035-public-entrypoints-live-in-src-exports.md) — realizes the
+  `src/exports/<plane>.ts` entrypoint convention across every package and
+  generates the exports maps.
 - [ADR-0027](ADR-0027-two-packages-compose-and-compose-prisma-cloud.md) — the
   two-public-package constraint this organizes.
 - [ADR-0017](ADR-0017-control-plane-loads-through-the-app-config.md) — the

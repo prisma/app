@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { inspect } from 'node:util';
-import { SecretBox } from './secret.ts';
+import { SecretBox } from './exports/secret.ts';
 
 describe('SecretBox', () => {
   test('expose() round-trips the wrapped value', () => {

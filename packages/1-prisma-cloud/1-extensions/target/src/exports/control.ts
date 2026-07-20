@@ -13,24 +13,24 @@ import { RPC_PEER_KEY } from '@internal/rpc';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
-import { computeDescriptor } from './descriptors/compute.ts';
-import { postgresDescriptor } from './descriptors/postgres.ts';
-import { prismaNextDescriptor } from './descriptors/prisma-next.ts';
-import { s3CredentialsDescriptor } from './descriptors/s3-credentials.ts';
-import { s3StoreDescriptor } from './descriptors/s3-store.ts';
+import { computeDescriptor } from '../descriptors/compute.ts';
+import { postgresDescriptor } from '../descriptors/postgres.ts';
+import { prismaNextDescriptor } from '../descriptors/prisma-next.ts';
+import { s3CredentialsDescriptor } from '../descriptors/s3-credentials.ts';
+import { s3StoreDescriptor } from '../descriptors/s3-store.ts';
 import type {
   CloudApplication,
   ProviderParam,
   ResolvedCloudOptions,
-} from './descriptors/shared.ts';
-import { PgWarmProvider } from './pg-warm-resource.ts';
-import { PnMigrationProvider } from './pn-migration-resource.ts';
-import { runPreflight } from './preflight.ts';
-import { RESERVED_PROVIDER_PARAMS } from './provider-params.ts';
-import { S3CredentialsProvider } from './s3-credentials-resource.ts';
-import type { ProviderParamEntry } from './serializer.ts';
-import { STREAMS_API_KEY } from './streams-keys.ts';
-import { runTeardown } from './teardown.ts';
+} from '../descriptors/shared.ts';
+import { PgWarmProvider } from '../pg-warm-resource.ts';
+import { PnMigrationProvider } from '../pn-migration-resource.ts';
+import { runPreflight } from '../preflight.ts';
+import { RESERVED_PROVIDER_PARAMS } from '../provider-params.ts';
+import { S3CredentialsProvider } from '../s3-credentials-resource.ts';
+import type { ProviderParamEntry } from '../serializer.ts';
+import { STREAMS_API_KEY } from '../streams-keys.ts';
+import { runTeardown } from '../teardown.ts';
 
 /**
  * ADR-0031's registered provisioner for RPC_PEER_KEY: mints one `ServiceKey`

@@ -5,8 +5,8 @@
 // the app's own node wrote (mirrors scheduler-entrypoint.ts). This is where the
 // pure engine (D2) and the Postgres store (D3) meet the framework: load() hands
 // the deps, config() the params, and the server serves the wire protocol.
-import { createPgStore } from './pg-store.ts';
-import { startStorageServer } from './storage-server.ts';
+import { createPgStore } from '../pg-store.ts';
+import { startStorageServer } from '../storage-server.ts';
 import { storageService } from './storage-service.ts';
 
 const service = storageService({ bucket: 'storage' });

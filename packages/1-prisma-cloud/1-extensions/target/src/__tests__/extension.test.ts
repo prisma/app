@@ -12,11 +12,11 @@ import {
 } from '@internal/core';
 import { RPC_ACCEPTED_KEYS_ENV } from '@internal/rpc';
 import { type } from 'arktype';
-import { compute, postgres, postgresContract } from '../index.ts';
+import { compute, postgres, postgresContract } from '../exports/index.ts';
+import { bootstrapService } from '../exports/testing.ts';
 import { configKey, deserialize, deserializeSecrets, encode, secretKey } from '../serializer.ts';
 import { RPC_ACCEPTED_KEYS_PARAM } from '../service-keys.ts';
 import { STREAMS_API_KEY_ENV, STREAMS_API_KEY_PARAM } from '../streams-keys.ts';
-import { bootstrapService } from '../testing.ts';
 
 /** The deploy-side, address-scoped row for a reserved provider param. */
 const providerParamKey = (address: string, name: string): string =>

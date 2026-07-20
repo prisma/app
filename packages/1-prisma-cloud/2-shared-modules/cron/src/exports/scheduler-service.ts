@@ -5,6 +5,6 @@
 // named exports would leave `main` undefined and `main.run()` throw at boot.
 // An empty schedule is fine: run() reads the real jobs from the stashed env,
 // never from this default.
-import { cronScheduler } from './scheduler.ts';
+import { cronScheduler } from '../scheduler.ts';
 
 export default cronScheduler<string>({ jobs: [] });

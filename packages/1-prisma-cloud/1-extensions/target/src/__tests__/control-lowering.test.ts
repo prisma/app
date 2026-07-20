@@ -128,9 +128,9 @@ mock.module('../s3-credentials-resource.ts', () => ({
   S3CredentialsProvider: () => ({ stub: 's3-credentials-provider' }),
 }));
 
-const { prismaCloud } = await import('../control.ts');
+const { prismaCloud } = await import('../exports/control.ts');
 const { compute, envParam, envSecret, postgres, postgresContract, s3StoreService } = await import(
-  '../index.ts'
+  '../exports/index.ts'
 );
 const { dependency, module, provisionNeed, secret, string } = await import('@internal/core');
 const { lowering } = await import('@internal/core/deploy');

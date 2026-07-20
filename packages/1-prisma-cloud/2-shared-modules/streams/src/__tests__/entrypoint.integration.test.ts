@@ -54,7 +54,7 @@ function childEnv(): NodeJS.ProcessEnv {
 }
 
 function startServer(): ChildProcess {
-  const proc = spawn('bun', ['src/streams-entrypoint.ts'], {
+  const proc = spawn('bun', ['src/exports/streams-entrypoint.ts'], {
     cwd: PACKAGE_ROOT,
     env: childEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],

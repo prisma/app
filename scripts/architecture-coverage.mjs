@@ -13,17 +13,28 @@ export const normalizeGlob = (glob) => {
   const SINGLE_WILDCARD = '__SINGLE_WILDCARD__';
   const hasWildcard = glob.includes('*');
   const lastPathSegment = glob.split('/').pop() ?? '';
-  const isFileLikePattern = !hasWildcard && lastPathSegment.includes('.');
+  // A dotted last segment names a file, whether or not it holds a wildcard:
+  // both `control.ts` and `*.ts` must match one path segment and stop there.
+  // Without the end anchor, `src/*.ts` -> `^.../src/[^/]*.ts` also matches
+  // `.../src/exports/deploy.ts` (`[^/]*` takes `expo`, the dot takes `r`, and
+  // `ts` takes the `ts` in `exports`), which would put an entrypoint in a
+  // second plane group.
+  const isFileLikePattern = lastPathSegment.includes('.');
 
   let pattern = glob
     .replace(/\*\*/g, DOUBLE_WILDCARD)
     .replace(/\*/g, SINGLE_WILDCARD)
+    // Escape regex metacharacters in the literal parts while the wildcards are
+    // still placeholders, so this does not escape the regex substituted below.
+    // Unescaped, the dot in `control.ts` matches any character.
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     .replaceAll(DOUBLE_WILDCARD, '.*')
     .replaceAll(SINGLE_WILDCARD, '[^/]*');
 
   if (isFileLikePattern) {
     return `^${pattern}$`;
   }
+  // A directory glob stays a prefix match: everything under it belongs to it.
   if (!hasWildcard && !pattern.endsWith('/')) {
     pattern += '/.*';
   }

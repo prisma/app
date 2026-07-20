@@ -39,6 +39,7 @@ const coreIndex = path.resolve(
   '1-core',
   'core',
   'src',
+  'exports',
   'index.ts',
 );
 

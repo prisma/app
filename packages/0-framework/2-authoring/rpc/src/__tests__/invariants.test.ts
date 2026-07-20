@@ -34,7 +34,7 @@ describe('entry map: @prisma/composer/rpc ships a single entry', () => {
 describe('invariant: the entry is web-standard only — no bun/node coupling', () => {
   test('bundling index.ts yields no bun/node-scheme tokens', async () => {
     const out = await Bun.build({
-      entrypoints: [path.join(srcDir, 'index.ts')],
+      entrypoints: [path.join(srcDir, 'exports', 'index.ts')],
       target: 'bun',
     });
     expect(out.success).toBe(true);

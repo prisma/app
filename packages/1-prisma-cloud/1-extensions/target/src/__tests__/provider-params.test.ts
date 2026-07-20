@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { type } from 'arktype';
-import { buildProviderParams, PROVIDER_PARAMS, prismaCloud } from '../control.ts';
+import { buildProviderParams, PROVIDER_PARAMS, prismaCloud } from '../exports/control.ts';
 import { RESERVED_PROVIDER_PARAMS } from '../provider-params.ts';
 import type { ProviderParamEntry } from '../serializer.ts';
 

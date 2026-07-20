@@ -11,7 +11,7 @@
 import { string } from '@internal/core';
 import node from '@internal/node';
 import { postgres, s3Credentials, s3StoreService } from '@internal/prisma-cloud';
-import { s3Contract } from './contract.ts';
+import { s3Contract } from '../contract.ts';
 
 export function storageService(opts: { bucket: string }) {
   return s3StoreService({

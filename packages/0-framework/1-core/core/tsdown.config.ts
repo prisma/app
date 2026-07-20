@@ -5,9 +5,9 @@ export default defineConfig({
   // `app-config.ts` is published as `./config` — `config.ts` is already the
   // internal typed-config module.
   entry: {
-    index: 'src/index.ts',
-    deploy: 'src/deploy.ts',
-    config: 'src/app-config.ts',
-    testing: 'src/testing.ts',
+    index: 'src/exports/index.ts',
+    deploy: 'src/exports/deploy.ts',
+    config: 'src/exports/app-config.ts',
+    testing: 'src/exports/testing.ts',
   },
 });
