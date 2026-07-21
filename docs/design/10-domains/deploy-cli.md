@@ -78,7 +78,7 @@ loading the graph imports that module — the app's choice, not a CLI limit.
    assembly succeeds and before the stack is generated, so a deploy that
    cannot assemble never creates anything on any platform: for every
    extension in the config that declares a `container` descriptor
-   ([ADR-0037](../90-decisions/ADR-0037-containers-are-an-extension-descriptor.md)),
+   ([ADR-0038](../90-decisions/ADR-0038-containers-are-an-extension-descriptor.md)),
    the CLI calls `ensure({ appName, stage })` (`deploy`, creates if absent) or
    `locate({ appName, stage })` (`destroy`, finds only). `destroy` against a
    `locate` that finds nothing fails with "nothing deployed for
@@ -89,7 +89,7 @@ loading the graph imports that module — the app's choice, not a CLI limit.
    module at `.prisma-composer/alchemy.run.ts` and drive the `alchemy` CLI against
    it (ADR-0007), carrying every resolved container across to the child as one
    environment variable per extension — content the CLI writes but never
-   reads (ADR-0037). Both `deploy` and `destroy` set it, since `alchemy
+   reads (ADR-0038). Both `deploy` and `destroy` set it, since `alchemy
    destroy` re-imports and re-evaluates the same stack, so its target
    reconstruction needs the same containers. The generated file and Alchemy's
    state live in the process's working directory — tool state lives where you
@@ -110,7 +110,7 @@ targets **production**; `--stage <name>` targets a **named stage**.
   infrastructure a service deploys *into*, which must exist before Alchemy
   runs and which Alchemy itself never creates or destroys — supplies a
   `container` descriptor
-  ([ADR-0037](../90-decisions/ADR-0037-containers-are-an-extension-descriptor.md)).
+  ([ADR-0038](../90-decisions/ADR-0038-containers-are-an-extension-descriptor.md)).
   The CLI resolves every configured extension's container before Alchemy runs
   (pipeline step 6) and holds each result as an opaque value.
 - **The transport is content-blind.** Each resolved container crosses to the
@@ -255,6 +255,6 @@ The CLI's quality lives in its errors; each failure names its fix:
 - [ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
   / [ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
   — stage, Project, and Branch semantics (§ Stages and containers).
-- [ADR-0037](../90-decisions/ADR-0037-containers-are-an-extension-descriptor.md)
+- [ADR-0038](../90-decisions/ADR-0038-containers-are-an-extension-descriptor.md)
   — the container descriptor and the opaque parent→child transport
   (pipeline steps 6-7, § Stages and containers).

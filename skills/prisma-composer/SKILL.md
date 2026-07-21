@@ -4,17 +4,17 @@ description: >-
   How to write, test, and deploy an app with Prisma Composer
   (`@prisma/composer`): declare services with `compute()` and typed
   dependencies, define RPC contracts, compose Modules, read config and
-  secrets, compose the ready-made cron/storage/streams Modules, find
-  extensions (npm packages named `prisma-composer-*`), test with
-  `mockService`/`bootstrapService`, and deploy with `prisma-composer deploy`
-  (stages, destroy). Use when building a Prisma App, wiring a service
-  dependency, adding a Postgres database, adding scheduled jobs / blob
-  storage / event streams, writing tests for composed services, or
-  deploying/tearing down an environment. Triggers on
+  secrets, compose the ready-made cron/storage/streams Modules, provision a
+  raw S3-compatible object-store bucket with `bucket()`, find extensions (npm
+  packages named `prisma-composer-*`), test with `mockService`/`bootstrapService`,
+  and deploy with `prisma-composer deploy` (stages, destroy). Use when building
+  a Prisma App, wiring a service dependency, adding a Postgres database, adding
+  scheduled jobs / blob storage / event streams / a raw bucket, writing tests
+  for composed services, or deploying/tearing down an environment. Triggers on
   "prisma composer", "@prisma/composer", "prisma app", "compute()",
   "service.load()", "module()", "contract()", "mockService",
   "bootstrapService", "prisma-composer deploy", "--stage",
-  "prisma-composer destroy", "prisma-composer-".
+  "prisma-composer destroy", "prisma-composer-", "bucket()".
 ---
 
 # Writing apps with Prisma Composer
@@ -157,6 +157,19 @@ deployed `/rpc/<method>` to check it works** — an unwired caller always gets
 `401`, which looks like a broken deploy and isn't. Debug through a consumer,
 or locally.
 
+**Calls carry an idempotency key and retry safely for you.** Every call the
+generated client makes carries an `Idempotency-Key`; a call dropped while the
+target cold-starts is retried with a backoff, and `serve()` runs one call per
+key — a retry that arrives after the first completed replays that answer
+instead of re-running the handler. So every method is safely retryable and no
+contract declares anything about it (do not add an "is this idempotent" flag —
+the framework does not have one). Two consequences for you: a handler may take
+an **optional third argument** `(input, deps, ctx)` and read `ctx.idempotencyKey`
+(`string | undefined` — it's absent for a keyless caller) if it needs exactly-once
+beyond one instance's memory (most don't); and a request without the header is
+served once without deduplication rather than rejected, so a hand-rolled probe
+works but gets no retry safety.
+
 | | |
 | --- | --- |
 | Locally / in tests | nothing is provisioned, so `serve()` passes every call through — never supply a key in `inputs` |
@@ -288,6 +301,26 @@ options object is the resource end.)
 
 See `examples/store/modules/catalog` in the prisma/composer repo for the
 complete pattern.
+
+## Object Storage
+
+`bucket` is a raw S3-compatible object-store bucket, imported alongside `postgres`:
+
+```ts
+import { bucket, compute } from '@prisma/composer-prisma-cloud';
+
+// service.ts — dependency end: receives { url, bucket, accessKeyId, secretAccessKey }
+export default compute({ name: 'uploads', deps: { store: bucket() } });
+
+// module.ts — resource end: provisions the bucket and mints a keypair
+const store = provision(bucket({ name: 'uploads' }));
+provision(uploadsService, { deps: { store } });
+```
+
+Use any S3-compatible client with the binding: the shape matches the standard S3
+config and is also compatible with the `s3()` dependency from `/storage`, so any
+service wired to `s3()` can be rewired to a `bucket` resource without changing
+the service declaration.
 
 ## Reusable Modules
 

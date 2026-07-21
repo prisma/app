@@ -1,4 +1,4 @@
-# ADR-0037: Containers are an extension descriptor
+# ADR-0038: Containers are an extension descriptor
 
 ## Decision
 

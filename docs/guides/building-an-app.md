@@ -47,8 +47,9 @@ export const authContract = contract({
 
 On the producer, `serve()` turns the service's `expose` into a fetch handler.
 The handler map must cover every method — a missing or wrong-shaped handler
-doesn't compile. Each handler receives the validated input (and the service's
-own loaded deps as a second argument):
+doesn't compile. Each handler receives the validated input, the service's own
+loaded deps as a second argument, and an optional third argument carrying the
+call's idempotency key (see below — most handlers ignore it):
 
 ```ts
 const handler = serve(service, {
@@ -87,6 +88,25 @@ run it locally.
 **Locally and in tests, nothing changes.** Only a deploy creates keys, so a
 service you run in a terminal, a fake, and `bootstrapService` all accept every
 call, and there's no key for you to supply.
+
+### Calls retry safely for you
+
+You don't do anything for this either. A provider that has scaled to zero has
+to boot before it answers, and a first call can be dropped mid-connection
+while it does. The client absorbs that: every call carries an **idempotency
+key**, a dropped call is retried with a backoff, and the provider runs one
+call per key — a retry that arrives after the first already ran gets the first
+answer back instead of running your handler twice. So `await auth.verify(...)`
+just works across a cold start, and it works whether or not the call changes
+state. You write nothing; the key is on the request and the deduplication is
+in `serve()`.
+
+The deduplication rides on the key, so a request sent *without* one — a `curl`,
+any hand-rolled request — simply isn't deduplicated: it runs once, which is what
+you'd expect. The generated client always sends a key, so your service-to-service
+calls always get it. If a handler needs a stronger guarantee than one instance's
+memory — surviving a crash mid-call — its optional third argument carries the key
+to write into its own transaction; most handlers never need it.
 
 Two limits worth knowing:
 
@@ -229,6 +249,47 @@ Two naming rules the platform enforces: provision names must be at least
 three characters (call a database `'database'`, not `'db'` — the wiring key
 on the service side can still be `db`), and ids must be unique within their
 module.
+
+## Object Storage
+
+`bucket` is a raw S3-compatible object-store bucket — a flat key-value store
+with no higher-level abstractions attached. Import it alongside `postgres` and
+use it the same way:
+
+```ts
+import { bucket, compute } from '@prisma/composer-prisma-cloud';
+
+export default compute({
+  name: 'uploads',
+  deps: { store: bucket() },           // dependency end: receives credentials
+  // ...
+});
+```
+
+```ts
+// module.ts — provision the bucket resource and wire it to the service
+const store = provision(bucket({ name: 'uploads' })); // resource end: provisions + keys
+provision(uploadsService, { deps: { store } });
+```
+
+Inside the service entry, `load()` hands back
+`{ url, bucket, accessKeyId, secretAccessKey }` — the standard S3 config set.
+Use any S3-compatible client (`@aws-sdk/client-s3`, `minio`, Bun's S3 API, …):
+
+```ts
+import { S3Client } from '@aws-sdk/client-s3';
+const { store } = service.load();
+const s3 = new S3Client({
+  endpoint: store.url,
+  bucket: store.bucket,
+  credentials: { accessKeyId: store.accessKeyId, secretAccessKey: store.secretAccessKey },
+});
+```
+
+A bucket resource uses the same S3 contract kind as the `storage` module's
+blob store, so a service declared with `deps: { store: s3() }` — where `s3` is
+imported from `@prisma/composer-prisma-cloud/storage` — can also be wired to a
+`bucket` resource without any changes to the service declaration.
 
 ## The building blocks that ship with the framework
 

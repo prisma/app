@@ -70,7 +70,30 @@ jobs:
           stack-name: pn-widgets-ci-${{ github.run_id }}
           verify-command: bun scripts/e2e-verify.ts
           destroy-label: 'pn-widgets '
-          sweep-prefixes: storefront-auth pn-widgets hello canary
+          sweep-prefixes: storefront-auth pn-widgets hello canary bucket
+
+  deploy-bucket:
+    name: Deploy, verify, destroy (bucket)
+    runs-on: ubuntu-latest
+    needs: deploy-pn-widgets
+    timeout-minutes: 3
+    # Secrets aren't available on forked-PR runs; skip rather than fail loudly.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      PRISMA_SERVICE_TOKEN: ${{ secrets.PRISMA_SERVICE_TOKEN }}
+      PRISMA_WORKSPACE_ID: ${{ vars.PRISMA_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-verify-destroy
+        with:
+          working-directory: examples/bucket
+          build-filter: '@prisma/example-bucket...'
+          stack-name: bucket-ci-${{ github.run_id }}
+          verify-command: bun scripts/e2e-verify.ts
+          destroy-label: 'bucket '
+          sweep-prefixes: storefront-auth pn-widgets hello canary bucket
 
   cold-connect-canary:
     name: Cold-connect canary (FT-5226)
@@ -78,7 +101,7 @@ jobs:
     # Runs after both deploys so it never holds a database concurrently with
     # them (workspace DB-quota headroom). Fails when PPg no longer rejects a
     # database's first connection — the signal to remove withConnectionRetry.
-    needs: deploy-pn-widgets
+    needs: deploy-bucket
     timeout-minutes: 3
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     env:
@@ -132,4 +155,4 @@ jobs:
           stack-name: streams-canary-ci-${{ github.run_id }}
           verify-command: bun "${{ github.workspace }}/scripts/cold-start-canary.ts"
           destroy-label: 'streams-canary '
-          sweep-prefixes: storefront-auth pn-widgets hello canary streams-canary
+          sweep-prefixes: storefront-auth pn-widgets hello canary streams-canary bucket

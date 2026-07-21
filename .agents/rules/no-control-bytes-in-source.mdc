@@ -1,0 +1,66 @@
+---
+description: A NUL byte (0x00) and other control characters are reserved sentinels — control signals with defined meanings across the entire computing stack (NUL is THE string terminator), not data. Never put one in source, and never, ever use one as a separator or delimiter. It silently truncates or corrupts in every downstream system it flows through — C strings, DB drivers, serializers, logs, terminals, transports, git. Compose keys with a data structure, not a delimited string.
+alwaysApply: false
+globs: ["**/*"]
+---
+
+# Control bytes are signals, not data — never use one as a separator
+
+A NUL byte (`0x00`, `\0`) is not an unused character you can borrow. It is **the
+string terminator** — a reserved sentinel with a defined meaning across the
+whole computing stack: C strings, POSIX syscalls, filenames, most database
+drivers, wire protocols, terminals, and git all treat NUL as "end of string" or
+"end of record." The other C0 control characters (`0x00`–`0x1F` except
+tab/newline/carriage-return, and `0x7F`) are signals too, not text.
+
+Using one as data — most often as a **separator** — is the specific mistake this
+rule exists to stop.
+
+## Why the "it can't collide" reasoning is exactly backwards
+
+The tempting logic is: "a method name / a UUID / a path can't contain a NUL, so
+it's a collision-proof delimiter." That property is real, and it is the whole
+problem. **A NUL is collision-free in your data precisely because every
+correctly-built system refuses to put one there.** You are not finding a clever
+unused byte; you are being the one component that violates an invariant the
+entire rest of the stack relies on.
+
+And the byte does not stay in your code. It flows downstream, where its reserved
+meaning takes over and silently corrupts:
+
+- **C-string boundaries** (and anything backed by them) truncate at the NUL —
+  your `"a\0b"` becomes `"a"`, losing data with no error.
+- **Database drivers, serializers, and wire protocols** reject it, truncate it,
+  or mangle it — often only in production, only for some inputs.
+- **Logs, terminals, and text tooling** (`grep`, editors, `less`) misrender or
+  drop it, so the corruption is invisible while you debug.
+- **git** classifies any file containing a NUL as binary, so the diff renders as
+  `Binary file not shown` and the file becomes unreviewable — one concrete
+  instance of the general breakage, not the reason.
+
+None of these are worth a delimiter. There is no gain that offsets shipping a
+reserved sentinel into data.
+
+## What to do instead
+
+**Compose with a data structure, not a delimited string.** Reaching for
+`` `${a}<sep>${b}` `` to key a `Map` by a tuple is the smell that invites a
+"clever" separator. Use a shape that needs no delimiter at all:
+
+- Nested maps: `Map<a, Map<b, V>>`.
+- A `Set`/`Map` of entry objects that each carry their own fields
+  (`{ a, b, ... }`), so nothing is re-parsed out of a joined key.
+- Identity keys when reference semantics fit.
+
+**If a delimiter is genuinely unavoidable**, use an ordinary printable character
+that cannot appear in either part, and say in a comment why it cannot collide. A
+control byte is never the answer — not raw, and not as the `\0` escape, which
+produces the same byte at runtime and signals the same broken instinct.
+
+## Detecting it
+
+```bash
+git diff --numstat <base>...HEAD        # a text file showing "-  -" is binary to git
+file path/to/suspect.ts                 # "data" instead of "… text" means a bad byte
+LC_ALL=C grep -naP '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]' path/to/file   # locate control bytes
+```

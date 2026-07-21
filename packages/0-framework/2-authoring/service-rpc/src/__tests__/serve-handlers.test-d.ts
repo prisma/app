@@ -60,6 +60,17 @@ test('the exhaustive, correctly-typed handler map is accepted', () => {
   });
 });
 
+test('ctx.idempotencyKey is typed string | undefined on the three-argument handler form', () => {
+  serve(authService, {
+    rpc: {
+      verify: async ({ token }, { db }, ctx) => {
+        const key: string | undefined = ctx.idempotencyKey;
+        return { ok: token.length > 0 && db.validTokens.length >= 0 && key !== undefined };
+      },
+    },
+  });
+});
+
 test('extra handler methods/ports beyond what is exposed are allowed (width)', () => {
   serve(authService, {
     rpc: {

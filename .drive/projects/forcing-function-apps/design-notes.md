@@ -191,3 +191,57 @@ shipped inside Part B's refactor (implicit create, read-creates, contentType
 dropped), the complete unenforced-invariant inventory (T1–T9), deviations
 from the design doc, and decisions R1–R6 awaiting his ruling. No further
 dispatches until he rules.
+
+## RPC idempotency keys — settled design (2026-07-17, Will)
+
+Supersedes the `idempotent: true` per-method boolean considered earlier the
+same day. The RPC protocol requires an `Idempotency-Key` on every call
+(client-minted per logical call, reused across retries); `serve()` enforces
+it, runs single-flight per key, and replays completed answers within the
+retry envelope; handlers may read `ctx.idempotencyKey` for their own durable
+control but need not. Rationale: a boolean is a human claim the framework
+cannot check — the key is a mechanism it enforces, making every method
+safely retryable with no declaration. Scope calibration from Will: this
+protocol serves same-network service-to-service calls and guards the
+cold-start bug specifically; in-memory control is sufficient, and the
+cross-instance residual window is documented and accepted, not closed.
+The bounded retry becomes permanent protocol semantics — the PRO-217 canary
+retires itself when the platform heals, never the retry or the keys.
+Slice: [slices/rpc-cold-start/](slices/rpc-cold-start/spec.md).
+
+### Amendment (2026-07-17, later): rename, scope citation, absorbed fixes
+
+The kind was renamed to service-rpc (#131, ADR-0036) while this slice was in
+flight; the branch is rebased and all paths follow the new package and the
+`src/exports/` entrypoint convention (ADR-0035). Two corrections from Will:
+
+- The accepted residual is no longer justified by "same network" — that
+  framing contradicts `connection-contracts.md` § Purpose and scope, which
+  defines internal as membership of the application's topology and puts
+  cross-target, cross-network edges explicitly in scope, with robustness
+  calibrated per edge against the named failure modes of the targets
+  carrying it. The slice now names its concrete failure (PRO-217's close
+  during connection establishment, before any handler runs) and names the
+  residual it does not close (a retry reaching a different instance than the
+  one that applied the call), whose escalation path is the handler's own
+  durable control via `ctx.idempotencyKey`.
+- Three fixes promised when #114 was declined touch the same files this
+  slice rewrites, so they are absorbed rather than left to collide: a
+  request body size limit, masking handler exception messages instead of
+  returning them to callers, and dropping the client's redundant second
+  validation of responses.
+
+ADR-0037 is the number for the keyed protocol (0033–0036 taken); it ships
+with the implementation in this slice's PR, never as a docs-only change.
+
+### RPC cold-start canary dropped (2026-07-20, Will accepted)
+
+The slice's own canary was built, run live, and dropped on the evidence
+(revert `a46abfa`). The auth service boots in under ~1.5s (no state to
+restore), narrower than the 2s coldness-proof margin, so 14 forced races
+certified as cold zero times. The decisive reason is not the margin, though:
+the RPC idempotency retry is permanent protocol semantics (ADR-0037), so
+there is no workaround for a canary to time the removal of — and PRO-217, a
+platform ingress bug, is already watched by the streams canary, which catches
+it well because streams has the long boot window RPC lacks. The slice ships
+the keyed protocol; the streams canary stays the platform-wide PRO-217 signal.

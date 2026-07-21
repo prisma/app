@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { service } from '@internal/core';
 import type { DeployedNode, DeploymentResult } from '@internal/core/deploy';
-import { deploymentReport, renderDeployment } from '../exports/render-deployment.ts';
+import { deploymentReport, renderDeployment } from '../render-deployment.ts';
 
 /**
  * The renderer reads only `address` and `entities` — `node` is along for the

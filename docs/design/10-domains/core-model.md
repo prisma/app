@@ -467,7 +467,7 @@ interface PrismaAppConfig {
 function defineConfig(config: PrismaAppConfig): PrismaAppConfig   // in @prisma/composer/config
 
 // The deploy's one state store, naming its owning extension so core can hand
-// that extension's own resolved container to create() (ADR-0037) — never
+// that extension's own resolved container to create() (ADR-0038) — never
 // defaulted, never read from the environment.
 interface StateDescriptor {
   readonly extension: string                            // matched against ExtensionDescriptor.id

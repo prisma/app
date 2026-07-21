@@ -8,7 +8,7 @@ import type {
   ContainerInstance,
   ExtensionDescriptor,
   PrismaAppConfig,
-} from '../exports/app-config.ts';
+} from '../control/app-config.ts';
 
 describe('containerEnvVarName()', () => {
   test('the documented mangling — the exact @prisma/composer-prisma-cloud expectation', () => {

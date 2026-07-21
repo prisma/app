@@ -8,15 +8,16 @@ const authContract = contract({
   verify: rpc({ input: type({ token: 'string' }), output: type({ ok: 'boolean' }) }),
 });
 
+const okResponse = () =>
+  new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } });
+
 describe('makeClient()', () => {
-  test('POSTs JSON to <url>/rpc/<method> and returns the validated output', async () => {
+  test('POSTs JSON to <url>/rpc/<method> and returns the parsed response', async () => {
     const requests: Request[] = [];
     const client = makeClient(authContract, 'http://auth.internal', {
       fetch: async (req) => {
         requests.push(req);
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { 'content-type': 'application/json' },
-        });
+        return okResponse();
       },
     });
 
@@ -34,9 +35,7 @@ describe('makeClient()', () => {
     const client = makeClient(authContract, 'http://auth.internal/api/v1', {
       fetch: async (req) => {
         requests.push(req);
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { 'content-type': 'application/json' },
-        });
+        return okResponse();
       },
     });
 
@@ -45,20 +44,10 @@ describe('makeClient()', () => {
     expect(requests[0]?.url).toBe('http://auth.internal/api/v1/rpc/verify');
   });
 
-  test('rejects a response that fails the output schema — a lying server is caught', async () => {
+  test('throws naming the method when the transport responds with a non-retryable non-OK status', async () => {
+    // 400 (not 500 — a 5xx would now retry, see the idempotency-key tests below).
     const client = makeClient(authContract, 'http://auth.internal', {
-      fetch: async () =>
-        new Response(JSON.stringify({ ok: 'not-a-boolean' }), {
-          headers: { 'content-type': 'application/json' },
-        }),
-    });
-
-    await expect(client.verify({ token: 't' })).rejects.toThrow();
-  });
-
-  test('throws naming the method when the transport responds non-OK', async () => {
-    const client = makeClient(authContract, 'http://auth.internal', {
-      fetch: async () => new Response('nope', { status: 500 }),
+      fetch: async () => new Response('nope', { status: 400 }),
     });
 
     await expect(client.verify({ token: 't' })).rejects.toThrow(/verify/);
@@ -90,9 +79,7 @@ describe('makeClient()', () => {
       serviceKey: 'edge-key',
       fetch: async (req) => {
         requests.push(req);
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { 'content-type': 'application/json' },
-        });
+        return okResponse();
       },
     });
 
@@ -106,14 +93,107 @@ describe('makeClient()', () => {
     const client = makeClient(authContract, 'http://auth.internal', {
       fetch: async (req) => {
         requests.push(req);
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { 'content-type': 'application/json' },
-        });
+        return okResponse();
       },
     });
 
     await client.verify({ token: 't' });
 
     expect(requests[0]?.headers.has('authorization')).toBe(false);
+  });
+});
+
+describe('makeClient() — idempotency key and retry', () => {
+  test('every request carries a non-empty Idempotency-Key header', async () => {
+    const requests: Request[] = [];
+    const client = makeClient(authContract, 'http://auth.internal', {
+      fetch: async (req) => {
+        requests.push(req);
+        return okResponse();
+      },
+    });
+
+    await client.verify({ token: 't' });
+
+    expect(requests[0]?.headers.get('idempotency-key')).toBeTruthy();
+  });
+
+  test('two separate logical calls mint two different keys', async () => {
+    const requests: Request[] = [];
+    const client = makeClient(authContract, 'http://auth.internal', {
+      fetch: async (req) => {
+        requests.push(req);
+        return okResponse();
+      },
+    });
+
+    await client.verify({ token: 'a' });
+    await client.verify({ token: 'b' });
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.headers.get('idempotency-key')).not.toBe(
+      requests[1]?.headers.get('idempotency-key'),
+    );
+  });
+
+  test('a 503 then success resolves after exactly two requests, both carrying the same key', async () => {
+    const requests: Request[] = [];
+    const client = makeClient(authContract, 'http://auth.internal', {
+      fetch: async (req) => {
+        requests.push(req);
+        return requests.length === 1 ? new Response('cold', { status: 503 }) : okResponse();
+      },
+    });
+
+    await expect(client.verify({ token: 't' })).resolves.toEqual({ ok: true });
+
+    expect(requests).toHaveLength(2);
+    const firstKey = requests[0]?.headers.get('idempotency-key');
+    const secondKey = requests[1]?.headers.get('idempotency-key');
+    expect(firstKey).toBeTruthy();
+    expect(firstKey).toBe(secondKey);
+  });
+
+  test('a 429 is retried the same as a 5xx', async () => {
+    const requests: Request[] = [];
+    const client = makeClient(authContract, 'http://auth.internal', {
+      fetch: async (req) => {
+        requests.push(req);
+        return requests.length === 1 ? new Response('slow down', { status: 429 }) : okResponse();
+      },
+    });
+
+    await expect(client.verify({ token: 't' })).resolves.toEqual({ ok: true });
+    expect(requests).toHaveLength(2);
+  });
+
+  test('a thrown network error is retried and the call still resolves', async () => {
+    let calls = 0;
+    const client = makeClient(authContract, 'http://auth.internal', {
+      fetch: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error('socket reset');
+        return okResponse();
+      },
+    });
+
+    await expect(client.verify({ token: 't' })).resolves.toEqual({ ok: true });
+    expect(calls).toBe(2);
+  });
+
+  test('a 404 rejects after exactly one request — no background retry follows', async () => {
+    const requests: Request[] = [];
+    const client = makeClient(authContract, 'http://auth.internal', {
+      fetch: async (req) => {
+        requests.push(req);
+        return new Response(JSON.stringify({ error: 'unknown method' }), { status: 404 });
+      },
+    });
+
+    await expect(client.verify({ token: 't' })).rejects.toThrow();
+    expect(requests).toHaveLength(1);
+
+    await new Promise((resolve) => setTimeout(resolve, 300)); // a retry would land here
+    expect(requests).toHaveLength(1);
   });
 });

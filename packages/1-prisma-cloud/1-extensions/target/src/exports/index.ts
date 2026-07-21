@@ -5,6 +5,8 @@
  * nothing else. Pure barrel — implementations live in the named modules.
  */
 
+export type { BucketConfig } from '../bucket.ts';
+export { bucket, bucketContract } from '../bucket.ts';
 export { compute } from '../compute.ts';
 export type { HttpClient } from '../http.ts';
 export { http } from '../http.ts';

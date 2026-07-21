@@ -34,7 +34,7 @@
     "@prisma-next/postgres": "0.15.0",
     "@prisma-next/sql-contract": "0.15.0",
     "@prisma/composer": "workspace:0.1.0",
-    "@prisma/management-api-sdk": "^1.47.0",
+    "@prisma/management-api-sdk": "^1.50.0",
     "@standard-schema/spec": "^1.1.0",
     "alchemy": "2.0.0-beta.59",
     "arktype": "^2.2.3",

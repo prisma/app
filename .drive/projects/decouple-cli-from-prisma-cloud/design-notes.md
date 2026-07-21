@@ -570,3 +570,18 @@ Test names in plain English describing observable behavior.
   file, reading only the framework's own `PRISMA_COMPOSER_CONTAINER_*`
   transport vars. The ADR (D2) must state this.
 - **D1/3 — nine config call sites, not ten** (corrected inline above).
+- **Merge/rebase onto main after #136 and #140 — two mechanical renumbers,
+  no design change.** #136 made `src/exports/*.ts` thin re-export stubs and
+  placed implementation by plane; `core/src/exports/app-config.ts` and
+  `exports/deploy.ts`'s bodies relocated to `core/src/control/app-config.ts`
+  and `core/src/control/deploy.ts` (control plane; `core/src/control/**` is
+  now an architecture.config.json entry), and `target/src/exports/control.ts`'s
+  body relocated to `target/src/control/extension.ts`. `container-transport.ts`
+  needed no move — it stays at `core/src/container-transport.ts`, already
+  covered by the pre-existing `core/src/*.ts -> shared` glob, the same
+  placement `testing.ts` (also shared-plane) kept. #140 claimed ADR-0037 for
+  the service-RPC idempotency-key decision first, so this project's ADR
+  renumbered to **ADR-0038** (file, README index row, and every in-repo
+  reference). Bucket resource work (#132) coexists unchanged: the extension's
+  one `container:` field covers the whole platform, so `bucketDescriptor`
+  needed no container-related edits.

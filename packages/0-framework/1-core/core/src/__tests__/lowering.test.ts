@@ -5,7 +5,7 @@ import * as Layer from 'effect/Layer';
 import type { Config, Params } from '../config.ts';
 import { number, string } from '../config.ts';
 import { containerEnvVarName } from '../container-transport.ts';
-import type { ExtensionDescriptor, PrismaAppConfig } from '../exports/app-config.ts';
+import type { ExtensionDescriptor, PrismaAppConfig } from '../control/app-config.ts';
 import {
   type AlchemyStateLayer,
   type Artifact,
@@ -24,7 +24,7 @@ import {
   type ProvisionerDescriptor,
   resolveStateLayer,
   type ServiceLowering,
-} from '../exports/deploy.ts';
+} from '../control/deploy.ts';
 import { Load } from '../graph.ts';
 import {
   type BuildAdapter,

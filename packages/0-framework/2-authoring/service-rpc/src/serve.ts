@@ -32,8 +32,14 @@ type AnyRunnable = RunnableServiceNode<any, any, any>;
 
 type CmpOf<C> = C extends Contract<string, infer Cmp> ? Cmp : never;
 
+/** A handler's optional third argument. Handlers may ignore it. */
+export interface RpcHandlerContext {
+  /** The call's idempotency key (same across its retries), or `undefined` for a keyless caller that opted out of dedup. */
+  readonly idempotencyKey: string | undefined;
+}
+
 type HandlerFor<Fn, LoadedDeps> = Fn extends (input: infer I) => Promise<infer O>
-  ? (input: I, deps: LoadedDeps) => Promise<O>
+  ? (input: I, deps: LoadedDeps, ctx: RpcHandlerContext) => Promise<O>
   : never;
 
 /** Every exposed port's methods, turned into a handler map typed off S's own `expose` and `load()`. */
@@ -51,13 +57,146 @@ interface MethodSchemas {
   readonly output: StandardSchemaV1;
 }
 
-type RpcHandler = (input: unknown, deps: unknown) => Promise<unknown>;
+type RpcHandler = (input: unknown, deps: unknown, ctx: RpcHandlerContext) => Promise<unknown>;
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
+/** A response, reduced to what the replay cache needs to reproduce it byte-identically. */
+interface Outcome {
+  readonly status: number;
+  readonly bodyText: string;
+}
+
+function outcome(body: unknown, status = 200): Outcome {
+  return { status, bodyText: JSON.stringify(body) };
+}
+
+function toResponse(o: Outcome): Response {
+  return new Response(o.bodyText, {
+    status: o.status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+/** The generic message every caller-facing 500 carries — the real error goes to `console.error` instead. */
+const INTERNAL_ERROR_MESSAGE = 'Internal server error';
+
+/** Request body cap. Internal RPC payloads are small records, not uploads; 1 MiB bounds a slow request's memory. */
+export const MAX_BODY_BYTES = 1_048_576;
+
+class RequestBodyTooLargeError extends Error {}
+
+/** Reads the body as text, aborting past `maxBytes` of bytes actually read — `content-length` is caller-supplied, so untrusted. */
+async function readBoundedBody(req: Request, maxBytes: number): Promise<string> {
+  const reader = req.body?.getReader();
+  if (reader === undefined) return '';
+
+  const decoder = new TextDecoder();
+  let text = '';
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new RequestBodyTooLargeError();
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
+  return text;
+}
+
+/** Completed answers held for replay before LRU eviction. Fixed, so the per-provider cache is bounded memory, not traffic-scaled. */
+export const REPLAY_CACHE_MAX_ENTRIES = 1000;
+
+/** How long a completed 2xx/4xx answer stays replayable for a repeated key. */
+const REPLAY_TTL_MS = 60_000;
+
+interface CompletedEntry {
+  readonly kind: 'completed';
+  readonly outcome: Outcome;
+  readonly completedAt: number;
+  // The entry knows where it lives, so eviction can delete it from byMethod
+  // without reconstructing its location.
+  readonly method: string;
+  readonly key: string;
+}
+type CacheEntry = { readonly kind: 'pending'; readonly promise: Promise<Outcome> } | CompletedEntry;
+
+/**
+ * Per-method, per-key deduplication. A duplicate arriving mid-execution
+ * single-flights onto the same promise; a completed 2xx/4xx replays for
+ * REPLAY_TTL_MS; a 5xx is never kept, since that is what a retry re-executes.
+ * Keyed by method first, so a replay can never answer a different method.
+ */
+class IdempotencyStore {
+  private readonly byMethod = new Map<string, Map<string, CacheEntry>>();
+  // Completed entries in least-recently-used order. A Set keeps insertion
+  // order, so deleting then re-adding an entry moves it to the newest end.
+  private readonly lru = new Set<CompletedEntry>();
+
+  async dispatch(method: string, key: string, run: () => Promise<Outcome>): Promise<Outcome> {
+    const bucket = this.bucketFor(method);
+    const existing = bucket.get(key);
+
+    if (existing?.kind === 'pending') {
+      return existing.promise;
+    }
+    if (existing?.kind === 'completed') {
+      if (Date.now() - existing.completedAt < REPLAY_TTL_MS) {
+        this.lru.delete(existing);
+        this.lru.add(existing);
+        return existing.outcome;
+      }
+      bucket.delete(key);
+      this.lru.delete(existing);
+    }
+
+    const promise = run();
+    bucket.set(key, { kind: 'pending', promise });
+
+    let result: Outcome;
+    try {
+      result = await promise;
+    } catch (err) {
+      bucket.delete(key);
+      throw err;
+    }
+
+    if (result.status >= 500) {
+      bucket.delete(key); // retryable outcome — a retry must re-execute
+    } else {
+      const entry: CompletedEntry = {
+        kind: 'completed',
+        outcome: result,
+        completedAt: Date.now(),
+        method,
+        key,
+      };
+      bucket.set(key, entry);
+      this.lru.add(entry);
+      this.evictOverflow();
+    }
+    return result;
+  }
+
+  private bucketFor(method: string): Map<string, CacheEntry> {
+    let bucket = this.byMethod.get(method);
+    if (bucket === undefined) {
+      bucket = new Map();
+      this.byMethod.set(method, bucket);
+    }
+    return bucket;
+  }
+
+  private evictOverflow(): void {
+    if (this.lru.size <= REPLAY_CACHE_MAX_ENTRIES) return;
+    const oldest = this.lru.values().next().value;
+    if (oldest !== undefined) {
+      this.lru.delete(oldest);
+      this.byMethod.get(oldest.method)?.delete(oldest.key);
+    }
+  }
 }
 
 /** The provisioned accepted key set, or undefined when the deploy never provisioned one (local/test — enforcement off). */
@@ -108,6 +247,8 @@ function bearerToken(req: Request): string {
   return header?.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : '';
 }
 
+const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
+
 /**
  * Flattens every exposed port's methods into one method → {schemas, handler}
  * table. RPC dispatch is flat (`/rpc/<method>`), so a method name exposed by
@@ -144,11 +285,14 @@ function methodTable(
 }
 
 /**
- * Routes `POST /rpc/<method>`: parses JSON, validates input, calls the
- * handler with `service.load()`'s deps, validates the output, and responds
- * JSON. An unknown method or invalid input is a 4xx; a handler (or output
- * validation) failure is a 5xx — either way the process does not crash.
- * `load()` is called exactly once, here, before the handler ever runs.
+ * Routes `POST /rpc/<method>`: checks the service key, requires an
+ * Idempotency-Key, single-flights/replays through `IdempotencyStore`, and —
+ * per call — parses JSON within the body cap, validates input, calls the
+ * handler with `service.load()`'s deps plus `{ idempotencyKey }`, validates
+ * the output, and responds JSON. A handler or output-validation failure
+ * masks its message behind a generic 500 and logs the real error; an
+ * unknown method or invalid input is a 4xx. `load()` is called exactly
+ * once, here, before the handler ever runs.
  */
 export function serve<S extends AnyRunnable, H extends Handlers<S>>(
   service: S,
@@ -162,46 +306,85 @@ export function serve<S extends AnyRunnable, H extends Handlers<S>>(
     >(handlers),
   );
   const deps = service.load();
+  const idempotency = new IdempotencyStore();
 
   return async (req: Request): Promise<Response> => {
     const accepted = acceptedKeys();
     if (accepted !== undefined && !isAcceptedKey(bearerToken(req), accepted)) {
-      return jsonResponse({ error: 'Unauthorized: missing or invalid service key' }, 401);
+      return toResponse(outcome({ error: 'Unauthorized: missing or invalid service key' }, 401));
     }
 
     const { pathname } = new URL(req.url);
     const methodName = /^\/rpc\/([^/]+)$/.exec(pathname)?.[1];
     if (methodName === undefined) {
-      return jsonResponse({ error: `Not found: ${pathname}` }, 404);
+      return toResponse(outcome({ error: `Not found: ${pathname}` }, 404));
     }
 
     const method = table.get(methodName);
     if (method === undefined) {
-      return jsonResponse({ error: `Unknown RPC method "${methodName}"` }, 404);
+      return toResponse(outcome({ error: `Unknown RPC method "${methodName}"` }, 404));
     }
     if (req.method !== 'POST') {
-      return jsonResponse({ error: `Method "${methodName}" requires POST` }, 405);
+      return toResponse(outcome({ error: `Method "${methodName}" requires POST` }, 405));
     }
 
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return jsonResponse({ error: 'Request body must be JSON' }, 400);
-    }
+    // An empty header is the same as no header: the caller sent no key.
+    const idempotencyKey = req.headers.get(IDEMPOTENCY_KEY_HEADER.toLowerCase()) || undefined;
+    const ctx: RpcHandlerContext = { idempotencyKey };
 
-    let input: unknown;
-    try {
-      input = await standardValidate(method.input, body);
-    } catch (err) {
-      return jsonResponse({ error: err instanceof Error ? err.message : String(err) }, 400);
-    }
+    const run = async (): Promise<Outcome> => {
+      let bodyText: string;
+      try {
+        bodyText = await readBoundedBody(req, MAX_BODY_BYTES);
+      } catch (err) {
+        if (err instanceof RequestBodyTooLargeError) {
+          return outcome({ error: `Request body exceeds the ${MAX_BODY_BYTES}-byte limit` }, 413);
+        }
+        // A body-stream I/O error: mask and log like any other internal
+        // failure — letting it reject would break serve()'s Response contract.
+        console.error(`serve(): reading the request body for "${methodName}" failed:`, err);
+        return outcome({ error: INTERNAL_ERROR_MESSAGE }, 500);
+      }
 
-    try {
-      const result = await method.handler(input, deps);
-      return jsonResponse(await standardValidate(method.output, result));
-    } catch (err) {
-      return jsonResponse({ error: err instanceof Error ? err.message : String(err) }, 500);
-    }
+      let body: unknown;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        return outcome({ error: 'Request body must be JSON' }, 400);
+      }
+
+      let input: unknown;
+      try {
+        input = await standardValidate(method.input, body);
+      } catch (err) {
+        return outcome({ error: err instanceof Error ? err.message : String(err) }, 400);
+      }
+
+      try {
+        const result = await method.handler(input, deps, ctx);
+        let output: unknown;
+        try {
+          output = await standardValidate(method.output, result);
+        } catch (err) {
+          console.error(
+            `serve(): handler for "${methodName}" returned output that failed schema validation — this is a provider bug:`,
+            err,
+          );
+          return outcome({ error: INTERNAL_ERROR_MESSAGE }, 500);
+        }
+        return outcome(output);
+      } catch (err) {
+        console.error(`serve(): handler for "${methodName}" threw:`, err);
+        return outcome({ error: INTERNAL_ERROR_MESSAGE }, 500);
+      }
+    };
+
+    // Keyed calls dedupe/replay through the store; a keyless one opts out (the
+    // generated client always sends a key, so this is a hand-rolled/legacy caller).
+    const result =
+      idempotencyKey === undefined
+        ? await run()
+        : await idempotency.dispatch(methodName, idempotencyKey, run);
+    return toResponse(result);
   };
 }
