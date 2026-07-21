@@ -14,7 +14,13 @@ import {
   paramEntries,
   secretPointerRows,
 } from '../serializer.ts';
-import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
+import {
+  cloudApplicationOf,
+  DEFAULT_REGION,
+  projectIdOf,
+  type ResolvedCloudOptions,
+  validateName,
+} from './shared.ts';
 
 /**
  * compute's provision → serialize/deploy handoff. `serviceId` is an
@@ -53,11 +59,12 @@ export function computeDescriptor(
       Effect.gen(function* () {
         validateName(id, 'service name (from provision id)');
         const projectId = projectIdOf(application);
+        const branchId = cloudApplicationOf(application).branchId;
         const svc = yield* Prisma.ComputeService(`${id}-svc`, {
           projectId,
           name: id,
           region: o.region ?? DEFAULT_REGION,
-          ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
+          ...(branchId !== undefined ? { branchId } : {}),
         });
         return { serviceId: svc.id, projectId };
       }),
@@ -69,8 +76,9 @@ export function computeDescriptor(
     serialize: (ctx, provisioned, config) =>
       Effect.gen(function* () {
         const { address, node, graph } = ctx;
-        const cls = o.branchId ? ('preview' as const) : ('production' as const);
-        const branch = o.branchId !== undefined ? { branchId: o.branchId } : {};
+        const branchId = cloudApplicationOf(ctx.application).branchId;
+        const cls = branchId ? ('preview' as const) : ('production' as const);
+        const branch = branchId !== undefined ? { branchId } : {};
         const projectId = provisioned.projectId;
         const svc = node as ServiceNode;
         const records = [];

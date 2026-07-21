@@ -11,7 +11,13 @@ import { resolveMigrationsDir } from '../pn-config.ts';
 import { PnMigration } from '../pn-migration-resource.ts';
 import { isPnPostgresResourceNode } from '../prisma-next.ts';
 import { resolveTargetRef } from '../prisma-next-migrate.ts';
-import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
+import {
+  cloudApplicationOf,
+  DEFAULT_REGION,
+  projectIdOf,
+  type ResolvedCloudOptions,
+  validateName,
+} from './shared.ts';
 
 /**
  * The migration is a tracked `PnMigration` Alchemy resource keyed on the
@@ -22,11 +28,12 @@ export function prismaNextDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
   const lowering: Lowering = ({ id, node, application }) =>
     Effect.gen(function* () {
       validateName(id, 'resource name (from provision id)');
+      const branchId = cloudApplicationOf(application).branchId;
       const db = yield* Prisma.Database(`${id}-db`, {
         projectId: projectIdOf(application),
         name: id,
         region: o.region ?? DEFAULT_REGION,
-        ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
+        ...(branchId !== undefined ? { branchId } : {}),
       });
       const conn = yield* Prisma.Connection(`${id}-conn`, { databaseId: db.id, name: id });
       const url = Output.map(conn.connectionString, (value) => Redacted.value(value));

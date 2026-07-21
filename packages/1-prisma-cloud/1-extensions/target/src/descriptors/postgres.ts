@@ -7,7 +7,13 @@ import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
 import { PgWarm } from '../pg-warm-resource.ts';
-import { DEFAULT_REGION, projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
+import {
+  cloudApplicationOf,
+  DEFAULT_REGION,
+  projectIdOf,
+  type ResolvedCloudOptions,
+  validateName,
+} from './shared.ts';
 
 /**
  * One Database per module-provisioned postgres resource — `id` is the
@@ -18,11 +24,12 @@ export function postgresDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
   const lowering: Lowering = ({ id, application }) =>
     Effect.gen(function* () {
       validateName(id, 'resource name (from provision id)');
+      const branchId = cloudApplicationOf(application).branchId;
       const db = yield* Prisma.Database(`${id}-db`, {
         projectId: projectIdOf(application),
         name: id,
         region: o.region ?? DEFAULT_REGION,
-        ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
+        ...(branchId !== undefined ? { branchId } : {}),
       });
       const conn = yield* Prisma.Connection(`${id}-conn`, { databaseId: db.id, name: id });
       const url = Output.map(conn.connectionString, (value) => Redacted.value(value));

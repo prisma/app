@@ -265,6 +265,12 @@
       "plane": "control"
     },
     {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/container.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "control"
+    },
+    {
       "glob": "packages/1-prisma-cloud/1-extensions/target/src/s3-credentials-resource.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
@@ -610,13 +616,7 @@
       "exceptions": []
     }
   },
-  "crossDomainExceptions": [
-    {
-      "from": "packages/0-framework/3-tooling/cli/src/**",
-      "to": "packages/1-prisma-cloud/0-lowering/lowering/src/**",
-      "reason": "Known debt: the CLI's pre-stack container-ensure step (Project/Branch resolution) is Prisma Cloud-specific today; ADR-0017's config-driven model should eventually absorb it"
-    }
-  ],
+  "crossDomainExceptions": [],
   "layerOrder": {
     "framework": ["foundation", "core", "authoring", "tooling"],
     "prisma-cloud": ["lowering", "extensions", "modules"],

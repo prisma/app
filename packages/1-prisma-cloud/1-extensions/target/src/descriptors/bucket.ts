@@ -6,7 +6,12 @@ import * as Prisma from '@internal/lowering';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
-import { projectIdOf, type ResolvedCloudOptions, validateName } from './shared.ts';
+import {
+  cloudApplicationOf,
+  projectIdOf,
+  type ResolvedCloudOptions,
+  validateName,
+} from './shared.ts';
 
 /**
  * One Bucket per module-provisioned bucket resource — `id` is the module
@@ -15,14 +20,15 @@ import { projectIdOf, type ResolvedCloudOptions, validateName } from './shared.t
  * carrier, and its attributes (endpoint, bucketName, accessKeyId,
  * secretAccessKey) become the four S3Config outputs consumers resolve by name.
  */
-export function bucketDescriptor(o: ResolvedCloudOptions): NodeDescriptor {
+export function bucketDescriptor(_o: ResolvedCloudOptions): NodeDescriptor {
   const lowering: Lowering = ({ id, application }) =>
     Effect.gen(function* () {
       validateName(id, 'resource name (from provision id)');
+      const branchId = cloudApplicationOf(application).branchId;
       const bkt = yield* Prisma.Bucket(`${id}-bucket`, {
         projectId: projectIdOf(application),
         name: id,
-        ...(o.branchId !== undefined ? { branchId: o.branchId } : {}),
+        ...(branchId !== undefined ? { branchId } : {}),
       });
       const key = yield* Prisma.BucketKey(`${id}-key`, {
         bucketId: bkt.id,

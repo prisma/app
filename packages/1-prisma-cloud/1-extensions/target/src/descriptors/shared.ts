@@ -31,15 +31,13 @@ export interface ProviderParam extends ProviderParamEntry {
 }
 
 /**
- * The factory's resolved options each node descriptor closes over. `projectId`
- * and `branchId` come from the CLI (stage-as-branch): a named stage sets
- * `branchId`, routing every branch-scoped resource there with the `preview` class.
+ * The factory's resolved options each node descriptor closes over. Deploy
+ * identity (`projectId`/`branchId`) is no longer here — it comes from the
+ * resolved container, read via `cloudApplicationOf(ctx.application)`.
  */
 export interface ResolvedCloudOptions {
   readonly workspaceId: string;
   readonly region?: Prisma.ComputeRegion;
-  readonly projectId: string | undefined;
-  readonly branchId: string | undefined;
   /**
    * This extension's reserved provider params, keyed by need brand — the
    * mirror of the `provisions` registry core resolves mints through. Passed
@@ -72,6 +70,7 @@ export function validateName(value: string, source: string): void {
 /** What prisma-cloud's application hook produces; its own descriptors are the only consumers. */
 export interface CloudApplication {
   readonly projectId: string;
+  readonly branchId: string | undefined;
 }
 
 export function isCloudApplication(value: unknown): value is CloudApplication {
@@ -80,17 +79,23 @@ export function isCloudApplication(value: unknown): value is CloudApplication {
     typeof value === 'object' &&
     value !== null &&
     'projectId' in value &&
-    typeof value.projectId === 'string'
+    typeof value.projectId === 'string' &&
+    'branchId' in value &&
+    (value.branchId === undefined || typeof value.branchId === 'string')
   );
 }
 
 /** Narrows `ctx.application`, which core hands over as `unknown`, to this extension's own product; throws naming the hook when it hasn't run. */
-export function projectIdOf(application: unknown): string {
+export function cloudApplicationOf(application: unknown): CloudApplication {
   if (!isCloudApplication(application)) {
     throw new Error(
       "prisma-cloud: ctx.application is not this extension's application product — " +
         'the prismaCloud() application hook must run before any node lowers.',
     );
   }
-  return application.projectId;
+  return application;
+}
+
+export function projectIdOf(application: unknown): string {
+  return cloudApplicationOf(application).projectId;
 }

@@ -71,26 +71,29 @@ loading the graph imports that module — the app's choice, not a CLI limit.
    carries (ADR-0004) — no directory discovery of any kind. Assembly validates
    the user's built output exists (missing → "run your build" error; staleness
    is not detected) and produces a normalized bundle `{ dir, entry }`.
-6. **Resolve the app's containers.** Resolved after assembly succeeds and
-   before the stack is generated, so a deploy that cannot assemble never
-   creates anything in Prisma Cloud. The CLI resolves two Prisma Cloud
-   containers via the Management API: the app's **Project** — found by app
-   name, oldest match adopted, created if none exist — and, for a named
-   stage, that stage's **Branch** — found by `gitName` (the stage name),
-   created if absent. The stage name must pass `git check-ref-format`; an
-   invalid name fails outright, never silently normalized. The default stage
-   (no `--stage`) resolves the Project only — no Branch, zero change to
-   production. `destroy` resolves **find-only**: an absent Project or Branch
-   fails with "nothing deployed for `<app>`[`/<stage>`]" rather than creating
-   one. See § Stages and containers.
+6. **Validate the stage name, then resolve each extension's containers.**
+   `--stage` must pass `git check-ref-format`; an invalid name fails outright,
+   never silently normalized — the framework's own contract, platform-free
+   and checked once, before any extension runs. Containers are resolved after
+   assembly succeeds and before the stack is generated, so a deploy that
+   cannot assemble never creates anything on any platform: for every
+   extension in the config that declares a `container` descriptor
+   ([ADR-0038](../90-decisions/ADR-0038-containers-are-an-extension-descriptor.md)),
+   the CLI calls `ensure({ appName, stage })` (`deploy`, creates if absent) or
+   `locate({ appName, stage })` (`destroy`, finds only). `destroy` against a
+   `locate` that finds nothing fails with "nothing deployed for
+   `<app>`[`/<stage>`]" rather than creating one. What resolving a container
+   means is entirely the extension's own business — the CLI holds the result
+   as an opaque value. See § Stages and containers.
 7. **Lower and drive.** Write the pipeline's results as a runnable stack
    module at `.prisma-composer/alchemy.run.ts` and drive the `alchemy` CLI against
-   it (ADR-0007), setting `PRISMA_PROJECT_ID` (always) and `PRISMA_BRANCH_ID`
-   (named stages only) on the `alchemy` child process — for both `deploy` and
-   `destroy`, since `alchemy destroy` re-imports and re-evaluates the same
-   stack, so its target reconstruction needs the same ids. The generated file
-   and Alchemy's state live in the process's working directory — tool state
-   lives where you run the tool, like any other CLI (ADR-0004).
+   it (ADR-0007), carrying every resolved container across to the child as one
+   environment variable per extension — content the CLI writes but never
+   reads (ADR-0038). Both `deploy` and `destroy` set it, since `alchemy
+   destroy` re-imports and re-evaluates the same stack, so its target
+   reconstruction needs the same containers. The generated file and Alchemy's
+   state live in the process's working directory — tool state lives where you
+   run the tool, like any other CLI (ADR-0004).
 
 The pass that assembles a service is the same pass that lowers it, so the
 correlation between services and their built bundles never exists as
@@ -101,41 +104,45 @@ file, and consumed in one motion.
 
 An app deploys to a named **stage** — a deploy-time environment, never
 authored in the topology (ADR-0024). `prisma-composer deploy` with no `--stage`
-targets **production**, at the Project level; `--stage <name>` targets a
-**named stage**, resolved to a Branch of the app's Project (ADR-0023).
+targets **production**; `--stage <name>` targets a **named stage**.
 
-- **Containers.** The app's **Project** and the stage's **Branch** are
-  resolved before Alchemy runs (pipeline step 6) — Alchemy provisions only
-  the resources *within* them; it never creates or destroys a container.
-- **Id threading.** The resolved `projectId` (and, for a named stage,
-  `branchId`) are set as `PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID` on the
-  `alchemy` child process, for both `deploy` and `destroy`.
-- **Targets read the ids at lowering time, not construction.** An extension is
-  constructed twice: once when the CLI loads `prisma-composer.config.ts` in the
-  parent — *before* the ids exist — and again in the alchemy child, where they
-  are set. So an extension's constructor must tolerate the ids being absent;
-  only its lowering hooks (which run in the child) may require them.
-- **State rides the Branch.** Each stage's deploy state lives in a
-  framework-owned `prisma-composer-state` database attached to the stage's
-  Branch — production's on the Project's implicit default Branch
-  ([ADR-0034](../90-decisions/ADR-0034-deploy-state-lives-in-the-stage-branch.md)).
-  The state layer bootstraps it from the threaded ids; the default Branch is
-  resolved read-only (`isDefault`), never created.
+- **Containers.** Any extension whose platform has platform-side containers —
+  infrastructure a service deploys *into*, which must exist before Alchemy
+  runs and which Alchemy itself never creates or destroys — supplies a
+  `container` descriptor
+  ([ADR-0038](../90-decisions/ADR-0038-containers-are-an-extension-descriptor.md)).
+  The CLI resolves every configured extension's container before Alchemy runs
+  (pipeline step 6) and holds each result as an opaque value.
+- **The transport is content-blind.** Each resolved container crosses to the
+  alchemy child as one environment variable, named from the extension's id
+  and holding whatever that extension's own `serialize()` produced; the child
+  reads it back and calls the same extension's `deserialize`. The CLI never
+  reads the value, and an extension never touches `process.env` directly — it
+  receives its container as a parameter everywhere.
+- **State rides the container.** `PrismaAppConfig.state` names its owning
+  extension; core hands that extension's own resolved container to
+  `state.create()`, so the state layer is built from it rather than from the
+  environment.
 - **Destroy is explicit.** `prisma-composer destroy` requires `--stage <name>` or
   `--production`; a bare `destroy` is an error, so an omitted or mistyped
   stage can never silently tear down production. `destroy` resolves
-  find-only (no container is ever created); after `alchemy destroy` removes
-  a named stage's resources, the CLI removes the stage's state database
-  (ownership-verified, never by name alone) and then soft-deletes its Branch.
-  The production Branch is never deleted; destroying production removes the
-  production state database before the best-effort Project removal. State is
-  deleted **last among the stage's members and before its container**: destroy
-  reads state, and the platform refuses to delete a Branch with live members.
+  find-only (no container is ever created); after `alchemy destroy` succeeds
+  and after every extension's `teardown` has run, the CLI removes each
+  resolved container. That two-loop order — every teardown, then every
+  removal — is what keeps a stage's deploy state deleted before its
+  container goes.
 
-See [ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
-(App = one Project, Stage = Branch) and
+**Prisma Cloud's own containers** are its app's **Project** and, for a named
+stage, that stage's **Branch** — found by name, created if absent on deploy,
+never created on destroy; each stage's deploy state lives in a
+framework-owned `prisma-composer-state` database attached to its Branch
+(production's on the Project's implicit default Branch). See
+[ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
+(App = one Project, Stage = Branch),
 [ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
-(stage resolution mechanics).
+(stage resolution mechanics), and
+[ADR-0034](../90-decisions/ADR-0034-deploy-state-lives-in-the-stage-branch.md)
+(deploy state lives on the stage's Branch).
 
 ## Build ownership
 
@@ -220,9 +227,8 @@ The CLI's quality lives in its errors; each failure names its fix:
   "nothing to do here", not an error; the warning makes the wrong-directory
   case visible instead of silently succeeding (see ADR-0004's state rule).
 - `--stage` passes through to the `alchemy` invocation, which owns Alchemy's
-  own stage/state semantics, alongside the resolved container ids
-  (`PRISMA_PROJECT_ID`/`PRISMA_BRANCH_ID`, § Stages and containers); the
-  generated stack file carries neither (ADR-0007).
+  own stage/state semantics; the generated stack file carries neither it nor
+  any resolved container (ADR-0007).
 
 ## Known limitations
 
@@ -249,3 +255,6 @@ The CLI's quality lives in its errors; each failure names its fix:
 - [ADR-0023](../90-decisions/ADR-0023-a-prisma-app-is-one-project-a-stage-is-a-branch.md)
   / [ADR-0024](../90-decisions/ADR-0024-a-stage-is-a-deploy-time-environment-resolved-to-project-and-branch.md)
   — stage, Project, and Branch semantics (§ Stages and containers).
+- [ADR-0038](../90-decisions/ADR-0038-containers-are-an-extension-descriptor.md)
+  — the container descriptor and the opaque parent→child transport
+  (pipeline steps 6-7, § Stages and containers).
