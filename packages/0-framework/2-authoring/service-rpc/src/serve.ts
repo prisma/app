@@ -112,9 +112,16 @@ export const REPLAY_CACHE_MAX_ENTRIES = 1000;
 /** How long a completed 2xx/4xx answer stays replayable for a repeated key. */
 const REPLAY_TTL_MS = 60_000;
 
-type CacheEntry =
-  | { readonly kind: 'pending'; readonly promise: Promise<Outcome> }
-  | { readonly kind: 'completed'; readonly outcome: Outcome; readonly completedAt: number };
+interface CompletedEntry {
+  readonly kind: 'completed';
+  readonly outcome: Outcome;
+  readonly completedAt: number;
+  // The entry knows where it lives, so eviction can delete it from byMethod
+  // without reconstructing its location.
+  readonly method: string;
+  readonly key: string;
+}
+type CacheEntry = { readonly kind: 'pending'; readonly promise: Promise<Outcome> } | CompletedEntry;
 
 /**
  * Per-method, per-key deduplication. A duplicate arriving mid-execution
@@ -124,8 +131,9 @@ type CacheEntry =
  */
 class IdempotencyStore {
   private readonly byMethod = new Map<string, Map<string, CacheEntry>>();
-  // LRU order over completed entries; Map insertion order is the list, so re-inserting moves a key to the end.
-  private readonly lruOrder = new Map<string, { readonly method: string; readonly key: string }>();
+  // Completed entries in least-recently-used order. A Set keeps insertion
+  // order, so deleting then re-adding an entry moves it to the newest end.
+  private readonly lru = new Set<CompletedEntry>();
 
   async dispatch(method: string, key: string, run: () => Promise<Outcome>): Promise<Outcome> {
     const bucket = this.bucketFor(method);
@@ -136,11 +144,12 @@ class IdempotencyStore {
     }
     if (existing?.kind === 'completed') {
       if (Date.now() - existing.completedAt < REPLAY_TTL_MS) {
-        this.touch(method, key);
+        this.lru.delete(existing);
+        this.lru.add(existing);
         return existing.outcome;
       }
       bucket.delete(key);
-      this.lruOrder.delete(this.lruKey(method, key));
+      this.lru.delete(existing);
     }
 
     const promise = run();
@@ -157,8 +166,16 @@ class IdempotencyStore {
     if (result.status >= 500) {
       bucket.delete(key); // retryable outcome — a retry must re-execute
     } else {
-      bucket.set(key, { kind: 'completed', outcome: result, completedAt: Date.now() });
-      this.touch(method, key);
+      const entry: CompletedEntry = {
+        kind: 'completed',
+        outcome: result,
+        completedAt: Date.now(),
+        method,
+        key,
+      };
+      bucket.set(key, entry);
+      this.lru.add(entry);
+      this.evictOverflow();
     }
     return result;
   }
@@ -172,23 +189,12 @@ class IdempotencyStore {
     return bucket;
   }
 
-  private lruKey(method: string, key: string): string {
-    return `${method}\0${key}`;
-  }
-
-  /** Marks (method, key) most-recently-used, evicting the oldest completed entry once over the bound. */
-  private touch(method: string, key: string): void {
-    const lruKey = this.lruKey(method, key);
-    this.lruOrder.delete(lruKey);
-    this.lruOrder.set(lruKey, { method, key });
-
-    if (this.lruOrder.size > REPLAY_CACHE_MAX_ENTRIES) {
-      const oldestKey = this.lruOrder.keys().next().value;
-      const oldest = oldestKey === undefined ? undefined : this.lruOrder.get(oldestKey);
-      if (oldestKey !== undefined && oldest !== undefined) {
-        this.lruOrder.delete(oldestKey);
-        this.byMethod.get(oldest.method)?.delete(oldest.key);
-      }
+  private evictOverflow(): void {
+    if (this.lru.size <= REPLAY_CACHE_MAX_ENTRIES) return;
+    const oldest = this.lru.values().next().value;
+    if (oldest !== undefined) {
+      this.lru.delete(oldest);
+      this.byMethod.get(oldest.method)?.delete(oldest.key);
     }
   }
 }
