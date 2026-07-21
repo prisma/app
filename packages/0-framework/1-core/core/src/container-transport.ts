@@ -1,6 +1,15 @@
-/** The parent→child transport for resolved containers (ADR-0033-style opacity): the CLI parent writes each instance's `serialize()` output into one env var per extension; the alchemy child reads it back and calls the same descriptor's `deserialize`. */
+/**
+ * Carries resolved containers from the CLI process into the alchemy process
+ * (ADR-0037). A deploy runs as two processes: the CLI resolves each
+ * extension's containers, then spawns `alchemy`, which re-imports the config
+ * from scratch and needs those containers back — and env vars are the only
+ * channel between the two. So the CLI writes each instance's `serialize()`
+ * output into one env var per extension, and in the alchemy process
+ * `deserializeContainers` reads each var back through the same extension's
+ * descriptor. The framework owns the vars; it never reads their contents.
+ */
 
-/** What the framework knows about the deploy target — the container lookup key. */
+/** The key an extension resolves a container from: which app, which stage. */
 export interface LocateContainerInput {
   /** The application name (root node's name, or `--name`). */
   readonly appName: string;
@@ -9,22 +18,25 @@ export interface LocateContainerInput {
 }
 
 /**
- * One resolved container. Core's claim is minimal; the owning extension
- * narrows to its concrete type where it reads the instance back (ADR-0033).
+ * One resolved container. The framework sees only this interface; the
+ * extension that produced the instance narrows it back to its own concrete
+ * type wherever the framework hands it back (ADR-0037).
  */
 export interface ContainerInstance {
   readonly input: LocateContainerInput;
-  /** Serialize to a non-empty string for the parent→child transport. The format is the extension's own; only its `deserialize` reads it. */
+  /** Serialize to a non-empty string for the process transport above. The format is the extension's own; only its `deserialize` reads it. */
   serialize(): string;
 }
 
 /**
  * The platform containers an app deploys into, as one lifecycle. `I` is
  * the extension's own instance type — the same descriptor produces and
- * consumes it, so the generic is compiler-checked within the extension
- * (ADR-0033). METHOD SYNTAX REQUIRED on all four members: the erased
- * assignment into ExtensionDescriptor relies on method bivariance, exactly
- * as ServiceLowering<P, S> does.
+ * consumes it, so the extension gets full typing internally while the
+ * framework stores the erased form. METHOD SYNTAX REQUIRED on all four
+ * members: the erased assignment into ExtensionDescriptor compiles only
+ * through method bivariance; property-arrow members are checked
+ * contravariantly and the assignment fails (same rule as
+ * ServiceLowering<P, S> — ADR-0033).
  */
 export interface ContainerDescriptor<I extends ContainerInstance = ContainerInstance> {
   /** Resolve the container for (appName, stage), creating anything absent. Called by `deploy`. */
@@ -37,13 +49,7 @@ export interface ContainerDescriptor<I extends ContainerInstance = ContainerInst
   deserialize(serialized: string): I;
 }
 
-/**
- * 'PRISMA_COMPOSER_CONTAINER_' + extensionId.toUpperCase()
- *   .replace(/[^A-Z0-9]+/g, '_') with leading/trailing '_' trimmed
- *   from the mangled id.
- * '@prisma/composer-prisma-cloud' →
- * 'PRISMA_COMPOSER_CONTAINER_PRISMA_COMPOSER_PRISMA_CLOUD'
- */
+/** '@prisma/composer-prisma-cloud' → 'PRISMA_COMPOSER_CONTAINER_PRISMA_COMPOSER_PRISMA_CLOUD' */
 export function containerEnvVarName(extensionId: string): string {
   const mangled = extensionId
     .toUpperCase()
@@ -66,12 +72,7 @@ function emptySerializeError(extensionId: string): Error {
   );
 }
 
-/**
- * { [containerEnvVarName(id)]: instance.serialize() } for every resolved
- * instance. Throws Error naming BOTH extension ids when two ids mangle to
- * one var name; throws Error naming the extension id when serialize()
- * returns ''.
- */
+/** The env entries the CLI sets on the alchemy process: `{ [containerEnvVarName(id)]: instance.serialize() }` for every resolved instance. */
 export function containerEnv(
   instances: ReadonlyMap<string, ContainerInstance>,
 ): Record<string, string> {
@@ -97,8 +98,8 @@ export interface ContainerTransportExtension {
 }
 
 /**
- * Child side: for each extension with a container descriptor whose var is
- * present in `env`, call its deserialize. Absent var → no entry.
+ * The alchemy-process side: for each extension with a container descriptor
+ * whose var is present in `env`, call its deserialize. Absent var → no entry.
  */
 export function deserializeContainers(
   extensions: readonly ContainerTransportExtension[],

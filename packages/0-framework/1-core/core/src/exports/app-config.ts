@@ -57,17 +57,18 @@ export interface ExtensionDescriptor {
    */
   readonly teardown?: (input: TeardownInput) => Promise<void>;
   /**
-   * The extension's container lifecycle, when its platform has containers.
-   * The CLI resolves containers after assembly and before any stack file
-   * or Alchemy run (deploy ensures, destroy locates); the product crosses
-   * to the alchemy child via its own serialize/deserialize.
+   * The extension's container lifecycle, when its platform has containers
+   * (ADR-0037). The CLI resolves containers after assembly and before any
+   * stack file or Alchemy run (deploy ensures, destroy locates); the
+   * resolved instance reaches the alchemy process through the env transport
+   * in container-transport.ts.
    */
   readonly container?: ContainerDescriptor;
 }
 
 /**
- * The deploy's one state store, naming its owning extension so core can
- * inject that extension's resolved container (amends ADR-0011/0017).
+ * The deploy's one state store. It names its owning extension so core knows
+ * whose resolved container to pass into `create` (ADR-0037).
  */
 export interface StateDescriptor {
   /** The owning extension's id — matched against `ExtensionDescriptor.id`. */

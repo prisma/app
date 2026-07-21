@@ -1,12 +1,7 @@
-/**
- * Pipeline pre-container step: validates `--stage` as a git ref name before
- * anything platform-specific runs — the framework's own documented contract
- * (deploy-cli.md), platform-free and uniform across extensions.
- */
 import { spawnSync } from 'node:child_process';
 import { CliError } from './cli-error.ts';
 
-/** Validates `stage` as a git ref name via `git check-ref-format` — no silent normalization. */
+/** A stage name must be a valid git ref (deploy-cli.md) — checked via `git check-ref-format`, never silently normalized. Runs before anything platform-specific. */
 export function validateStageName(stage: string): void {
   const result = spawnSync('git', ['check-ref-format', `refs/heads/${stage}`], {
     stdio: 'ignore',

@@ -1,10 +1,11 @@
 /**
- * The extension's container lifecycle (ADR-0017's `container` descriptor):
- * resolves the app's Project + (named stage) Branch via `@internal/lowering`'s
- * `resolveContainer`, before the generated stack file runs — `deploy`
- * ensures (creates if absent), `destroy` locates only. Control-plane only
- * (imported by control.ts and the hook modules); errors here are plain
- * `Error`s — `CliError` is a CLI concept this extension must not import.
+ * This extension's container lifecycle (the `container` descriptor,
+ * ADR-0037): resolves the app's Project + (named stage) Branch via
+ * `@internal/lowering`'s `resolveContainer`, before the generated stack file
+ * runs — `deploy` ensures (creates if absent), `destroy` locates only.
+ * Control-plane only (imported by control.ts and the hook modules); errors
+ * here are plain `Error`s — `CliError` is a CLI concept this extension must
+ * not import.
  */
 import type {
   ContainerDescriptor,
@@ -181,8 +182,8 @@ async function locateContainer(
 
 /**
  * Soft-deletes a named stage's Branch after a successful `alchemy destroy`
- * has removed its members (spec §10) — the Management API refuses to delete
- * a Branch that still has live members.
+ * has removed its members — the Management API refuses to delete a Branch
+ * that still has live members.
  */
 async function removeStageBranch(
   branchId: string,
