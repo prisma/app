@@ -51,33 +51,50 @@ describe('insert', () => {
 });
 
 describe('updateDelivery', () => {
-  test('sent: sets providerMessageId, clears error, increments attempts', async () => {
+  test('sent: sets providerMessageId, clears error, adds the reported attempts', async () => {
     const store = createMemoryOutboxStore();
     const { row: inserted } = await store.insert(row({ status: 'queued' }));
     const updated = await store.updateDelivery(inserted.id, {
       status: 'sent',
       providerMessageId: 'msg_1',
+      attempts: 2,
     });
     expect(updated.status).toBe('sent');
     expect(updated.providerMessageId).toBe('msg_1');
     expect(updated.error).toBeNull();
-    expect(updated.attempts).toBe(1);
+    expect(updated.attempts).toBe(2);
   });
 
-  test('failed: sets error, leaves providerMessageId null, increments attempts', async () => {
+  test('failed: sets error, leaves providerMessageId null, adds the reported attempts', async () => {
     const store = createMemoryOutboxStore();
     const { row: inserted } = await store.insert(row({ status: 'queued' }));
-    const updated = await store.updateDelivery(inserted.id, { status: 'failed', error: 'boom' });
+    const updated = await store.updateDelivery(inserted.id, {
+      status: 'failed',
+      error: 'boom',
+      attempts: 3,
+    });
     expect(updated.status).toBe('failed');
     expect(updated.providerMessageId).toBeNull();
     expect(updated.error).toBe('boom');
-    expect(updated.attempts).toBe(1);
+    expect(updated.attempts).toBe(3);
+  });
+
+  test('a second delivery attempt accumulates onto the running total', async () => {
+    const store = createMemoryOutboxStore();
+    const { row: inserted } = await store.insert(row({ status: 'queued' }));
+    await store.updateDelivery(inserted.id, { status: 'failed', error: 'boom', attempts: 1 });
+    const second = await store.updateDelivery(inserted.id, {
+      status: 'sent',
+      providerMessageId: 'msg_1',
+      attempts: 2,
+    });
+    expect(second.attempts).toBe(3);
   });
 
   test('throws for an unknown id', async () => {
     const store = createMemoryOutboxStore();
     await expect(
-      store.updateDelivery('missing', { status: 'failed', error: 'boom' }),
+      store.updateDelivery('missing', { status: 'failed', error: 'boom', attempts: 1 }),
     ).rejects.toThrow();
   });
 });

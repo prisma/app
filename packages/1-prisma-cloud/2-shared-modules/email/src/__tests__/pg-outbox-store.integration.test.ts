@@ -85,22 +85,27 @@ suite('pg-outbox-store integration (local Postgres)', () => {
     expect(second.row.subject).toBe('first');
   });
 
-  test('updateDelivery increments attempts and sets status/providerMessageId/error', async () => {
+  test('updateDelivery adds the reported attempts and sets status/providerMessageId/error', async () => {
     const { row: inserted } = await store.insert(row({ status: 'queued' }));
     const sent = await store.updateDelivery(inserted.id, {
       status: 'sent',
       providerMessageId: 'msg_1',
+      attempts: 1,
     });
     expect(sent.status).toBe('sent');
     expect(sent.providerMessageId).toBe('msg_1');
     expect(sent.error).toBeNull();
     expect(sent.attempts).toBe(1);
 
-    const failed = await store.updateDelivery(inserted.id, { status: 'failed', error: 'boom' });
+    const failed = await store.updateDelivery(inserted.id, {
+      status: 'failed',
+      error: 'boom',
+      attempts: 2,
+    });
     expect(failed.status).toBe('failed');
     expect(failed.providerMessageId).toBeNull();
     expect(failed.error).toBe('boom');
-    expect(failed.attempts).toBe(2);
+    expect(failed.attempts).toBe(3);
   });
 
   test('getById returns null for an unknown id', async () => {
@@ -122,7 +127,11 @@ suite('pg-outbox-store integration (local Postgres)', () => {
         status: 'queued',
       }),
     );
-    await store.updateDelivery(verificationRow.id, { status: 'sent', providerMessageId: null });
+    await store.updateDelivery(verificationRow.id, {
+      status: 'sent',
+      providerMessageId: null,
+      attempts: 1,
+    });
 
     const byTo = await store.list({ to: `a-${marker}@example.com`, limit: 50 });
     expect(byTo.rows).toHaveLength(2);

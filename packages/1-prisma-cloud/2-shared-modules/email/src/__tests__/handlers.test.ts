@@ -36,7 +36,8 @@ function baseInput() {
 
 function makeHandlers(overrides: Partial<HandlersConfig> = {}) {
   const store: OutboxStore = overrides.store ?? createMemoryOutboxStore();
-  const delivery = overrides.delivery ?? fakeDelivery({ ok: true, providerMessageId: null });
+  const delivery =
+    overrides.delivery ?? fakeDelivery({ ok: true, providerMessageId: null, attempts: 1 });
   const handlers = createHandlers({
     store,
     delivery,
@@ -48,7 +49,7 @@ function makeHandlers(overrides: Partial<HandlersConfig> = {}) {
 
 describe('send: mode none', () => {
   test('stores the row as "stored" without calling delivery', async () => {
-    const delivery = fakeDelivery({ ok: true, providerMessageId: null });
+    const delivery = fakeDelivery({ ok: true, providerMessageId: null, attempts: 1 });
     const { handlers } = makeHandlers({ deliveryMode: 'none', delivery });
     const result = await handlers.send(baseInput());
     expect(result.status).toBe('stored');
@@ -66,7 +67,7 @@ describe('send: mode none', () => {
 
 describe('send: real modes', () => {
   test('mode resend: queues, calls delivery once, records a sent result', async () => {
-    const delivery = fakeDelivery({ ok: true, providerMessageId: 'msg_1' });
+    const delivery = fakeDelivery({ ok: true, providerMessageId: 'msg_1', attempts: 1 });
     const { handlers, store } = makeHandlers({ deliveryMode: 'resend', delivery });
     const result = await handlers.send(baseInput());
     expect(result.status).toBe('sent');
@@ -77,18 +78,33 @@ describe('send: real modes', () => {
     expect(stored?.attempts).toBe(1);
   });
 
+  test("the row's attempts total is the count Delivery reports, not a flat +1", async () => {
+    const delivery = fakeDelivery({ ok: true, providerMessageId: 'msg_1', attempts: 3 });
+    const { handlers, store } = makeHandlers({ deliveryMode: 'resend', delivery });
+    const result = await handlers.send(baseInput());
+    const stored = await store.getById(result.id);
+    expect(stored?.attempts).toBe(3);
+  });
+
   test('a delivery failure is recorded as data, not thrown', async () => {
-    const delivery = fakeDelivery({ ok: false, error: 'resend 500 server_error: boom' });
-    const { handlers } = makeHandlers({ deliveryMode: 'resend', delivery });
+    const delivery = fakeDelivery({
+      ok: false,
+      error: 'resend 500 server_error: boom',
+      attempts: 3,
+    });
+    const { handlers, store } = makeHandlers({ deliveryMode: 'resend', delivery });
     const result = await handlers.send(baseInput());
     expect(result.status).toBe('failed');
     expect(result.error).toBe('resend 500 server_error: boom');
+
+    const stored = await store.getById(result.id);
+    expect(stored?.attempts).toBe(3);
   });
 });
 
 describe('send: dedup on conflict', () => {
   test('a repeated idempotency key returns the original row and makes no delivery attempt', async () => {
-    const delivery = fakeDelivery({ ok: true, providerMessageId: 'msg_1' });
+    const delivery = fakeDelivery({ ok: true, providerMessageId: 'msg_1', attempts: 1 });
     const { handlers } = makeHandlers({ deliveryMode: 'resend', delivery });
     const input = baseInput();
 

@@ -52,9 +52,14 @@ export interface InsertOutcome {
   readonly inserted: boolean;
 }
 
+/** `attempts` is the number of provider tries that delivery invocation made — added to the row's running total, not a flat +1 (redeliveries accumulate). */
 export type DeliveryUpdate =
-  | { readonly status: 'sent'; readonly providerMessageId: string | null }
-  | { readonly status: 'failed'; readonly error: string };
+  | {
+      readonly status: 'sent';
+      readonly providerMessageId: string | null;
+      readonly attempts: number;
+    }
+  | { readonly status: 'failed'; readonly error: string; readonly attempts: number };
 
 /** The decoded form of an opaque `listEmails` cursor: the `(createdAt, id)` keyset position. */
 export interface Cursor {
@@ -80,7 +85,7 @@ export interface ListPage {
 export interface OutboxStore {
   /** `on conflict (idempotencyKey) do nothing` semantics (D10) — see {@link InsertOutcome}. */
   insert(row: NewEmailRow): Promise<InsertOutcome>;
-  /** Applies a delivery outcome; increments `attempts` by one and sets `updatedAt`. Throws if `id` does not exist. */
+  /** Applies a delivery outcome; adds `update.attempts` to the row's running `attempts` total and sets `updatedAt`. Throws if `id` does not exist. */
   updateDelivery(id: string, update: DeliveryUpdate): Promise<EmailRow>;
   getById(id: string): Promise<EmailRow | null>;
   list(filters: ListFilters): Promise<ListPage>;

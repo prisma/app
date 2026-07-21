@@ -62,7 +62,7 @@ class MemoryOutboxStore implements OutboxStore {
       status: update.status,
       providerMessageId: update.status === 'sent' ? update.providerMessageId : null,
       error: update.status === 'failed' ? update.error : null,
-      attempts: existing.attempts + 1,
+      attempts: existing.attempts + update.attempts,
       updatedAt: new Date().toISOString(),
     };
     this.rowsById.set(id, updated);

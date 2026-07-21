@@ -145,8 +145,8 @@ export function createHandlers(config: HandlersConfig): EmailHandlers {
     const updated = await store.updateDelivery(
       outcome.row.id,
       result.ok
-        ? { status: 'sent', providerMessageId: result.providerMessageId }
-        : { status: 'failed', error: result.error },
+        ? { status: 'sent', providerMessageId: result.providerMessageId, attempts: result.attempts }
+        : { status: 'failed', error: result.error, attempts: result.attempts },
     );
     return toSendResult(updated);
   }

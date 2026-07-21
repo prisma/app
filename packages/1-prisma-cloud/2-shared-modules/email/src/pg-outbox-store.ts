@@ -5,6 +5,13 @@
  * with AND; `to` matches `$n = any(to_addrs)`. Keyset pagination compares
  * the `(created_at, id)` tuple against the decoded cursor.
  *
+ * `created_at`/`updated_at` are written as `date_trunc('milliseconds',
+ * now())` rather than the DDL's plain `now()` default, because the
+ * row-mapping layer reads timestamps back as a JS `Date` (millisecond
+ * precision). Writing at that same precision means the raw column can be
+ * ordered/compared directly — `list` needs no `date_trunc` at read time,
+ * so `emails_created_at_id_idx` (a plain column index) still applies.
+ *
  * Runtime engine code (Bun's `SQL`); NOT re-exported from the authoring
  * barrel.
  */
@@ -82,12 +89,13 @@ class PgOutboxStore implements OutboxStore {
     const inserted = await this.sql<PgEmailRow[]>`
       insert into emails (
         id, template_id, to_addrs, cc_addrs, bcc_addrs, reply_to, from_addr,
-        subject, html, text, status, idempotency_key
+        subject, html, text, status, idempotency_key, created_at, updated_at
       ) values (
         ${row.id}, ${row.templateId}, ${this.sql.array([...row.to], 'text')},
         ${this.sql.array([...row.cc], 'text')}, ${this.sql.array([...row.bcc], 'text')},
         ${row.replyTo}, ${row.from}, ${row.subject}, ${row.html}, ${row.text},
-        ${row.status}, ${row.idempotencyKey}
+        ${row.status}, ${row.idempotencyKey},
+        date_trunc('milliseconds', now()), date_trunc('milliseconds', now())
       )
       on conflict (idempotency_key) do nothing
       returning *`;
@@ -114,13 +122,15 @@ class PgOutboxStore implements OutboxStore {
         ? await this.sql<PgEmailRow[]>`
             update emails set
               status = 'sent', provider_message_id = ${update.providerMessageId},
-              error = null, attempts = attempts + 1, updated_at = now()
+              error = null, attempts = attempts + ${update.attempts},
+              updated_at = date_trunc('milliseconds', now())
             where id = ${id}
             returning *`
         : await this.sql<PgEmailRow[]>`
             update emails set
               status = 'failed', provider_message_id = null,
-              error = ${update.error}, attempts = attempts + 1, updated_at = now()
+              error = ${update.error}, attempts = attempts + ${update.attempts},
+              updated_at = date_trunc('milliseconds', now())
             where id = ${id}
             returning *`;
     const row = rows[0];
@@ -152,19 +162,11 @@ class PgOutboxStore implements OutboxStore {
       params.push(filters.status);
       conditions.push(`status = $${params.length}`);
     }
-    // `created_at` is compared and ordered through `date_trunc('milliseconds', ...)`
-    // because the row-mapping layer reads it back as a JS `Date` (millisecond
-    // precision) — without the same truncation here, two rows landing in the
-    // same millisecond but different microseconds would sort one way but
-    // compare against a millisecond-truncated cursor the other way, dropping
-    // or duplicating rows across a page boundary.
     if (filters.after !== undefined) {
       params.push(filters.after.createdAt, filters.after.id);
       const createdAtIdx = params.length - 1;
       const idIdx = params.length;
-      conditions.push(
-        `(date_trunc('milliseconds', created_at), id) < ($${createdAtIdx}::timestamptz, $${idIdx}::uuid)`,
-      );
+      conditions.push(`(created_at, id) < ($${createdAtIdx}::timestamptz, $${idIdx}::uuid)`);
     }
 
     const where = conditions.length > 0 ? `where ${conditions.join(' and ')}` : '';
@@ -172,9 +174,7 @@ class PgOutboxStore implements OutboxStore {
     const limitIdx = params.length;
 
     const rows = await this.sql.unsafe<PgEmailRow[]>(
-      `select * from emails ${where}
-       order by date_trunc('milliseconds', created_at) desc, id desc
-       limit $${limitIdx}`,
+      `select * from emails ${where} order by created_at desc, id desc limit $${limitIdx}`,
       params,
     );
     const hasMore = rows.length > filters.limit;
