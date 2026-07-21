@@ -256,25 +256,57 @@ describe('serve()', () => {
   });
 });
 
-describe('serve() — idempotency key requirement', () => {
-  test('a request without the Idempotency-Key header is rejected with 400 naming the header', async () => {
+describe('serve() — a keyless request opts out of deduplication', () => {
+  test('a request without the Idempotency-Key header succeeds, running the handler each time (no dedup)', async () => {
+    let handlerCalls = 0;
     const authService = fakeAuthService(() => ({ validTokens: ['good-token'] }));
-    const handler = serve(authService, { rpc: { verify: async () => ({ ok: true }) } });
+    const handler = serve(authService, {
+      rpc: {
+        verify: async ({ token }, { db }) => {
+          handlerCalls += 1;
+          return { ok: db.validTokens.includes(token) };
+        },
+      },
+    });
 
-    const res = await handler(verifyRequest({ token: 'good-token' }, { idempotencyKey: null }));
+    const req = () => verifyRequest({ token: 'good-token' }, { idempotencyKey: null });
+    const first = await handler(req());
+    const second = await handler(req());
 
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Idempotency-Key');
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ ok: true });
+    // Two keyless requests each ran the handler — no replay, because the caller
+    // sent no key to deduplicate on.
+    expect(handlerCalls).toBe(2);
+    expect(second.status).toBe(200);
   });
 
-  test('an empty Idempotency-Key header is treated as missing', async () => {
+  test('an empty Idempotency-Key header is treated as no key (opts out, does not error)', async () => {
     const authService = fakeAuthService(() => ({ validTokens: ['good-token'] }));
     const handler = serve(authService, { rpc: { verify: async () => ({ ok: true }) } });
 
     const res = await handler(verifyRequest({ token: 'good-token' }, { idempotencyKey: '' }));
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  test('the handler sees ctx.idempotencyKey === undefined for a keyless call, and the key value for a keyed one', async () => {
+    const seen: Array<string | undefined> = [];
+    const authService = fakeAuthService(() => ({ validTokens: [] }));
+    const handler = serve(authService, {
+      rpc: {
+        verify: async (_input, _deps, ctx) => {
+          seen.push(ctx.idempotencyKey);
+          return { ok: true };
+        },
+      },
+    });
+
+    await handler(verifyRequest({ token: 't' }, { idempotencyKey: null }));
+    await handler(verifyRequest({ token: 't' }, { idempotencyKey: 'k-123' }));
+
+    expect(seen).toEqual([undefined, 'k-123']);
   });
 });
 

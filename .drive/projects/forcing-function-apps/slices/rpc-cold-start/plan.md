@@ -16,7 +16,7 @@ believed.
 `makeClient` mints one `Idempotency-Key` per logical call and reuses it
 across a bounded retry (250 ms / ×2 / 5 s cap / 5 attempts / jitter; retry
 network errors + 5xx + 429, never other 4xx). `serve()` enforces the key
-(keyless → loud 400), single-flights per in-flight key, replays completed
+(keyless requests opt out — served once, no dedup), single-flights per in-flight key, replays completed
 2xx/4xx for ~60 s under a justified LRU bound, never caches 5xx/throws, and
 passes `ctx.idempotencyKey` as an optional third handler argument after
 `deps`. Absorbed in the same pass: the request body size limit (413,
@@ -79,8 +79,8 @@ report, do not ship); workspace left clean with project counts; committed.
 
 **Outcome:** reviewer pass over D1+D2. Attack priorities: a repeated key can
 never double-execute within an instance; a replay can never leak one logical
-call's answer to another, across methods or callers; keyless rejection
-cannot be bypassed; the body cap holds without a truthful `content-length`;
+call's answer to another, across methods or callers; a keyless request opts
+out cleanly (served once, no dedup); the body cap holds without a truthful `content-length`;
 no handler exception text reaches a caller while operators keep it; the
 canary cannot be masked by the retry machinery; every reported number is
 real. Findings closed. Full live round (deploy storefront-auth, canary

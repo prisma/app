@@ -52,10 +52,10 @@ const schedule = defineSchedule({ tick: '2s', mrr: '5s' });
 function triggerRequest(jobId: string): Request {
   return new Request('http://cron.internal/rpc/trigger', {
     method: 'POST',
-    // service-rpc's serve() requires every request to carry an idempotency
-    // key; production calls go through makeClient, which mints one, so only
-    // this hand-built test request needs to supply it.
-    headers: { 'content-type': 'application/json', 'idempotency-key': `test-${jobId}` },
+    // No idempotency key: a hand-built request without one is served normally
+    // (it has opted out of dedup). Production calls go through makeClient,
+    // which mints a key and gets dedup; this exercises the keyless path.
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jobId }),
   });
 }

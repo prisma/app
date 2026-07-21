@@ -332,8 +332,8 @@ details.
 Two more things the generated client does for you, both invisible in your
 code: every call carries an idempotency key and retries safely if the target
 was still cold-starting, and the provider deduplicates on that key so a retry
-never runs your handler twice. (A hand-rolled request without the key is
-answered `400` — the client always sends one.)
+never runs your handler twice. (A hand-rolled request without a key still
+works — it just isn't deduplicated.)
 [Building an app](building-an-app.md#calls-retry-safely-for-you) has these too.
 
 Re-deploying is idempotent — it updates the same Project. For an isolated

@@ -60,12 +60,12 @@ test('the exhaustive, correctly-typed handler map is accepted', () => {
   });
 });
 
-test('ctx.idempotencyKey is typed on the three-argument handler form', () => {
+test('ctx.idempotencyKey is typed string | undefined on the three-argument handler form', () => {
   serve(authService, {
     rpc: {
       verify: async ({ token }, { db }, ctx) => {
-        const key: string = ctx.idempotencyKey;
-        return { ok: token.length > 0 && db.validTokens.length >= 0 && key.length >= 0 };
+        const key: string | undefined = ctx.idempotencyKey;
+        return { ok: token.length > 0 && db.validTokens.length >= 0 && key !== undefined };
       },
     },
   });

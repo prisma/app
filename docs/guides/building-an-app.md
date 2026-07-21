@@ -101,12 +101,12 @@ just works across a cold start, and it works whether or not the call changes
 state. You write nothing; the key is on the request and the deduplication is
 in `serve()`.
 
-The one visible edge, again from `curl`: a request without an `Idempotency-Key`
-header is answered with `400`. The generated client always sends one, so this
-only bites a hand-rolled request. If a handler needs a stronger guarantee than
-one instance's memory — surviving a crash mid-call — its optional third
-argument carries the same key, to write into its own transaction; most
-handlers never need it.
+The deduplication rides on the key, so a request sent *without* one — a `curl`,
+any hand-rolled request — simply isn't deduplicated: it runs once, which is what
+you'd expect. The generated client always sends a key, so your service-to-service
+calls always get it. If a handler needs a stronger guarantee than one instance's
+memory — surviving a crash mid-call — its optional third argument carries the key
+to write into its own transaction; most handlers never need it.
 
 Two limits worth knowing:
 

@@ -198,9 +198,10 @@ The client mints one key per *logical call* and sends the same key on every retr
 of it, so the server can tell a retry from a new call: it runs one call per key,
 lets a duplicate that arrives mid-flight wait for the first, and replays a
 completed answer (a `2xx` or a `4xx` — never a `5xx`, which is the outcome a retry
-exists to escape) to a later duplicate. The key is required — the server rejects a
-keyless request with `400` naming the header — so deduplication is never silently
-lost to a caller that forgot one.
+exists to escape) to a later duplicate. The generated client always sends a key,
+so every framework call is deduplicated; a request that arrives without one — a
+hand-rolled or older caller — is served once, with no deduplication, rather than
+rejected.
 
 This is a property of the binding, like the service key above: an in-memory or
 mock binding has no network hop to drop a request, so it neither retries nor

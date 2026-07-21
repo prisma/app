@@ -1,17 +1,10 @@
 /**
- * The RPC kind's network adapter — the client `rpc(contract)` hydrates to.
- * POSTs JSON to `<url>/rpc/<method>` for each contract method read off
- * `contract.__cmp`. Every request carries an `Idempotency-Key` header: one
- * `crypto.randomUUID()` minted per logical call and reused byte-identically
- * across every retry of that call — never shared between two separate
- * calls. A thrown network error, a 429, or any 5xx is retried with a
- * bounded, jittered backoff; any other 4xx is not, since a malformed or
- * unauthorized request stays wrong on a second try. `serve()` already
- * validates a handler's output against the method schema before responding,
- * so the client trusts that and does not re-validate — both ends of every
- * edge are framework-provisioned. When a `serviceKey` is supplied
- * (ADR-0030), every request also carries `Authorization: Bearer
- * <serviceKey>`.
+ * The client `rpc(contract)` hydrates to. POSTs JSON to `<url>/rpc/<method>`
+ * per contract method. Each call carries one `Idempotency-Key`
+ * (`crypto.randomUUID()`, reused across that call's retries) and, when a
+ * `serviceKey` is given, `Authorization: Bearer`. A thrown error, a 429, or a
+ * 5xx is retried; any other 4xx is not. `serve()` validates the response, so
+ * the client does not re-validate.
  */
 
 import type { Contract } from '@internal/core';
@@ -25,30 +18,7 @@ import type { Client, RpcFns } from './rpc.ts';
  */
 export type Transport = (req: Request) => Promise<Response>;
 
-/**
- * The Prisma Compute ingress can close a service's first-touch connection
- * while a scale-to-zero target boots (PRO-217), so every call is retried
- * with a bounded, jittered exponential backoff — permanent protocol
- * semantics for this kind, not a compensation that goes away once that
- * platform behavior is fixed. These numbers mirror the streams module's
- * IDEMPOTENT_BACKOFF; they are reimplemented here rather than imported
- * because service-rpc is framework-layer and must not depend on
- * prisma-cloud. `maxRetries` counts retries after the first attempt, so a
- * persistently failing call sends 6 requests in total before giving up.
- *
- * Why 6 attempts covers a boot that can take up to ~22s even though the
- * backoff sums to only ~8s: the close is intermittent. On a cold start the
- * ingress usually HOLDS the connection and the request simply blocks until
- * the server is listening (there is no client-side request timeout here), so
- * a held attempt rides out the whole boot and succeeds on its own — the
- * backoff budget only governs the case where an attempt is actively closed,
- * and every close so far has been the fast (~400ms) kind. Spending six
- * attempts against that means the call fails only if it is closed six times
- * in a row, which the observed close rate makes rare. `maxDelayMs` is the
- * ceiling the doubling would be clamped to; at maxRetries:5 the last wait is
- * 4s, so the clamp never actually binds — it is kept so raising maxRetries
- * stays safe.
- */
+/** Bounded jittered backoff for retrying a dropped call. `maxRetries` is retries after the first attempt. */
 const RETRY = {
   initialDelayMs: 250,
   multiplier: 2,
@@ -86,11 +56,9 @@ function methodUrl(base: string, method: string): string {
 }
 
 /**
- * Sends one logical call over `send`, retrying a thrown error, a 429, or a
- * 5xx with full-jitter backoff (a random wait between 0 and the current
- * delay, which then grows by `RETRY.multiplier` up to `RETRY.maxDelayMs`).
- * `buildRequest` is called fresh for each attempt but always carries the
- * same idempotency key — only the transport call is repeated, not the key.
+ * Sends one call over `send`, retrying a thrown error, 429, or 5xx with
+ * full-jitter backoff. `buildRequest` runs per attempt but carries the same
+ * idempotency key each time — only the transport call repeats, not the key.
  */
 async function callWithRetry(
   send: Transport,

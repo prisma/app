@@ -165,9 +165,10 @@ instead of re-running the handler. So every method is safely retryable and no
 contract declares anything about it (do not add an "is this idempotent" flag —
 the framework does not have one). Two consequences for you: a handler may take
 an **optional third argument** `(input, deps, ctx)` and read `ctx.idempotencyKey`
-if it needs exactly-once beyond one instance's memory (most don't); and a
-request without the header is answered `400`, so any hand-rolled probe must
-send one — another reason not to `curl` these endpoints.
+(`string | undefined` — it's absent for a keyless caller) if it needs exactly-once
+beyond one instance's memory (most don't); and a request without the header is
+served once without deduplication rather than rejected, so a hand-rolled probe
+works but gets no retry safety.
 
 | | |
 | --- | --- |

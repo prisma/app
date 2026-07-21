@@ -30,8 +30,12 @@ be rebased onto main at or after `6ec2625` before any code is written.
   UUID minted **once per logical call** and reused **byte-identically across
   every retry of that call**. Two separate logical calls never share a key.
   `crypto.randomUUID()` — no new dependency.
-- The key is REQUIRED: `serve()` rejects a keyless request with a loud 400
-  naming the header. "Requires" is enforced, not suggested.
+- The generated client always sends the key. A request that arrives without
+  one (a hand-rolled or older caller) is served once, with no dedup or replay,
+  rather than rejected — it has opted out. `ctx.idempotencyKey` is `undefined`
+  for such a call. (Superseded the earlier "keyless → 400" rule, on the
+  grounds that the safe path is the always-keyed generated client, so keyless
+  requests never came from it and opt-out degrades transparently.)
 
 ### Client (`makeClient`)
 
@@ -160,7 +164,7 @@ Server tests:
 - Repeated key after completion → handler ran **once**, response replayed
   byte-identically.
 - Concurrent same-key → **one** execution (single-flight).
-- Keyless → 400 naming the header.
+- Keyless → served once, no dedup (handler runs each time); `ctx.idempotencyKey` is `undefined`.
 - 5xx not cached → a same-key retry re-executes.
 - LRU bound evicts.
 - A replay can never answer a different method.
