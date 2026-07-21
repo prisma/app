@@ -38,9 +38,9 @@ export interface SendResult {
 export interface EmailRecord {
   readonly id: string;
   readonly templateId: string;
-  readonly to: readonly string[];
-  readonly cc: readonly string[];
-  readonly bcc: readonly string[];
+  readonly to: string[];
+  readonly cc: string[];
+  readonly bcc: string[];
   readonly replyTo: string | null;
   readonly from: string;
   readonly subject: string;
@@ -71,7 +71,7 @@ export interface ListEmailsInput {
 }
 
 export interface ListEmailsResult {
-  readonly emails: readonly EmailRecord[];
+  readonly emails: EmailRecord[];
   readonly nextCursor?: string;
 }
 

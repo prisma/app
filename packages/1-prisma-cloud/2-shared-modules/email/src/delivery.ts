@@ -23,6 +23,13 @@ export interface Delivery {
   deliver(row: EmailRow): Promise<DeliveryResult>;
 }
 
+/** Mode `none` never calls `Delivery` (`handlers.ts`'s `send` returns before it) — this placeholder satisfies the required config slot in the entrypoint and the local test server without a real backing. */
+export const noneDelivery: Delivery = {
+  deliver: () => {
+    throw new Error('unreachable: deliveryMode "none" never calls Delivery.deliver');
+  },
+};
+
 export interface AttemptSuccess {
   readonly ok: true;
   readonly providerMessageId: string | null;

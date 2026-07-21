@@ -784,6 +784,9 @@ importers:
       '@internal/foundation':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/0-foundation/foundation
+      '@internal/node':
+        specifier: workspace:0.1.0
+        version: link:../../../0-framework/2-authoring/node
       '@internal/prisma-cloud':
         specifier: workspace:0.1.0
         version: link:../../1-extensions/target
@@ -1017,6 +1020,9 @@ importers:
       '@internal/cron':
         specifier: workspace:0.1.0
         version: link:../../1-prisma-cloud/2-shared-modules/cron
+      '@internal/email':
+        specifier: workspace:0.1.0
+        version: link:../../1-prisma-cloud/2-shared-modules/email
       '@internal/foundation':
         specifier: workspace:0.1.0
         version: link:../../0-framework/0-foundation/foundation
