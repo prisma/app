@@ -1,8 +1,8 @@
 /**
  * `@internal/lowering`'s public surface: the Prisma resource providers plus the
  * Management API client, container, and credential helpers. Implementation
- * lives in `../providers.ts` and the modules it re-exports; the compute and
- * postgres surfaces are their own entrypoints.
+ * lives in `../providers.ts` and the modules it re-exports; the compute,
+ * postgres, and bucket surfaces are their own entrypoints.
  */
 export {
   layer as managementClientLayer,
@@ -12,5 +12,6 @@ export {
 export * from '../container.ts';
 export * from '../credentials.ts';
 export * from '../providers.ts';
+export * from './buckets.ts';
 export * from './compute.ts';
 export * from './postgres.ts';

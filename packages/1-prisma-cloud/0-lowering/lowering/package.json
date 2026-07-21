@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./buckets": "./dist/buckets.mjs",
     "./compute": "./dist/compute.mjs",
     "./postgres": "./dist/postgres.mjs",
     "./state": "./dist/state.mjs",
@@ -18,7 +19,7 @@
   "dependencies": {
     "@internal/core": "workspace:0.1.0",
     "@internal/foundation": "workspace:0.1.0",
-    "@prisma/management-api-sdk": "^1.47.0",
+    "@prisma/management-api-sdk": "^1.50.0",
     "alchemy": "2.0.0-beta.59",
     "effect": "4.0.0-beta.93",
     "postgres": "^3.4.9"
