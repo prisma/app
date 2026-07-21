@@ -337,6 +337,18 @@
       "plane": "execution"
     },
     {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/delivery-resend.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/delivery-smtp.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
       "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/exports/index.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
