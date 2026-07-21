@@ -1,0 +1,55 @@
+---
+description: Never put control bytes (NUL/0x00 and other non-printable C0 characters) in source, and never use one as a separator or delimiter. A NUL makes git treat the file as binary, so GitHub renders "Binary file not shown" and the entire diff is hidden — the file becomes unreviewable. Compose keys with a data structure, not a delimited string; if a delimiter is truly unavoidable, use an ordinary printable character.
+alwaysApply: false
+globs: ["**/*"]
+---
+
+# No control bytes in source — especially not as separators
+
+**Never** embed a NUL byte (`0x00`, `\0`) or any other non-printable control
+character (C0 range `0x00`–`0x1F` except tab/newline/carriage-return, plus
+`0x7F`) in a source file. This is not a style preference; it breaks tooling in
+ways that are expensive to diagnose.
+
+The worst offender is using a control byte — most often NUL — as a **separator**
+because "the parts can't contain it, so it can't collide." Do not do this.
+
+## Why a control byte is never worth it
+
+- **It makes the file unreviewable.** Git classifies any file containing a NUL
+  as binary. GitHub then shows `Binary file not shown` and hides the *entire*
+  diff — not just the offending line. A reviewer cannot see what changed, and an
+  approval means nothing. (This happened: a NUL separator in an LRU key hid a
+  whole file's diff on a PR.)
+- **It breaks text tooling.** `grep`, editors, `less`, terminals, and log
+  pipelines all mishandle embedded control bytes — silently truncating,
+  corrupting, or misrendering.
+- **A literal control byte in source is invisible.** It looks like a space or
+  nothing at all, so it survives review and lands.
+
+## What to do instead
+
+**Prefer a data structure over a delimited string.** Reaching for
+`` `${a}<sep>${b}` `` to key a `Map` by a tuple is the smell that invites a
+"clever" separator. Use a structure that needs no delimiter:
+
+- Nested maps: `Map<a, Map<b, V>>`.
+- A `Set`/`Map` of entry objects where each entry carries its own fields
+  (`{ a, b, ... }`), so nothing has to be re-parsed out of a joined key.
+- An object/tuple wrapper keyed by identity when reference semantics fit.
+
+**If a delimiter is genuinely unavoidable**, use an ordinary printable ASCII
+character that cannot appear in either part, and state in a comment *why* it
+cannot collide. A newline or a printable punctuation character is fine; a
+control byte never is. Even the escaped form (`\0`) is banned in source — it
+still produces a control byte at runtime and signals the same bad instinct.
+
+## Detecting it
+
+A file that should be text but reads as binary is the tell:
+
+```bash
+git diff --numstat <base>...HEAD        # a text file showing "-  -" is binary to git
+file path/to/suspect.ts                 # "data" instead of "… text" means a bad byte
+LC_ALL=C grep -naP '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]' path/to/file   # locate control bytes
+```
