@@ -1,10 +1,8 @@
 /**
- * The client `rpc(contract)` hydrates to. POSTs JSON to `<url>/rpc/<method>`
- * per contract method. Each call carries one `Idempotency-Key`
- * (`crypto.randomUUID()`, reused across that call's retries) and, when a
- * `serviceKey` is given, `Authorization: Bearer`. A thrown error, a 429, or a
- * 5xx is retried; any other 4xx is not. `serve()` validates the response, so
- * the client does not re-validate.
+ * The typed client `rpc(contract)` hydrates to: POSTs JSON to
+ * `<url>/rpc/<method>` per method, carrying an idempotency key (and the
+ * service key when given) and retrying per `callWithRetry`. It does not
+ * re-validate the response — `serve()` already did.
  */
 
 import type { Contract } from '@internal/core';
