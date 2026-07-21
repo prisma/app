@@ -4,17 +4,17 @@ description: >-
   How to write, test, and deploy an app with Prisma Composer
   (`@prisma/composer`): declare services with `compute()` and typed
   dependencies, define RPC contracts, compose Modules, read config and
-  secrets, compose the ready-made cron/storage/streams Modules, find
-  extensions (npm packages named `prisma-composer-*`), test with
-  `mockService`/`bootstrapService`, and deploy with `prisma-composer deploy`
-  (stages, destroy). Use when building a Prisma App, wiring a service
-  dependency, adding a Postgres database, adding scheduled jobs / blob
-  storage / event streams, writing tests for composed services, or
-  deploying/tearing down an environment. Triggers on
+  secrets, compose the ready-made cron/storage/streams Modules, provision a
+  raw S3-compatible object-store bucket with `bucket()`, find extensions (npm
+  packages named `prisma-composer-*`), test with `mockService`/`bootstrapService`,
+  and deploy with `prisma-composer deploy` (stages, destroy). Use when building
+  a Prisma App, wiring a service dependency, adding a Postgres database, adding
+  scheduled jobs / blob storage / event streams / a raw bucket, writing tests
+  for composed services, or deploying/tearing down an environment. Triggers on
   "prisma composer", "@prisma/composer", "prisma app", "compute()",
   "service.load()", "module()", "contract()", "mockService",
   "bootstrapService", "prisma-composer deploy", "--stage",
-  "prisma-composer destroy", "prisma-composer-".
+  "prisma-composer destroy", "prisma-composer-", "bucket()".
 ---
 
 # Writing apps with Prisma Composer
@@ -300,6 +300,26 @@ options object is the resource end.)
 
 See `examples/store/modules/catalog` in the prisma/composer repo for the
 complete pattern.
+
+## Object Storage
+
+`bucket` is a raw S3-compatible object-store bucket, imported alongside `postgres`:
+
+```ts
+import { bucket, compute } from '@prisma/composer-prisma-cloud';
+
+// service.ts — dependency end: receives { url, bucket, accessKeyId, secretAccessKey }
+export default compute({ name: 'uploads', deps: { store: bucket() } });
+
+// module.ts — resource end: provisions the bucket and mints a keypair
+const store = provision(bucket({ name: 'uploads' }));
+provision(uploadsService, { deps: { store } });
+```
+
+Use any S3-compatible client with the binding: the shape matches the standard S3
+config and is also compatible with the `s3()` dependency from `/storage`, so any
+service wired to `s3()` can be rewired to a `bucket` resource without changing
+the service declaration.
 
 ## Reusable Modules
 

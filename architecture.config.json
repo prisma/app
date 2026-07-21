@@ -163,6 +163,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/bucket.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/1-prisma-cloud/1-extensions/target/src/exports/prisma-next.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",

@@ -1,5 +1,7 @@
 import * as Provider from 'alchemy/Provider';
 import * as Layer from 'effect/Layer';
+import { Bucket, BucketProvider } from '../buckets/Bucket.ts';
+import { BucketKey, BucketKeyProvider } from '../buckets/BucketKey.ts';
 import * as client from '../client.ts';
 import { ComputeService, ComputeServiceProvider } from '../compute/ComputeService.ts';
 import { Deployment, DeploymentProvider } from '../compute/Deployment.ts';
@@ -19,6 +21,7 @@ export {
 } from '../client.ts';
 export * from '../container.ts';
 export * from '../credentials.ts';
+export * from './buckets.ts';
 export * from './compute.ts';
 export * from './postgres.ts';
 
@@ -40,6 +43,8 @@ export const providers = () =>
       ComputeService,
       Deployment,
       EnvironmentVariable,
+      Bucket,
+      BucketKey,
     ]),
   ).pipe(
     Layer.provide(
@@ -50,6 +55,8 @@ export const providers = () =>
         ComputeServiceProvider(),
         DeploymentProvider(),
         EnvironmentVariableProvider(),
+        BucketProvider(),
+        BucketKeyProvider(),
       ),
     ),
     Layer.provideMerge(client.layer()),

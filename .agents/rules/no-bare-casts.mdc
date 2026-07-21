@@ -55,3 +55,21 @@ Any time you touch a file that contains a bare `as` cast — even as part of unr
 ## Test code is exempt
 
 The rule does not fire on test files (`**/*.test.ts`, `**/*.test-d.ts`, `**/test/**/*.ts`). Tests routinely use `as` for stubbing, narrowing, and negative type assertions; the exemption is encoded in the Biome plugin itself.
+
+## Reading casts: a cast is a claim, not a fact
+
+When you are specifying or designing against existing code, a cast in that
+code is evidence that *someone made a claim* about a type — it is not
+evidence the claim was true. The cast is what made a wrong type compile, so
+the code around it cannot corroborate it.
+
+Derive types from the producing expression — compile a probe if needed —
+never from an adjacent cast, and never from a consuming parameter whose type
+accepts a union (Alchemy's `Input<T>` is `T | Output<T> | …`, so a value
+flowing into it type-checks whether the claim was true or laundered).
+
+Incident this rule records: PR #117. `provisioned.outputs['serviceId'] as
+string` had hidden that `serviceId` was an unresolved `Output<string>`; a
+spec written by reading the cast pinned `string`, and the same mistake was
+made twice more in the same project before the pattern was named. Typing the
+value honestly deleted the cast; the pinned type would have forced it back.

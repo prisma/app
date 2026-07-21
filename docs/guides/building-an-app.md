@@ -250,6 +250,47 @@ three characters (call a database `'database'`, not `'db'` — the wiring key
 on the service side can still be `db`), and ids must be unique within their
 module.
 
+## Object Storage
+
+`bucket` is a raw S3-compatible object-store bucket — a flat key-value store
+with no higher-level abstractions attached. Import it alongside `postgres` and
+use it the same way:
+
+```ts
+import { bucket, compute } from '@prisma/composer-prisma-cloud';
+
+export default compute({
+  name: 'uploads',
+  deps: { store: bucket() },           // dependency end: receives credentials
+  // ...
+});
+```
+
+```ts
+// module.ts — provision the bucket resource and wire it to the service
+const store = provision(bucket({ name: 'uploads' })); // resource end: provisions + keys
+provision(uploadsService, { deps: { store } });
+```
+
+Inside the service entry, `load()` hands back
+`{ url, bucket, accessKeyId, secretAccessKey }` — the standard S3 config set.
+Use any S3-compatible client (`@aws-sdk/client-s3`, `minio`, Bun's S3 API, …):
+
+```ts
+import { S3Client } from '@aws-sdk/client-s3';
+const { store } = service.load();
+const s3 = new S3Client({
+  endpoint: store.url,
+  bucket: store.bucket,
+  credentials: { accessKeyId: store.accessKeyId, secretAccessKey: store.secretAccessKey },
+});
+```
+
+A bucket resource uses the same S3 contract kind as the `storage` module's
+blob store, so a service declared with `deps: { store: s3() }` — where `s3` is
+imported from `@prisma/composer-prisma-cloud/storage` — can also be wired to a
+`bucket` resource without any changes to the service declaration.
+
 ## The building blocks that ship with the framework
 
 These are the Modules you compose instead of building the capability
