@@ -301,10 +301,40 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/*.ts",
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/contract.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/outbox-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/delivery.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/handlers.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/pg-outbox-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/memory-outbox-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
     },
     {
       "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/exports/index.ts",

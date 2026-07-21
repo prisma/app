@@ -784,6 +784,9 @@ importers:
       '@internal/foundation':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/0-foundation/foundation
+      '@internal/prisma-cloud':
+        specifier: workspace:0.1.0
+        version: link:../../1-extensions/target
       '@internal/service-rpc':
         specifier: workspace:0.1.0
         version: link:../../../0-framework/2-authoring/service-rpc
