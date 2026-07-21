@@ -184,6 +184,34 @@ generalizes the mechanism — the `serviceKey` connection param declares an opaq
 provisioning *need* that the deploy target resolves through its own registry, so
 core mints nothing and knows nothing about RPC.
 
+### The binding retries safely, so a dropped request is not a lost call
+
+A network-bound provider may have scaled to zero and has to boot before it can
+answer; a caller's first request can be dropped while that happens. The generated
+client absorbs this: every call carries an `Idempotency-Key` header, and a call
+whose request is dropped — a thrown network error, a `429`, or any `5xx` — is
+retried with a bounded, jittered backoff. Any other `4xx` is not retried: a
+malformed or unauthorized request stays wrong on a second attempt.
+
+The key is what makes retrying safe rather than a way to double-execute a write.
+The client mints one key per *logical call* and sends the same key on every retry
+of it, so the server can tell a retry from a new call: it runs one call per key,
+lets a duplicate that arrives mid-flight wait for the first, and replays a
+completed answer (a `2xx` or a `4xx` — never a `5xx`, which is the outcome a retry
+exists to escape) to a later duplicate. The generated client always sends a key,
+so every framework call is deduplicated; a request that arrives without one — a
+hand-rolled or older caller — is served once, with no deduplication, rather than
+rejected.
+
+This is a property of the binding, like the service key above: an in-memory or
+mock binding has no network hop to drop a request, so it neither retries nor
+deduplicates, and the contract says nothing about either. The retry is permanent
+behavior of a network binding, not a workaround for one platform's cold starts;
+[ADR-0037](../90-decisions/ADR-0037-service-rpc-calls-carry-an-idempotency-key.md)
+decides it, including what its in-process deduplication does not cover — a retry
+that reaches a different provider instance than the one that did the work — and why
+that residue is left to a handler that needs to close it.
+
 ## How compatibility is checked
 
 Enforcement happens in three places:
@@ -196,9 +224,15 @@ Enforcement happens in three places:
    contract value), so a structurally-equivalent-but-distinct contract does not match.
    That is the RPC contract's current implementation, not a rule the framework or the
    Contract abstraction imposes.
-3. **Run (per call) — validate input and output against the contract's schemas.**
-   Catches a provider that is typed-compatible but lies at runtime: a bug, drift, or
-   a legacy server wrapped in a Service that TypeScript never saw.
+3. **Run (per call) — the server validates both directions against the contract's
+   schemas.** It validates the request against the method's input schema, rejecting a
+   malformed caller with `400` and a message describing what was wrong, and validates
+   its own handler's return against the output schema before responding — which
+   catches a provider that is typed-compatible but lies at runtime: a bug, drift, or
+   a legacy server wrapped in a Service that TypeScript never saw. The generated
+   client does not validate the response a second time; both ends of every connection
+   are framework-generated, so a second pass on every call would re-check what the
+   server already guaranteed.
 
 ### The compile-time check is plain TypeScript assignability
 
