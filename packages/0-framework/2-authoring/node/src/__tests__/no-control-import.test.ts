@@ -47,7 +47,7 @@ describe('firewall: the authoring entry never reaches a control entry', () => {
     expect(reachable.size).toBeGreaterThan(0);
 
     for (const [file, specs] of reachable) {
-      const offending = specs.filter((spec) => /\/control(\.ts)?$/.test(spec));
+      const offending = specs.filter((spec) => /\/control(\.ts)?$|\/control\//.test(spec));
       expect({ file: path.relative(srcDir, file), offending }).toEqual({
         file: path.relative(srcDir, file),
         offending: [],
