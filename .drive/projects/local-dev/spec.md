@@ -738,5 +738,21 @@ friction #3's shape) and independently useful.
 
 ## Open questions
 
-(none — a gap found during implementation is recorded here and raised, not
-improvised around)
+- **S3, `daemon.ts`'s `registryRoot` scope.** § 2's "Start:" step still reads
+  literally `--state-dir ~/.prisma-composer/emulators/<name>/` and stdio to
+  `~/.prisma-composer/emulators/<name>.log` — the pre-`registryRoot` text,
+  never updated when `registryRoot` was introduced on the "Registry:" bullet
+  two paragraphs above. Taken literally, a test passing `{ registryRoot }`
+  would still spawn a real daemon writing its state dir and log file into the
+  real home directory, directly contradicting that override's stated purpose
+  ("a test never touches the real home directory"). Implemented as:
+  `registryRoot` substitutes for the whole `~/.prisma-composer/emulators`
+  prefix throughout `daemon.ts` — the registry JSON, the spawned daemon's
+  `--state-dir`, and its log path all move under an override together, never
+  split. `registryRoot`'s stated default (`path.join(os.homedir(),
+  '.prisma-composer', 'emulators')`) is exactly that literal prefix, so this
+  reproduces the old text under the default case and only changes behavior
+  when overridden. S3's implementer prompt independently required this
+  behavior ("EVERY test uses a temp registryRoot + temp state/data dirs …
+  nothing may touch the real ~/.prisma-composer"), so this was implemented
+  rather than escalated; flagged here for the spec text to be tidied to match.
