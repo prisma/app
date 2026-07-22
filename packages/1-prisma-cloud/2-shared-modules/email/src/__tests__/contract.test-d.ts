@@ -86,6 +86,22 @@ test('optional fields accept a maybe-undefined value directly — no conditional
   });
 });
 
+test('render may be async — defineTemplates accepts it and the data type is unaffected', () => {
+  const asyncTemplates = defineTemplates({
+    welcome: {
+      data: type({ name: 'string' }),
+      render: async ({ name }: { name: string }) => ({ subject: 'Welcome', html: name }),
+    },
+  });
+
+  expectTypeOf(asyncTemplates.welcome.data.infer).toEqualTypeOf<{ name: string }>();
+
+  const sender: EmailSender<typeof asyncTemplates> = emailSender(
+    asyncTemplates,
+  ) as unknown as EmailSender<typeof asyncTemplates>;
+  sender.welcome({ to: 'user@example.com', data: { name: 'Ada' } });
+});
+
 test('emailSender accepts a directly-built template map with no defineTemplates() wrapper', () => {
   emailSender({
     verification: {

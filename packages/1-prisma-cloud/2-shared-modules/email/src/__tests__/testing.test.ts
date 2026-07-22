@@ -111,4 +111,55 @@ describe('startLocalEmailServer', () => {
       capture.stop();
     }
   });
+
+  test("an async render's result is what lands on the wire (react-email-style templates)", async () => {
+    server = await startLocalEmailServer();
+    const templates = defineTemplates({
+      welcome: {
+        data: type({ name: 'string' }),
+        render: async ({ name }) => {
+          // Stands in for an async renderer (react-email's render() is
+          // async) — a microtask hop proves the sender actually awaits.
+          await Promise.resolve();
+          return {
+            subject: `Async hi ${name}`,
+            html: `<p>Async hi ${name}</p>`,
+            text: `Async hi ${name}`,
+          };
+        },
+      },
+    });
+    const sender = await emailSender(templates).connection.hydrate({ url: server.url });
+
+    const result = await sender.welcome({ to: 'user@example.com', data: { name: 'Ada' } });
+    expect(result.status).toBe('stored');
+
+    const outboxClient = makeClient(emailOutboxContract, server.url);
+    const { email } = await outboxClient.getEmail({ id: result.id });
+    expect(email?.subject).toBe('Async hi Ada');
+    expect(email?.html).toBe('<p>Async hi Ada</p>');
+    expect(email?.text).toBe('Async hi Ada');
+  });
+
+  test('a rejecting async render propagates to the caller — no send-op call, no outbox row', async () => {
+    server = await startLocalEmailServer();
+    const templates = defineTemplates({
+      welcome: {
+        data: type({ name: 'string' }),
+        render: async () => {
+          await Promise.resolve();
+          throw new Error('render blew up');
+        },
+      },
+    });
+    const sender = await emailSender(templates).connection.hydrate({ url: server.url });
+
+    await expect(sender.welcome({ to: 'user@example.com', data: { name: 'Ada' } })).rejects.toThrow(
+      'render blew up',
+    );
+
+    const outboxClient = makeClient(emailOutboxContract, server.url);
+    const { emails } = await outboxClient.listEmails({});
+    expect(emails).toHaveLength(0);
+  });
 });

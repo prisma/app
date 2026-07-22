@@ -110,7 +110,7 @@ export interface RenderedEmail {
 
 export interface TemplateDef<D> {
   readonly data: Type<D>;
-  readonly render: (data: D) => RenderedEmail;
+  readonly render: (data: D) => RenderedEmail | Promise<RenderedEmail>;
 }
 
 export type TemplateDefs = Record<string, TemplateDef<never>>;
@@ -127,9 +127,14 @@ sanctioned variance idiom — but the call-site inference behavior above is
 non-negotiable: `defineTemplates({ verification: { data: type({ link: 'string' }), render } })`
 must produce per-key `data` types without annotations.
 
-`render` is a plain synchronous function. react-email users call its
-`render()` inside theirs; we neither depend on nor mention react-email in
-code (README may note compatibility).
+`render` may be synchronous or async — the sender method awaits its result.
+*(Amended 2026-07-22: originally sync-only; react-email's and jsx-email's
+`render()` are async, so the sync-only signature forced consumers to
+pre-render outside the template. Widening is backward-compatible.)* We
+neither depend on nor mention react-email in module code; the README shows
+the integration, and the example app demonstrates it (its `welcome`
+template is a react-email component, while `verification` stays a plain
+function — the two authoring styles side by side).
 
 ### Wire contracts
 

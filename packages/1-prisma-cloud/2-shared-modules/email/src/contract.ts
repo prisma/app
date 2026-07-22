@@ -20,10 +20,15 @@ export interface RenderedEmail {
   readonly text?: string;
 }
 
-/** One template's data schema and its pure render function. */
+/**
+ * One template's data schema and its render function. `render` may be
+ * synchronous or async — the sender method awaits its result either way, so
+ * react-email's/jsx-email's async `render()` works directly (spec's
+ * `TemplateDef` amendment, 2026-07-22).
+ */
 export interface TemplateDef<D> {
   readonly data: Type<D>;
-  readonly render: (data: D) => RenderedEmail;
+  readonly render: (data: D) => RenderedEmail | Promise<RenderedEmail>;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: width-only bound for a heterogeneous map of TemplateDef<D>, one D per key — matches RpcFns's own `any` bound (service-rpc/src/contract.ts). `never` does not work here: arktype's `Type<D>` carries D in a covariant position internally, so `TemplateDef<never>` rejects every concrete template when checked as a generic constraint or type instantiation.
@@ -171,7 +176,11 @@ export function emailSender<T extends TemplateDefs>(
               );
             }
 
-            const rendered = def.render(validated);
+            // Validation happens before render, always — and a render that
+            // throws or rejects propagates to the caller exactly as a
+            // throwing sync render does: no send-op call, no outbox row,
+            // since nothing was ever handed to the wire.
+            const rendered = await def.render(validated);
             const to = Array.isArray(input.to) ? [...input.to] : [input.to];
             if (to.length === 0) {
               throw new Error(`email.${templateId}(): "to" must contain at least one recipient.`);
