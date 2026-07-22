@@ -42,7 +42,12 @@ shape change, pinned in the spec).
 
 ### S2 — `auth-email-flows`
 
-**Blocked on:** PR #146 merged.
+**Unblocked 2026-07-22:** #146 merged to main; branch rebased onto it.
+Merged surface verified against the spec's assumptions — one amendment:
+`TemplateDef.render` may now be async (react-email support). Auth's
+templates stay plain sync functions as pinned (avoids the `.tsx`
+precompile deploy caveat); react-email remains an option consumers can
+use for their own templates, not ours.
 
 **Outcome:** Verification, password reset, and magic-link emails deliver
 through the email module. `requireEmailVerification: true`. Magic-link
