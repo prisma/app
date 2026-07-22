@@ -62,7 +62,7 @@ file per published subpath. Everything else under `src/` is internal. See
 
 ## Exceptions that keep `exports: false` + a hand-maintained map
 
-- **Multi-pass packages** (`cron`, `storage`, `streams`): several tsdown passes
+- **Multi-pass packages** (`cron`, `storage`, `streams`, `email`, `auth`): several tsdown passes
   build the `*-entrypoint` standalone; generation would clobber the map across
   passes. Repoint only the entry SOURCE paths to `src/exports/…`; keep every pass.
 - **The two published packages** (`@prisma/composer`,

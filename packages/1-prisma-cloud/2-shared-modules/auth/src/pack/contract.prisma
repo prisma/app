@@ -1,0 +1,92 @@
+// use prisma-next
+//
+// The Better Auth schema at the pinned better-auth version (package.json)
+// with plugins jwt + bearer + admin + magicLink and email+password enabled —
+// transcribed from the SQL `getMigrations(...).compileMigrations()` emits for
+// a fresh Postgres (Better Auth's own generator; the schema-conformance test
+// re-derives it and asserts zero drift). Better Auth defaults throughout:
+// camelCase column names, singular lowercase table names, text ids. Tables
+// live in the `auth` Postgres schema (PSL namespace → PG schema).
+
+types {
+  Tstz = DateTime @db.Timestamptz
+}
+
+namespace auth {
+  model User {
+    id            String  @id
+    name          String
+    email         String  @unique
+    emailVerified Boolean
+    image         String?
+    createdAt     Tstz    @default(now())
+    updatedAt     Tstz    @default(now())
+    role          String?
+    banned        Boolean?
+    banReason     String?
+    banExpires    Tstz?
+
+    sessions Session[]
+    accounts Account[]
+
+    @@map("user")
+  }
+
+  model Session {
+    id             String  @id
+    expiresAt      Tstz
+    token          String  @unique
+    createdAt      Tstz    @default(now())
+    updatedAt      Tstz
+    ipAddress      String?
+    userAgent      String?
+    userId         String
+    impersonatedBy String?
+    user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId], map: "session_userId_idx")
+    @@map("session")
+  }
+
+  model Account {
+    id                    String  @id
+    accountId             String
+    providerId            String
+    userId                String
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  Tstz?
+    refreshTokenExpiresAt Tstz?
+    scope                 String?
+    password              String?
+    createdAt             Tstz    @default(now())
+    updatedAt             Tstz
+    user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId], map: "account_userId_idx")
+    @@map("account")
+  }
+
+  model Verification {
+    id         String @id
+    identifier String
+    value      String
+    expiresAt  Tstz
+    createdAt  Tstz   @default(now())
+    updatedAt  Tstz   @default(now())
+
+    @@index([identifier], map: "verification_identifier_idx")
+    @@map("verification")
+  }
+
+  model Jwks {
+    id         String @id
+    publicKey  String
+    privateKey String
+    createdAt  Tstz
+    expiresAt  Tstz?
+
+    @@map("jwks")
+  }
+}
