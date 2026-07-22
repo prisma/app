@@ -630,6 +630,23 @@ Terse, factual, no strategy content.
    value on a module boundary either becomes a platform env var or a factory
    option; record if this bites during implementation.
 3. Anything else the first multi-port `serve()`/wiring surfaces.
+4. **The deploy-time module graph cannot carry JSX** *(found during D7,
+   logged 2026-07-22 per Will)*. `deploy` learns the topology by executing
+   the user's module file under Node, whose loader strips types but does
+   not transform JSX — so a `.tsx` anywhere in the topology's transitive
+   imports fails to load. This bit the recommended react-email pattern the
+   moment a service file imported its templates. Accepted v1 answer: the
+   user's own build precompiles the JSX file and the topology imports the
+   compiled output (`examples/email/scripts/build.ts`; gotchas.md entry;
+   the CLI now names this fix in its error — PR #155). Deliberately NOT
+   fixed by transforming in the loader: the framework compiling user code
+   would pick JSX semantics and create a second compilation of the same
+   file beside the user's own build (the ADR-0005 failure class). Futures,
+   each an ADR-sized decision: evaluate the graph under Bun when present
+   (deploys behave differently per machine), a JSX loader hook (the quick
+   `tsx` loader broke Alchemy's process handling when tried), or a
+   structural split keeping application code out of the topology import
+   graph entirely.
 
 ## Acceptance criteria
 
