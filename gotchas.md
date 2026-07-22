@@ -545,3 +545,32 @@ The Management API is no help: the project and database both read `status: "read
 
 - Design record: [`.drive/projects/email-module/spec.md`](.drive/projects/email-module/spec.md) — "Module factory" pinned consequences, "`deliveryUrl` is a factory option, static per app"
 - Core's param-forwarding rejection: [`packages/0-framework/1-core/core/src/__tests__/params.test.ts`](packages/0-framework/1-core/core/src/__tests__/params.test.ts)
+
+---
+
+## The deploy CLI's module-graph loader can't parse a `.tsx` file with real JSX — even though the runtime bundler handles it fine
+
+**Filed upstream:** not filed — worth tracking as a product gap, since react-email (a common email-templating library) is JSX by construction.
+**Product:** Prisma Compute (`prisma-composer deploy`, via Alchemy)
+**Version:** Prisma Composer framework, observed 2026-07-22
+**First hit:** the email module example (`examples/email`) — its `welcome` template was rewritten as a react-email component (`src/mailer/emails/welcome.tsx`), imported (through `templates.tsx` and `service.ts`) from `module.ts`
+**Cost:** roughly half a day diagnosing and working around
+
+**Symptom.** `pnpm run deploy` failed with `TypeError: Unknown file extension ".tsx"`, thrown from Node's own `node:internal/modules/esm/get_format`, while loading `templates.tsx`. The same file bundles and runs correctly under Bun (`bun build`, `bun test`) — the failure is specific to the deploy CLI's module-graph-loading step.
+
+**Cause.** `prisma-composer deploy` loads the app's `module.ts` → `service.ts` → dependency-factory-argument import graph with Node's own native ESM loader, to build deploy topology (ADR-0005: the framework doesn't bundle the app's code). Node's native TypeScript support (`--experimental-strip-types` / `--experimental-transform-types`) strips *type* syntax but has no JSX transform at all — confirmed by direct testing: a `.tsx` file with real JSX syntax fails to load under bare `node` and under both experimental-types flags alike; only a separate loader hook (the `tsx` npm package, via `--import=tsx`) can execute it. No pre-existing `.tsx` file in this repo's example apps sits in a `module.ts`/`service.ts`-reachable import graph (the ones that exist are Next.js pages, reached only through the Next.js build adapter), so this is the first time the conflict surfaces.
+
+Setting `NODE_OPTIONS=--import=tsx` globally around the deploy command does make Node parse the JSX, but it also changes module resolution for every other Node process spawned during that deploy — it broke an unrelated, pre-existing import inside Alchemy's own CLI startup (`@alchemy.run/node-utils`'s `foregroundChild` export stopped resolving), so it isn't a safe fix.
+
+**Workaround.** Kept the JSX-authored `templates.tsx`/`emails/welcome.tsx` as the real source (so the example still demonstrates react-email authoring), but added a build step (`examples/email/scripts/build.ts`) that precompiles `templates.tsx` to plain, JSX-free JS via `bun build --target=node` (all real npm packages passed as `--external`, so nothing from `node_modules` gets inlined — this is a JSX transform, not a bundle) before `service.ts` imports it. `service.ts` imports the compiled `dist/mailer/templates.generated.ts`, not the raw `.tsx`; the runtime server bundle imports the same compiled file, so there's one wired-up template set, not two paths that could drift.
+
+**Reproduction.**
+
+1. Add a `.tsx` file with real JSX syntax anywhere in a module's `module.ts` → `service.ts` → dependency-argument import graph.
+2. `prisma-composer deploy module.ts` → `TypeError: Unknown file extension ".tsx"` from Node's ESM loader, before any resources are planned.
+3. Precompile the JSX away (e.g. `bun build --target=node --format=esm` with npm packages kept `--external`) into a plain `.ts`/`.mjs` file, and import that from `service.ts` instead → deploy succeeds.
+
+**References.**
+
+- Surfaced through: [`examples/email/scripts/build.ts`](examples/email/scripts/build.ts), [`examples/email/src/mailer/service.ts`](examples/email/src/mailer/service.ts)
+- Design record: [`.drive/projects/email-module/spec.md`](.drive/projects/email-module/spec.md) — 2026-07-22 amendment, "Template definitions" (react-email demo)
