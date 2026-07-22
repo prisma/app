@@ -102,6 +102,17 @@ async function writeAtomic(finalPath: string, tmpRoot: string, bytes: Uint8Array
   await fs.rename(tmpPath, finalPath);
 }
 
+function isSidecar(value: unknown): value is Sidecar {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'contentType' in value &&
+    typeof value.contentType === 'string' &&
+    'etag' in value &&
+    typeof value.etag === 'string'
+  );
+}
+
 async function readSidecar(sidecar: string): Promise<Sidecar | null> {
   let raw: string;
   try {
@@ -112,14 +123,7 @@ async function readSidecar(sidecar: string): Promise<Sidecar | null> {
   }
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      typeof (parsed as Record<string, unknown>)['contentType'] === 'string' &&
-      typeof (parsed as Record<string, unknown>)['etag'] === 'string'
-    ) {
-      return parsed as Sidecar;
-    }
+    if (isSidecar(parsed)) return parsed;
   } catch {
     // Falls through to treat a corrupt sidecar the same as a missing one —
     // dropped-file adoption already has to tolerate an absent sidecar, so
