@@ -64,9 +64,17 @@ New files:
 
 - `fs-store.ts` — `export function fsStore(resolveBucketDir: (bucket:
   string) => string | undefined): ObjectStore`. The resolver maps a (wire)
-  bucket name to its directory — `undefined` = unknown bucket (the handler's
-  no-such-bucket path). The bucket emulator supplies the resolver from its
-  registrations; a test can pin a fixed map. Mapping:
+  bucket name to its directory — `undefined` = unknown bucket. An invalid
+  bucket name (failing `/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/`) is treated
+  identically to an unregistered one. On an unknown bucket,
+  `get`/`head`/`list`/`delete` degrade to the missing-key shapes (null /
+  empty list / no-op), which path-style addressing renders through the
+  handler as 404 / empty-200 / 204; a `put` has no graceful shape (nowhere
+  to write the bytes), so it throws — `handler.ts` does not catch store
+  exceptions, so the hosting server surfaces a 500, and the thrown message
+  names only the client-supplied bucket, never a server directory. The
+  bucket emulator supplies the resolver from its registrations; a test can
+  pin a fixed map. Mapping:
   - Object bytes: `<bucketDir>/<key>` — the key's `/` segments become
     directories. Writes are write-temp-then-rename
     (`<bucketDir>/.tmp/<uuid>` → target) so a concurrent read never sees a
@@ -74,10 +82,15 @@ New files:
   - Metadata sidecar: `<bucketDir>/.meta/<key>.json` containing
     `{ "contentType": string, "etag": string }`. `etag` = quoted SHA-256 hex
     of the object bytes (the store owns the ETag — store.ts's contract).
-  - Key validation: reject (return the handler's error path) any key whose
-    normalized path would escape the bucket dir (`..` segments, absolute
-    paths, empty segments) and any key segment equal to `.meta` or `.tmp`.
-    Reject bucket names not matching `/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/`.
+  - Key validation: an invalid key — one whose normalized path would escape
+    the bucket dir (`..` segments, absolute paths, empty segments) or with
+    a segment equal to `.meta` or `.tmp` — throws on every operation that
+    takes one, when the bucket is known (on an unknown bucket the
+    unknown-bucket shape above short-circuits first). The STORE — not the
+    handler — is the escape protection: no bytes ever land outside the
+    bucket dir. The throw surfaces as the host's 500 (no handler
+    try/catch), and the message names only the client-supplied key, never
+    the server directory.
   - A file present on disk without a sidecar (a developer dropped it in) is a
     valid object: `contentType` = `application/octet-stream`, etag computed
     on read and the sidecar written lazily. This is deliberate — droppable
@@ -112,8 +125,12 @@ plus the shared daemon layer and typed loopback clients.
 
 #### `daemon.ts` — the shared daemon layer
 
-- Registry: `~/.prisma-composer/emulators/<name>.json` —
+- Registry: `<registryRoot>/<name>.json` —
   `{ "pid": number, "port": number, "version": string, "logPath": string }`.
+  `registryRoot` defaults to `path.join(os.homedir(), '.prisma-composer',
+  'emulators')`; `ensureDaemon`/`stopDaemon` accept an optional
+  `{ registryRoot }` override whose ONLY caller is tests (isolation — a test
+  never touches the real home directory). Production code never passes it.
 - `ensureDaemon(name: 'compute' | 'buckets'): Promise<{ url: string }>`:
   1. Entry resolution: `fileURLToPath(import.meta.resolve(
      '@internal/dev-emulators/<name>-main'))`. Health path per daemon:
@@ -127,10 +144,13 @@ plus the shared daemon layer and typed loopback clients.
      pid / failed health → clean the entry, fall through.
   4. Start: port = persisted port if any, else smallest ≥ 4300 unused across
      registry entries, persisted immediately. Spawn `process.execPath
-     <entry> --port <n> --state-dir ~/.prisma-composer/emulators/<name>/`
-     with `detached: true`, stdio appended to
-     `~/.prisma-composer/emulators/<name>.log`, `unref()`. Poll the health
-     path, 10 s budget; timeout →
+     <entry> --port <n> --state-dir <registryRoot>/<name>/` with
+     `detached: true`, stdio appended to `<registryRoot>/<name>.log`,
+     `unref()` — the `registryRoot` override governs the registry file, the
+     state dir, AND the log path together, so an overriding test touches
+     nothing outside its own root. Poll the health path, 10 s budget;
+     timeout → kill the spawned child (it must not outlive a failed
+     ensure), then
      `Error: <name> emulator failed to start on port <port> — see <logPath>.`
   5. Foreign process on the port → same error; `--fresh` does NOT touch the
      daemons (they are machine-global, shared by other apps); recovering a
