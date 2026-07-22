@@ -1,12 +1,13 @@
 /**
- * The mailer example app's integration test: drives the app against the
- * email module's local stand-in (`startLocalEmailServer` — in-memory store,
- * mode `none`, no cloud credentials) and asserts the full chain the spec's
- * end-to-end requirement pins: an HTTP request to the app's OWN endpoint
- * causes the send, and the assertion reads the stored email back through a
- * SEPARATE app endpoint that itself reads the outbox port — the test never
- * calls `emailSendContract`/`emailOutboxContract` directly. The same
- * `createEmailApp` handler runs behind `Bun.serve` in the deployed service.
+ * The mailer example app's integration test: drives the signup → verify
+ * story against the email module's local stand-in (`startLocalEmailServer`
+ * — in-memory store, mode `none`, no cloud credentials), the same chain the
+ * deployed smoke proves. An HTTP request to the app's own `/signup`
+ * endpoint sends the verification email; the test reads the stored body
+ * back through the app's own `/emails/:id` endpoint, extracts the rendered
+ * link, and follows it — proving the link a recipient would actually click
+ * works, not just that a send happened. Dedup is module behavior, already
+ * covered by the module's own tests, so it stays out of this example.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { rpc } from '@prisma/composer/service-rpc';
@@ -25,8 +26,7 @@ describe('mailer example app (against the local email stand-in)', () => {
   beforeAll(async () => {
     server = await startLocalEmailServer();
     // The same wiring the app's own service.load() produces — hydrated
-    // directly against the local server's URL, with no deploy graph, exactly
-    // the way the deployed app's dependencies are wired for it at boot.
+    // directly against the local server's URL, with no deploy graph.
     // `connection.hydrate` is typed `C | Promise<C>` (some dependency kinds
     // hydrate async); both of this app's kinds hydrate synchronously, and
     // `await` resolves either shape.
@@ -39,70 +39,45 @@ describe('mailer example app (against the local email stand-in)', () => {
     await server?.stop();
   });
 
-  test('POST /send/welcome then GET /emails/:id round-trips the rendered body through the outbox', async () => {
-    const sendRes = await app(
-      new Request('http://mailer/send/welcome', {
+  test('signup sends a verification email whose link, followed, completes the story', async () => {
+    const signupRes = await app(
+      new Request('http://mailer/signup', {
         method: 'POST',
-        body: JSON.stringify({ to: 'user@example.com', name: 'Ada' }),
+        body: JSON.stringify({ email: 'user@example.com', name: 'Ada' }),
       }),
     );
-    expect(sendRes.status).toBe(201);
-    const sent = (await sendRes.json()) as { id: string; status: string };
-    expect(sent.status).toBe('stored');
+    expect(signupRes.status).toBe(201);
+    const { id: verificationId } = (await signupRes.json()) as { id: string };
 
-    const getRes = await app(new Request(`http://mailer/emails/${sent.id}`));
-    expect(getRes.status).toBe(200);
-    const email = (await getRes.json()) as { subject: string; html: string; status: string };
-    expect(email.subject).toBe('Welcome, Ada!');
-    expect(email.html).toContain('Ada');
-    expect(email.status).toBe('stored');
+    const storedRes = await app(new Request(`http://mailer/emails/${verificationId}`));
+    expect(storedRes.status).toBe(200);
+    const stored = (await storedRes.json()) as {
+      templateId: string;
+      subject: string;
+      html: string;
+    };
+    expect(stored.templateId).toBe('verification');
+    expect(stored.subject).toBe('Verify your email');
+
+    const link = stored.html.match(/href="([^"]+)"/)?.[1];
+    if (link === undefined) throw new Error('verification email body carried no link');
+    expect(link).toMatch(/^http:\/\/mailer\/verify\?token=/);
+
+    const verifyRes = await app(new Request(link));
+    expect(verifyRes.status).toBe(200);
+    const verified = (await verifyRes.json()) as { verified: boolean; id: string };
+    expect(verified.verified).toBe(true);
+
+    const welcomeRes = await app(new Request(`http://mailer/emails/${verified.id}`));
+    expect(welcomeRes.status).toBe(200);
+    const welcome = (await welcomeRes.json()) as { templateId: string; subject: string };
+    expect(welcome.templateId).toBe('welcome');
+    expect(welcome.subject).toBe('Welcome, Ada!');
   });
 
-  test('POST /send/verification renders the link into the stored body', async () => {
-    const sendRes = await app(
-      new Request('http://mailer/send/verification', {
-        method: 'POST',
-        body: JSON.stringify({ to: 'user@example.com', link: 'https://example.com/verify/abc' }),
-      }),
-    );
-    const sent = (await sendRes.json()) as { id: string };
-
-    const getRes = await app(new Request(`http://mailer/emails/${sent.id}`));
-    const email = (await getRes.json()) as { html: string; text: string };
-    expect(email.html).toContain('https://example.com/verify/abc');
-    expect(email.text).toContain('https://example.com/verify/abc');
-  });
-
-  test('GET /emails lists what was sent, filterable by templateId', async () => {
-    const res = await app(new Request('http://mailer/emails?templateId=welcome'));
-    expect(res.status).toBe(200);
-    const { emails } = (await res.json()) as { emails: { templateId: string }[] };
-    expect(emails.length).toBeGreaterThan(0);
-    expect(emails.every((e) => e.templateId === 'welcome')).toBe(true);
-  });
-
-  test('a repeated idempotencyKey dedups — the second POST returns the same row, no re-send', async () => {
-    const idempotencyKey = crypto.randomUUID();
-    const first = await app(
-      new Request('http://mailer/send/welcome', {
-        method: 'POST',
-        body: JSON.stringify({ to: 'dedup@example.com', name: 'First', idempotencyKey }),
-      }),
-    );
-    const firstBody = (await first.json()) as { id: string };
-
-    const second = await app(
-      new Request('http://mailer/send/welcome', {
-        method: 'POST',
-        body: JSON.stringify({ to: 'dedup@example.com', name: 'Second, ignored', idempotencyKey }),
-      }),
-    );
-    const secondBody = (await second.json()) as { id: string };
-    expect(secondBody.id).toBe(firstBody.id);
-
-    const getRes = await app(new Request(`http://mailer/emails/${firstBody.id}`));
-    const email = (await getRes.json()) as { subject: string };
-    expect(email.subject).toBe('Welcome, First!');
+  test('GET /verify with an unknown token is 404', async () => {
+    const res = await app(new Request('http://mailer/verify?token=does-not-exist'));
+    expect(res.status).toBe(404);
   });
 
   test('GET /emails/:id for an unknown id is 404', async () => {

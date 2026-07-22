@@ -2,12 +2,13 @@
 /**
  * Verifies a DEPLOYED email example end to end (spec's end-to-end
  * requirement): resolves the mailer service's URL via the Management API,
- * `POST`s to the mailer's OWN `/send/welcome` endpoint (never the email
- * module's `send` port directly), then `GET`s the mailer's OWN
- * `/emails/:id` endpoint (never the module's `outbox` port directly) and
- * asserts the stored body round-trips. Proves the `none`-mode preview-stage
- * story: a real deploy with a junk credential, no Resend account, storing
- * and reading back through the app a consumer would actually write.
+ * `POST`s to the mailer's OWN `/signup` endpoint (never the email module's
+ * `send` port directly), reads the stored verification body back through
+ * the mailer's OWN `/emails/:id` endpoint, extracts the rendered link, and
+ * follows it — proving the link a recipient would actually click works,
+ * not just that a send happened — then reads the resulting welcome email
+ * back the same way. Proves the `none`-mode preview-stage story: a real
+ * deploy with a junk credential, no Resend account.
  *
  *   [EMAIL_STACK_NAME=…] bun scripts/smoke.ts
  *
@@ -82,14 +83,14 @@ function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
 }
 
-/** A cold start after deploy (PRO-200) — poll the health route until it answers. */
+/** A cold start after deploy (PRO-200) — poll until the app answers at all; the route doesn't exist, so any response (a 404) proves it's up without touching the email module. */
 async function waitUntilUp(): Promise<void> {
   const deadline = Date.now() + 180_000;
   let lastError: unknown;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(30_000) });
-      if (res.ok) return;
+      const res = await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(30_000) });
+      if (res.status > 0) return;
     } catch (error) {
       lastError = error;
     }
@@ -102,52 +103,73 @@ async function main(): Promise<void> {
   await waitUntilUp();
 
   const marker = `smoke-${Date.now()}@example.com`;
-  let sentId = '';
+  let verificationId = '';
+  let verifyLink = '';
+  let welcomeId = '';
 
-  await check('POST /send/welcome (the mailer’s own endpoint) stores mode "none"', async () => {
-    const res = await fetch(`${baseUrl}/send/welcome`, {
+  await check('POST /signup (the mailer’s own endpoint) sends the verification email', async () => {
+    const res = await fetch(`${baseUrl}/signup`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ to: marker, name: 'Smoke Test' }),
+      body: JSON.stringify({ email: marker, name: 'Smoke Test' }),
     });
     assert(res.status === 201, `expected 201, got ${res.status}`);
-    const body = blindCast<
-      { id: string; status: string },
-      'the mailer proxies the send port’s { id, status } result unchanged'
-    >(await res.json());
-    assert(body.status === 'stored', `expected status "stored" (mode none), got "${body.status}"`);
-    sentId = body.id;
+    const body = blindCast<{ id: string }, 'the mailer responds with the verification send’s id'>(
+      await res.json(),
+    );
+    verificationId = body.id;
   });
 
   await check(
-    'GET /emails/:id (the mailer’s own endpoint) reads the stored body back',
+    'GET /emails/:id reads the stored verification body back and carries the rendered link',
     async () => {
-      const res = await fetch(`${baseUrl}/emails/${sentId}`);
+      const res = await fetch(`${baseUrl}/emails/${verificationId}`);
       assert(res.status === 200, `expected 200, got ${res.status}`);
       const email = blindCast<
-        { to: string[]; subject: string; html: string; status: string },
+        { templateId: string; status: string; html: string },
         'the mailer proxies the outbox port’s email record unchanged'
       >(await res.json());
       assert(
-        email.to.includes(marker),
-        `expected "to" to include ${marker}, got ${JSON.stringify(email.to)}`,
+        email.templateId === 'verification',
+        `expected templateId "verification", got "${email.templateId}"`,
       );
-      assert(email.subject === 'Welcome, Smoke Test!', `unexpected subject: ${email.subject}`);
-      assert(email.html.includes('Smoke Test'), `rendered body did not round-trip: ${email.html}`);
-      assert(email.status === 'stored', `expected status "stored", got "${email.status}"`);
+      assert(
+        email.status === 'stored',
+        `expected status "stored" (mode none), got "${email.status}"`,
+      );
+      const link = email.html.match(/href="([^"]+)"/)?.[1] ?? '';
+      assert(link.length > 0, `rendered body carried no link: ${email.html}`);
+      verifyLink = link;
     },
   );
 
-  await check('GET /emails lists the sent email through the outbox port', async () => {
-    const res = await fetch(`${baseUrl}/emails?to=${encodeURIComponent(marker)}`);
+  await check(
+    'following the rendered link (GET /verify) marks the user verified and sends the welcome email',
+    async () => {
+      const res = await fetch(verifyLink);
+      assert(res.status === 200, `expected 200, got ${res.status}`);
+      const body = blindCast<
+        { verified: boolean; id: string },
+        'the mailer responds with { verified, id }'
+      >(await res.json());
+      assert(body.verified === true, 'expected verified: true');
+      welcomeId = body.id;
+    },
+  );
+
+  await check('GET /emails/:id reads the welcome email back through the outbox port', async () => {
+    const res = await fetch(`${baseUrl}/emails/${welcomeId}`);
     assert(res.status === 200, `expected 200, got ${res.status}`);
-    const body = blindCast<{ emails: { id: string }[] }, 'listEmails returns { emails }'>(
-      await res.json(),
-    );
+    const email = blindCast<
+      { templateId: string; subject: string; status: string },
+      'the mailer proxies the outbox port’s email record unchanged'
+    >(await res.json());
     assert(
-      body.emails.some((e) => e.id === sentId),
-      `expected the sent email (${sentId}) in the list`,
+      email.templateId === 'welcome',
+      `expected templateId "welcome", got "${email.templateId}"`,
     );
+    assert(email.subject === 'Welcome, Smoke Test!', `unexpected subject: ${email.subject}`);
+    assert(email.status === 'stored', `expected status "stored", got "${email.status}"`);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
