@@ -557,4 +557,26 @@ describe('assemble() — the directory form', () => {
       }),
     ).rejects.toThrow(/contains symlinks.*server\/vendor/s);
   });
+
+  test('rejects a dir that is itself a symlink — hard-errors instead of dereferencing it and copying the target', async () => {
+    // ADR-0005: a symlink is never dereferenced, including when it's the
+    // build adapter's `dir` value itself, not just something nested inside
+    // it. `statSync` (used to confirm dir is a directory) follows a symlink,
+    // so this case needs its own check — this test is what catches a
+    // regression there.
+    const serviceDir = makeServiceDir();
+    writeTree(path.join(serviceDir, 'dist', 'real'), {
+      'start.js': 'export default "app-entry";\n',
+    });
+    fs.symlinkSync(path.join(serviceDir, 'dist', 'real'), path.join(serviceDir, 'dist', 'server'));
+    writeServiceModule(serviceDir);
+
+    await expect(
+      assemble({
+        build: node({ module: moduleUrl(serviceDir), dir: '../dist/server', entry: 'start.js' }),
+        address: 'svc',
+        cwd: makeCwd(),
+      }),
+    ).rejects.toThrow(/contains symlinks.*dist\/server/s);
+  });
 });

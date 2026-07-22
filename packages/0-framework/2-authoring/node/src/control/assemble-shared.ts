@@ -76,6 +76,12 @@ export async function resolveDir(
  * in files the author never named. The walk reads dirents (lstat
  * semantics), so a symlinked directory is reported and never descended
  * into.
+ *
+ * `dirPath` itself can also be a symlink — passed directly as `dir` — which
+ * `readdir` alone would never catch (it only inspects `dirPath`'s children).
+ * `lstat` it first, before walking, so that case hard-errors exactly like a
+ * symlink found inside the tree, instead of being silently followed by the
+ * `statSync`/`cp` calls upstream and downstream of this function.
  */
 export async function assertNoSymlinks(dirPath: string): Promise<void> {
   const found: string[] = [];
@@ -86,7 +92,12 @@ export async function assertNoSymlinks(dirPath: string): Promise<void> {
       else if (entry.isDirectory()) await walk(full);
     }
   };
-  await walk(dirPath);
+
+  if ((await fs.promises.lstat(dirPath)).isSymbolicLink()) {
+    found.push(dirPath);
+  } else {
+    await walk(dirPath);
+  }
 
   if (found.length === 0) return;
   const listed = found.slice(0, 5).join(', ');
