@@ -67,6 +67,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
+      # Pinned exact to the protocol version @prisma/streams-server ships;
+      # bumped by hand together with streams-server (see the note in
+      # packages/1-prisma-cloud/2-shared-modules/streams/conformance/local.vitest.ts).
+      - dependency-name: "@durable-streams/server-conformance-tests"
 
   - package-ecosystem: github-actions
     directory: /
