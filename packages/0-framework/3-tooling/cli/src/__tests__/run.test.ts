@@ -168,17 +168,19 @@ function makeAppDir(
     [
       `import { module, service } from ${JSON.stringify(coreIndex)};`,
       '',
+      // The provision id must be a config-key-safe segment (letters/digits
+      // only), unlike the module/app name, which may carry hyphens.
       `export default module(${JSON.stringify(name)}, {}, ({ provision }) => {`,
       '  provision(',
       '    service({',
-      `      name: ${JSON.stringify(name)},`,
+      "      name: 'app',",
       "      extension: 'fixture-extension',",
       "      type: 'fixture/compute',",
       '      inputs: {},',
       '      params: {},',
       "      build: { extension: 'fixture-build', type: 'node', module: import.meta.url, entry: 'dist/server.js' },",
       '    }),',
-      `    { id: ${JSON.stringify(name)} },`,
+      "    { id: 'app' },",
       '  );',
       '  return {};',
       '});',
@@ -239,7 +241,7 @@ describe('run() — the full pipeline over fakes', () => {
     expect(content).toContain('import app from "../service.ts";');
     expect(content).toContain('lower(app, config, {');
     expect(content).toContain(
-      `"hello-run": { dir: ${JSON.stringify(path.join(app.dir, 'dist', 'bundle'))}, entry: "server.js" }`,
+      `"app": { dir: ${JSON.stringify(path.join(app.dir, 'dist', 'bundle'))}, entry: "server.js" }`,
     );
   });
 

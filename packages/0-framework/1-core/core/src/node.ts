@@ -450,30 +450,37 @@ function requireExtension(extension: string, factory: string): void {
 }
 
 /**
- * Config keys join address/input/param names with "_" and uppercase — an
- * underscore inside a name would collide with that separator (e.g. param
- * "db_url" vs input "db"'s param "url" both hitting env key "DB_URL").
+ * Core's grammar for every name that becomes a config-key segment —
+ * addresses, input/param/secret names: ASCII letters and digits only.
+ * Conservative by design so any target medium — POSIX env-var keys
+ * included — can uppercase and "_"-join segments without escaping.
  */
-function requireNoUnderscoreName(
+export function isConfigKeySegment(name: string): boolean {
+  return /^[A-Za-z0-9]+$/.test(name);
+}
+
+function requireConfigKeySegmentName(
   name: string,
   kind: 'input' | 'param' | 'secret',
   factory: string,
 ): void {
-  if (name.includes('_')) {
+  if (!isConfigKeySegment(name)) {
     throw new Error(
-      `${factory}() ${kind} name "${name}" may not contain "_" — config keys join names with ` +
-        '"_" as the separator (e.g. an input "db"\'s param "url" becomes env key "DB_URL"), so ' +
-        'an underscore inside a name would collide with that separator.',
+      `${factory}() ${kind} name "${name}" must contain only ASCII letters and digits ` +
+        '([A-Za-z0-9]) — declared names derive deterministic config keys, uppercased and joined ' +
+        'with "_" (an input "db"\'s param "url" becomes config key "DB_URL"), so an underscore ' +
+        'inside a name collides with that separator and any other character has no place in a ' +
+        `config key. "${name}" would put "${name.toUpperCase()}" inside the derived key.`,
     );
   }
 }
 
-function requireNoUnderscoreNames(
+function requireConfigKeySegmentNames(
   names: Iterable<string>,
   kind: 'input' | 'param' | 'secret',
   factory: string,
 ): void {
-  for (const name of names) requireNoUnderscoreName(name, kind, factory);
+  for (const name of names) requireConfigKeySegmentName(name, kind, factory);
 }
 
 function freezeParams<P extends Params>(params: P): P {
@@ -593,9 +600,9 @@ export function service<
   requireName(def.name, 'service');
   requireExtension(def.extension, 'service');
   requireType(def.type, 'service');
-  requireNoUnderscoreNames(Object.keys(def.inputs), 'input', 'service');
-  requireNoUnderscoreNames(Object.keys(def.params), 'param', 'service');
-  requireNoUnderscoreNames(Object.keys(def.secrets ?? {}), 'secret', 'service');
+  requireConfigKeySegmentNames(Object.keys(def.inputs), 'input', 'service');
+  requireConfigKeySegmentNames(Object.keys(def.params), 'param', 'service');
+  requireConfigKeySegmentNames(Object.keys(def.secrets ?? {}), 'secret', 'service');
   // A secret slot and a service-OWN param of the same name derive the SAME
   // config key (COMPOSER_<addr>_<NAME>), so they'd write two rows to one key.
   // A same-named dependency is fine — its keys carry the input+param segments
@@ -637,7 +644,7 @@ export function dependency<P extends Params, C, Req = unknown>(def: {
   required?: Req;
 }): DependencyEnd<C, Req> {
   requireType(def.type, 'dependency');
-  requireNoUnderscoreNames(Object.keys(def.connection.params), 'param', 'dependency');
+  requireConfigKeySegmentNames(Object.keys(def.connection.params), 'param', 'dependency');
   const connection: Connection<P, C> = Object.freeze({
     params: freezeParams(def.connection.params),
     hydrate: def.connection.hydrate,

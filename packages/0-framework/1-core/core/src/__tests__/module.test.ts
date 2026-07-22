@@ -130,14 +130,29 @@ describe('Load of a module root', () => {
     expect(() => Load(root)).toThrow(/Duplicate provision id "auth"/);
   });
 
-  test('a provision id containing "_" or "." is a LoadError naming the separators', () => {
+  test('a provision id containing "_" or "." is a LoadError naming the constraint', () => {
     const root = module('shop', {}, (h) => {
       h.provision(dbResource(), { id: 'auth_db' });
       return {};
     });
 
     expect(() => Load(root)).toThrow(LoadError);
-    expect(() => Load(root)).toThrow(/id "auth_db" \(module "shop"\) may not contain "_" or "\."/);
+    expect(() => Load(root)).toThrow(
+      /id "auth_db" \(module "shop"\) must contain only ASCII letters and digits/,
+    );
+  });
+
+  test('a hyphenated provision id is a LoadError — it would derive an invalid env-var key', () => {
+    const root = module('shop', {}, (h) => {
+      h.provision(dbResource(), { id: 'origin-proof' });
+      return {};
+    });
+
+    expect(() => Load(root)).toThrow(LoadError);
+    expect(() => Load(root)).toThrow(
+      /id "origin-proof" \(module "shop"\) must contain only ASCII letters and digits/,
+    );
+    expect(() => Load(root)).toThrow(/"ORIGIN-PROOF"/);
   });
 
   test('a dangling dependency input names the service and the input', () => {

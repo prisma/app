@@ -136,7 +136,7 @@ describe('dependency()', () => {
         type: 'fake/db',
         connection: conn({ db_url: string() }, () => ({})),
       }),
-    ).toThrow(/param name "db_url" may not contain "_"/);
+    ).toThrow(/param name "db_url" must contain only ASCII letters and digits/);
   });
 });
 
@@ -257,7 +257,7 @@ describe('service()', () => {
         params: {},
         build,
       }),
-    ).toThrow(/input name "my_db" may not contain "_"/);
+    ).toThrow(/input name "my_db" must contain only ASCII letters and digits/);
   });
 
   test('rejects an underscore in a service param name', () => {
@@ -270,7 +270,38 @@ describe('service()', () => {
         params: { max_conns: number({ default: 1 }) },
         build,
       }),
-    ).toThrow(/param name "max_conns" may not contain "_"/);
+    ).toThrow(/param name "max_conns" must contain only ASCII letters and digits/);
+  });
+
+  test('rejects a hyphen in a param name (would derive an invalid env-var key)', () => {
+    expect(() =>
+      service({
+        name: 'hello',
+        extension: 'test/pack',
+        type: 'fake/app',
+        inputs: {},
+        params: { 'max-conns': number({ default: 1 }) },
+        build,
+      }),
+    ).toThrow(/param name "max-conns" must contain only ASCII letters and digits/);
+  });
+
+  test('accepts camelCase, digits-only, and single-char input and param names', () => {
+    const db = dependency({
+      name: 'db',
+      type: 'fake/db',
+      connection: conn({}, () => ({})),
+    });
+    expect(() =>
+      service({
+        name: 'hello',
+        extension: 'test/pack',
+        type: 'fake/app',
+        inputs: { primaryDb2: db, a: db },
+        params: { maxConns: number({ default: 1 }), '42': number({ default: 1 }) },
+        build,
+      }),
+    ).not.toThrow();
   });
 
   test('rejects a secret slot name that collides with a service param name', () => {
