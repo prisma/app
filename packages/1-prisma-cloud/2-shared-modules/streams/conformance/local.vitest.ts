@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runConformanceTests } from '@durable-streams/server-conformance-tests';
 import { afterAll, beforeAll } from 'vitest';
-import { type LocalStreamsServer, startLocalStreamsServer } from '../src/testing.ts';
+import { type LocalStreamsServer, startLocalStreamsServer } from '../src/exports/testing.ts';
 
 const baseUrl = 'http://127.0.0.1:8791';
 

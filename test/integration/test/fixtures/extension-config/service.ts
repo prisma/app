@@ -17,7 +17,7 @@ export default module('extension-config-fixture', {}, ({ provision }) => {
       deps: {},
       build: node({ module: import.meta.url, entry: 'dist/server.js' }),
     }),
-    { id: 'extension-config-fixture' },
+    { id: 'app' },
   );
   return {};
 });
