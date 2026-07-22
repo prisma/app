@@ -28,8 +28,12 @@ import { fileURLToPath } from 'node:url';
 import type { BuildAdapter } from '@internal/core';
 import type { ExtensionDescriptor } from '@internal/core/config';
 import type { AssembleInput, Bundle } from '@internal/core/deploy';
-import { build } from 'esbuild';
 import type { NodeBuildAdapter } from '../node.ts';
+import {
+  assertOutsideWorkDir,
+  buildWrapper,
+  resolveDir as resolveDirShared,
+} from './assemble-shared.ts';
 
 export type { AssembleInput, Bundle } from '@internal/core/deploy';
 
@@ -48,6 +52,8 @@ interface BuiltRunnable {
   readonly sourceField: 'dir' | 'entry';
   /** The artifact's entry relative to `bundle/`, POSIX-separated (the Bundle contract). */
   readonly entry: string;
+  /** The resolved, absolute entry file — the Bundle.watch input (ADR-0041). */
+  readonly entryPath: string;
   /** Places `source` under `bundle/`, verbatim. */
   readonly copyInto: (bundleDir: string) => Promise<void>;
 }
@@ -66,6 +72,7 @@ function resolveFile(entrySpec: string, moduleDir: string): BuiltRunnable {
     source: entryPath,
     sourceField: 'entry',
     entry: entryFile,
+    entryPath,
     copyInto: async (bundleDir) => {
       await fs.promises.mkdir(bundleDir, { recursive: true });
       await fs.promises.copyFile(entryPath, path.join(bundleDir, entryFile));
@@ -77,100 +84,22 @@ function resolveFile(entrySpec: string, moduleDir: string): BuiltRunnable {
  * The directory form: `dir` is the built tree, resolved against dirname(module)
  * (ADR-0004) and copied whole; `entry` resolves inside `dir` and names the file
  * that boots. An `entry` that resolves outside `dir` is rejected rather than
- * followed — only `dir` is ever copied.
+ * followed — only `dir` is ever copied. Validation and the symlink hard error
+ * are shared with the `dir()` adapter (`./assemble-shared.ts`).
  */
 async function resolveDir(
   dirSpec: string,
   entrySpec: string,
   moduleDir: string,
 ): Promise<BuiltRunnable> {
-  const dirPath = path.resolve(moduleDir, dirSpec);
-  if (!fs.existsSync(dirPath)) {
-    throw new Error(
-      `no built directory at ${dirPath} — run your build first (the build adapter's ` +
-        `dir, "${dirSpec}", resolves against dirname(module)).`,
-    );
-  }
-  if (!fs.statSync(dirPath).isDirectory()) {
-    throw new Error(
-      `the build adapter's dir ("${dirPath}") is not a directory — drop dir to deploy a ` +
-        'single built file, naming it as entry.',
-    );
-  }
-
-  const entryPath = path.resolve(dirPath, entrySpec);
-  if (!entryPath.startsWith(dirPath + path.sep)) {
-    throw new Error(
-      `the build adapter's entry ("${entrySpec}") resolves to ${entryPath}, which is not inside ` +
-        `dir ("${dirPath}") — in the directory form entry names a file inside dir, and only dir is copied.`,
-    );
-  }
-  if (!fs.existsSync(entryPath) || !fs.statSync(entryPath).isFile()) {
-    throw new Error(
-      `no built entry at ${entryPath} — run your build first (the build adapter's entry, ` +
-        `"${entrySpec}", resolves inside dir, "${dirPath}").`,
-    );
-  }
-
-  await assertNoSymlinks(dirPath);
-
+  const resolved = await resolveDirShared(dirSpec, entrySpec, moduleDir);
   return {
-    source: dirPath,
+    source: resolved.dirPath,
     sourceField: 'dir',
-    entry: path.relative(dirPath, entryPath).split(path.sep).join('/'),
-    copyInto: (bundleDir) => fs.promises.cp(dirPath, bundleDir, { recursive: true }),
+    entry: resolved.entryRel,
+    entryPath: resolved.entryPath,
+    copyInto: (bundleDir) => fs.promises.cp(resolved.dirPath, bundleDir, { recursive: true }),
   };
-}
-
-/**
- * Compute's packager rejects symlinks, so a tree containing one cannot deploy.
- * We fail here, naming the links, rather than dereferencing them on the copy:
- * the artifact must be what the author's build produced (ADR-0005), and
- * following a link that points outside `dir` would pull in files the author
- * never named. The walk reads dirents (lstat semantics), so a symlinked
- * directory is reported and never descended into.
- */
-async function assertNoSymlinks(dirPath: string): Promise<void> {
-  const found: string[] = [];
-  const walk = async (current: string): Promise<void> => {
-    for (const entry of await fs.promises.readdir(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isSymbolicLink()) found.push(full);
-      else if (entry.isDirectory()) await walk(full);
-    }
-  };
-  await walk(dirPath);
-
-  if (found.length === 0) return;
-  const listed = found.slice(0, 5).join(', ');
-  throw new Error(
-    `the build adapter's dir ("${dirPath}") contains symlinks, which the platform's packager ` +
-      `rejects: ${listed}${found.length > 5 ? `, and ${found.length - 5} more` : ''}. The tree is ` +
-      'copied verbatim, so make your build emit real files in dir (for example, a hoisted ' +
-      'node_modules, or dereference the links into dir with cp -RL).',
-  );
-}
-
-/**
- * The working dir is cleared on every assemble, so it must not overlap the copy
- * source: inside it, the rm would delete the source before the copy; the other
- * way round, the copy would recurse into its own output.
- */
-function assertOutsideWorkDir(runnable: BuiltRunnable, workDir: string): void {
-  const { source, sourceField } = runnable;
-  if (source === workDir || source.startsWith(workDir + path.sep)) {
-    throw new Error(
-      `the build adapter's ${sourceField} ("${source}") resolves inside the deploy working dir ` +
-        `("${workDir}"), which is cleared on every assemble — point ${sourceField} at your build output elsewhere.`,
-    );
-  }
-  if (workDir.startsWith(source + path.sep)) {
-    throw new Error(
-      `the deploy working dir ("${workDir}") sits inside the build adapter's ${sourceField} ` +
-        `("${source}"), so assembling would copy the artifact into itself — point ${sourceField} ` +
-        'at your build output elsewhere.',
-    );
-  }
 }
 
 export async function assemble(input: AssembleInput): Promise<Bundle> {
@@ -189,27 +118,20 @@ export async function assemble(input: AssembleInput): Promise<Bundle> {
       : await resolveDir(buildDescriptor.dir, buildDescriptor.entry, moduleDir);
 
   const workDir = path.join(input.cwd, '.prisma-composer', 'artifacts', input.address);
-  assertOutsideWorkDir(runnable, workDir);
+  assertOutsideWorkDir(runnable.source, runnable.sourceField, workDir);
 
   await fs.promises.rm(workDir, { recursive: true, force: true });
   await fs.promises.mkdir(workDir, { recursive: true });
 
-  await build({
-    entryPoints: { main: serviceModule },
-    outdir: workDir,
-    bundle: true,
-    format: 'esm',
-    platform: 'node',
-    external: ['bun', 'bun:*'],
-    outExtension: { '.js': '.mjs' },
-  });
-  if (!fs.existsSync(path.join(workDir, 'main.mjs'))) {
-    throw new Error(`esbuild produced no main.mjs in ${workDir}`);
-  }
+  await buildWrapper(serviceModule, workDir);
 
   await runnable.copyInto(path.join(workDir, 'bundle'));
 
-  return { dir: workDir, entry: path.posix.join('bundle', runnable.entry) };
+  return {
+    dir: workDir,
+    entry: path.posix.join('bundle', runnable.entry),
+    watch: [runnable.entryPath],
+  };
 }
 
 /** The node build extension descriptor — `prisma-composer.config.ts` lists it under `extensions`. */

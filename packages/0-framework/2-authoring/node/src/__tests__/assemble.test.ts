@@ -172,6 +172,8 @@ describe('assemble()', () => {
     // Deploy-owned working dir — never the user's build output, never node_modules.
     expect(result.dir.startsWith(serviceDir)).toBe(false);
     expect(result.dir.includes('node_modules')).toBe(false);
+    // Bundle.watch names the resolved entry file (ADR-0041).
+    expect(result.watch).toEqual([path.join(serviceDir, 'dist', 'server.js')]);
   }, 20_000);
 
   test('copies exactly the named file — the siblings sitting beside it in the build dir are not swept in', async () => {
@@ -364,6 +366,9 @@ describe('assemble() — the directory form', () => {
     // The wrapper still sits at the working-dir root, outside the copied tree.
     expect(fs.existsSync(path.join(result.dir, 'main.mjs'))).toBe(true);
     expect(fs.existsSync(path.join(result.dir, 'bundle', 'main.mjs'))).toBe(false);
+    // Bundle.watch names the resolved entry file, not the whole dir — unlike
+    // dir()'s watch, which names the dir (ADR-0041; see assemble-dir.test.ts).
+    expect(result.watch).toEqual([path.join(serviceDir, 'dist', 'server', 'start.js')]);
   }, 20_000);
 
   test('boots an entry nested inside the tree, reported relative to bundle/', async () => {
