@@ -24,7 +24,11 @@ export interface DevDescriptor {
   readonly container: ContainerDescriptor;
   /** Dev value-sourcing policy: secrets from the shell else minted placeholders; env-sourced params from the shell else a hard error. */
   preflight?(input: PreflightInput): Promise<void>;
-  /** `--fresh`: remove every local trace of the dev instance — emulator daemons, state, data. */
+  /** Ensure the emulator daemons this topology's node kinds need are running (idempotent — they persist across sessions). */
+  emulators?(input: DevEmulatorsInput): Promise<void>;
+  /** The dev session's view of the running app: endpoints, merged logs, and the stop control. */
+  attach(input: DevAttachInput): Promise<DevAttachment>;
+  /** `--fresh`: remove every local trace of the dev instance — emulator instances, state, data. */
   teardown?(input: TeardownInput): Promise<void>;
 }
 ```
@@ -53,30 +57,43 @@ three clusters:
 
 | Cluster | Resources | Local implementation |
 | --- | --- | --- |
-| Compute | `ComputeService`, `Deployment`, `EnvironmentVariable` | port allocation + a supervised child process per service + a local env-var store |
+| Compute | `ComputeService`, `Deployment`, `EnvironmentVariable` | a Compute **emulator** owning one child process per service, plus a local env-var store |
 | Postgres | `Project`, `Database`, `Connection` | the ORM CLI's local Postgres **emulator** (`prisma dev`) |
 | Buckets | `Bucket`, `BucketKey` | a bucket **emulator**: the storage module's existing S3 wire handler + SigV4 verifier over a disk-backed object store — objects are plain files at their key paths |
 
-**Backing services are emulators: machine-scoped daemons, uniformly.** Every
-local backing service — the Postgres instances and the bucket server alike —
-is a long-lived daemon that survives dev sessions, exactly the model of the
-ORM's `prisma dev` (and of the firebase/supabase emulators). A local provider
-*ensures* its emulator is running when it reconciles (spawning it detached if
-absent) and provisions the app's instances — a database, a bucket, accepted
-credentials — by communicating with it: the ORM CLI's daemon manager for
-Postgres, a loopback admin endpoint for the bucket emulator. Because
-provisioning happens inside converge, no separate lifecycle hook exists on
-`DevDescriptor`; emulators are removed only by `--fresh`, through `teardown`.
+**The target runs one emulator per node kind — the platform's primitives,
+locally.** The extension's `emulators` hook inspects the loaded topology and
+ensures a machine-scoped emulator daemon per node kind the app uses: a
+**Compute emulator** (runs service processes), the **Postgres emulator** (the
+ORM's `prisma dev` — its daemon manager is the ORM CLI's own), and a **bucket
+emulator** (the S3 wire over disk). Each emulator is multi-tenant and
+long-lived — the firebase/supabase model — and is capable of creating an
+*isolated instance* of its node type: a running service, a database, a
+bucket. The local providers provision those instances by communicating with
+the emulators during converge, and the orchestration wires the instances to
+each other through the same lowered `EnvironmentVariable` records a deploy
+produces — the topology composes locally exactly as it does on the platform.
+Emulator instances are removed only by `--fresh`, through `teardown`.
 
-**Converge terminates; the dev command supervises.** Alchemy's converge is a
-run-to-completion program (ADR-0007 drives it in a child process that exits), so
-the local `Deployment` provider spawns nothing. It writes a *desired-process
-record* — artifact, materialized env, port — into a process table in the dev
-state directory. The long-running `dev` command reconciles that table: spawn,
-kill on artifact-hash change, restart on crash, multiplex logs. Per-service
-restart falls out of Alchemy's own diffing — an edit re-runs converge, only the
-changed service's `Deployment` reconciles, only its record changes, only its
-process restarts.
+**Converge terminates; the Compute emulator keeps serving.** Alchemy's
+converge is a run-to-completion program (ADR-0007 drives it in a child
+process that exits), so the local `Deployment` provider spawns nothing
+itself: it unpacks the artifact, materializes the env, and hands the
+deployment to the Compute emulator's loopback admin endpoint — which owns the
+child processes: spawn under bun, restart on a changed artifact hash, crash
+backoff, per-service logs. Per-service restart falls out of Alchemy's own
+diffing — an edit re-runs converge, only the changed service's `Deployment`
+reconciles, only that deployment is re-put, only its process restarts.
+
+**The dev command is a view.** After converge it *attaches* through the
+extension's `attach` hook — endpoints for the front door, merged log
+streams, a stop control — and runs the watch loop (rebuild → re-assemble →
+re-converge). Core renders what the hook returns and never learns any
+emulator's API (the ADR-0038 opacity pattern). Ctrl-C stops the app's
+service instances through the attachment and exits; the emulators, the
+databases, and the bucket data persist, making the next start warm. A
+detached mode (services keep serving with no session, full platform parity)
+is a designed extension, not v1.
 
 **Rebuilds stay the user's** (ADR-0005). Dev watches the *built* output that
 assembly consumes, never sources; the user's own watcher (`next dev` is not
@@ -178,11 +195,17 @@ this repo owns.
 - **A new operational dependency:** the ORM CLI's local Postgres (`prisma dev`)
   is the postgres emulator. Dev shells out to a sibling product's command.
 - **Dev state is local and disposable.** The Alchemy state store is Alchemy's
-  own `localState()` (`.alchemy/state/`); everything else — the process table,
-  env store, unpacked artifacts, bucket objects, minted placeholders — lives
-  under `.prisma-composer/dev/` (ADR-0004's tool-state rule). `--fresh` is
-  wholesale local deletion through `dev.teardown` (every resource is a local
-  file or process), never an `alchemy destroy`.
+  own `localState()` (`.alchemy/state/`); the app-scoped state — env store,
+  unpacked artifacts, bucket objects, minted placeholders — lives under
+  `.prisma-composer/dev/` (ADR-0004's tool-state rule), while the emulator
+  daemons keep their own machine-global registry. `--fresh` is wholesale
+  local deletion through `dev.teardown` (every resource is a local file,
+  process, or emulator instance), never an `alchemy destroy`.
+- **Process supervision lives in the Compute emulator, not the CLI.** The
+  framework owns a small, generic daemon layer (registry, stable ports,
+  readiness, version-skew restart) and the Compute emulator's supervision
+  policy; the dev command itself supervises nothing — it renders the
+  `attach` hook's view.
 - **The strict secrets model is unchanged** (ADR-0029). Dev policy lives in
   `dev.preflight`: a secret slot bound in the shell's environment is used; an
   unbound slot gets a minted, persisted placeholder and a printed warning. An
@@ -229,7 +252,7 @@ this repo owns.
 - [goals.md](../00-purpose/goals.md) — the local-dev-emulator goal this
   decision implements ("a local stand-in beside its real provider").
 - [`../10-domains/local-dev.md`](../10-domains/local-dev.md) — the domain deep
-  dive: pipeline deltas, the process table, substitution details, value
+  dive: pipeline deltas, the Compute emulator, substitution details, value
   sourcing, error surface.
 - [`../05-prisma-cloud/alchemy-lowering.md`](../05-prisma-cloud/alchemy-lowering.md)
   — the resource inventory and lowering graphs the local providers implement.
@@ -238,7 +261,8 @@ this repo owns.
 - [ADR-0005](ADR-0005-users-build-the-framework-assembles.md) — users build;
   dev watches built output only.
 - [ADR-0007](ADR-0007-deploy-drives-alchemy-through-a-generated-stack-file.md)
-  — the terminating converge child the process table decouples dev from.
+  — the terminating converge child the machine-scoped emulators decouple
+  dev from.
 - [ADR-0011](ADR-0011-targets-supply-the-deploy-state-layer.md) — the state
   layer the `dev.state` descriptor supplies locally.
 - [ADR-0017](ADR-0017-control-plane-loads-through-the-app-config.md) /

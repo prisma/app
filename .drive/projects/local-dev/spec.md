@@ -12,12 +12,13 @@
 `prisma-composer dev <entry>` brings up the whole application locally,
 credential-free: it re-runs the deploy pipeline (Load → assemble → lower →
 Alchemy converge) against local providers declared on the extension's new
-`dev` descriptor field, then supervises the resulting process table — spawning
-one child per service from its real packaged artifact, restarting on rebuild,
-streaming logs — until interrupted. Backing services are **emulators**:
-machine-scoped daemons that survive dev sessions (ORM `prisma dev` instances
-per Database; a disk-backed S3 bucket emulator per app), which providers
-ensure and provision against during converge. The lowering
+`dev` descriptor field. The target runs one machine-scoped, multi-tenant
+**emulator per node kind** — a Compute emulator (runs service processes from
+their real packaged artifacts), the Postgres emulator (ORM `prisma dev`),
+and a bucket emulator (S3 wire over disk). Providers provision isolated
+instances by talking to the emulators during converge; the dev command is a
+view (`attach`): endpoints, merged logs, watch-rebuild-reconverge, Ctrl-C
+stops the app's services while emulators and data persist. The lowering
 (`nodes`/`provisions`) is byte-identical to deploy; parity holds by
 construction above the Alchemy provider boundary.
 
@@ -26,13 +27,13 @@ construction above the Alchemy provider boundary.
 | # | Decision | Where recorded |
 |---|---|---|
 | D1 | Dev = the deploy pipeline retargeted at the Alchemy **provider** boundary; never an HTTP Management-API emulation, never a bespoke per-kind dev harness | ADR-0041 |
-| D2 | The seam is `ExtensionDescriptor.dev?: DevDescriptor` — `providers`, `container`, `preflight`, `teardown`; **no `nodes`, no `provisions`, no `state`, no emulator lifecycle hook** (providers ensure emulators at reconcile) | ADR-0041 |
+| D2 | The seam is `ExtensionDescriptor.dev?: DevDescriptor` — `providers`, `container`, `preflight`, `emulators`, `attach`, `teardown`; **no `nodes`, no `provisions`, no `state`** | ADR-0041 |
 | D3 | Dev Alchemy state = alchemy's own `localState()` via the existing `LowerOptions.state` override, always at Alchemy stage `dev` | ADR-0041 |
-| D4 | Converge terminates; local `Deployment` writes desired-process records; the long-running dev command supervises them | ADR-0041 |
-| D5 | Every backing service is an **emulator**: a machine-scoped daemon surviving dev sessions, ensured by its provider at reconcile, provisioned against via its control surface, removed only by `--fresh`. Postgres = ORM `prisma dev`, one named detached instance per `Database` resource | ADR-0041, local-dev.md |
-| D6 | Bucket emulator = the storage module's S3 protocol handler + SigV4 over a new disk `ObjectStore`, daemonized one instance per app with a loopback admin API; protocol pieces extracted DOWN to a lowering-layer package | ADR-0041, local-dev.md |
+| D4 | One machine-scoped, multi-tenant emulator **per node kind**, ensured by the topology-aware `dev.emulators` hook; providers provision isolated instances by communicating with them; converge terminates and the Compute emulator keeps serving | ADR-0041 |
+| D5 | The dev command owns no processes: it is a view through `dev.attach` (endpoints, merged logs, stop control). Ctrl-C stops the app's service instances; emulators + data persist; `--fresh` removes; detached mode is a designed extension, not v1 | ADR-0041, local-dev.md |
+| D6 | Bucket emulator = the storage module's S3 protocol handler + SigV4 over a new disk `ObjectStore`, one machine-global daemon, physical bucket names `<app>--<name>` carried on the binding, per-bucket in-project data roots; protocol pieces extracted DOWN to a lowering-layer package. Postgres = ORM `prisma dev`, one named detached instance per `Database` resource | ADR-0041, local-dev.md |
 | D7 | Secrets: shell env else minted persisted placeholder + warning. Env-sourced params: shell env else **hard error** | ADR-0041 |
-| D8 | Children are spawned under **bun** (Compute's runtime) from the real packaged artifact's `bootstrap.js` — the deployed boot path, no bypass | ADR-0041 |
+| D8 | The Compute emulator spawns children under **bun** (Compute's runtime) from the real packaged artifact's `bootstrap.js` — the deployed boot path, no bypass | ADR-0041 |
 | D9 | Rebuilds are the user's (ADR-0005); dev watches **built output** and re-runs assemble + converge | ADR-0041 |
 | D10 | Cron fires for real (ADR-0020); no dev-side special-casing in v1 | ADR-0041 |
 | D11 | Hot reload / user dev-commands / remote bindings: designed extensions, **not v1** | local-dev.md |
@@ -61,13 +62,16 @@ Files **moved verbatim** (git mv; adjust imports only) from
 
 New files:
 
-- `fs-store.ts` — `export function fsStore(rootDir: string): ObjectStore`.
-  Mapping:
-  - Object bytes: `<rootDir>/<bucket>/<key>` — the key's `/` segments become
+- `fs-store.ts` — `export function fsStore(resolveBucketDir: (bucket:
+  string) => string | undefined): ObjectStore`. The resolver maps a (wire)
+  bucket name to its directory — `undefined` = unknown bucket (the handler's
+  no-such-bucket path). The bucket emulator supplies the resolver from its
+  registrations; a test can pin a fixed map. Mapping:
+  - Object bytes: `<bucketDir>/<key>` — the key's `/` segments become
     directories. Writes are write-temp-then-rename
-    (`<rootDir>/.tmp/<uuid>` → target) so a concurrent read never sees a
+    (`<bucketDir>/.tmp/<uuid>` → target) so a concurrent read never sees a
     partial object.
-  - Metadata sidecar: `<rootDir>/.meta/<bucket>/<key>.json` containing
+  - Metadata sidecar: `<bucketDir>/.meta/<key>.json` containing
     `{ "contentType": string, "etag": string }`. `etag` = quoted SHA-256 hex
     of the object bytes (the store owns the ETag — store.ts's contract).
   - Key validation: reject (return the handler's error path) any key whose
@@ -83,35 +87,13 @@ New files:
     `.meta`/`.tmp`.
   - `delete`: remove object + sidecar, prune now-empty parent dirs up to the
     bucket dir; missing key is a no-op.
-- `serve.ts` — `export function serveS3(opts: { port: number; store:
-  ObjectStore; statePath: string }): Promise<{ readonly url: string;
-  close(): Promise<void> }>`. Plain `node:http` (works under node and bun),
-  adapting IncomingMessage → the fetch-style `Request` `createS3Handler`
-  consumes and streaming the `Response` back. Binds `127.0.0.1`. S3 requests
-  are accepted iff SigV4 verification passes against ANY credential in the
-  emulator state (below). Multipart upload endpoints: respond `501` with body
-  text `multipart upload is not supported by the local dev bucket emulator yet`.
+- `mintKeyPair` moves here (into `sigv4.ts`) from the target extension's
+  `s3-credentials-resource.ts`; the extension re-exports it so both use one
+  implementation.
 
-  **Admin surface** (same listener, path prefix `/_pcdev/` — the underscore
-  makes collision with a valid bucket name impossible; loopback-only, no
-  auth — same trust model as the `prisma dev` proxy):
-  - `GET /_pcdev/health` → `200` JSON `{ "version": "<package version>" }`.
-  - `PUT /_pcdev/buckets/<name>` → validate the bucket name (store rules),
-    mkdir its directory, `204`. Idempotent.
-  - `PUT /_pcdev/credentials` with JSON `{ "accessKeyId", "secretAccessKey" }`
-    → add to the accepted set if absent, persist, `204`. Idempotent.
-
-  Emulator state (accepted credentials) is a JSON file at `statePath`
-  (mode 0600), owned and persisted by the emulator itself — providers never
-  write it directly, they PUT.
-- `emulator-main.ts` — the daemon entry, exported as subpath
-  `@internal/s3-protocol/emulator` and runnable directly:
-  `<runtime> emulator-main.js --port <n> --data-root <abs> --state-path <abs>
-  --ready-path <abs>`. Boots `serveS3({ port, store: fsStore(dataRoot),
-  statePath })`, then writes `{ "pid": <pid>, "port": <n>, "version":
-  "<package version>" }` to `readyPath` (temp-then-rename) as the readiness
-  signal. Exits nonzero with the error on the log stream if the port is
-  taken.
+This package stays **pure protocol** — no server, no daemon; those live in
+`@internal/dev-emulators` (§ 2). The storage module needs none of the daemon
+machinery.
 
 Storage module keeps `pg-store.ts`, `storage-server.ts`, `handlers` etc. and
 imports the moved pieces from `@internal/s3-protocol`. Its public exports
@@ -119,7 +101,106 @@ imports the moved pieces from `@internal/s3-protocol`. Its public exports
 byte-compatible — no consumer-visible change; existing storage tests must
 pass unmodified (except import paths inside the package itself).
 
-### 2. `@prisma/composer` core (`packages/0-framework/1-core/core`)
+### 2. `@internal/dev-emulators` — NEW package (the emulator daemons)
+
+Location: `packages/1-prisma-cloud/0-lowering/dev-emulators/`, name
+`@internal/dev-emulators`, private, `type: module`, tsdown like
+`@internal/lowering`. `architecture.config.json`: `domain: prisma-cloud,
+layer: lowering, plane: control`. Imports `@internal/s3-protocol`; node
+built-ins only. Two machine-global singleton daemons (`compute`, `buckets`)
+plus the shared daemon layer and typed loopback clients.
+
+#### `daemon.ts` — the shared daemon layer
+
+- Registry: `~/.prisma-composer/emulators/<name>.json` —
+  `{ "pid": number, "port": number, "version": string, "logPath": string }`.
+- `ensureDaemon(name: 'compute' | 'buckets'): Promise<{ url: string }>`:
+  1. Entry resolution: `fileURLToPath(import.meta.resolve(
+     '@internal/dev-emulators/<name>-main'))`.
+  2. Registry entry present AND pid alive AND `GET /health` OK AND health
+     `version` === this package's version → return `http://127.0.0.1:<port>`.
+  3. Version mismatch → SIGTERM (5 s grace, SIGKILL), fall through. Dead
+     pid / failed health → clean the entry, fall through.
+  4. Start: port = persisted port if any, else smallest ≥ 4300 unused across
+     registry entries, persisted immediately. Spawn `process.execPath
+     <entry> --port <n> --state-dir ~/.prisma-composer/emulators/<name>/`
+     with `detached: true`, stdio appended to
+     `~/.prisma-composer/emulators/<name>.log`, `unref()`. Poll `GET
+     /health`, 10 s budget; timeout →
+     `Error: <name> emulator failed to start on port <port> — see <logPath>.`
+  5. Foreign process on the port → same error; `--fresh` does NOT touch the
+     daemons (they are machine-global, shared by other apps); recovering a
+     stolen port is manual (delete the registry entry).
+- `stopDaemon(name)`: SIGTERM/SIGKILL + registry cleanup. Not called by any
+  v1 command — an operator escape hatch, exported for tests.
+
+#### `compute-main.ts` — the Compute emulator (subpath `/compute-main`)
+
+A small local counterpart of the platform's compute service: it owns the
+service child processes. Loopback `node:http` JSON admin API; state under its
+`--state-dir` (apps registry JSON + `logs/<app>/<service>.log`):
+
+- `GET /health` → `{ "version": string }`.
+- `PUT /apps/<app>/services/<id>` (empty body) → `{ "port": number, "url":
+  string }`. Port stable per (app, id): persisted in emulator state,
+  allocated smallest ≥ 3000 unused across ALL apps' services. Idempotent.
+- `PUT /apps/<app>/services/<id>/deployment` body `{ "address": string,
+  "artifactDir": string, "artifactHash": string, "env": Record<string,
+  string>, "port": number }` → `204`. (Re)starts the child iff
+  `artifactHash` or `env` changed: SIGTERM old (5 s, SIGKILL), spawn
+  `bun bootstrap.js` with `cwd: artifactDir`, `env`, stdio line-buffered
+  into the service's log file. `bun` missing from PATH → `500` with body
+  `local dev runs services under bun — the Prisma Compute runtime — and \`bun\` was not found on PATH. Install it: https://bun.sh.`
+  (fails the converge with that message).
+- `GET /apps/<app>/services` → `[{ "id", "address", "port", "url",
+  "status": "running" | "backoff" | "held" | "stopped", "pid"?,
+  "lastExitCode"?, "artifactHash"?, "logPath" }]`.
+- `GET /apps/<app>/services/<id>/logs?follow=1` → chunked plain text: the
+  log file's current tail, then live lines while open.
+- `POST /apps/<app>/stop` → stop every child of the app (records kept,
+  status `stopped`) → `204`.
+- `DELETE /apps/<app>` → stop + remove the app's records and logs → `204`.
+
+Supervision policy (emulator-owned): unexpected exit → restart with backoff
+1 s · 2ⁿ capped at 30 s, counter reset after 30 s of uptime; 5 consecutive
+sub-30 s exits → status `held` (no more restarts) until a deployment PUT
+changes `artifactHash`. Every supervision event is written into the
+service's own log stream prefixed `[emulator]` (e.g.
+`[emulator] exited (code 1) — restarting in 2s`).
+
+#### `buckets-main.ts` — the bucket emulator (subpath `/buckets-main`)
+
+The S3 wire (`@internal/s3-protocol`'s handler + SigV4) over `fsStore`, with
+the bucket-name → directory resolver fed from registrations. Multi-tenant:
+physical bucket names are `<app>--<name>`; each bucket's directory is
+registered by the provider (an in-project path, so objects stay browsable in
+the app's own working tree). Admin under `/_pcdev/` (the underscore cannot
+collide with a valid bucket name); registrations and accepted credentials
+persist in `<state-dir>/state.json`, mode `0600`:
+
+- `GET /health` → `{ "version": string }` (also at `/_pcdev/health`).
+- `PUT /_pcdev/apps/<app>/buckets/<name>` body `{ "dir": string }` →
+  register physical `<app>--<name>` → `dir`, mkdir, `204`. Idempotent.
+- `PUT /_pcdev/apps/<app>/credentials` body `{ "accessKeyId",
+  "secretAccessKey" }` → add to the accepted set, persist, `204`. Idempotent.
+- `DELETE /_pcdev/apps/<app>` → remove the app's registrations and
+  credentials (object directories are NOT deleted — they live in the app's
+  working tree and `teardown`'s `fs.rm` owns them) → `204`.
+
+S3 requests verify SigV4 against ANY accepted credential. Multipart upload
+endpoints: `501` with body
+`multipart upload is not supported by the local dev bucket emulator yet`.
+
+#### `client.ts`
+
+Typed loopback clients for both daemons (`computeClient()` /
+`bucketsClient()`), resolving the port from the registry; a dead or absent
+daemon surfaces as
+`Error: the <name> emulator is not running — \`prisma-composer dev\` starts it via the extension's dev.emulators hook.`
+Used by the local providers (§ 4) and the extension's `emulators`/`attach`/
+`teardown` implementations (§ 5).
+
+### 3. `@prisma/composer` core (`packages/0-framework/1-core/core`)
 
 `src/control/app-config.ts` — add, exported through `exports/app-config.ts`:
 
@@ -132,9 +213,37 @@ export interface DevDescriptor {
   readonly container: ContainerDescriptor;
   /** Dev value sourcing (secrets/env-params) — runs where deploy's preflight runs. */
   preflight?(input: PreflightInput): Promise<void>;
-  /** `--fresh`: remove every local trace of the dev instance — emulator daemons, state, data. */
+  /** Ensure the emulator daemons this topology's node kinds need are running (idempotent; they persist across sessions). */
+  emulators?(input: DevEmulatorsInput): Promise<void>;
+  /** The dev session's view of the running app. Core renders it and never learns an emulator's API. */
+  attach(input: DevAttachInput): Promise<DevAttachment>;
+  /** `--fresh`: remove every local trace of the dev instance — emulator instances, state, data. */
   teardown?(input: TeardownInput): Promise<void>;
 }
+
+export interface DevEmulatorsInput {
+  /** The loaded application graph — inspected for which node kinds need an emulator. */
+  readonly graph: Graph;
+  readonly container: ContainerInstance | undefined;
+  /** Absolute path of the dev state directory (`<cwd>/.prisma-composer/dev`). */
+  readonly devDir: string;
+}
+
+export interface DevAttachInput {
+  readonly container: ContainerInstance | undefined;
+  readonly devDir: string;
+}
+
+export interface DevAttachment {
+  /** Every service's local endpoint, for the front door. */
+  endpoints(): Promise<readonly { readonly address: string; readonly url: string }[]>;
+  /** Merged, line-oriented log stream across the app's services (including services that appear after later converges). Ends when `signal` aborts. */
+  logs(signal: AbortSignal): AsyncIterable<{ readonly service: string; readonly line: string }>;
+  /** Stop the app's service instances (emulators and data persist). */
+  stopServices(): Promise<void>;
+}
+
+export const DEV_DIR = '.prisma-composer/dev';
 ```
 
 and on `ExtensionDescriptor`:
@@ -156,46 +265,11 @@ and on `ExtensionDescriptor`:
   resolution is unchanged (`resolveStateLayer` — dev passes `opts.state`,
   which already takes precedence).
 
-`src/control/dev-process.ts` — NEW, exported via `exports/app-config.ts`
-(control plane): the framework-owned process-table contract any target's dev
-providers write and the CLI supervises.
+There is no framework-owned process table: service processes belong to the
+Compute emulator (§ 2), and core's whole view of the running app is the
+`DevAttachment` the extension returns.
 
-```ts
-/** One desired local service process — written by a dev Deployment provider, reconciled by the dev command. */
-export interface DevProcessRecord {
-  /** Schema version; this spec defines "1". A reader seeing an unknown version fails loudly. */
-  readonly recordVersion: '1';
-  /** The provisioned compute service's id — the record's identity and filename stem. */
-  readonly serviceId: string;
-  /** The service's full graph address (dotted). */
-  readonly address: string;
-  /** sha256 of the packaged artifact this process must run. */
-  readonly artifactHash: string;
-  /** Absolute path of the unpacked artifact directory (contains bootstrap.js). */
-  readonly artifactDir: string;
-  /** The COMPLETE child environment (COMPOSER_* rows, secret platform vars, PORT, PATH, HOME). */
-  readonly env: Readonly<Record<string, string>>;
-  /** The localhost port the service binds. */
-  readonly port: number;
-  /** The service's local URL (`http://localhost:<port>`). */
-  readonly url: string;
-}
-
-export const DEV_DIR = '.prisma-composer/dev';
-export const DEV_PROCESS_DIR = `${DEV_DIR}/processes`;
-
-export function readDevProcessTable(cwd: string): DevProcessRecord[];
-export function writeDevProcessRecord(cwd: string, record: DevProcessRecord): void;
-export function deleteDevProcessRecord(cwd: string, serviceId: string): void;
-```
-
-Records live at `<cwd>/.prisma-composer/dev/processes/<serviceId>.json`,
-written temp-then-rename. `readDevProcessTable` validates `recordVersion`
-and every field's type with real narrowing (no casts — `.agents/rules/
-no-bare-casts.mdc`), throwing an `Error` naming the file and field on
-mismatch. `serviceId` must match `/^[a-z0-9][a-z0-9-]*$/` (it is a filename).
-
-### 3. `@internal/lowering` (`packages/1-prisma-cloud/0-lowering/lowering`)
+### 4. `@internal/lowering` (`packages/1-prisma-cloud/0-lowering/lowering`)
 
 New directory `src/dev/`, exported as subpath `@internal/lowering/dev`
 (add to `src/exports/` per `.agents/rules/exports-entrypoints.mdc`; plane
@@ -205,36 +279,29 @@ New directory `src/dev/`, exported as subpath `@internal/lowering/dev`
 
 All JSON files under `<cwd>/.prisma-composer/dev/`, written
 temp-then-rename, guarded by ONE in-process async mutex per file (providers
-run concurrently inside the one alchemy child; there is no cross-process
-writer by design — the supervisor only reads these, and never during a
-converge it did not itself start):
+run concurrently inside the one alchemy child; nothing else writes them):
 
 - `env.json` — `Record<string, string>`: every `EnvironmentVariable` row,
   key → value. Last write wins (matches platform semantics: one project-wide
   namespace; `alchemy-lowering.md` § Placement).
-- `ports.json` — `Record<string, number>`: allocation name → port.
-  Allocation names: `service:<serviceName>`. (The bucket emulator's port is
-  NOT here — it lives in the machine-global emulator registry, allocated
-  from its own ≥ 4300 range, because the emulator outlives any one working
-  directory's session.)
 - `secrets.json` — `Record<string, string>`: platform var name → value
   (shell-sourced or minted placeholder). File mode `0o600`.
 - `postgres.json` — `Record<string, { instance: string; url: string }>`:
   Database resource name → its `prisma dev` instance name and URL.
 
-`allocatePort(cwd, name): number` — returns the existing allocation for
-`name`, else the smallest integer ≥ 3000 not present in `ports.json` values,
-persisting it. No OS probing — determinism wins; an actual bind conflict
-surfaces at spawn and is covered by the error surface.
+Ports live nowhere here: service ports are the Compute emulator's own state
+(stable per (app, service)); emulator daemon ports live in the daemon
+registry (§ 2).
 
 #### `src/dev/compute.ts` — local compute cluster providers
 
-- `LocalComputeServiceProvider()`: `reconcile` returns prior `output` when
-  present (stable identity + port). First create: `id` = `news.name`,
-  `port` = `allocatePort(cwd, \`service:${news.name}\`)`,
-  `endpointDomain` = `http://localhost:<port>`. `list` → `[]`; `delete` →
-  release nothing (allocations persist; `--fresh` clears them); `read` →
-  echo `output`.
+- `LocalComputeServiceProvider()`: `reconcile` calls the Compute emulator —
+  `PUT /apps/<app>/services/<news.name>` (idempotent; the app is the dev
+  container's `input.appName`) → `{ port, url }`; returns `{ id: news.name,
+  name: news.name, endpointDomain: url }`. An unreachable emulator surfaces
+  `client.ts`'s not-running error. `list` → `[]`; `delete` →
+  `DELETE`-less no-op (instance removal is `teardown`'s, via
+  `DELETE /apps/<app>`); `read` → echo `output`.
 - `LocalEnvironmentVariableProvider()`: `reconcile` writes
   `news.key → news.value` into `env.json`, returns
   `{ id: news.key, key: news.key }`. `delete` removes the key. Handles the
@@ -247,20 +314,23 @@ surfaces at spawn and is covered by the error surface.
      destDir)`), a minimal ustar reader matching exactly what the writer
      emits: regular files, name+prefix fields, no links (error on any other
      typeflag). Extraction goes temp-then-rename at the directory level.
-  2. Look up the service's port: `ports.json` key
-     `service:<name>` where `name` is resolved from `news.computeServiceId`
-     (equal to the ComputeService's `name` by construction above). Resolve
-     the address from `news.serviceAddress` (see § lowering handoff change).
+  2. Fetch the service's port: `PUT /apps/<app>/services/<id>` (idempotent)
+     where `id` = the ComputeService's name resolved from
+     `news.computeServiceId`, `app` = the dev container's `input.appName`.
+     Resolve the address from `news.serviceAddress` (see § lowering handoff
+     change).
   3. Materialize env: `{ ...allOf(env.json) }`, then override
      `configKey(address, { owner: 'service', name: 'port' })` =
      `JSON.stringify(port)` (the serializer's service-own literal encoding),
      then merge `secrets.json` entries verbatim (raw platform names), then
      `PATH` and `HOME` from the current process env.
-  4. Write the `DevProcessRecord` (core's `writeDevProcessRecord`).
+  4. `PUT /apps/<app>/services/<id>/deployment` with `{ address,
+     artifactDir, artifactHash, env, port }` — the emulator (re)starts the
+     child only when the hash or env changed.
   5. Return `{ deploymentId: news.artifactHash, deployedUrl:
      \`http://localhost:${port}\` }`.
-  `delete` removes the record and the unpacked dir if no other record
-  references its `artifactDir`.
+  `delete` removes the unpacked artifact dir if no other deployment
+  references it (instance removal is `teardown`'s).
 - `LocalProjectProvider()`: identity only — `reconcile` returns
   `{ id: 'local', ... }` shapes; present so the provider collection stays
   total, though current lowerings never yield `Project`.
@@ -289,60 +359,26 @@ surfaces at spawn and is covered by the error surface.
   `Redacted.value` on it).
 - `PgWarm`/`PnMigration` are NOT here — the hosted ones run as-is.
 
-#### `src/dev/emulator-daemon.ts` — the emulator daemon manager
-
-Minimal, framework-owned daemon bookkeeping for emulators the framework
-itself ships (Postgres does NOT use this — the ORM CLI is its manager).
-
-- Registry: one JSON file per instance at
-  `~/.prisma-composer/emulators/<instance>.json` —
-  `{ "pid": number, "port": number, "version": string, "dataRoot": string,
-  "statePath": string, "logPath": string }`. Instance names:
-  `pcdev-<app>-buckets` (same sanitization as the Postgres instance names).
-- `ensureEmulator(opts: { instance: string; entry: string; dataRoot: string;
-  devDir: string }): Promise<{ url: string }>`:
-  1. Read the registry entry. If present: pid alive (`kill(pid, 0)`) AND
-     `GET /_pcdev/health` succeeds AND health `version` === this package's
-     version → return `http://127.0.0.1:<port>`.
-  2. Version mismatch → SIGTERM the pid (5 s grace, then SIGKILL), fall
-     through to start. Dead pid / failed health → clean the entry, fall
-     through.
-  3. Start: port = the registry entry's persisted port if any (endpoint
-     stability — minted `BucketKey` attributes freeze the URL in Alchemy
-     state), else the smallest port ≥ 4300 not used by any other registry
-     entry, persisted immediately. Spawn `process.execPath <entry> --port …
-     --data-root … --state-path <registryDir>/<instance>.state.json
-     --ready-path <registryDir>/<instance>.ready.json` with
-     `detached: true`, stdio to `<registryDir>/<instance>.log` (append),
-     `unref()`. Poll the ready file then `GET /_pcdev/health`, 10 s budget;
-     on timeout: `Error: bucket emulator "<instance>" failed to start on
-     port <port> — see <logPath>.` On success write the registry entry.
-  4. A port held by a foreign process (spawn exits nonzero, log shows bind
-     failure) → same error text; `--fresh` deletes the registry entry and
-     re-allocates.
-- `stopEmulator(instance)`: SIGTERM from registry pid (grace 5 s, SIGKILL),
-  delete registry + ready + state files. Used by teardown only.
-
 #### `src/dev/bucket.ts` — local bucket cluster providers
 
-Both providers first `ensureEmulator({ instance: \`pcdev-<app>-buckets\`,
-entry: fileURLToPath(import.meta.resolve('@internal/s3-protocol/emulator')),
-dataRoot: <devDir>/buckets, devDir })` — idempotent and cheap when healthy.
-The app name reaches the provider via the dev container (its
-`input.appName`), read from the deserialized container exactly as the hosted
-providers read theirs.
+Both are clients of the machine-global bucket emulator (§ 2 — the daemon is
+already up: the extension's `dev.emulators` hook ensured it before converge;
+unreachable surfaces `client.ts`'s not-running error). The app name reaches
+the provider via the dev container's `input.appName`.
 
-- `LocalBucketProvider()`: `reconcile` → ensure emulator, then
-  `PUT /_pcdev/buckets/<news.name>`; returns `{ id: news.name }`-shaped
-  attributes.
-- `LocalBucketKeyProvider()`: mint-once-stable like `ServiceKey` (PIN:
-  `mintKeyPair` moves into `@internal/s3-protocol`'s `sigv4.ts`; the target
-  extension re-exports it so both use one impl). `reconcile` → ensure
-  emulator, `PUT /_pcdev/credentials` with the (prior or freshly minted)
-  pair — re-PUT on every reconcile, which self-heals an emulator whose state
-  was wiped. Attributes: `{ endpoint: <emulator url>, bucketName: news.name,
-  accessKeyId, secretAccessKey }` (matching the hosted `BucketKey`
-  attribute names the bucket descriptor reads).
+- `LocalBucketProvider()`: `reconcile` →
+  `PUT /_pcdev/apps/<app>/buckets/<news.name>` with
+  `{ dir: <devDir>/buckets/<news.name> }` (in-project, browsable); returns
+  `{ id: news.name }`-shaped attributes.
+- `LocalBucketKeyProvider()`: mint-once-stable like `ServiceKey` (the mint
+  is `@internal/s3-protocol`'s `mintKeyPair`). `reconcile` →
+  `PUT /_pcdev/apps/<app>/credentials` with the (prior or freshly minted)
+  pair — re-PUT on every reconcile, which self-heals an emulator whose
+  state was wiped. Attributes: `{ endpoint: <emulator url>, bucketName:
+  \`<app>--<news.name>\`, accessKeyId, secretAccessKey }` — the PHYSICAL
+  bucket name rides the binding, so consumers address the emulator's
+  namespace-safe name and cross-app collisions are impossible (matching the
+  hosted `BucketKey` attribute names the bucket descriptor reads).
 - `list` → `[]`, `delete` → no-op (objects belong to the developer;
   `--fresh` deletes), `read` → echo output. Both providers.
 
@@ -375,7 +411,7 @@ platform derives nothing from it). `descriptors/compute.ts`: add
 `serviceAddress`. The local provider REQUIRES it:
 `Error: Deployment for "<computeServiceId>" carries no serviceAddress — the lowering predates local dev support.`
 
-### 4. Target extension (`packages/1-prisma-cloud/1-extensions/target`)
+### 5. Target extension (`packages/1-prisma-cloud/1-extensions/target`)
 
 New control-plane files (all under `src/`, plane `control` in
 `architecture.config.json`):
@@ -400,13 +436,30 @@ New control-plane files (all under `src/`, plane `control` in
      throw one error listing all, formatted like preflight.ts's
      `missingError` but scoped `local dev` and instructing
      `Set each in the shell you run \`prisma-composer dev\` from.`
+- `src/dev/emulators.ts` — `runDevEmulators(input: DevEmulatorsInput)`:
+  inspect the graph's node kinds; `ensureDaemon('compute')` always (every
+  app has services); `ensureDaemon('buckets')` when any `s3`-kinded resource
+  node exists. Postgres needs no pre-start — its instances are created at
+  provision through the ORM CLI. Idempotent; prints one `[dev]` line per
+  daemon it actually started.
+- `src/dev/attach.ts` — `devAttach(input: DevAttachInput): DevAttachment`,
+  a Compute-emulator client scoped to the app:
+  - `endpoints()` → `GET /apps/<app>/services`, mapped to
+    `{ address, url }`.
+  - `logs(signal)` → follow each listed service's
+    `logs?follow=1` stream, merged and line-labelled; re-list every 2 s and
+    attach followers for services that appeared after a later converge.
+  - `stopServices()` → `POST /apps/<app>/stop`.
 - `src/dev/teardown.ts` — `runDevTeardown(input: TeardownInput)`:
   1. `<prisma-bin> dev stop 'pcdev-<app>-*'` then
      `<prisma-bin> dev rm 'pcdev-<app>-*'` (glob per the CLI's stop/rm NAME
      pattern support; tolerate nonzero exit when no instance matches — match
      on the CLI's "not found"-style output, otherwise rethrow with output).
-  2. `stopEmulator('pcdev-<app>-buckets')` (emulator-daemon manager —
-     tolerates an absent registry entry).
+  2. Compute emulator: `DELETE /apps/<app>` (stops children, removes records
+     and logs). Bucket emulator: `DELETE /_pcdev/apps/<app>` (removes
+     registrations + credentials). Both tolerate an unreachable or absent
+     daemon — the machine-global daemons themselves are NEVER stopped by
+     `--fresh` (other apps may be using them).
   3. `fs.rm` `<cwd>/.prisma-composer/dev` recursively.
   4. `fs.rm` `<cwd>/.alchemy/state/<app>/dev` recursively (the localState
      stage dir; tolerate absence).
@@ -423,6 +476,8 @@ New control-plane files (all under `src/`, plane `control` in
         Prisma.ServiceKeyProvider(),
       )),
       preflight: (input) => runDevPreflight(input),
+      emulators: (input) => runDevEmulators(input),
+      attach: (input) => devAttach(input),
       teardown: (input) => runDevTeardown(input),
     },
 ```
@@ -437,14 +492,14 @@ New control-plane files (all under `src/`, plane `control` in
   that `prismaCloud()` succeeds in a scrubbed env and `prisma-composer dev`
   never reads `PRISMA_WORKSPACE_ID`/`PRISMA_SERVICE_TOKEN`/`PRISMA_REGION`.
 
-### 5. CLI (`packages/0-framework/3-tooling/cli`)
+### 6. CLI (`packages/0-framework/3-tooling/cli`)
 
 - `src/main.ts`: new `DevCommand` (`paths = [['dev']]`), options: `entry`
   (positional, required), `--name` (same override semantics as deploy),
   `--fresh` (boolean, default false). `ParsedArgs.command` widens to
   `'deploy' | 'destroy' | 'dev'`. `--stage`/`--production` do not exist on
   dev (clipanion rejects them as unknown flags → usage error).
-- `src/dev/` — the dev pipeline + supervisor (all new; `plane: control` via
+- `src/dev/` — the dev pipeline + view (all new; `plane: control` via
   the existing CLI glob):
   - `run-dev.ts` — `runDev(args, deps)`:
     1. Steps 1–6 of `run()` reused verbatim (extract the shared prefix of
@@ -463,14 +518,21 @@ New control-plane files (all under `src/`, plane `control` in
        `input.appName`.)
     5. Preflight: `dev.preflight` per extension (always — dev has no
        deploy/destroy split).
-    6. Write the dev stack file (below); run
+    6. Emulators: `dev.emulators({ graph, container, devDir })` per
+       extension that declares it.
+    7. Write the dev stack file (below); run
        `runAlchemy({ command: 'deploy', stackFileRelativePath:
        DEV_STACK_RELATIVE_PATH, cwd, stage: 'dev', containerEnv })`.
        Nonzero exit: print the stack-file reproduction hint (deploy's
        pattern, with `--stage dev`) and exit with that status.
-    7. Enter the supervisor loop (below) until SIGINT/SIGTERM; on exit stop
-       children and exit 0 — emulators stay up by design (machine-scoped
-       daemons; `--fresh` removes them).
+    8. Attach: `dev.attach({ container, devDir })` per extension; print the
+       front door from the merged `endpoints()` (ordered by address depth,
+       fewest dots first, then lexicographic; first line preceded by
+       `[dev] ready:`); pump every attachment's `logs()` to stdout, each
+       line prefixed `[<service>] `; the CLI's own lines are `[dev] `.
+    9. Watch loop (below) until SIGINT/SIGTERM; on exit call every
+       attachment's `stopServices()`, then exit 0 — emulators and data stay
+       up by design (machine-scoped daemons; `--fresh` removes instances).
   - `generate-dev-stack.ts` — like `generate-stack.ts` but at
     `.prisma-composer/dev/alchemy.run.ts`
     (`DEV_STACK_RELATIVE_PATH`), emitting:
@@ -491,33 +553,6 @@ New control-plane files (all under `src/`, plane `control` in
     No `report` (dev prints its own front door). Header comment mirrors the
     deploy one with `alchemy deploy .prisma-composer/dev/alchemy.run.ts --stage dev`
     as the reproduction line.
-  - `supervisor.ts` — owns children, keyed by `serviceId`:
-    - Reconcile pass (after every converge): read the table
-      (`readDevProcessTable`); spawn missing; kill+respawn on
-      `artifactHash` change; kill children whose record vanished.
-    - Spawn: `spawn(bunBin, ['bootstrap.js'], { cwd: record.artifactDir,
-      env: record.env, stdio: ['ignore','pipe','pipe'] })`. `bunBin` =
-      `bun` resolved on PATH once at startup; missing →
-      `CliError: local dev runs services under bun — the Prisma Compute runtime — and \`bun\` was not found on PATH. Install it: https://bun.sh.`
-    - Pid registry: `<devDir>/pids.json` (`Record<serviceId, number>`),
-      updated on spawn/exit. At startup, for each recorded pid still alive
-      whose command line (read via `process.kill(pid, 0)` + platform
-      `ps -o command= -p <pid>`) contains `.prisma-composer/dev/artifacts/`,
-      SIGTERM it (then SIGKILL after 5s) — recovering from a killed
-      supervisor. A pid whose command line does NOT match is left alone and
-      dropped from the registry.
-    - Logs: line-buffer each child's stdout+stderr; prefix every line
-      `[<serviceId>] ` to the dev process's stdout. Supervisor's own lines
-      are prefixed `[dev] `.
-    - Crash policy: unexpected exit → log
-      `[dev] <serviceId> exited (code <code>) — restarting`; restart with
-      backoff 1s ·2ⁿ capped 30s, counter reset after 30s of uptime. After 5
-      consecutive sub-30s exits, stop restarting and print a standing block:
-      the serviceId, last exit code, and the child's last 20 log lines,
-      re-printed only when new information arrives; resume on the next
-      successful converge that changes its `artifactHash`.
-    - Shutdown: SIGTERM each child, 5s grace, SIGKILL survivors; then exit.
-      Emulators are not touched.
   - `watch.ts` — for each assembled service, watch the **user's built
     output** consumed by assembly: the resolved `entry` file and, when the
     adapter's contract is a directory, the bundle input dir (both are known
@@ -525,15 +560,13 @@ New control-plane files (all under `src/`, plane `control` in
     dirs, plain on files; debounce 300 ms per burst, coalescing across
     services. On fire: re-run assemble for ALL services (correctness over
     cleverness; optimization is a recorded follow-up) → rewrite the dev stack
-    file → re-run converge (`--stage dev`) → reconcile pass. Converge failure
-    during watch: print the error, keep the previous processes running, keep
-    watching (a broken build must not take down the running topology).
-  - Front door, printed after every successful converge:
-    `[dev] <address>  <url>` for every record, ordered by address depth
-    (fewest dots first) then lexicographic; the first line is preceded by
-    `[dev] ready:`.
+    file → re-run converge (`--stage dev`) — the emulator restarts exactly
+    the services whose deployments were re-put. Converge failure during
+    watch: print the error, keep the running topology untouched, keep
+    watching (a broken build must not take down the running app). After
+    every successful converge, re-print the front door from `endpoints()`.
 
-### 6. `dir()` build adapter (`packages/0-framework/2-authoring/dir/` — NEW)
+### 7. `dir()` build adapter (`packages/0-framework/2-authoring/node/src/dir.ts` — NEW entry)
 
 Prerequisite for the open-chat proof (its runnable is a directory —
 friction #3's shape) and independently useful.
@@ -556,7 +589,7 @@ friction #3's shape) and independently useful.
   states the directory and the entry (ADR-0005; the friction #3
   recommendation, verbatim).
 
-### 7. Docs & rules
+### 8. Docs & rules
 
 - `docs/design/10-domains/local-dev.md` — already aligned; final pass in the
   last slice for anything the implementation forced (each such change also
@@ -570,7 +603,7 @@ friction #3's shape) and independently useful.
 ## Behavior contracts (cross-cutting)
 
 - **No new runtime dependencies** in any shipped package. The S3 server,
-  tar reader, watcher, and supervisor use node built-ins only. (`alchemy`,
+  tar reader, watcher, and emulator daemons use node built-ins only. (`alchemy`,
   `effect`, `clipanion` are already present.)
 - **Casts**: `.agents/rules/no-bare-casts.mdc` — every cast is `blindCast`
   with a justification, or real narrowing. The provider attribute shapes are
@@ -580,8 +613,8 @@ friction #3's shape) and independently useful.
   `url.replace(/:[^/:@]*@/, ':***@')`).
 - **Determinism**: no `Date.now()`-seeded names or ports; every allocation
   and minted value is persisted and stable across restarts.
-- **Windows**: out of scope, recorded: dev requires a POSIX host (the `ps`
-  pid check and `prisma dev` both assume it); fail on `process.platform ===
+- **Windows**: out of scope, recorded: dev requires a POSIX host (daemon
+  signalling and `prisma dev` assume it); fail on `process.platform ===
   'win32'` with `local dev is not supported on Windows yet.`
 
 ## Acceptance criteria (project DoD)

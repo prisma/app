@@ -39,82 +39,70 @@ Dev re-runs [deploy's pipeline](deploy-cli.md#the-pipeline) with these deltas:
 3. **Assemble** — identical. Dev consumes the user's built output through the
    same adapters and produces the same bundles; missing output produces the
    same "run your build" error.
-4. **Containers** — the `dev.container` descriptor resolves a stable local
-   identity from the app name with no platform calls. Emulators need no step
-   here: each local provider ensures its emulator daemon is running when it
-   reconciles (step 5), the same way the Postgres provider shells the ORM's
-   `prisma dev`.
+4. **Containers + emulators** — the `dev.container` descriptor resolves a
+   stable local identity from the app name with no platform calls. Then the
+   `dev.emulators` hook inspects the loaded graph and ensures one emulator
+   daemon per node kind the topology uses (Compute always; buckets when
+   bucket resources exist; Postgres needs no pre-start — its instances are
+   created at provision through the ORM CLI).
 5. **Lower + converge** — a dev-generated stack file (ADR-0007's pattern, at
    `.prisma-composer/dev/alchemy.run.ts`), driven with the extension's
    `dev.providers()` layer and Alchemy's built-in `localState()` store, always
-   at Alchemy stage `dev`. Converge terminates as always; services are *not*
-   running when it exits — desired state is.
-6. **Supervise** — new, dev-only: reconcile the process table (below), print
-   the front door, stream logs, watch for rebuilds, loop.
+   at Alchemy stage `dev`. Providers provision emulator instances (a running
+   service, a database, a bucket) by talking to the emulators; converge
+   terminates as always, and the Compute emulator keeps serving.
+6. **Attach** — new, dev-only: through `dev.attach`, render the front door
+   (every service's endpoint), stream the merged logs, watch for rebuilds,
+   loop. Ctrl-C stops the app's service instances through the attachment and
+   exits; emulators and data persist.
 
-## The process table
+## The Compute emulator
 
-The seam between converge (terminating) and serving (long-running). The local
-`Deployment` provider's `reconcile` does not spawn; it writes one record per
-service into the dev state directory:
+The seam between converge (terminating) and serving (long-running). One
+emulator daemon per node kind runs machine-scoped and multi-tenant — the
+Compute emulator is the one the framework builds in full: a small local
+counterpart of the platform's compute service, with a loopback admin
+endpoint. The local `Deployment` provider does not spawn processes; it
+unpacks the artifact into `.prisma-composer/dev/artifacts/<hash>/`,
+materializes the complete child env, and puts the deployment at the
+emulator, which owns the processes:
 
-```jsonc
-// .prisma-composer/dev/processes/<address>.json
-{
-  "address": "chat",
-  "artifactHash": "sha256-…",
-  "artifactDir": "…/dev/artifacts/sha256-…/", // unpacked once per hash
-  "env": { "COMPOSER_CHAT_DB_URL": "…", "PORT": "3000", … },
-  "port": 3000
-}
-```
+- **New or changed deployment** (artifact hash or env changed) → stop the
+  old child if any, spawn the artifact's `bootstrap.js` under bun with the
+  materialized env. Only the changed service restarts — Alchemy's diff
+  already limited which deployments were re-put.
+- **Child exits unexpectedly** → the emulator restarts it with backoff and
+  writes its supervision events into that service's log stream; repeated
+  crash-looping is a held state visible in the service listing and the logs,
+  not silent churn.
+- **Instance deleted** (service removed from the topology, `--fresh`) → stop
+  and remove.
+- **Ctrl-C on the dev command** → the attachment stops the app's service
+  instances and detaches. Every emulator — Compute, Postgres instances, the
+  bucket emulator — stays up with its data; the next start is warm.
+  `--fresh` is what removes instances and data. (A detached mode where
+  services keep serving with no session is a designed extension, not v1.)
 
-The `dev` command reconciles the table against reality:
-
-- **Record with no process** → spawn the artifact's bootstrap as a child, env
-  from the record, stdout/stderr multiplexed into the dev log stream prefixed
-  by address.
-- **Record's `artifactHash` changed** → kill the child, respawn from the new
-  artifact dir. Only the changed service restarts — Alchemy's diff already
-  guaranteed only its record changed.
-- **Child exits unexpectedly** → log loudly with the exit code, restart with
-  backoff; repeated crash-looping surfaces as a standing error line, not silent
-  churn.
-- **Record deleted** (a service removed from the topology, `--fresh`) → kill
-  the child.
-- **Ctrl-C** → kill every child. Every emulator — the Postgres instances and
-  the bucket emulator — stays up: they are machine-scoped daemons holding the
-  data, and they make the next start warm. `--fresh` is what stops and
-  removes them.
-
-The env materialization in each record is the one platform-side behavior the
-local target implements itself: the hosted platform joins the branch's config
-variables into a deployment at version-create; locally, the `Deployment`
-provider performs the same join from the `EnvironmentVariable` records the
-lowering emitted — against props defined in this repo, once, not an emulation
-of a foreign API.
+The env materialization is the one platform-side behavior the local target
+implements itself: the hosted platform joins the branch's config variables
+into a deployment at version-create; locally, the `Deployment` provider
+performs the same join from the `EnvironmentVariable` records the lowering
+emitted — against props defined in this repo, once, not an emulation of a
+foreign API.
 
 ### Process lifetimes
 
-Dev has three process lifetimes, each with a distinct owner:
-
 1. **Converge-scoped** — the Alchemy child (ADR-0007). Providers run here;
    nothing started here survives its exit.
-2. **Session-scoped** — the app's own service children, owned by the
-   long-running `dev` command via the process table. They outlive every
-   converge within a session and stop on Ctrl-C.
-3. **Machine-scoped emulators** — every local backing service, uniformly:
-   the `prisma dev` Postgres instances and the bucket emulator. The classic
-   local-emulator model (firebase/supabase emulators): long-lived daemons
-   that survive dev sessions entirely, removed only by `--fresh`. A local
-   provider *ensures* its emulator is running at reconcile — spawning it
-   detached if absent — and provisions the app's instances (a database, a
-   bucket, accepted credentials) by communicating with it: the ORM CLI's own
-   daemon manager for Postgres, a loopback admin endpoint for the bucket
-   emulator. Ensuring happens inside converge, so no lifecycle hook exists
-   on `DevDescriptor` for emulators.
+2. **Machine-scoped emulators** — one per node kind, multi-tenant, holding
+   every long-lived process: the Compute emulator (service children), the
+   `prisma dev` Postgres instances (managed by the ORM CLI, per-Database),
+   and the bucket emulator. They survive dev sessions; `--fresh` removes an
+   app's instances.
+3. **The dev session owns no processes at all** — it is a view (`attach`):
+   endpoints, merged logs, the stop control, and the watch loop.
 
-The bucket emulator's daemon bookkeeping (registry, pidfile, stable port,
+The emulator daemon bookkeeping (registry, stable ports, readiness,
 version-skew restart) is framework-owned and minimal; Postgres reuses the
 ORM CLI's mature manager (`prisma dev ls|stop|rm`) rather than duplicating
 it.
@@ -130,8 +118,8 @@ semantics):
 | `Project` | a local identity record; no platform |
 | `Database` | a database on the local Postgres server (ORM `prisma dev`) |
 | `Connection` | the local connection URL |
-| `ComputeService` | allocates a port (persisted in state, stable across runs); `endpointDomain = http://localhost:<port>` — which makes origin (ADR-0039) work unchanged |
-| `Deployment` | unpacks the artifact once per hash; writes the process-table record |
+| `ComputeService` | registers the service with the Compute emulator, which allocates its stable port; `endpointDomain = http://localhost:<port>` — which makes origin (ADR-0039) work unchanged |
+| `Deployment` | unpacks the artifact once per hash, materializes the env, and puts the deployment at the Compute emulator, which (re)starts the child |
 | `EnvironmentVariable` | a key→value row in the dev state store |
 | `Bucket` | a directory under `.prisma-composer/dev/buckets/<bucket>/`, served by the bucket emulator |
 | `BucketKey` | credentials registered with the bucket emulator |
@@ -168,10 +156,13 @@ cannot import the storage module, so the protocol pieces (handler, SigV4,
 lowering layer that both the module and the bucket emulator import — a
 behavior-preserving extraction; the storage module's public surface is
 unchanged. The bucket emulator is then a third store implementation plus one
-daemonized local server per app (plain `node:http`, which runs under both
-node and bun), ensured by the `Bucket`/`BucketKey` providers at reconcile and
-administered through a loopback admin endpoint (`/_pcdev/…` — the underscore
-prefix cannot collide with a valid bucket name):
+machine-global daemonized server (plain `node:http`, which runs under both
+node and bun), multi-tenant across apps and administered through a loopback
+admin endpoint (`/_pcdev/…` — the underscore prefix cannot collide with a
+valid bucket name). Physical bucket names are prefixed `<app>--<name>` and
+carried on the binding's `bucketName`, so consumers follow the binding and
+names cannot collide across apps; each bucket's data root is registered as
+an in-project path:
 
 - **Objects are plain files at their key paths** —
   `.prisma-composer/dev/buckets/<bucket>/<key>`. Browse them, open them, drop a
@@ -179,7 +170,7 @@ prefix cannot collide with a valid bucket name):
   implementation detail: inspectable state is half the value of local dev.
 - Object metadata (content type, user metadata) lives in a sidecar tree, so
   the object tree stays clean for humans.
-- One emulator instance per app serves every bucket (the wire namespaces by
+- One machine-global emulator serves every bucket (the wire namespaces by
   path bucket, as the handler already does), accepting each registered
   pair.
 - Multipart upload is initially unimplemented and fails with a clear error
