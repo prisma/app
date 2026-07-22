@@ -234,8 +234,10 @@ persist in `<state-dir>/state.json`, mode `0600`:
   working tree and `teardown`'s `fs.rm` owns them) → `204`.
 
 S3 requests authenticate per tenant: the target bucket's owning app is
-derived from its physical `<app>--<name>` prefix, and SigV4 is verified
-against ONLY that app's accepted credentials. A valid signature from another
+resolved from the bucket's REGISTRATION RECORD (which stores it), never by
+splitting the physical name — the segment rule permits `-` runs, so
+`<app>--<name>` is not reversible — and SigV4 is verified against ONLY that
+app's accepted credentials. A valid signature from another
 app's credential is rejected exactly like a bad signature — cross-app access
 is impossible and the rejection reveals nothing about the bucket's
 existence. Multipart upload endpoints: `501` with body
