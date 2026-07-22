@@ -159,6 +159,10 @@ describe.skipIf(pg === undefined)('PnMigration reconcile routes through applyPnM
         migrationsDir,
         targetHash: targetStorageHash(contractJson),
         invariants: [],
+        // No packs declared: reconcile must not touch configPath (the path
+        // deliberately points nowhere).
+        packHeads: [],
+        configPath: path.join(migrationsDir, 'no-such-prisma-next.config.ts'),
       },
       olds: undefined,
       output: undefined,

@@ -22,10 +22,13 @@ export type AnyPnContract = import('@prisma-next/contract/types').Contract<SqlSt
 /**
  * The comparison payload behind a `prisma-next` Contract. `_contract` is a
  * type-only anchor so plain assignability between two `PnCmp`s means the
- * branded `storageHash` literals match.
+ * branded `storageHash` literals match. `packRequirement` is the
+ * extension-pack claim a `pnPackRequirement` contract carries instead of a
+ * contract value.
  */
 export interface PnCmp<C extends AnyPnContract = AnyPnContract> {
   readonly contractJson: unknown;
+  readonly packRequirement?: PnPackRequirement;
   readonly _contract?: C;
 }
 
@@ -85,11 +88,58 @@ export function pnContract(contract: unknown): unknown {
     kind: 'prisma-next',
     __cmp: { contractJson: contract },
     satisfies: (required) => {
+      // A pack requirement is wireable to ANY pn database (D5): whether the
+      // wired resource's config actually lists the pack at the required head
+      // is enforced by the deploy preflight, not here — the authoring-side
+      // contract value cannot see the resource's prisma-next.config.ts.
+      if (packRequirementOf(required) !== undefined) return true;
       const requiredHash = storageHashOf(required);
       return requiredHash !== undefined && requiredHash === storageHashOf(value);
     },
   };
   return Object.freeze(value);
+}
+
+/** A dependency's claim that its pn database carries extension pack `packId` at `headHash`. */
+export interface PnPackRequirement {
+  readonly packId: string;
+  readonly headHash: string;
+}
+
+/**
+ * A `prisma-next`-kind required contract carrying an extension-pack claim
+ * instead of a contract value. Wireable to any `pnContract()` provider
+ * (wireability only); the deploy preflight enforces that the wired resource's
+ * PN config lists the pack at the required head.
+ */
+export function pnPackRequirement(req: PnPackRequirement): PnPostgresContract {
+  const value: PnPostgresContract = {
+    kind: 'prisma-next',
+    __cmp: { contractJson: undefined, packRequirement: req },
+    // A requirement never provides; core only calls `satisfies` on the
+    // provider side of a wiring. Answer honestly anyway: another requirement
+    // for the exact same pack head is the only thing this value could stand
+    // in for.
+    satisfies: (required) => {
+      const other = packRequirementOf(required);
+      return other !== undefined && other.packId === req.packId && other.headHash === req.headHash;
+    },
+  };
+  return Object.freeze(value);
+}
+
+/** Reads `__cmp.packRequirement` off a Contract, defensively — `__cmp` is opaque to core, so nothing guarantees its shape without a runtime check. */
+export function packRequirementOf(
+  contract: Contract<string, unknown> | undefined,
+): PnPackRequirement | undefined {
+  if (contract === undefined) return undefined;
+  const cmp = contract.__cmp;
+  if (typeof cmp !== 'object' || cmp === null || !('packRequirement' in cmp)) return undefined;
+  const req = cmp.packRequirement;
+  if (typeof req !== 'object' || req === null) return undefined;
+  if (!('packId' in req) || typeof req.packId !== 'string') return undefined;
+  if (!('headHash' in req) || typeof req.headHash !== 'string') return undefined;
+  return { packId: req.packId, headHash: req.headHash };
 }
 
 /**
