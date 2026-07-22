@@ -4,6 +4,7 @@ import type {
   Deps,
   Expose,
   HydratedDeps,
+  NODE,
   Params,
   RunnableServiceNode,
   Secrets,
@@ -11,7 +12,7 @@ import type {
   ServiceNode,
   Values,
 } from '@internal/core';
-import { hydrateSecrets, hydrateSync, NODE, number, service } from '@internal/core';
+import { hydrateSecrets, hydrateSync, number, service } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
 import { RESERVED_PROVIDER_PARAMS } from './provider-params.ts';
 import {
