@@ -388,8 +388,9 @@ Four additions, no new machinery classes:
    `config.extensionPacks ?? []` alongside `resolveMigrationsDir` (new
    `resolvePnProject(configPath) → { migrationsDir, extensionPacks }`).
    Thread `extensionPacks` into `createPostgresControlClient({ connection,
-   extensionPacks })` and into `client.dbInit({...})` (its options already
-   accept them). Decision change in `applyPnMigration`: when
+   extensionPacks })` — client-creation options only; the client threads
+   them into `dbInit`/`migrate` internally (amended 2026-07-22, D2: the
+   per-call options do not accept them, the creation options do). Decision change in `applyPnMigration`: when
    `extensionPacks.length > 0` and `decideMigrationAction` returns `noop`
    for the app space, still call `client.migrate` (PN's per-space path
    resolution no-ops each up-to-date space); `noop` is returned to the
