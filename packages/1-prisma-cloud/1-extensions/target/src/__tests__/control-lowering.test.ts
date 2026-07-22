@@ -1421,6 +1421,10 @@ describe('ADR-0030: per-binding RPC service keys — mint (control.ts) + wire (d
         .slice(before)
         .map(([, props]) => (props as { key: string }).key);
       expect(writtenKeys).not.toContain('COMPOSER_STOREFRONT_RPC_ACCEPTED_KEYS');
+      // The origin row is service-derived, not edge-derived, so the expose
+      // check above does not apply to it: the non-exposing storefront still
+      // gets its own origin row.
+      expect(writtenKeys).toContain('COMPOSER_STOREFRONT_ORIGIN');
     });
   });
 });

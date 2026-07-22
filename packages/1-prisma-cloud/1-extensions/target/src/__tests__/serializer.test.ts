@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { type ConfigParam, param, string } from '@internal/core';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { compute } from '../exports/index.ts';
+import { ORIGIN_PARAM } from '../origin-key.ts';
 import {
   configKey,
   decodeParamPointer,
@@ -15,7 +16,7 @@ import {
   encodeParamPointer,
   isParamPointerRow,
   readOrigin,
-  stashOrigin,
+  stashProviderParams,
 } from '../serializer.ts';
 
 const build = {
@@ -133,23 +134,23 @@ describe('deserialize — env-sourced param boot resolution', () => {
   });
 });
 
-describe('stashOrigin/readOrigin — the framework-resolved origin row', () => {
+describe('the framework-resolved origin row rides stashProviderParams; readOrigin reads it back', () => {
   const addressKey = configKey('web', { owner: 'service', name: 'ORIGIN' });
   const freeKey = configKey('', { owner: 'service', name: 'ORIGIN' });
 
-  test('stashOrigin re-emits the address-scoped row address-free when present', async () => {
+  test('stashProviderParams re-emits the address-scoped ORIGIN row address-free when present — the boot half of the round-trip', async () => {
     await withEnv(
       { [addressKey]: encode('service', 'https://web.example.com'), [freeKey]: undefined },
       () => {
-        stashOrigin('web');
+        stashProviderParams([ORIGIN_PARAM], 'web');
         expect(process.env[freeKey]).toBe(encode('service', 'https://web.example.com'));
       },
     );
   });
 
-  test('stashOrigin is a no-op when the address-scoped row is absent', async () => {
+  test('stashProviderParams writes nothing for ORIGIN when the address-scoped row is absent', async () => {
     await withEnv({ [addressKey]: undefined, [freeKey]: undefined }, () => {
-      stashOrigin('web');
+      stashProviderParams([ORIGIN_PARAM], 'web');
       expect(process.env[freeKey]).toBeUndefined();
     });
   });

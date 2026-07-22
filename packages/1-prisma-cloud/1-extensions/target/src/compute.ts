@@ -21,7 +21,6 @@ import {
   ORIGIN_KEY_NAME,
   readOrigin,
   stash,
-  stashOrigin,
   stashProviderParams,
   stashSecrets,
 } from './serializer.ts';
@@ -87,14 +86,11 @@ export class ComputeService<D extends Deps, P extends Params, E extends Expose, 
     const config = deserialize(this, address);
     stash(this, config);
     // ADR-0031's provider-side sibling of the param re-stash above — the
-    // reader is serve()'s accepted keys or the streams entrypoint's
-    // API_KEY. An absent row stays absent (never provisioned); a present
-    // one is schema-checked exactly like a declared param before it moves.
+    // readers are serve()'s accepted keys, the streams entrypoint's API_KEY,
+    // and origin() (the framework-resolved ORIGIN row rides the same list).
+    // An absent row stays absent (never provisioned); a present one is
+    // schema-checked exactly like a declared param before it moves.
     stashProviderParams(RESERVED_PROVIDER_PARAMS, address);
-    // The framework-resolved origin row (this dispatch): re-stash it
-    // address-free exactly like a reserved provider param, so origin() reads
-    // a validated value with no address in play.
-    stashOrigin(address);
     // Re-emit the secret POINTERS address-free too, so secrets() double-looks-up
     // the same way with no address (the value stays only in its platform var).
     stashSecrets(this, address);

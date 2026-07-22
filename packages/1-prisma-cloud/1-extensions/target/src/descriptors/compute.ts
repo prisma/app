@@ -11,7 +11,6 @@ import {
   configKey,
   encode,
   encodeParamPointer,
-  ORIGIN_KEY_NAME,
   paramEntries,
   secretPointerRows,
 } from '../serializer.ts';
@@ -36,8 +35,9 @@ export interface ComputeProvisioned {
   readonly serviceId: Output.Output<string>;
   readonly projectId: string;
   /** The platform-assigned public origin domain — resolves to `undefined` only
-   *  in the narrow provider-response gap serialize enforces away (see its
-   *  origin-row push): every other reader may treat it as present. */
+   *  in the narrow provider-response gap the origin param's deploy-side value
+   *  function enforces away (control.ts's `selfOriginValue`): every other
+   *  reader may treat it as present. */
   readonly endpointDomain: Output.Output<string | undefined>;
 }
 
@@ -133,20 +133,27 @@ export function computeDescriptor(
         // fills a provisioned param like any other, so there is no
         // consumer-side special case left to write here.
 
-        // Provider side (ADR-0031). Driven by the PROVIDER, not by its edges:
-        // every registered reserved provider param is asked, even when this
-        // service has no inbound edge for that brand, because "no edges" and
-        // "no var" are not the same thing — an absent var reads as "never
-        // provisioned" (local dev, tests), so a deployed provider with zero
-        // wired consumers must still be able to emit a deny-everything value.
-        // Whether an empty set means deny-all or emit-nothing is that param's
-        // own call, so it decides and may return undefined to write no row at
-        // all. Compute never names a brand — it looks one up.
+        // Provider side (ADR-0031). Compute never names a brand — it looks
+        // one up. Two kinds of registered entries:
         //
-        // The check is main's and stays: a service that exposes nothing can
-        // never be any binding's provider, so it gets no provider param rows.
-        if (svc.expose !== undefined && Object.keys(svc.expose).length > 0) {
-          const refsByBrand = new Map<symbol, unknown[]>();
+        //  · Edge-derived (`value(refs)`) — driven by the PROVIDER, not by
+        //    its edges: asked even with no inbound edge for that brand,
+        //    because "no edges" and "no var" are not the same thing — an
+        //    absent var reads as "never provisioned" (local dev, tests), so
+        //    a deployed provider with zero wired consumers must still be
+        //    able to emit a deny-everything value. Whether an empty set
+        //    means deny-all or emit-nothing is that param's own call, so it
+        //    may return undefined to write no row at all. The expose check
+        //    is main's and stays for these: a service that exposes nothing
+        //    can never be any binding's provider.
+        //
+        //  · Service-derived (`valueForService(provisioned, address)`) —
+        //    derived from this service's OWN provisioned attributes (e.g.
+        //    its origin), so EVERY compute service is asked, exposing or
+        //    not; the expose check does not apply.
+        const exposes = svc.expose !== undefined && Object.keys(svc.expose).length > 0;
+        const refsByBrand = new Map<symbol, unknown[]>();
+        if (exposes) {
           for (const edge of provisionedEdges(graph)) {
             if (edge.providerAddress !== address) continue;
             const ref = ctx.provisioned.get(edge.edgeId);
@@ -155,50 +162,35 @@ export function computeDescriptor(
             refs.push(ref);
             refsByBrand.set(edge.brand, refs);
           }
-          for (const [brand, entry] of o.providerParams) {
-            const raw = entry.value(refsByBrand.get(brand) ?? []);
-            if (raw === undefined) continue;
-            const key = configKey(address, { owner: 'service', name: entry.name });
-            // The value may still be an unresolved deploy-time Output (a
-            // minted key isn't known until Alchemy applies it) or already a
-            // plain value (e.g. a zero-refs deny-all literal) — either way it
-            // is JSON-encoded through the same `encode` a declared param's
-            // own literal takes, never a brand-invented format.
-            const value = Output.isOutput(raw)
-              ? Output.map(raw, (v) => encode('service', v))
-              : encode('service', raw);
-            records.push(
-              yield* Prisma.EnvironmentVariable(`${key}-var`, {
-                projectId,
-                key,
-                value,
-                class: cls,
-                ...branch,
-              }),
-            );
-          }
         }
-
-        // The framework-resolved origin (this dispatch): one row per compute
-        // service, unconditional — never declared, never in config(). The
-        // value is the platform's URL verbatim, no trailing-slash/normalization.
-        const originKey = configKey(address, { owner: 'service', name: ORIGIN_KEY_NAME });
-        records.push(
-          yield* Prisma.EnvironmentVariable(`${originKey}-var`, {
-            projectId,
-            key: originKey,
-            value: Output.map(provisioned.endpointDomain, (v) => {
-              if (v === undefined) {
-                throw new Error(
-                  `ComputeService for "${address}" reported no endpointDomain at provision — cannot resolve the service's own origin (Management API predates the PRO-200 fix?)`,
-                );
-              }
-              return encode('service', v);
+        for (const [brand, entry] of o.providerParams) {
+          const raw =
+            'valueForService' in entry
+              ? entry.valueForService(provisioned, address)
+              : exposes
+                ? entry.value(refsByBrand.get(brand) ?? [])
+                : undefined;
+          if (raw === undefined) continue;
+          const key = configKey(address, { owner: 'service', name: entry.name });
+          // The value may still be an unresolved deploy-time Output (a
+          // minted key or the provisioned endpoint domain isn't known until
+          // Alchemy applies it) or already a plain value (e.g. a zero-refs
+          // deny-all literal) — either way it is JSON-encoded through the
+          // same `encode` a declared param's own literal takes, never a
+          // brand-invented format.
+          const value = Output.isOutput(raw)
+            ? Output.map(raw, (v) => encode('service', v))
+            : encode('service', raw);
+          records.push(
+            yield* Prisma.EnvironmentVariable(`${key}-var`, {
+              projectId,
+              key,
+              value,
+              class: cls,
+              ...branch,
             }),
-            class: cls,
-            ...branch,
-          }),
-        );
+          );
+        }
 
         // Carries the resolved port to deploy(); falls back to 3000 if unset.
         // This is the only place the raw, untyped config is read, so it is the
