@@ -22,11 +22,11 @@ export interface DevDescriptor {
   providers(): ProvidersLayer;
   /** A stable local identity — resolved without any platform call. */
   readonly container: ContainerDescriptor;
-  /** File-backed deploy state under the dev state directory (ADR-0011: the target supplies it). */
-  readonly state: StateDescriptor;
-  /** Dev secret policy: shell env wins, else a minted placeholder plus a warning. */
+  /** Dev value-sourcing policy: secrets from the shell else minted placeholders; env-sourced params from the shell else a hard error. */
   preflight?(input: PreflightInput): Promise<void>;
-  /** Removes the dev instance's local state. */
+  /** Long-running local stand-ins that outlive a converge (e.g. an S3 server) — started by the dev command before converge, stopped on exit. */
+  standIns?(input: DevStandInsInput): Promise<DevStandIns>;
+  /** `--fresh`: remove every local trace of the dev instance (stand-in servers, state, data). */
   teardown?(input: TeardownInput): Promise<void>;
 }
 ```
@@ -37,6 +37,13 @@ provisioners — is byte-identical between dev and deploy. Dev cannot diverge th
 semantics of the graph; it can only substitute what the lowered resources *do*.
 That structural absence is the parity claim, expressed where the compiler can
 hold it.
+
+It also has **no `state`**: dev's Alchemy state uses Alchemy's own built-in
+local file store (`localState()`, under `.alchemy/state/` in the working
+directory), passed through the existing `LowerOptions.state` override.
+ADR-0011's rule — targets supply the deploy state layer — governs durable
+state on a platform; dev state is tool state in the working directory
+(ADR-0004's rule), the same for every target, so core supplies it.
 
 For the Prisma Cloud extension, the substitution splits its twelve resource
 types four/eight. Four providers already run entirely locally and are shared
@@ -161,13 +168,19 @@ this repo owns.
   path resolves no credentials at all.
 - **A new operational dependency:** the ORM CLI's local Postgres (`prisma dev`)
   is the postgres stand-in. Dev shells out to a sibling product's command.
-- **Dev state is local and disposable.** It lives under `.prisma-composer/dev/`
-  in the working directory (ADR-0004's tool-state rule); `--fresh` destroys the
-  stack through the same teardown path and wipes it.
+- **Dev state is local and disposable.** The Alchemy state store is Alchemy's
+  own `localState()` (`.alchemy/state/`); everything else — the process table,
+  env store, unpacked artifacts, bucket objects, minted placeholders — lives
+  under `.prisma-composer/dev/` (ADR-0004's tool-state rule). `--fresh` is
+  wholesale local deletion through `dev.teardown` (every resource is a local
+  file or process), never an `alchemy destroy`.
 - **The strict secrets model is unchanged** (ADR-0029). Dev policy lives in
-  `dev.preflight`: a slot bound in the shell's environment is used; an unbound
-  slot gets a minted placeholder and a printed warning. `secrets()` stays
-  eager and all-or-nothing in every environment.
+  `dev.preflight`: a secret slot bound in the shell's environment is used; an
+  unbound slot gets a minted, persisted placeholder and a printed warning. An
+  env-sourced *param* (ADR-0032) with no shell value is a hard error instead —
+  params feed schema validation at boot, so junk there produces a confusing
+  crash rather than a legible degraded mode. `secrets()` stays eager and
+  all-or-nothing in every environment.
 - **Scheduled work runs for real** (ADR-0020): the scheduler is an ordinary
   service and fires locally. A manual-trigger affordance for
   determinism-sensitive workflows is a domain-doc concern, not a model change.

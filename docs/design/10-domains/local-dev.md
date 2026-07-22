@@ -40,11 +40,14 @@ Dev re-runs [deploy's pipeline](deploy-cli.md#the-pipeline) with these deltas:
    same adapters and produces the same bundles; missing output produces the
    same "run your build" error.
 4. **Containers** — the `dev.container` descriptor resolves a stable local
-   identity from the app name with no platform calls.
-5. **Lower + converge** — the same generated stack file (ADR-0007), driven with
-   the extension's `dev.providers()` layer and `dev.state` store. Converge
-   terminates as always; services are *not* running when it exits — desired
-   state is.
+   identity from the app name with no platform calls. Long-running stand-ins
+   the converge cannot own (the bucket server) start next, through the
+   extension's `dev.standIns` hook.
+5. **Lower + converge** — a dev-generated stack file (ADR-0007's pattern, at
+   `.prisma-composer/dev/alchemy.run.ts`), driven with the extension's
+   `dev.providers()` layer and Alchemy's built-in `localState()` store, always
+   at Alchemy stage `dev`. Converge terminates as always; services are *not*
+   running when it exits — desired state is.
 6. **Supervise** — new, dev-only: reconcile the process table (below), print
    the front door, stream logs, watch for rebuilds, loop.
 
@@ -78,8 +81,9 @@ The `dev` command reconciles the table against reality:
   churn.
 - **Record deleted** (a service removed from the topology, `--fresh`) → kill
   the child.
-- **Ctrl-C** → kill every child, stop stand-ins (local Postgres server, bucket
-  server), leave state intact for the next start.
+- **Ctrl-C** → kill every child and stop the bucket server; the local Postgres
+  instances stay up (they run detached, hold the data, and make the next start
+  warm). `--fresh` is what stops and removes them.
 
 The env materialization in each record is the one platform-side behavior the
 local target implements itself: the hosted platform joins the branch's config
@@ -116,11 +120,13 @@ SQLite test stand-in remains a testing utility, not part of the dev loop.
 
 ### Postgres
 
-The stand-in is the ORM CLI's local Postgres server (`prisma dev`), one server
-per dev instance, one database per `Database` resource. Migrations are not
-special-cased: `PnMigration` runs exactly as it does in a deploy, against the
-local URL. `PgWarm` is near-instant locally and is kept (not stubbed) so the
-provider set stays uniform.
+The stand-in is the ORM CLI's local Postgres (`prisma dev`), **one named,
+detached instance per `Database` resource** — instance names are derived from
+the app and database ids, so instances are isolated, discoverable
+(`prisma dev ls`), and survive across dev restarts for warm starts.
+Migrations are not special-cased: `PnMigration` runs exactly as it does in a
+deploy, against the local URL. `PgWarm` is near-instant locally and is kept
+(not stubbed) so the provider set stays uniform.
 
 ### Buckets: a disk-backed S3 server
 
@@ -128,8 +134,15 @@ The storage module already implements the S3 wire protocol over an
 `ObjectStore` interface with full SigV4 verification, including presigned URLs
 ([storage/src/handler.ts](../../../packages/1-prisma-cloud/2-shared-modules/storage/src/handler.ts),
 [storage/src/sigv4.ts](../../../packages/1-prisma-cloud/2-shared-modules/storage/src/sigv4.ts)),
-with memory- and Postgres-backed stores. The dev bucket stand-in is a third
-store implementation plus one shared local server:
+with memory- and Postgres-backed stores. The domain layering
+(lowering < extensions < modules, upward imports denied) means dev machinery
+cannot import the storage module, so the protocol pieces (handler, SigV4,
+`ObjectStore`, memory store) move down into a shared protocol package at the
+lowering layer that both the module and the dev stand-in import — a
+behavior-preserving extraction; the storage module's public surface is
+unchanged. The dev bucket stand-in is then a third store implementation plus
+one shared local server (plain `node:http`, which runs under both node and
+bun, started through `dev.standIns` because it must outlive each converge):
 
 - **Objects are plain files at their key paths** —
   `.prisma-composer/dev/buckets/<bucket>/<key>`. Browse them, open them, drop a
@@ -151,8 +164,8 @@ The same table the port's hand-rolled script implemented, now standard:
 | --- | --- |
 | dependency connection values (URLs) | the local provider's resolved value, through the normal lowering |
 | service params | bound literals / defaults, identical to deploy |
-| `envParam` sources (ADR-0032) | the dev shell's environment, same names |
-| secrets (ADR-0029) | shell env if set; else a minted placeholder + one printed warning per slot |
+| `envParam` sources (ADR-0032) | the dev shell's environment, same names; missing → a hard error listing the names (params feed boot-time schema validation — junk there is a confusing crash, not a legible degraded mode) |
+| secrets (ADR-0029) | shell env if set; else a minted placeholder (persisted, stable across restarts) + one printed warning per slot |
 | minted needs (ADR-0030/0031: service keys, streams keys) | minted locally by the unchanged provisioners |
 | origin (ADR-0039) | `http://localhost:<port>` via the unchanged origin channel |
 
@@ -179,9 +192,12 @@ Deploy's rule holds: every failure names its fix.
 | --- | --- |
 | extension has no `dev` descriptor | which extension, and that it does not support local dev |
 | built output missing | same as deploy: the expected path, "run your build" |
-| ORM `prisma dev` not available / fails to start | the command that was attempted and what to install |
-| port conflict on a persisted allocation | which service, which port, who holds it, how to free or re-allocate (`--fresh`) |
+| `bun` not on PATH | that dev runs services under bun (the Compute runtime) and how to install it |
+| no installed `prisma` bin (the local-Postgres stand-in) | what was searched for and to add `prisma` to devDependencies |
+| ORM `prisma dev` fails to start | the exact command that was attempted and its output |
+| port conflict on a persisted allocation | which service, which port, and how to free or re-allocate (`--fresh`) |
 | secret slot unbound | warning (not an error) naming the env var and the placeholder behavior |
+| env-sourced param unbound | hard error listing the missing names, deploy-preflight style |
 | service crash-loops | the address, exit code, and the last stderr lines, as a standing message |
 
 ## Out of scope (designed around)
@@ -205,12 +221,11 @@ Deploy's rule holds: every failure names its fix.
   unmeasured. The artifact cache (unpack once per hash) is designed; whether
   package's tar step needs a dev bypass for very large trees (Next standalone)
   is a measurement away. Decide with numbers, not in advance.
-- **One local Postgres server vs one per database** — current lean: one server
-  per dev instance, `CREATE DATABASE` per resource; revisit if the ORM CLI's
-  instance model fights it.
-- **Front-door ergonomics** — which service is "the" URL to print first when
-  several are exposed; likely the root module's first exposed compute service,
-  with all endpoints listed.
+
+(Settled since the first draft: Postgres runs one named `prisma dev` instance
+per `Database` resource; the front door prints every service URL ordered by
+address depth then name, shallowest first; port allocation and the remaining
+mechanics are pinned in the implementation spec.)
 
 ## Related
 
