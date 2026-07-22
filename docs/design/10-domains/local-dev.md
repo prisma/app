@@ -215,7 +215,7 @@ Deploy's rule holds: every failure names its fix.
 | `bun` not on PATH | that dev runs services under bun (the Compute runtime) and how to install it |
 | no installed `prisma` bin (the local-Postgres emulator) | what was searched for and to add `prisma` to devDependencies |
 | the bucket emulator fails to start or report healthy | the instance name, its log file path, and the port it tried |
-| ORM `prisma dev` fails to start | the exact command that was attempted and its output |
+| ORM `prisma dev` fails to start | the exact command that was attempted and its output, sanitized — connection-URL credentials are masked before embedding |
 | port conflict on a persisted allocation | which service, which port, and how to free or re-allocate (`--fresh`) |
 | secret slot unbound | warning (not an error) naming the env var and the placeholder behavior |
 | env-sourced param unbound | hard error listing the missing names, deploy-preflight style |
