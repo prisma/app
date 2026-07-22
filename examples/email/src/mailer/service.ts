@@ -8,7 +8,7 @@ import node from '@prisma/composer/node';
 import { rpc } from '@prisma/composer/service-rpc';
 import { compute } from '@prisma/composer-prisma-cloud';
 import { emailOutboxContract, emailSender } from '@prisma/composer-prisma-cloud/email';
-import { templates } from './templates.ts';
+import { templates } from './templates.tsx';
 
 export default compute({
   name: 'mailer',

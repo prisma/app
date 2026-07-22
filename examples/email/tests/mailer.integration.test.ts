@@ -17,7 +17,7 @@ import {
   startLocalEmailServer,
 } from '@prisma/composer-prisma-cloud/email/testing';
 import { createEmailApp } from '../src/mailer/app.ts';
-import { templates } from '../src/mailer/templates.ts';
+import { templates } from '../src/mailer/templates.tsx';
 
 describe('mailer example app (against the local email stand-in)', () => {
   let server: LocalEmailServer;
@@ -70,9 +70,18 @@ describe('mailer example app (against the local email stand-in)', () => {
 
     const welcomeRes = await app(new Request(`http://mailer/emails/${verified.id}`));
     expect(welcomeRes.status).toBe(200);
-    const welcome = (await welcomeRes.json()) as { templateId: string; subject: string };
+    const welcome = (await welcomeRes.json()) as {
+      templateId: string;
+      subject: string;
+      html: string;
+      text: string;
+    };
     expect(welcome.templateId).toBe('welcome');
     expect(welcome.subject).toBe('Welcome, Ada!');
+    // welcome is a react-email component (templates.tsx) — assert on content
+    // it definitely renders, not exact markup (react-email owns that shape).
+    expect(welcome.html).toContain('Ada');
+    expect(welcome.text).toContain('Ada');
   });
 
   test('GET /verify with an unknown token is 404', async () => {

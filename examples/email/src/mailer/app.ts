@@ -19,7 +19,7 @@ import type { Client } from '@prisma/composer/service-rpc';
 import type { EmailSender, emailOutboxContract } from '@prisma/composer-prisma-cloud/email';
 import { type } from 'arktype';
 import { Hono } from 'hono';
-import type { templates } from './templates.ts';
+import type { templates } from './templates.tsx';
 
 type Templates = typeof templates;
 type Outbox = Client<typeof emailOutboxContract>;

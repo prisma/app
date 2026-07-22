@@ -101,6 +101,53 @@ await email.verification({ to: user.email, data: { link } });
 The outbox port needs no custom factory — declare `deps: { outbox:
 rpc(emailOutboxContract) }` and get the generated client directly.
 
+## Using react-email
+
+`render` may be synchronous or async — the sender method awaits either.
+This module neither depends on nor imports react-email; a template's
+`render` just calls react-email's own `render()` and returns its result:
+
+```tsx
+// emails/welcome.tsx — a plain react-email component
+import { Body, Container, Html, Text } from '@react-email/components';
+
+export function WelcomeEmail({ name }: { name: string }) {
+  return (
+    <Html lang="en">
+      <Body>
+        <Container>
+          <Text>Welcome, {name}!</Text>
+        </Container>
+      </Body>
+    </Html>
+  );
+}
+```
+
+```ts
+// templates.ts
+import { render } from '@react-email/render';
+import { WelcomeEmail } from './emails/welcome.tsx';
+
+const templates = defineTemplates({
+  welcome: {
+    data: type({ name: 'string' }),
+    render: async ({ name }) => ({
+      subject: `Welcome, ${name}!`,
+      html: await render(<WelcomeEmail name={name} />),
+      text: await render(<WelcomeEmail name={name} />, { plainText: true }),
+    }),
+  },
+});
+```
+
+JSX interpolation (`{name}` above) escapes automatically — React escapes
+text children by construction, so a react-email template needs no manual
+`escapeHtml` the way a plain-function template does. See
+[`examples/email`](../../../../examples/email)'s `welcome` template for
+the full worked version, alongside `verification` as a plain function —
+both authoring styles side by side.
+
 ## Platform env vars (per stage)
 
 `deliveryMode` and `from` are module-boundary params — the app binds a
@@ -215,5 +262,5 @@ Attachments, cc/bcc size limits beyond the contract's, per-send `from`
 override, batch/scheduled send, Resend webhooks, delivery-status polling,
 open/click tracking, queue-backed async delivery (the outbox is the seam
 for a later relay — no contract change needed), retention/redaction/
-deletion, an admin UI, and react-email as a dependency (compatible via its
-plain `render()` output, nothing more).
+deletion, and an admin UI. react-email is not a dependency of this module
+— see "Using react-email" above for how a consumer wires it in.

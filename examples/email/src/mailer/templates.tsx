@@ -1,13 +1,17 @@
 /**
  * The two templates this example sends — declared and rendered
  * consumer-side (ADR-0005; the email module never runs this code, only the
- * rendered `subject`/`html`/`text` it produces). Interpolated values
- * (`name`, `link`) are user input — `name` comes straight from the signup
- * body, `link` carries a token this app minted but still lands inside an
- * `href` attribute — so both are HTML-escaped before going into markup.
+ * rendered `subject`/`html`/`text` it produces). Two authoring styles side
+ * by side: `welcome` is a react-email component (`render` is async —
+ * `TemplateDef.render` accepts either, spec's 2026-07-22 amendment);
+ * `verification` is a plain function. `link` is user input (a token this
+ * app minted, but still landing inside an `href` attribute), so it's
+ * HTML-escaped before going into markup.
  */
 import { defineTemplates } from '@prisma/composer-prisma-cloud/email';
+import { render } from '@react-email/render';
 import { type } from 'arktype';
+import { WelcomeEmail } from './emails/welcome.tsx';
 
 function escapeHtml(value: string): string {
   return value
@@ -21,10 +25,10 @@ function escapeHtml(value: string): string {
 export const templates = defineTemplates({
   welcome: {
     data: type({ name: 'string' }),
-    render: ({ name }) => ({
+    render: async ({ name }) => ({
       subject: `Welcome, ${name}!`,
-      html: `<p>Welcome, ${escapeHtml(name)}!</p>`,
-      text: `Welcome, ${name}!`,
+      html: await render(<WelcomeEmail name={name} />),
+      text: await render(<WelcomeEmail name={name} />, { plainText: true }),
     }),
   },
   verification: {
