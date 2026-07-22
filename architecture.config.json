@@ -319,6 +319,18 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/preflight-names.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "control"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/dev/**",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "control"
+    },
+    {
       "glob": "packages/1-prisma-cloud/2-shared-modules/email/src/contract.ts",
       "domain": "prisma-cloud",
       "layer": "modules",

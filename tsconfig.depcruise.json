@@ -41,6 +41,9 @@
       "@internal/lowering/state": [
         "./packages/1-prisma-cloud/0-lowering/lowering/src/exports/state.ts"
       ],
+      "@internal/lowering/dev": [
+        "./packages/1-prisma-cloud/0-lowering/lowering/src/exports/dev.ts"
+      ],
       "@internal/lowering": ["./packages/1-prisma-cloud/0-lowering/lowering/src/exports/index.ts"],
       "@internal/s3-protocol": [
         "./packages/1-prisma-cloud/0-lowering/s3-protocol/src/exports/index.ts"

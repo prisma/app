@@ -64,6 +64,8 @@ export interface ExtensionDescriptor {
    * in container-transport.ts.
    */
   readonly container?: ContainerDescriptor;
+  /** Local dev counterparts (ADR-0041). */
+  readonly dev?: DevDescriptor;
 }
 
 /**
@@ -94,6 +96,54 @@ export interface TeardownInput {
   /** The stage name (`--stage`), or `undefined` for the default stage — for diagnostics/scope. */
   readonly stage: string | undefined;
 }
+
+/** Local counterparts for `prisma-composer dev` (ADR-0041). An extension without one is not dev-capable. */
+export interface DevDescriptor {
+  /** Local providers for the SAME resource types this extension's lowering emits. Receives the app identity — unlike deploy's env-arg-free `providers()`, local providers are emulator clients and must know which app they provision for. */
+  providers(input: DevProvidersInput): Layer.Layer<never>;
+  /** A stable local identity — resolved without any platform call. */
+  readonly container: ContainerDescriptor;
+  /** Dev value sourcing (secrets/env-params) — runs where deploy's preflight runs. */
+  preflight?(input: PreflightInput): Promise<void>;
+  /** Ensure the emulator daemons this topology's node kinds need are running (idempotent; they persist across sessions). */
+  emulators?(input: DevEmulatorsInput): Promise<void>;
+  /** The dev session's view of the running app. Core renders it and never learns an emulator's API. */
+  attach(input: DevAttachInput): Promise<DevAttachment>;
+  /** `--fresh`: remove every local trace of the dev instance — emulator instances, state, data. */
+  teardown?(input: TeardownInput): Promise<void>;
+}
+
+export interface DevProvidersInput {
+  /** This extension's resolved dev container (its `input.appName` is the emulator app namespace). */
+  readonly container: ContainerInstance | undefined;
+  /** Absolute path of the dev state directory (`<cwd>/.prisma-composer/dev`). */
+  readonly devDir: string;
+}
+
+export interface DevEmulatorsInput {
+  /** The loaded application graph — inspected for which node kinds need an emulator. */
+  readonly graph: Graph;
+  readonly container: ContainerInstance | undefined;
+  /** Absolute path of the dev state directory (`<cwd>/.prisma-composer/dev`). */
+  readonly devDir: string;
+}
+
+export interface DevAttachInput {
+  readonly container: ContainerInstance | undefined;
+  readonly devDir: string;
+}
+
+export interface DevAttachment {
+  /** Every service's local endpoint, for the front door. */
+  endpoints(): Promise<readonly { readonly address: string; readonly url: string }[]>;
+  /** Merged, line-oriented log stream across the app's services (including services that appear after later converges). Ends when `signal` aborts. */
+  logs(signal: AbortSignal): AsyncIterable<{ readonly service: string; readonly line: string }>;
+  /** Stop the app's service instances (emulators and data persist). */
+  stopServices(): Promise<void>;
+}
+
+/** `<cwd>/.prisma-composer/dev` — the dev instance's app-scoped state directory (ADR-0041, ADR-0004's tool-state rule). */
+export const DEV_DIR = '.prisma-composer/dev';
 
 /**
  * What one registry entry can do. The `kind` discriminant is checked at every
