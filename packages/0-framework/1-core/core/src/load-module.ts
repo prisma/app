@@ -12,6 +12,7 @@ import { serviceInputs } from './load-service.ts';
 import {
   type DependencyEnd,
   type Deps,
+  isConfigKeySegment,
   isNode,
   isParamSource,
   isSecretSource,
@@ -394,15 +395,20 @@ function flatten(
     if (typeof id !== 'string' || id.length === 0) {
       throw new LoadError(`provision() requires a non-empty id (module "${moduleNode.name}").`);
     }
-    // The id becomes the node's address segment: configKey joins it with "_"
-    // (id "auth_db" + param "url" would collide with id "auth" + input "db" +
-    // param "url" — both AUTH_DB_URL), and node ids join path segments with
-    // "." — so neither may appear inside an id.
-    if (id.includes('_') || id.includes('.')) {
+    // The id becomes the node's address segment, and config keys uppercase
+    // address segments and join them with "_" into an env-var key
+    // ([A-Z_][A-Z0-9_]*). So an id must be ASCII letters and digits only:
+    // "_" collides with the separator (id "auth_db" + param "url" vs id
+    // "auth" + input "db" + param "url" — both AUTH_DB_URL), "." is the
+    // node-id path separator, and anything else (e.g. "-") uppercases into
+    // a key the platform rejects at deploy.
+    if (!isConfigKeySegment(id)) {
       throw new LoadError(
-        `provision() id "${id}" (module "${moduleNode.name}") may not contain "_" or "." — ` +
-          '"_" is the config-key separator and "." the node-id path separator; either ' +
-          'inside an id collides with the joined form of other names.',
+        `provision() id "${id}" (module "${moduleNode.name}") must contain only ASCII letters ` +
+          'and digits ([A-Za-z0-9]) — the id becomes an address segment, and config keys ' +
+          'uppercase each segment and join them with "_" into an env-var key that must match ' +
+          `[A-Z_][A-Z0-9_]*. "${id}" would put "${id.toUpperCase()}" inside the derived key. ` +
+          '("_" collides with the key separator and "." with the address separator.)',
       );
     }
     if (localIds.has(id)) {

@@ -39,9 +39,9 @@ const untypedEnd = () =>
     connection: conn({ url: string() }, (v) => ({ url: v.url })),
   });
 
-const noOpService = () =>
+const noOpService = (name = 'noop') =>
   service({
-    name: 'noop',
+    name,
     extension: 'test/pack',
     type: 'fake/compute',
     inputs: {},
@@ -567,8 +567,8 @@ describe('a resource-backed input now forwards across a module boundary (unified
   });
 });
 
-describe('provision ids may not contain "." (the address separator)', () => {
-  test('a dotted id is a LoadError naming the reserved characters', () => {
+describe('provision ids must be config-key-safe segments', () => {
+  test('a dotted id is a LoadError naming the constraint', () => {
     const root = module('shop', {}, ({ provision }) => {
       provision(noOpService(), { id: 'a.b' });
       return {};
@@ -576,8 +576,19 @@ describe('provision ids may not contain "." (the address separator)', () => {
 
     expect(() => Load(root)).toThrow(LoadError);
     expect(() => Load(root)).toThrow(
-      'provision() id "a.b" (module "shop") may not contain "_" or "." — "_" is the config-key ' +
-        'separator and "." the node-id path separator',
+      'provision() id "a.b" (module "shop") must contain only ASCII letters and digits',
+    );
+  });
+
+  test('a service whose name (the inferred id) is hyphenated is a LoadError before any deploy', () => {
+    const root = module('shop', {}, ({ provision }) => {
+      provision(noOpService('origin-proof'));
+      return {};
+    });
+
+    expect(() => Load(root)).toThrow(LoadError);
+    expect(() => Load(root)).toThrow(
+      'provision() id "origin-proof" (module "shop") must contain only ASCII letters and digits',
     );
   });
 });
