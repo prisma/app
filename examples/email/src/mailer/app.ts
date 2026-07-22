@@ -2,10 +2,10 @@
  * The mailer example app: a signup story, not an HTTP proxy over the email
  * module's operations. `POST /signup` sends a verification email as part of
  * a real business action; following its link (`GET /verify`) completes the
- * story and sends a welcome email. `createEmailApp` returns a plain handler
- * so the same app runs behind `Bun.serve` in the deployed service and
- * inside the integration test with no server (mirrors the storage
- * example's `createBlobApp`).
+ * story and sends a welcome email. Routing is Hono — the app brings its own
+ * HTTP framework, and since Hono's handler is a plain `Request → Response`
+ * function, the same app runs behind `Bun.serve` in the deployed service
+ * and inside the integration test with no server.
  *
  *   POST /signup           { "email", "name" } — sends the verification email, responds with its send id
  *   GET  /verify?token=…   marks the user verified, sends the welcome email, responds with its send id
@@ -18,6 +18,7 @@
 import type { Client } from '@prisma/composer/service-rpc';
 import type { EmailSender, emailOutboxContract } from '@prisma/composer-prisma-cloud/email';
 import { type } from 'arktype';
+import { Hono } from 'hono';
 import type { templates } from './templates.ts';
 
 type Templates = typeof templates;
@@ -36,41 +37,37 @@ export function createEmailApp(
   outbox: Outbox,
 ): (req: Request) => Promise<Response> {
   const usersByToken = new Map<string, PendingUser>();
+  const app = new Hono();
 
-  return async (req: Request): Promise<Response> => {
-    const url = new URL(req.url);
+  app.post('/signup', async (c) => {
+    const body = signupBody(await c.req.json().catch(() => undefined));
+    if (body instanceof type.errors) return c.json({ error: body.summary }, 400);
 
-    if (req.method === 'POST' && url.pathname === '/signup') {
-      const body = signupBody(await req.json().catch(() => undefined));
-      if (body instanceof type.errors) {
-        return Response.json({ error: body.summary }, { status: 400 });
-      }
-      const token = crypto.randomUUID();
-      usersByToken.set(token, { email: body.email, name: body.name, verified: false });
-      const link = `${url.origin}/verify?token=${token}`;
-      const sent = await email.verification({ to: body.email, data: { link } });
-      return Response.json({ id: sent.id }, { status: 201 });
-    }
+    const token = crypto.randomUUID();
+    usersByToken.set(token, { email: body.email, name: body.name, verified: false });
 
-    if (req.method === 'GET' && url.pathname === '/verify') {
-      const token = url.searchParams.get('token');
-      const user = token !== null ? usersByToken.get(token) : undefined;
-      if (user === undefined) return new Response('unknown or expired token', { status: 404 });
-      user.verified = true;
-      const sent = await email.welcome({ to: user.email, data: { name: user.name } });
-      return Response.json({ verified: true, id: sent.id });
-    }
+    const link = `${new URL(c.req.url).origin}/verify?token=${token}`;
+    const sent = await email.verification({ to: body.email, data: { link } });
+    return c.json({ id: sent.id }, 201);
+  });
 
-    // Demo-only: a real app guards or omits a raw read-by-id — it can surface
-    // any stored body, including a live verification link.
-    if (req.method === 'GET' && url.pathname.startsWith('/emails/')) {
-      const id = decodeURIComponent(url.pathname.slice('/emails/'.length));
-      if (id.length === 0) return new Response('missing id', { status: 400 });
-      const { email: record } = await outbox.getEmail({ id });
-      if (record === null) return new Response('not found', { status: 404 });
-      return Response.json(record);
-    }
+  app.get('/verify', async (c) => {
+    const token = c.req.query('token');
+    const user = token === undefined ? undefined : usersByToken.get(token);
+    if (user === undefined) return c.text('unknown or expired token', 404);
 
-    return new Response('not found', { status: 404 });
-  };
+    user.verified = true;
+    const sent = await email.welcome({ to: user.email, data: { name: user.name } });
+    return c.json({ verified: true, id: sent.id });
+  });
+
+  // Demo-only: a real app guards or omits a raw read-by-id — it can surface
+  // any stored body, including a live verification link.
+  app.get('/emails/:id', async (c) => {
+    const { email: record } = await outbox.getEmail({ id: c.req.param('id') });
+    if (record === null) return c.text('not found', 404);
+    return c.json(record);
+  });
+
+  return async (req) => app.fetch(req);
 }
