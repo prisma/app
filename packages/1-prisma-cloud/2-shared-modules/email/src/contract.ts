@@ -120,6 +120,7 @@ export type EmailSender<T extends TemplateDefs> = {
     readonly cc?: readonly string[] | undefined;
     readonly bcc?: readonly string[] | undefined;
     readonly replyTo?: string | undefined;
+    /** Omitted (or `undefined`) mints a fresh UUID on every call — that call's own retry is NOT deduped against a previous one. Supply and reuse your own key across retries to get the outbox's dedup guarantee. */
     readonly idempotencyKey?: string | undefined;
   }) => Promise<{ id: string; status: 'stored' | 'queued' | 'sent' | 'failed'; error?: string }>;
 };
@@ -176,6 +177,9 @@ export function emailSender<T extends TemplateDefs>(
               throw new Error(`email.${templateId}(): "to" must contain at least one recipient.`);
             }
 
+            // A caller-supplied key is reused as-is; an omitted one mints a fresh
+            // UUID on every call, so THIS call's own retry logic must capture and
+            // reuse the key itself to get dedup — the module does not remember it.
             const idempotencyKey = input.idempotencyKey ?? crypto.randomUUID();
             return client.send({
               templateId,

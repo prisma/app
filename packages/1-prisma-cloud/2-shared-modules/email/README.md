@@ -165,6 +165,13 @@ all — with no new delivery attempt, even if the payload differs. This is a
 durable, row-level guarantee (a unique constraint on `idempotency_key`),
 independent of and stronger than service-rpc's own in-memory replay cache.
 
+`emailSender`'s per-template methods make `idempotencyKey` optional: omit
+it and a fresh UUID is minted on every call, so that call gets no dedup
+protection against its own retries. If your own retry logic re-invokes a
+send method after a transient failure, capture the key from the first
+attempt and pass it explicitly on the retry — the module does not
+remember it for you.
+
 ## Local development
 
 `@prisma/composer-prisma-cloud/email/testing` boots the same handler map
