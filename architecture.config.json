@@ -469,12 +469,6 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/store.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "shared"
-    },
-    {
       "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/exports/storage-entrypoint.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
@@ -487,25 +481,7 @@
       "plane": "execution"
     },
     {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/handler.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "execution"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/sigv4.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "execution"
-    },
-    {
       "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/pg-store.ts",
-      "domain": "prisma-cloud",
-      "layer": "modules",
-      "plane": "execution"
-    },
-    {
-      "glob": "packages/1-prisma-cloud/2-shared-modules/storage/src/memory-store.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "execution"

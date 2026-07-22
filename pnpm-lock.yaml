@@ -741,6 +741,9 @@ importers:
       '@internal/node':
         specifier: workspace:0.2.0
         version: link:../../../0-framework/2-authoring/node
+      '@internal/s3-protocol':
+        specifier: workspace:0.2.0
+        version: link:../../0-lowering/s3-protocol
       '@internal/service-rpc':
         specifier: workspace:0.2.0
         version: link:../../../0-framework/2-authoring/service-rpc
@@ -894,6 +897,9 @@ importers:
       '@internal/prisma-cloud':
         specifier: workspace:0.2.0
         version: link:../../1-extensions/target
+      '@internal/s3-protocol':
+        specifier: workspace:0.2.0
+        version: link:../../0-lowering/s3-protocol
     devDependencies:
       '@aws-sdk/client-s3':
         specifier: ^3.1085.0
@@ -1108,6 +1114,9 @@ importers:
       '@internal/prisma-cloud':
         specifier: workspace:0.2.0
         version: link:../../1-prisma-cloud/1-extensions/target
+      '@internal/s3-protocol':
+        specifier: workspace:0.2.0
+        version: link:../../1-prisma-cloud/0-lowering/s3-protocol
       '@internal/service-rpc':
         specifier: workspace:0.2.0
         version: link:../../0-framework/2-authoring/service-rpc
