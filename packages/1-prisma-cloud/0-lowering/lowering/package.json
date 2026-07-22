@@ -6,6 +6,7 @@
     ".": "./dist/index.mjs",
     "./buckets": "./dist/buckets.mjs",
     "./compute": "./dist/compute.mjs",
+    "./dev": "./dist/dev.mjs",
     "./postgres": "./dist/postgres.mjs",
     "./state": "./dist/state.mjs",
     "./package.json": "./package.json"
@@ -18,7 +19,9 @@
   },
   "dependencies": {
     "@internal/core": "workspace:0.2.0",
+    "@internal/dev-emulators": "workspace:0.2.0",
     "@internal/foundation": "workspace:0.2.0",
+    "@internal/s3-protocol": "workspace:0.2.0",
     "@prisma/management-api-sdk": "^1.50.0",
     "alchemy": "2.0.0-beta.59",
     "effect": "4.0.0-beta.93",

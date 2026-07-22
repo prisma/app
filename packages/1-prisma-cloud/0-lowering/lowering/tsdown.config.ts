@@ -7,5 +7,6 @@ export default defineConfig({
     compute: 'src/exports/compute.ts',
     postgres: 'src/exports/postgres.ts',
     state: 'src/exports/state.ts',
+    dev: 'src/exports/dev.ts',
   },
 });
