@@ -84,6 +84,12 @@ function smtpAttempt(deliveryUrl: string, credential: SecretString): Attempt {
 
   return async (row, signal): Promise<AttemptOutcome> => {
     try {
+      // raceWithSignal only stops WAITING on sendMail — it does not cancel
+      // the in-flight SMTP transaction with the relay. If the per-attempt
+      // timeout fires, the shared policy retries (a thrown error, always
+      // retryable), but the first attempt's message can still be accepted
+      // by a slow relay after the retry has already started: a timeout can
+      // duplicate a send. See the README's SMTP caveat.
       const info: { messageId?: string } = await raceWithSignal(
         transporter.sendMail(toMailOptions(row)),
         signal,

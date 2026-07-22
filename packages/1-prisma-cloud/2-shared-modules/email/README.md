@@ -147,6 +147,16 @@ means the relay accepted the message for submission — nothing more. SMTP
 gives no delivery confirmation; `providerMessageId` is nodemailer's
 `info.messageId` (or `null`).
 
+**SMTP: a timeout retry can duplicate a send.** The per-attempt timeout
+only stops the module from waiting on a slow relay — it does not cancel
+the in-flight SMTP transaction. If the timeout fires, the shared policy
+retries; a slow relay can still accept the first attempt's message after
+the retry has already started, delivering the same email twice. This is a
+deliberate retry-semantics tradeoff (at-least-once, not exactly-once) and
+stays as pinned — the only fix that removes the possibility is not
+retrying on timeout, which would trade a rare duplicate for a more common
+false failure on a merely slow relay.
+
 ## Idempotency
 
 `idempotencyKey` is required on every `send` call and must be **unique per
