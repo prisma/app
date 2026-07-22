@@ -105,15 +105,22 @@ export const emailOutboxContract = contract({
   }),
 });
 
-/** The per-template send methods a `emailSender(templates)` dependency hydrates to. */
+/**
+ * The per-template send methods a `emailSender(templates)` dependency
+ * hydrates to. Optional fields accept explicit `undefined` — absent and
+ * `undefined` mean the same thing everywhere — so a caller under
+ * `exactOptionalPropertyTypes` can pass a maybe-undefined value straight
+ * through instead of conditionally spreading it (spec's `EmailSender`
+ * amendment, 2026-07-22).
+ */
 export type EmailSender<T extends TemplateDefs> = {
   readonly [K in keyof T]: (input: {
     readonly to: string | readonly string[];
     readonly data: T[K] extends TemplateDef<infer D> ? D : never;
-    readonly cc?: readonly string[];
-    readonly bcc?: readonly string[];
-    readonly replyTo?: string;
-    readonly idempotencyKey?: string;
+    readonly cc?: readonly string[] | undefined;
+    readonly bcc?: readonly string[] | undefined;
+    readonly replyTo?: string | undefined;
+    readonly idempotencyKey?: string | undefined;
   }) => Promise<{ id: string; status: 'stored' | 'queued' | 'sent' | 'failed'; error?: string }>;
 };
 
@@ -121,10 +128,10 @@ export type EmailSender<T extends TemplateDefs> = {
 interface SenderMethodInput {
   readonly to: string | readonly string[];
   readonly data: unknown;
-  readonly cc?: readonly string[];
-  readonly bcc?: readonly string[];
-  readonly replyTo?: string;
-  readonly idempotencyKey?: string;
+  readonly cc?: readonly string[] | undefined;
+  readonly bcc?: readonly string[] | undefined;
+  readonly replyTo?: string | undefined;
+  readonly idempotencyKey?: string | undefined;
 }
 
 /**

@@ -233,10 +233,10 @@ export type EmailSender<T extends TemplateDefs> = {
   readonly [K in keyof T]: (input: {
     readonly to: string | readonly string[];
     readonly data: T[K] extends TemplateDef<infer D> ? D : never;
-    readonly cc?: readonly string[];
-    readonly bcc?: readonly string[];
-    readonly replyTo?: string;
-    readonly idempotencyKey?: string;
+    readonly cc?: readonly string[] | undefined;
+    readonly bcc?: readonly string[] | undefined;
+    readonly replyTo?: string | undefined;
+    readonly idempotencyKey?: string | undefined;
   }) => Promise<{ id: string; status: 'stored' | 'queued' | 'sent' | 'failed'; error?: string }>;
 };
 ```
@@ -263,6 +263,12 @@ Mechanism (mirror `durableStreams(contract)` in
      `{ templateId: k, to, cc, bcc, replyTo, ...rendered, idempotencyKey }`
      and returns its result unchanged.
 - `required` is `emailSendContract` (identity-satisfied).
+- Optional input fields accept explicit `undefined` (`?: string |
+  undefined`), so a caller under `exactOptionalPropertyTypes` can pass a
+  maybe-undefined value directly instead of conditionally spreading it.
+  Absent and `undefined` mean the same thing everywhere. *(Amended
+  2026-07-22: the first consumer needed six conditional spreads without
+  this.)*
 
 The outbox port needs no custom factory: consumers declare
 `deps: { outbox: rpc(emailOutboxContract) }` and get the generated client.
@@ -537,9 +543,26 @@ pg store and is the store under unit tests.
 ## Example app + smoke harness
 
 `examples/email/`, mirroring `examples/storage`'s layout: a root module
-provisioning `email()` plus one consumer service using `emailSender` with
-two templates (`welcome`, `verification`), and an admin-ish check that reads
-back via `rpc(emailOutboxContract)`. Tests:
+provisioning `email()` plus one consumer service that tells a real app's
+story — email sent as part of a business action, not an HTTP proxy over the
+module's API. *(Amended 2026-07-22, Will: the first cut re-exposed the
+module's send/outbox operations as generic HTTP routes; that demonstrates
+plumbing, not usage.)* The consumer's surface:
+
+- `POST /signup { email, name }` — the business action: record the user
+  (in-memory suffices), mint a token, send the `verification` template with
+  a `/verify?token=...` link built from the request's own origin. Responds
+  with the send result's `id`.
+- `GET /verify?token=...` — completes the story: following the link from
+  the rendered email marks the user verified.
+- `GET /emails/:id` — demo-only read-by-id through the `outbox` dependency,
+  with a one-line comment that a real app guards or omits this. No list
+  proxy, no filter/cursor/limit query parsing.
+- Request bodies validated with arktype (`type({ email: 'string', name:
+  'string' })`), never hand-written type guards.
+
+The `welcome` template remains declared (two templates exercise
+`defineTemplates`' shape) and is sent on successful verification. Tests:
 
 1. Local: against `startLocalEmailServer` — send both templates, list,
    get by id, dedup on repeated idempotency key.

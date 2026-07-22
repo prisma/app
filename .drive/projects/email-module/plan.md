@@ -100,6 +100,12 @@ before first use.
   service is the entry point, so the demonstration proves the wiring an app
   would actually use. The local no-creds test proves the same chain against
   `startLocalEmailServer`.
+- **Example reshape (Will, 2026-07-22, post-slice round):** the example is
+  a signup story, not an HTTP proxy over the module's operations — see the
+  amended spec §"Example app + smoke harness". The smoke's loop becomes:
+  `POST /signup` → `GET /emails/:id` (demo read-by-id) → extract the link
+  from the stored body → `GET /verify?token=…` → verified. This proves the
+  rendered link end to end, which the previous smoke did not.
 
 ## Open items
 

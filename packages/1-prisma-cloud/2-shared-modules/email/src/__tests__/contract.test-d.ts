@@ -67,6 +67,25 @@ test('a method call accepts the template’s own data shape and rejects a mismat
   sender.verification({ data: { link: 'x' } });
 });
 
+test('optional fields accept a maybe-undefined value directly — no conditional spread required under exactOptionalPropertyTypes', () => {
+  const sender: EmailSender<typeof templates> = emailSender(templates) as unknown as EmailSender<
+    typeof templates
+  >;
+  const maybeIdempotencyKey: string | undefined = undefined;
+  const maybeCc: readonly string[] | undefined = undefined;
+  const maybeBcc: readonly string[] | undefined = undefined;
+  const maybeReplyTo: string | undefined = undefined;
+
+  sender.verification({
+    to: 'user@example.com',
+    data: { link: 'x' },
+    idempotencyKey: maybeIdempotencyKey,
+    cc: maybeCc,
+    bcc: maybeBcc,
+    replyTo: maybeReplyTo,
+  });
+});
+
 test('emailSender accepts a directly-built template map with no defineTemplates() wrapper', () => {
   emailSender({
     verification: {
