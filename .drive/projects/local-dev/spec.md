@@ -206,14 +206,19 @@ persist in `<state-dir>/state.json`, mode `0600`:
   registered dir the developer has since deleted is re-created lazily on
   the next object write.
 - `PUT /_pcdev/apps/<app>/credentials` body `{ "accessKeyId",
-  "secretAccessKey" }` → upsert keyed by `accessKeyId` (same key + new
-  secret replaces), persist, `204`. Idempotent.
+  "secretAccessKey" }` → upsert keyed by `accessKeyId`, **recorded as owned
+  by `<app>`** (same key + new secret replaces; a key already owned by a
+  DIFFERENT app → `409` naming neither secret), persist, `204`. Idempotent.
 - `DELETE /_pcdev/apps/<app>` → remove the app's registrations and
   credentials (object directories are NOT deleted — they live in the app's
   working tree and `teardown`'s `fs.rm` owns them) → `204`.
 
-S3 requests verify SigV4 against ANY accepted credential. Multipart upload
-endpoints: `501` with body
+S3 requests authenticate per tenant: the target bucket's owning app is
+derived from its physical `<app>--<name>` prefix, and SigV4 is verified
+against ONLY that app's accepted credentials. A valid signature from another
+app's credential is rejected exactly like a bad signature — cross-app access
+is impossible and the rejection reveals nothing about the bucket's
+existence. Multipart upload endpoints: `501` with body
 `multipart upload is not supported by the local dev bucket emulator yet`.
 
 #### `client.ts`
@@ -398,8 +403,11 @@ name is `prismaCloudContainerOf(input.container).input.appName`, `devDir` is
      `<prisma-bin> dev --name <instance> --detach`, capture stdout, take the
      LAST non-empty line as the connection URL (the port's proven contract —
      verified against prisma dev v0.16); anything else →
-     `Error: could not read the database URL from "prisma dev --name <instance> --detach"; output was: <output>`.
-     Record `{ instance, url }` keyed by `news.name`.
+     `Error: could not read the database URL from "prisma dev --name <instance> --detach"; output was: <sanitized output>`
+     where `<sanitized output>` is the captured output with every
+     connection-URL credential masked (`output.replace(/:\/\/([^:@\/\s]+):[^@\/\s]+@/g, '://$1:***@')`)
+     — the behavior contract's no-value-logging rule applies to embedded
+     diagnostics too. Record `{ instance, url }` keyed by `news.name`.
   2. Entry exists → TCP-probe the recorded URL's host:port (500 ms). 
      Reachable → done.
   3. Unreachable (instance stopped — machine reboot, `prisma dev stop`) →
