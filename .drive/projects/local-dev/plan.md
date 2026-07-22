@@ -35,7 +35,9 @@ scripts. Implementer dispatches use Sonnet-4.6-mid, reviewers Opus-4.8-mid
 
 - **Outcome:** `@prisma/composer/dir` authoring + assemble per spec § 7:
   verbatim tree copy, named entry, symlink hard error, wrapper bundling
-  identical to `node()`'s. Guide/docs entry.
+  identical to `node()`'s. Also lands the `Bundle.watch` contract (spec
+  § 3): the optional core field plus `watch` population in `node()`,
+  `nextjs()`, and `dir()`. Guide/docs entry.
 - **Proves:** assemble tests (missing dir/entry errors verbatim, symlink
   error, tree fidelity); a fixture app with a multi-file runnable deploys
   through the full assemble path (no cloud needed — assemble-level test).
@@ -76,7 +78,9 @@ scripts. Implementer dispatches use Sonnet-4.6-mid, reviewers Opus-4.8-mid
   postgres + bucket) lowered with `dev: true` and driven through
   `alchemy deploy --stage dev` programmatically leaves the app SERVING —
   emulator listings correct, env store correct (port override + poison rows
-  + secret pointers), `prisma dev` instance running, HTTP round-trip against
+  + secret pointers), `prisma dev` instance running (including the spec's
+  pinned stop→start port-stability verification, run FIRST — its outcome
+  selects the pinned primary or fallback path), HTTP round-trip against
   the deployed fixture service; a second converge with an unchanged build is
   a full no-op (no restarts); a changed artifact restarts exactly one
   service. Plus: scrubbed-env test (`prismaCloud()` with no `PRISMA_*`);
@@ -94,7 +98,7 @@ scripts. Implementer dispatches use Sonnet-4.6-mid, reviewers Opus-4.8-mid
   re-converge; converge failure leaves the running app untouched);
   `--fresh`; Ctrl-C = `stopServices()` + exit; every error string from the
   spec verbatim.
-- **Proves:** the spec's acceptance criteria 1–5 on `examples/store`,
+- **Proves:** the spec's acceptance criteria 1–6 on `examples/store`,
   scripted as an integration test where feasible (bring-up, single-service
   restart on rebuild, warm restart after Ctrl-C with stable ports/URLs,
   `--fresh` wipe, placeholder warning) plus manual verification of log/TTY
@@ -111,7 +115,7 @@ scripts. Implementer dispatches use Sonnet-4.6-mid, reviewers Opus-4.8-mid
   `deploy-cli.md` scope updated; `local-dev.md` + ADR-0041 reconciled with
   what shipped; port-repo changes committed there.
 - **Depends on:** S2 + S5.
-- **Spec sections:** acceptance criteria 6–9.
+- **Spec sections:** acceptance criteria 7–10.
 
 ## Close-out (required)
 

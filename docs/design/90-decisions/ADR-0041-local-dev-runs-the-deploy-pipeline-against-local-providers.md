@@ -18,8 +18,8 @@ export interface ExtensionDescriptor {
 }
 
 export interface DevDescriptor {
-  /** Local providers for the SAME resource types the extension's lowering emits. */
-  providers(): ProvidersLayer;
+  /** Local providers for the SAME resource types the extension's lowering emits — handed the app identity, since local providers are emulator clients. */
+  providers(input: DevProvidersInput): ProvidersLayer;
   /** A stable local identity — resolved without any platform call. */
   readonly container: ContainerDescriptor;
   /** Dev value-sourcing policy: secrets from the shell else minted placeholders; env-sourced params from the shell else a hard error. */
