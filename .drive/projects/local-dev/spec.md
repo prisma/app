@@ -144,10 +144,13 @@ plus the shared daemon layer and typed loopback clients.
      pid / failed health → clean the entry, fall through.
   4. Start: port = persisted port if any, else smallest ≥ 4300 unused across
      registry entries, persisted immediately. Spawn `process.execPath
-     <entry> --port <n> --state-dir ~/.prisma-composer/emulators/<name>/`
-     with `detached: true`, stdio appended to
-     `~/.prisma-composer/emulators/<name>.log`, `unref()`. Poll the health
-     path, 10 s budget; timeout →
+     <entry> --port <n> --state-dir <registryRoot>/<name>/` with
+     `detached: true`, stdio appended to `<registryRoot>/<name>.log`,
+     `unref()` — the `registryRoot` override governs the registry file, the
+     state dir, AND the log path together, so an overriding test touches
+     nothing outside its own root. Poll the health path, 10 s budget;
+     timeout → kill the spawned child (it must not outlive a failed
+     ensure), then
      `Error: <name> emulator failed to start on port <port> — see <logPath>.`
   5. Foreign process on the port → same error; `--fresh` does NOT touch the
      daemons (they are machine-global, shared by other apps); recovering a
