@@ -730,7 +730,17 @@ per-consumer contract slices on shared DBs · exposing the instance secret ·
    raw `pg.Pool` + `search_path`. Needs: Will's call + coordination with
    Serhii on plugin-schema coverage and timeline. Fallback: author our own
    pack as specced (rename consideration: avoid colliding with theirs).
-   **Until decided, S1 must not start the § Pack work.**
+   **Interim decision (orchestrator, 2026-07-22, after operator said
+   proceed):** S1 authors our own pack (the fallback) — the extension
+   branch (`tml-2994-better-auth-extension`) is unmerged, covers only the
+   four core models in the `public` namespace, and lacks the `jwks` table
+   and admin columns our plugins require; blocking S1 on it is
+   unacceptable coupling. Mitigations: pack id + head hash live in one
+   constants file, the store schema-qualifies through one `AUTH_SCHEMA`
+   constant, and DB access stays behind `buildAuthOptions` — adopting the
+   extension later is a contained swap. Upstream ask (plugin schema
+   coverage) filed on the "BetterAuth Extension" Linear project. Revisit
+   at S3 pickup.
 
 Genuine gaps found during implementation are recorded here and asked — not
 improvised.
