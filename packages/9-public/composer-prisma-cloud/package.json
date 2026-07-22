@@ -31,6 +31,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@effect/platform-bun": "4.0.0-beta.97",
+    "@effect/platform-node": "4.0.0-beta.92",
     "@prisma-next/cli": "0.15.0",
     "@prisma-next/config-loader": "0.15.0",
     "@prisma-next/contract": "0.15.0",
