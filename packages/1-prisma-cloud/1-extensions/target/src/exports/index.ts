@@ -5,6 +5,8 @@
  * nothing else. Pure barrel — implementations live in the named modules.
  */
 
+export type { AuthSecretConfig, AuthSecretContract } from '../auth-secret.ts';
+export { authSecret, authSecretContract } from '../auth-secret.ts';
 export type { BucketConfig } from '../bucket.ts';
 export { bucket, bucketContract } from '../bucket.ts';
 export { ComputeService, compute } from '../compute.ts';

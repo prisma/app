@@ -13,11 +13,13 @@ import { RPC_PEER_KEY } from '@internal/service-rpc';
 import * as Output from 'alchemy/Output';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
+import { AuthSecretProvider } from '../auth-secret-resource.ts';
 import {
   containerDescriptor,
   PRISMA_CLOUD_EXTENSION_ID,
   prismaCloudContainerOf,
 } from '../container.ts';
+import { authSecretDescriptor } from '../descriptors/auth-secret.ts';
 import { bucketDescriptor } from '../descriptors/bucket.ts';
 import { computeDescriptor } from '../descriptors/compute.ts';
 import { postgresDescriptor } from '../descriptors/postgres.ts';
@@ -309,6 +311,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
           PgWarmProvider(),
           PnMigrationProvider(),
           S3CredentialsProvider(),
+          AuthSecretProvider(),
           Prisma.ServiceKeyProvider(),
         ),
       ),
@@ -359,6 +362,7 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
       'prisma-next': prismaNextDescriptor(o),
       compute: computeDescriptor(o),
       credentials: s3CredentialsDescriptor(o),
+      'auth-secret': authSecretDescriptor(o),
       's3-store': s3StoreDescriptor(o),
       // A resource node routes by its contract's kind (resource() sets type =
       // provides.kind), and a real bucket provides the 's3' contract — so the

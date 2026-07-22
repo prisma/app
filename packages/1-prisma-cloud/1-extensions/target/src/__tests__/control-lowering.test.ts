@@ -16,6 +16,7 @@ import * as RealOutput from 'alchemy/Output';
 import { type } from 'arktype';
 import * as Effect from 'effect/Effect';
 import * as Redacted from 'effect/Redacted';
+import * as RealAuthSecret from '../auth-secret-resource.ts';
 import { PRISMA_CLOUD_EXTENSION_ID, PrismaCloudContainer } from '../container.ts';
 import type { ComputeProvisioned, ComputeSerialized } from '../descriptors/compute.ts';
 import { computeDescriptor } from '../descriptors/compute.ts';
@@ -46,6 +47,7 @@ const recorded: {
   pkg: Array<[unknown]>;
   serviceKey: Array<[string, unknown]>;
   creds: Array<[string, unknown]>;
+  authSecret: Array<[string, unknown]>;
   bucket: Array<[string, unknown]>;
   bucketKey: Array<[string, unknown]>;
 } = {
@@ -58,6 +60,7 @@ const recorded: {
   pkg: [],
   serviceKey: [],
   creds: [],
+  authSecret: [],
   bucket: [],
   bucketKey: [],
 };
@@ -151,6 +154,18 @@ mock.module('../s3-credentials-resource.ts', () => ({
     return Effect.succeed({ accessKeyId: 'AKIA-STUB', secretAccessKey: 'secret-stub' });
   },
   S3CredentialsProvider: () => ({ stub: 's3-credentials-provider' }),
+}));
+
+// AuthSecret is a real Alchemy Resource (needs the Stack service); stub it so
+// the auth-secret lowering's data flow runs purely. The real provider mints a
+// random secret — a fixed value here so assertions can name it.
+mock.module('../auth-secret-resource.ts', () => ({
+  ...RealAuthSecret,
+  AuthSecret: (id: string, props: unknown) => {
+    recorded.authSecret.push([id, props]);
+    return Effect.succeed({ value: 'auth-secret-stub' });
+  },
+  AuthSecretProvider: () => ({ stub: 'auth-secret-provider' }),
 }));
 
 const { prismaCloud } = await import('../exports/control.ts');
@@ -453,6 +468,22 @@ describe("prismaCloud().nodes['credentials'] — the resource descriptor", () =>
     // It must never reach an entity. Entities get rendered to a terminal
     // and are the one channel with nothing publishable to say here.
     expect(result.entities).toEqual([]);
+  });
+});
+
+describe("prismaCloud().nodes['auth-secret'] — the resource descriptor", () => {
+  test('reports NO entities — a minted secret is secret material, and an entity is built to be printed', () => {
+    const target = prismaCloud({ workspaceId: 'ws_1' });
+    const ctx = { id: 'secret' } as unknown as LowerContext;
+
+    const result = run<LoweredResult>(resourceDescriptorOf(target, 'auth-secret')(ctx));
+
+    // The secret reaches consumers through the OUTPUTS — that is what they are for.
+    expect(result.outputs).toEqual({ value: 'auth-secret-stub' });
+    // It must never reach an entity. Entities get rendered to a terminal
+    // and are the one channel with nothing publishable to say here.
+    expect(result.entities).toEqual([]);
+    expect(recorded.authSecret).toEqual([['secret-secret', {}]]);
   });
 });
 
