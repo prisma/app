@@ -13,8 +13,9 @@
  * `fetch()` + `fs.readFileSync`), never by importing `@internal/dev-emulators`
  * or `@internal/lowering` directly.
  *
- * The Compute/buckets emulators are the real, machine-global daemon programs
- * a real `prisma-composer dev` session would spawn (D4) — there is no way to
+ * The Compute/buckets/postgres emulators are the real, machine-global daemon
+ * programs a real `prisma-composer dev` session would spawn (D4) — there is
+ * no way to
  * redirect them to an isolated registry from here: `ensureDaemon`'s own
  * `{registryRoot}` override is real, but reaching it would mean importing
  * `@internal/dev-emulators` directly, which a test importing only 9-public
@@ -29,27 +30,28 @@
  * therefore records whether each daemon was ALREADY running before it acts
  * (a baseline check) and only stops the ones it caused to start; every
  * app-scoped record is removed at the end regardless, through the
- * extension's own `dev.teardown`, and every `prisma dev` instance this test
- * created is removed too.
+ * extension's own `dev.teardown`, and the `postgres-main`-hosted server this
+ * test created (plus its persisted data) is removed too.
  *
  * WHY THIS IS A STANDALONE SCRIPT, NOT A `bun:test` FILE:
  *
- * `bun test` was tried first. Under `bun test` specifically,
- * `LocalDatabaseProvider`'s `prisma dev --name <x> --detach` subprocess
- * (spawned from deep inside the alchemy child's own Effect runtime) runs and
- * genuinely creates the instance, but its stdout is silently lost by the
- * calling `spawnSync`, so the first converge failed with "could not read the
- * database URL ... output was:" (empty). This was confirmed NOT a defect in
- * the local providers by rigorous empirical isolation: the identical stack
- * file, converged with the identical `alchemy` binary and args, succeeds
- * every time — "Done: 40 succeeded", full SERVING proof, correct HTTP
- * round-trip — under a plain shell, under `bun run <script>.ts` (this file),
- * and under plain `node`. Every other variable was ruled out (nesting depth,
- * `stdio` pipe vs. file-descriptor redirect, `detached: true`) — the one
- * variable that mattered was whether the process tree's ROOT ancestor is
- * `bun test`. Rather than work around that with an unrelated subprocess this
- * test doesn't control, the test itself is driven as a plain script (this
- * file) with hand-rolled asserts and `process.exitCode`, invoked by
+ * `bun test` was tried first. Under `bun test` specifically, a daemon
+ * spawned deep inside the alchemy child's own Effect runtime (originally
+ * `LocalDatabaseProvider`'s own `prisma dev --name <x> --detach` subprocess,
+ * pre-REVISION — operator review of #162; the same class of issue applies
+ * to any detached child a converge causes to spawn, e.g. `ensureDaemon`'s
+ * own daemon programs) had its stdout silently lost by the calling
+ * `spawnSync`/`spawn`. This was confirmed NOT a defect in the local
+ * providers by rigorous empirical isolation: the identical stack file,
+ * converged with the identical `alchemy` binary and args, succeeds every
+ * time — "Done: 40 succeeded", full SERVING proof, correct HTTP round-trip —
+ * under a plain shell, under `bun run <script>.ts` (this file), and under
+ * plain `node`. Every other variable was ruled out (nesting depth, `stdio`
+ * pipe vs. file-descriptor redirect, `detached: true`) — the one variable
+ * that mattered was whether the process tree's ROOT ancestor is `bun test`.
+ * Rather than work around that with an unrelated subprocess this test
+ * doesn't control, the test itself is driven as a plain script (this file)
+ * with hand-rolled asserts and `process.exitCode`, invoked by
  * `package.json`'s `test` script as `bun run test/local-dev.integration.ts`
  * — same `bun` runtime, same file-descriptor-redirected stdio and bounded
  * timeouts as before, just not started via `bun test`'s own harness.
@@ -191,11 +193,12 @@ ${bundleLines}
  * not Node's `encoding: 'utf8'` pipe-and-buffer capture) — confirmed live
  * that piped capture silently loses output from a deeply nested grandchild
  * (alchemy's own foreground-child watchdog, in turn running the stack file,
- * in turn shelling out to `prisma dev --detach`) specifically when the
- * OUTER process is `bun test`; the identical command run from a plain shell,
- * or with output going straight to a file, does not lose it. Bounded (never
- * a silent indefinite hang — the chief risk is `prisma dev --detach`
- * downloading engines on first use with no visible output) regardless.
+ * in turn ensuring the emulator daemons, including `postgres-main`)
+ * specifically when the OUTER process is `bun test`; the identical command
+ * run from a plain shell, or with output going straight to a file, does not
+ * lose it. Bounded (never a silent indefinite hang — the chief risk is a
+ * daemon downloading/starting engines on first use with no visible output)
+ * regardless.
  */
 function runAlchemyDeploy(containerEnvVars: Readonly<Record<string, string>>): {
   status: number | null;
@@ -258,9 +261,27 @@ function emulatorRegistryRoot(): string {
   return path.join(os.homedir(), '.prisma-composer', 'emulators');
 }
 
-function readEmulatorEntry(name: 'compute' | 'buckets'): EmulatorRegistryEntry | undefined {
+function readEmulatorEntry(
+  name: 'compute' | 'buckets' | 'postgres',
+): EmulatorRegistryEntry | undefined {
   const parsed = readJson(path.join(emulatorRegistryRoot(), `${name}.json`));
   return isRegistryEntry(parsed) ? parsed : undefined;
+}
+
+interface PostgresDatabaseInfo {
+  readonly id: string;
+  readonly url: string;
+  readonly instanceName: string;
+  readonly databasePort: number;
+}
+
+/** The documented postgres-emulator wire protocol (spec § 4, REVISED — operator review of #162) — plain fetch, never the typed client. */
+async function listPostgresDatabases(): Promise<readonly PostgresDatabaseInfo[]> {
+  const entry = readEmulatorEntry('postgres');
+  if (entry === undefined) throw new Error('postgres emulator registry entry not found');
+  const res = await fetch(`http://127.0.0.1:${entry.port}/apps/${APP_NAME}/databases`);
+  if (!res.ok) throw new Error(`postgres emulator listDatabases failed: ${res.status}`);
+  return (await res.json()) as PostgresDatabaseInfo[];
 }
 
 interface ServiceInfo {
@@ -347,11 +368,13 @@ async function main(): Promise<void> {
   // app may be using).
   let computePreExisting = false;
   let bucketsPreExisting = false;
+  let postgresPreExisting = false;
 
   fs.rmSync(path.join(fixtureDir, '.prisma-composer'), { recursive: true, force: true });
   fs.rmSync(path.join(fixtureDir, '.alchemy'), { recursive: true, force: true });
   computePreExisting = readEmulatorEntry('compute') !== undefined;
   bucketsPreExisting = readEmulatorEntry('buckets') !== undefined;
+  postgresPreExisting = readEmulatorEntry('postgres') !== undefined;
 
   try {
     // 1. Construct the extension with NO PRISMA_* present — proves the
@@ -392,12 +415,16 @@ async function main(): Promise<void> {
     }
 
     // 6. Emulators — ensures compute always, buckets because the graph has
-    // an `s3`-kinded resource.
+    // an `s3`-kinded resource, postgres because the graph has a
+    // `postgres`-kinded resource (REVISED — Postgres is a first-class
+    // daemon since the programmatic `@prisma/dev` adoption, operator
+    // review of #162).
     if (dev.emulators !== undefined) {
       await dev.emulators({ graph, container: devContainer, devDir });
     }
     assert(readEmulatorEntry('compute') !== undefined, 'compute emulator must be registered');
     assert(readEmulatorEntry('buckets') !== undefined, 'buckets emulator must be registered');
+    assert(readEmulatorEntry('postgres') !== undefined, 'postgres emulator must be registered');
 
     // 7. Write the dev stack file and converge through the REAL alchemy binary.
     fs.mkdirSync(stackDir, { recursive: true });
@@ -469,19 +496,22 @@ async function main(): Promise<void> {
       'secrets.json must be absent or empty for this fixture',
     );
 
-    // 11. postgres.json + a real, running `prisma dev` instance. Keyed by the
-    // instance name itself (`pcdev-<app>-<node>`), not the bare node id.
-    const postgres = readJson(path.join(devDir, 'postgres.json')) as Record<
-      string,
-      { instance: string; url: string }
-    >;
-    const dbEntry = postgres['pcdev-localdevs4fixture-appdb'];
-    assertEqual(dbEntry?.instance, 'pcdev-localdevs4fixture-appdb', 'postgres.json instance name');
+    // 11. The postgres-main daemon's own listing (REVISED — operator review
+    // of #162: no more dev-store postgres.json, the daemon owns instance
+    // state) + a real, running `@prisma/dev` server. Keyed by the instance
+    // name itself (`pcdev-<app>-<node>`), not the bare node id.
+    const databases = await listPostgresDatabases();
+    const dbEntry = databases.find((d) => d.instanceName === 'pcdev-localdevs4fixture-appdb');
+    assertEqual(
+      dbEntry?.instanceName,
+      'pcdev-localdevs4fixture-appdb',
+      'postgres-main database listing instance name',
+    );
     const dbUrl = new URL(dbEntry?.url ?? '');
     const dbReachable = await probeTcp(dbUrl.hostname, Number(dbUrl.port), 2000);
     assert(
       dbReachable,
-      `the prisma dev instance must be reachable at ${dbUrl.hostname}:${dbUrl.port}`,
+      `the postgres-main-hosted server must be reachable at ${dbUrl.hostname}:${dbUrl.port}`,
     );
 
     // 12. Second converge, unchanged build: full no-op — same pids.
@@ -559,7 +589,8 @@ async function main(): Promise<void> {
 
     // App-scoped teardown through the extension's own public dev.teardown —
     // never stops the daemons themselves (D4/D12), just this app's records
-    // and its `prisma dev` instance(s).
+    // on each daemon (postgres's own DELETE closes its servers and deletes
+    // their persisted data) and its dev state directory.
     if (descriptor?.dev !== undefined) {
       const resolvedDev = await descriptor.dev().catch(() => undefined);
       if (resolvedDev?.teardown !== undefined) {
@@ -575,6 +606,7 @@ async function main(): Promise<void> {
     for (const [name, preExisting] of [
       ['compute', computePreExisting],
       ['buckets', bucketsPreExisting],
+      ['postgres', postgresPreExisting],
     ] as const) {
       if (preExisting) continue;
       const entry = readEmulatorEntry(name);
