@@ -97,6 +97,7 @@ export async function devAttach(input: LocalTargetAttachInput): Promise<LocalTar
   const client = computeClient();
 
   return {
+    startServices: () => client.startApp(app),
     endpoints: async () => {
       const services = await client.listServices(app);
       return services.map((svc) => ({ address: svc.address, url: svc.url }));
