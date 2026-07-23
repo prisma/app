@@ -404,6 +404,10 @@ registry (§ 2).
 
 Every local provider factory takes `(input: DevProvidersInput)`; `devDir`
 is `input.devDir`; nothing here reads `process.cwd()` or the environment.
+The emulator-facing service id is `slugServiceId(name)` (the same
+lowercase/hyphen slugging as postgres instance names) because a dotted
+address cannot satisfy § 2's id-segment rule; the real dotted address rides
+the deployment body and labels logs/endpoints.
 Two layer-order accommodations are pinned (this package cannot import the
 extensions layer): the app name is read as `input.container.input.appName`
 directly off the generic `ContainerInstance` (the field is on the base
@@ -690,6 +694,15 @@ New control-plane files (all under `src/`, plane `control` in
     9. Watch loop (below) until SIGINT/SIGTERM; on exit call every
        attachment's `stopServices()`, then exit 0 — emulators and data stay
        up by design (machine-scoped daemons; `--fresh` removes instances).
+       Recorded limitation: the dev command becomes the SOLE signal
+       listener at this point (alchemy's transitively imported library code
+       registers exit-on-signal listeners at module load; they are stripped
+       so cleanup can run), so a second Ctrl-C does not force-quit a hung
+       stop — the emulator's kill grace bounds it in practice.
+       Recorded follow-up: `PreflightInput` carries no `devDir`, so the dev
+       preflight derives it from `process.cwd()` — correct under the CLI
+       (which runs from the app dir) but asymmetric with every other dev
+       hook; adding `devDir` to the input is future work, not v1.
   - `generate-dev-stack.ts` — like `generate-stack.ts` but at
     `.prisma-composer/dev/alchemy.run.ts`
     (`DEV_STACK_RELATIVE_PATH`), emitting:

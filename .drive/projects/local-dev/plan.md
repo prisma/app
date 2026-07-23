@@ -123,17 +123,14 @@ scripts. Implementer dispatches use Sonnet-4.6-mid, reviewers Opus-4.8-mid
 
 ## Known items blocking close-out (found in S5 proving, 2026-07-23)
 
-- **Restart amplification (defect):** rebuilding one service restarts its
-  RPC dependents too (observed: catalog rebuild → catalog + cron.runner +
-  orders.service restarted; storefront + cron.scheduler correctly
-  untouched). Something in the dependents' materialized deployment env
-  recomputes as changed on every converge. Root-cause and fix in the local
-  providers (S4 code) before S6 sign-off — acceptance criterion 2 requires
-  exactly-one-service restarts.
-- **Criteria 4/5 scripting pending:** `examples/store` has neither a bucket
-  nor a secret/env-param; the S4 fixture needs both to script the bucket
-  file-drop round-trip and the placeholder-warning / env-param-error
-  criteria at the CLI level.
+- ~~Restart amplification~~ — **resolved on the S5 branch**: root-caused
+  (app-wide env materialization completing between converges) with
+  three-converge byte evidence; fixed by the pinned scoped materialization;
+  proven by the store-level exactly-one-restart assertion, run twice.
+- ~~Criteria 4/5 scripting~~ — **resolved on the S5 branch**: the S4
+  fixture gained a bucket flow, a secret, and an envParam;
+  `local-dev-criteria-4-5.integration.ts` proves all four sub-criteria at
+  the CLI level as a required gate.
 - ~~Emulator stop/reap honesty~~ — **resolved, no bug**: `killChild`
   already awaits SIGTERM → 5 s grace → SIGKILL → exit before state flips;
   the observation was the grace period itself. Locked in by a regression
