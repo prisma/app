@@ -18,6 +18,8 @@ const MAP = [
   ['@internal/node', '@prisma/composer/node'],
   ['@internal/nextjs/control', '@prisma/composer/nextjs/control'],
   ['@internal/nextjs', '@prisma/composer/nextjs'],
+  ['@internal/email/testing', '@prisma/composer-prisma-cloud/email/testing'],
+  ['@internal/email', '@prisma/composer-prisma-cloud/email'],
 ];
 const IMPORT_REF = /(?:import\(|from )["']@internal\/[^"']+["']/;
 
