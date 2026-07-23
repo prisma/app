@@ -142,8 +142,10 @@ plus the shared daemon layer and typed loopback clients.
      `version` === this package's version → return `http://127.0.0.1:<port>`.
   3. Version mismatch → SIGTERM (5 s grace, SIGKILL), fall through. Dead
      pid / failed health → clean the entry, fall through.
-  4. Start: port = persisted port if any, else smallest ≥ 4300 unused across
-     registry entries, persisted immediately. Spawn `process.execPath
+  4. Start: port = persisted port if any, else allocated via `get-port`
+     (preferred range ≥ 4300, excluding registry-used ports — the free-port
+     PROBE is the library's, our persistence and range policy stay ours),
+     persisted immediately. Spawn `process.execPath
      <entry> --port <n> --state-dir <registryRoot>/<name>/` with
      `detached: true`, stdio appended to `<registryRoot>/<name>.log`,
      `unref()` — the `registryRoot` override governs the registry file, the
@@ -164,17 +166,19 @@ plus the shared daemon layer and typed loopback clients.
      endpoints frozen in deploy state reference it — fail with the pinned
      error; recovery is manual (`--fresh` does NOT touch the daemons — they
      are machine-global, shared by other apps).
-- **Concurrent-ensure protocol:** the observe→spawn→persist critical
-  section is serialized ACROSS PROCESSES per daemon name with an atomic
-  directory lock: `mkdir <registryRoot>/.lock-<name>` (atomic creation IS
-  acquisition; the holder writes its pid to `<lockDir>/pid`). On `EEXIST`:
-  if the recorded holder pid is dead, remove the lock dir and retry
-  immediately; else poll every 250 ms up to 10 s, then
-  `Error: timed out waiting for another process ensuring the <name> emulator — remove <lockDir> if stale.`
-  After acquiring, RE-READ the registry before deciding to spawn — the
-  previous holder may have already done the job. Port allocation happens
-  inside the lock, so two daemons can never claim one port. Release
-  (rm the dir) in a finally.
+- **Concurrent-ensure protocol (REVISED — operator decision, 2026-07-23):**
+  the observe→spawn→persist critical section is serialized ACROSS
+  PROCESSES per daemon name using `proper-lockfile` (maintained library;
+  its staleness/compromise semantics are adopted wholesale rather than our
+  earlier hand-rolled mkdir/pid protocol — commodity locking is exactly
+  where unforeseen edge cases hide). Our wrapper pins only: the lock path
+  is per-daemon under `<registryRoot>`; the bounded wait is ~10 s and its
+  exhaustion throws
+  `Error: timed out waiting for another process ensuring the <name> emulator — remove <lockDir> if stale.`;
+  the registry is RE-READ after acquiring (the previous holder may have
+  already done the job); port allocation happens inside the lock; release
+  runs in a finally on every path. The existing inter-process tests stand
+  unchanged — they validate behavior, not the engine.
 - `stopDaemon(name)`: SIGTERM/SIGKILL + registry cleanup. Not called by any
   v1 command — an operator escape hatch, exported for tests.
 - **Publish note (S5 scope):** `import.meta.resolve('@internal/dev-emulators/…')`
@@ -789,11 +793,15 @@ The open-chat proof (S6) uses `node({ module, dir, entry })`.
 
 ## Behavior contracts (cross-cutting)
 
-- **No new runtime dependencies** in any shipped package, with ONE
-  operator-approved exception: the dev watch engine is `chokidar` v4 (see
-  § 6). The S3 server, tar reader, and emulator daemons use node built-ins
-  only — those are wire formats we own, where a dependency is a liability.
-  (`alchemy`, `effect`, `clipanion` are already present.)
+- **Dependency razor (operator decision):** commodity infrastructure with
+  latent edge cases uses MAINTAINED LIBRARIES — `chokidar` v4 (watching,
+  § 6), `proper-lockfile` (inter-process locking, § 2), `get-port` (free-
+  port probing, § 2). Hand-rolled code is reserved for wire formats we own
+  — the S3 handler, the ustar reader, the emulator admin APIs — where a
+  dependency is a liability, not a shield. (`alchemy`, `effect`,
+  `clipanion` are already present.) The earlier no-new-deps contract cost
+  real bugs in exactly the commodity code (a Linux port-probe
+  self-collision, a BSD/GNU pgrep detour) and is retired.
 - **Casts**: `.agents/rules/no-bare-casts.mdc` — every cast is `blindCast`
   with a justification, or real narrowing. The provider attribute shapes are
   typed against the hosted providers' exported types, not re-declared.
