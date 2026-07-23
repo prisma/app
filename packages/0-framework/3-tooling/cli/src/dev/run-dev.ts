@@ -56,21 +56,19 @@ function printFrontDoor(
   for (const line of renderFrontDoor(endpoints)) console.log(line);
 }
 
-const ENDPOINTS_RETRY_ATTEMPTS = 3;
-const ENDPOINTS_RETRY_DELAY_MS = 500;
+const EMULATOR_RETRY_ATTEMPTS = 5;
+const EMULATOR_RETRY_DELAY_MS = 500;
 
-/** `attachment.endpoints()` right after a converge that just PUT dozens of resources through the same emulator connection can hit a transient refused/reset connection — a brief, genuinely transient loopback hiccup, not a real failure. Retried a few times before giving up. */
-async function endpointsWithRetry(
-  attachment: LocalTargetAttachment,
-): Promise<readonly { readonly address: string; readonly url: string }[]> {
+/** An emulator admin call right after a converge that just PUT dozens of resources through the same daemon can hit a transient refused/reset connection — a brief loopback hiccup under load, not a real failure. Retried before giving up. Applies to every attach admin call the dev session makes (`startServices`, `endpoints`). */
+async function withEmulatorRetry<T>(call: () => Promise<T>): Promise<T> {
   let lastError: unknown;
-  for (let attempt = 1; attempt <= ENDPOINTS_RETRY_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= EMULATOR_RETRY_ATTEMPTS; attempt += 1) {
     try {
-      return await attachment.endpoints();
+      return await call();
     } catch (error) {
       lastError = error;
-      if (attempt < ENDPOINTS_RETRY_ATTEMPTS) {
-        await new Promise((resolve) => setTimeout(resolve, ENDPOINTS_RETRY_DELAY_MS));
+      if (attempt < EMULATOR_RETRY_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, EMULATOR_RETRY_DELAY_MS));
       }
     }
   }
@@ -80,7 +78,7 @@ async function endpointsWithRetry(
 async function mergedEndpoints(
   attachments: readonly LocalTargetAttachment[],
 ): Promise<readonly { readonly address: string; readonly url: string }[]> {
-  const lists = await Promise.all(attachments.map((a) => endpointsWithRetry(a)));
+  const lists = await Promise.all(attachments.map((a) => withEmulatorRetry(() => a.endpoints())));
   return lists.flat();
 }
 
@@ -211,7 +209,7 @@ export async function runDev(args: DevArgs, deps: DevRunDeps = {}): Promise<numb
   }
   for (const attachment of attachments) {
     try {
-      await attachment.startServices();
+      await withEmulatorRetry(() => attachment.startServices());
     } catch (error) {
       throw toCliError(error);
     }
