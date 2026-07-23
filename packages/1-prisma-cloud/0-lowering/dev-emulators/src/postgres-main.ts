@@ -447,7 +447,6 @@ function main(): void {
 
     const prismaDev = await importPrismaDev(prismaDevModulePath);
     const isFreshAllocation = existingRecord === undefined;
-    const maxAttempts = isFreshAllocation ? MAX_FRESH_PORT_CANDIDATES : 1;
     let dbPort =
       existingRecord?.databasePort ?? (await smallestUnusedDatabasePort(MIN_DATABASE_PORT));
 
@@ -496,7 +495,7 @@ function main(): void {
             schedulePersist();
             return { url };
           }
-          if (attempt < maxAttempts) {
+          if (attempt < MAX_FRESH_PORT_CANDIDATES) {
             const internalState = await importPrismaDevInternalState(prismaDevModulePath);
             await internalState.deleteServer(instanceName);
             continue;
@@ -508,8 +507,14 @@ function main(): void {
           aux.shadowDatabasePort,
           aux.streamsPort,
         ]);
+        // The aux listener ports are never persisted, so a refusal of one is
+        // always retryable with fresh candidates. The DATABASE port is frozen
+        // once a record exists (endpoints in deploy state reference it) —
+        // only a fresh allocation may move it.
         const canRetryNextPort =
-          isFreshAllocation && conflictPort !== undefined && attempt < maxAttempts;
+          conflictPort !== undefined &&
+          attempt < MAX_FRESH_PORT_CANDIDATES &&
+          (conflictPort !== dbPort || isFreshAllocation);
         if (!canRetryNextPort) {
           const reason = err instanceof Error ? err.message : String(err);
           throw new Error(
