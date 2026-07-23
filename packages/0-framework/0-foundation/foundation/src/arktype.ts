@@ -4,7 +4,7 @@
  * module imports arktype, so an app that uses Zod never loads it.
  */
 import { type } from 'arktype';
-import { isSecretString } from './secret.ts';
+import { isSecretString, type SecretString } from './secret.ts';
 
 /**
  * A schema leaf that accepts only a redacting `SecretString` box, so
@@ -15,4 +15,8 @@ import { isSecretString } from './secret.ts';
  * input: type({ signingKey: secretString() })
  * ```
  */
-export const secretString = () => type('unknown').narrow(isSecretString);
+export const secretString = () =>
+  type('unknown').narrow(
+    (value, ctx): value is SecretString =>
+      isSecretString(value) || ctx.mustBe('a SecretString box — bind this field to a secret'),
+  );

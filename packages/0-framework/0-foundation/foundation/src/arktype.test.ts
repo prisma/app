@@ -14,7 +14,9 @@ describe('secretString', () => {
   });
 
   test('rejects a plain string — a credential cannot arrive unboxed', () => {
-    expect(schema({ signingKey: 'sk_live_abc' })).toBeInstanceOf(type.errors);
+    const out = schema({ signingKey: 'sk_live_abc' });
+    expect(out).toBeInstanceOf(type.errors);
+    expect(String(out)).toContain('signingKey must be a SecretString box');
   });
 
   test('rejects an unbranded look-alike', () => {
