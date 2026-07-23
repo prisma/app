@@ -28,9 +28,16 @@ const MAX_DATABASE_PORT = 65_535;
 const APPS_STATE_MODE = 0o600;
 /** Spec § 2 step 5's pattern, applied to a fresh database-port allocation. */
 const MAX_FRESH_PORT_CANDIDATES = 5;
-/** Adoption patience: a cold server boot takes seconds, and a crashed holder's lock only goes stale after proper-lockfile's ~10s threshold — the window must outlast both. */
-const MAX_ADOPT_ATTEMPTS = 30;
-const ADOPT_RETRY_DELAY_MS = 500;
+/**
+ * A name refused as "already running" is retried a few times, each attempt
+ * first waiting out the holder: a cold server boot takes seconds, and a
+ * crashed holder's lock is only released once proper-lockfile's ~10s stale
+ * threshold passes. Bounded so a genuinely stuck name still fails visibly
+ * inside the dev command's own startup budget.
+ */
+const MAX_ALREADY_RUNNING_RETRIES = 2;
+const ALREADY_RUNNING_POLLS = 24;
+const ALREADY_RUNNING_POLL_MS = 500;
 
 const NOT_INSTALLED_MESSAGE =
   'local dev needs @prisma/dev for its local Postgres emulator — add "prisma" to your app\'s devDependencies.';
@@ -537,6 +544,7 @@ function main(): void {
       existingRecord?.databasePort ?? (await smallestUnusedDatabasePort(MIN_DATABASE_PORT));
 
     const conflicted = new Set<number>();
+    let alreadyRunningRetries = 0;
     for (let attempt = 1; ; attempt++) {
       const aux = await allocateAuxPorts(new Set([dbPort, ...conflicted]));
       try {
@@ -562,12 +570,24 @@ function main(): void {
         schedulePersist();
         return { url };
       } catch (err) {
-        if (isNameAlreadyTaken(err)) {
-          // Lost a race with another holder between the reconcile above and
-          // this start. Re-read the record with patience: a holder still
-          // mid-boot has no connection string yet, and a dead holder's lock
-          // is only released once proper-lockfile's stale threshold passes.
-          for (let adoptAttempt = 1; adoptAttempt <= MAX_ADOPT_ATTEMPTS; adoptAttempt += 1) {
+        if (isNameAlreadyTaken(err) && alreadyRunningRetries < MAX_ALREADY_RUNNING_RETRIES) {
+          alreadyRunningRetries += 1;
+          // The refusal means a live process holds this server's lock, but
+          // the RECORD it holds can say three different things, and the
+          // difference matters (observed on CI: the daemon had no record for
+          // this database while its name was locked):
+          //
+          //  - a live record with a live owner: that server IS this database
+          //    (the name is namespaced to this app+database) — adopt its URL;
+          //  - a live record with a dead owner: a crashed owner's leftover —
+          //    clear the process record (never the data) and start again;
+          //  - NO live record at all: the lock is held by a holder that has
+          //    not published its record yet, or one whose record was just
+          //    removed while its lock lingers. Neither is resolvable by
+          //    starting again immediately — the previous code did exactly
+          //    that and burned every attempt in milliseconds. Wait for the
+          //    holder to publish or release, then retry the start.
+          for (let poll = 1; poll <= ALREADY_RUNNING_POLLS; poll += 1) {
             const now = await serverStatusOf(internalState, instanceName);
             if (now.live && now.pid !== undefined && isPidAlive(now.pid) && now.url !== undefined) {
               appRec.databases[id] = {
@@ -583,10 +603,9 @@ function main(): void {
               await internalState.killServer(instanceName).catch(() => undefined);
               break;
             }
-            if (!now.live) break;
-            await new Promise((resolve) => setTimeout(resolve, ADOPT_RETRY_DELAY_MS));
+            await new Promise((resolve) => setTimeout(resolve, ALREADY_RUNNING_POLL_MS));
           }
-          if (attempt < MAX_FRESH_PORT_CANDIDATES) continue;
+          continue;
         }
         const conflictPort = portConflictOf(err, [
           dbPort,
