@@ -738,8 +738,13 @@ New control-plane files (all under `src/`, plane `control` in
     as the reproduction line.
   - `watch.ts` — watch each assembled bundle's `watch` paths (the
     adapter-declared user-built inputs — § 3's `Bundle.watch`; a bundle
-    without them is not watched, noted once at startup). `fs.watch`
-    recursive on dirs, plain on files; debounce 300 ms per burst, coalescing across
+    without them is not watched, noted once at startup). The watch ENGINE
+    is `chokidar` v4 (operator decision: don't-reinvent-the-wheel beats the
+    no-new-deps contract here — chokidar absorbs the atomic-rename/inode
+    class we hand-fixed once already and the cross-platform recursive-watch
+    differences; v4 is pure JS, no native code, no glob surface). The
+    hand-rolled parent-directory workaround is deleted; its delete+recreate
+    regression test STAYS as a behavior test. Debounce 300 ms per burst, coalescing across
     services. On fire: re-run assemble for ALL services (correctness over
     cleverness; optimization is a recorded follow-up) → rewrite the dev stack
     file → re-run converge (`--stage dev`) — the emulator restarts exactly
@@ -784,9 +789,11 @@ The open-chat proof (S6) uses `node({ module, dir, entry })`.
 
 ## Behavior contracts (cross-cutting)
 
-- **No new runtime dependencies** in any shipped package. The S3 server,
-  tar reader, watcher, and emulator daemons use node built-ins only. (`alchemy`,
-  `effect`, `clipanion` are already present.)
+- **No new runtime dependencies** in any shipped package, with ONE
+  operator-approved exception: the dev watch engine is `chokidar` v4 (see
+  § 6). The S3 server, tar reader, and emulator daemons use node built-ins
+  only — those are wire formats we own, where a dependency is a liability.
+  (`alchemy`, `effect`, `clipanion` are already present.)
 - **Casts**: `.agents/rules/no-bare-casts.mdc` — every cast is `blindCast`
   with a justification, or real narrowing. The provider attribute shapes are
   typed against the hosted providers' exported types, not re-declared.

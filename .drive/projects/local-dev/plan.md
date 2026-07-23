@@ -137,6 +137,20 @@ scripts. Implementer dispatches use Sonnet-4.6-mid, reviewers Opus-4.8-mid
   test (an ignores-SIGTERM fixture: the listing never says `stopped` while
   the pid lives, and the stop measurably takes the grace period).
 
+### S7 — adopt @prisma/dev programmatically (decided follow-up, post-stack)
+
+Operator decision (2026-07-23): replace the Postgres CLI shell-out with
+`@prisma/dev`'s programmatic API, hosted in our own `postgres-main`
+emulator daemon beside compute/buckets — `startPrismaDevServer({ name,
+databasePort, persistenceMode })` per `Database` resource, ports from our
+registry, persistence on. Deletes: bin walk-up, last-stdout-line URL
+parsing, `prisma dev start/stop/rm` coupling, the probe/start recovery
+sequence. Sub-decision to settle at pickup: version ownership (lean:
+resolve `@prisma/dev` from the app's node_modules so the app owns the
+version, consistent with runtime ownership). The CLI shell-out in the
+shipped slices is transitional and marked so here. Not started until the
+current stack merges.
+
 ## Close-out (required)
 
 - [ ] Verify all acceptance criteria in `.drive/projects/local-dev/spec.md`
