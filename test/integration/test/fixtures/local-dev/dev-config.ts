@@ -1,24 +1,18 @@
 /**
- * The dev STACK's own config — deliberately narrower than the shared
- * `test/integration/prisma-composer.config.ts` (which also lists
- * `nodeBuild()`, needed for THAT config's own CLI-driven assemble step).
- * `lower()`'s node-lowering loop never reads a service's `build.extension`
- * (only `descriptorFor`'s lookup via the node's own `.extension` field, which
- * for every node in this fixture is `@prisma-cloud`) — the build registry is
- * consulted only by `assembleServices`, a CLI/tooling-level concern outside
- * `lower()` entirely — so `nodeBuild()` is not needed here.
- *
- * This sidesteps an unresolved spec gap recorded in
- * `.drive/projects/local-dev/spec.md`'s Open Questions: `mergedDevProviders`
- * throws for ANY configured extension with no `dev` descriptor, including a
- * build-only one, which cannot sensibly implement one (see the recorded
- * question for the full analysis and why this is a real gap, not just a
- * test-fixture quirk).
+ * The dev STACK's own config. Matches the shared
+ * `test/integration/prisma-composer.config.ts` shape, including `nodeBuild()`
+ * — the same build-only extension `deploy`'s assemble step routes through
+ * (`config.extensions[build.extension].nodes[build.type]`) and dev needs to
+ * accept without throwing (`mergedDevProviders`'s build-only exemption,
+ * ADR-0041): `isBuildOnlyExtension` recognizes `nodeBuild()` (every `nodes`
+ * entry is `kind: 'build'`, no `providers`/`application`/`provisions`/
+ * `container`) and `mergedDevProviders` skips it rather than throwing.
  */
 import { defineConfig } from '@prisma/composer/config';
+import { nodeBuild } from '@prisma/composer/node/control';
 import { prismaCloud, prismaState } from '@prisma/composer-prisma-cloud/control';
 
 export default defineConfig({
-  extensions: [prismaCloud()],
+  extensions: [prismaCloud(), nodeBuild()],
   state: prismaState(),
 });

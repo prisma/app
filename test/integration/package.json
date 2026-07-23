@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test && bun run test/local-dev.integration.ts"
   },
   "devDependencies": {
     "@prisma/composer": "workspace:0.2.0",
