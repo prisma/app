@@ -146,6 +146,23 @@ export interface DevAttachment {
 export const DEV_DIR = '.prisma-composer/dev';
 
 /**
+ * True when an extension only participates in assembly (every `nodes` entry
+ * is `kind: 'build'`, and it declares none of `providers`/`application`/
+ * `provisions`/`container`) — it owns no resources or services, so it has
+ * nothing to emulate and is exempt from dev-capability requirements
+ * (ADR-0041). Shared by `mergedDevProviders` and every dev hook iteration.
+ */
+export function isBuildOnlyExtension(extension: ExtensionDescriptor): boolean {
+  return (
+    Object.values(extension.nodes).every((node) => node.kind === 'build') &&
+    extension.providers === undefined &&
+    extension.application === undefined &&
+    extension.provisions === undefined &&
+    extension.container === undefined
+  );
+}
+
+/**
  * What one registry entry can do. The `kind` discriminant is checked at every
  * lookup site against what the site needs — a resource node looked up against
  * a `service` descriptor is an error naming (extension, type, expected kind).

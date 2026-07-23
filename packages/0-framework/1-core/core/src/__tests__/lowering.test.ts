@@ -5,7 +5,11 @@ import * as Layer from 'effect/Layer';
 import type { Config, Params } from '../config.ts';
 import { number, string } from '../config.ts';
 import { containerEnvVarName } from '../container-transport.ts';
-import type { ExtensionDescriptor, PrismaAppConfig } from '../control/app-config.ts';
+import {
+  type ExtensionDescriptor,
+  isBuildOnlyExtension,
+  type PrismaAppConfig,
+} from '../control/app-config.ts';
 import {
   type AlchemyStateLayer,
   type Artifact,
@@ -18,6 +22,7 @@ import {
   type LowerOptions,
   lower,
   lowering,
+  mergedDevProviders,
   mergedProviders,
   type Outputs,
   type ProvisionEdge,
@@ -1418,5 +1423,106 @@ describe('mergedProviders', () => {
     };
 
     expect(mergedProviders(config)).toBeDefined();
+  });
+});
+
+// A build-only extension: every `nodes` entry is `kind: 'build'`, and none
+// of `providers`/`application`/`provisions`/`container` are declared — the
+// exact shape `nodeBuild()` uses (ADR-0041's build-only exemption).
+const buildOnlyExtension = (id = 'test/build-only'): ExtensionDescriptor => ({
+  id,
+  nodes: { node: { kind: 'build', assemble: () => Promise.reject(new Error('unused')) } },
+});
+
+const devCapableExtension = (id = 'test/dev-pack'): ExtensionDescriptor => ({
+  id,
+  nodes: {},
+  dev: {
+    providers: () => Layer.empty,
+    container: {
+      ensure: () => {
+        throw new Error('ensure() must not run here');
+      },
+      locate: () => {
+        throw new Error('locate() must not run here');
+      },
+      remove: () => {
+        throw new Error('remove() must not run here');
+      },
+      deserialize: () => {
+        throw new Error('deserialize() must not run here');
+      },
+    },
+    attach: () => Promise.reject(new Error('unused')),
+  },
+});
+
+describe('isBuildOnlyExtension', () => {
+  test('true for an extension whose every node is kind: build and declares no providers/application/provisions/container', () => {
+    expect(isBuildOnlyExtension(buildOnlyExtension())).toBe(true);
+  });
+
+  test('false for an extension with a non-build node', () => {
+    const { descriptor } = fakeExtension();
+    expect(isBuildOnlyExtension(descriptor)).toBe(false);
+  });
+
+  test('false for an all-build-node extension that also declares providers', () => {
+    const extension: ExtensionDescriptor = {
+      ...buildOnlyExtension(),
+      providers: () => Layer.empty,
+    };
+    expect(isBuildOnlyExtension(extension)).toBe(false);
+  });
+
+  test('false for an all-build-node extension that also declares a container', () => {
+    const extension: ExtensionDescriptor = {
+      ...buildOnlyExtension(),
+      container: {
+        ensure: () => {
+          throw new Error('unused');
+        },
+        locate: () => {
+          throw new Error('unused');
+        },
+        remove: () => {
+          throw new Error('unused');
+        },
+        deserialize: () => {
+          throw new Error('unused');
+        },
+      },
+    };
+    expect(isBuildOnlyExtension(extension)).toBe(false);
+  });
+
+  test('true for an extension with no nodes at all (vacuously every node is build)', () => {
+    expect(isBuildOnlyExtension({ id: 'test/empty', nodes: {} })).toBe(true);
+  });
+});
+
+describe('mergedDevProviders', () => {
+  test('a dev-capable extension plus a build-only extension merges without error — the build-only extension is skipped', () => {
+    const dev = devCapableExtension();
+    const buildOnly = buildOnlyExtension();
+    const config: PrismaAppConfig = {
+      extensions: [dev, buildOnly],
+      state: { extension: dev.id, create: () => stateSentinel('config') },
+    };
+
+    expect(mergedDevProviders(config, new Map(), '/tmp/dev')).toBeDefined();
+  });
+
+  test('an extension with a non-build node and no dev descriptor throws the pinned no-dev-support message', () => {
+    const { descriptor } = fakeExtension();
+    const { providers: _dropped, ...bare } = descriptor;
+    const config: PrismaAppConfig = {
+      extensions: [bare],
+      state: { extension: bare.id, create: () => stateSentinel('config') },
+    };
+
+    expect(() => mergedDevProviders(config, new Map(), '/tmp/dev')).toThrow(
+      'extension "test/pack" has no dev support — it declares no `dev` descriptor (ADR-0041).',
+    );
   });
 });
