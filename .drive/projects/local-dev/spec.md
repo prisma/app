@@ -601,12 +601,12 @@ without either.
 not leak into platform primitives. The address is already intrinsic to the
 packaged artifact (its `bootstrap.js` bakes `run("<address>", …)`), so the
 artifact's OWN manifest carries it: `packageComputeArtifact` writes
-`compute.manifest.json` as `{ manifestVersion: "2", entrypoint:
-"bootstrap.js", address: "<address>" }` (a format this repo owns; version
-bumped, readers of "1" unaffected — the platform reads only `entrypoint`).
+`compute.manifest.json` as `{ manifestVersion: "1", entrypoint:
+"bootstrap.js", address: "<address>" }` — no version bump (operator: there
+are no consumers to protect; the platform reads only `entrypoint`).
 The local Deployment provider reads `address` from the unpacked artifact's
 manifest; a manifest without it →
-`Error: artifact manifest carries no address — repackage with a current @prisma/composer (manifestVersion 2).`
+`Error: artifact manifest carries no address — repackage with a current @prisma/composer.`
 `ComputeSerialized.address` and the serialize/deploy threading are also
 reverted.
 
