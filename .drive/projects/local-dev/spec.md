@@ -725,8 +725,9 @@ New control-plane files (all under `src/`, plane `control` in
 ### 7. Directory-shaped builds (REVISED — no new adapter)
 
 **Correction (operator catch):** `node()`'s directory form —
-`node({ module, dir, entry })` — already exists on `main` and IS friction
-#3's fix, implemented before this project's design pass; the original § 7
+`node({ module, dir, entry })` — already exists on `main` and IS the fix
+for friction finding 3, implemented before this project's design pass; the
+original § 7
 pinned a duplicate `dir()` surface against a stale friction-log premise.
 There is no `dir()` adapter and no `@prisma/composer/dir` subpath. S2's
 real scope:
