@@ -17,14 +17,14 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { bucketsClient } from '../client.ts';
 import { ensureDaemon, stopDaemon } from '../daemon.ts';
-import { tempDir } from './helpers.ts';
+import { ensureFreshDaemon, tempDir } from './helpers.ts';
 
 let registryRoot: string;
 let daemonUrl: string;
 
 beforeEach(async () => {
   registryRoot = tempDir('buckets-registry');
-  const { url } = await ensureDaemon('buckets', { registryRoot });
+  const { url } = await ensureFreshDaemon('buckets', registryRoot);
   daemonUrl = url;
 });
 

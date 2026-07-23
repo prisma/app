@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { type ChildProcess, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as http from 'node:http';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bucketsClient, computeClient } from '../client.ts';
@@ -18,7 +19,7 @@ import {
   registryFilePath,
   stopDaemon,
 } from '../daemon.ts';
-import { tempDir, waitFor } from './helpers.ts';
+import { ensureFreshDaemon, findFreePort, tempDir, waitFor } from './helpers.ts';
 
 let registryRoot: string;
 const started = new Set<DaemonName>();
@@ -36,7 +37,7 @@ afterEach(async () => {
 });
 
 async function ensure(name: DaemonName): Promise<{ url: string }> {
-  const result = await ensureDaemon(name, { registryRoot });
+  const result = await ensureFreshDaemon(name, registryRoot);
   started.add(name);
   return result;
 }
@@ -129,7 +130,9 @@ describe('ensureDaemon', () => {
     // compares against this package's version, not the registry file's
     // (merely persisted, not re-verified) `version` field.
     const fixture = fileURLToPath(new URL('./fixtures/fake-versioned-daemon.ts', import.meta.url));
-    const port = 4300;
+    // A real free port, not a hardcoded 4300 — this machine may already
+    // have an unrelated daemon bound there.
+    const port = await findFreePort(4300);
     const logPath = path.join(registryRoot, 'compute.log');
     const fake = spawn('bun', [fixture, '--port', String(port), '--version', '0.0.0-stale'], {
       stdio: 'ignore',
@@ -192,6 +195,94 @@ describe('ensureDaemon', () => {
       );
     } finally {
       squatter.stop(true);
+    }
+  }, 15_000);
+});
+
+describe('fresh-allocation port retry (spec § 2 step 5)', () => {
+  test('a bind failure on a fresh allocation retries the next free port', async () => {
+    // Find a REAL free port at or above 4300 to squat — the machine may
+    // have unrelated processes (other local daemons, other test runs)
+    // already bound near 4300, and this test must not depend on the
+    // externally-quietest possible machine. Whatever port that turns out
+    // to be, fake-occupy every port below it in THIS test's own registry
+    // so ensureDaemon's own "smallest unused" calculation lands on the
+    // exact same port this test is about to squat.
+    const squatPort = await findFreePort(4300);
+    fs.mkdirSync(registryRoot, { recursive: true });
+    for (let p = 4300; p < squatPort; p++) {
+      fs.writeFileSync(
+        path.join(registryRoot, `fake-occupant-${String(p)}.json`),
+        JSON.stringify({ pid: process.pid, port: p, version: 'fake', logPath: '/dev/null' }),
+      );
+    }
+
+    const squatter = http.createServer();
+    await new Promise<void>((resolve, reject) => {
+      squatter.once('error', reject);
+      squatter.listen(squatPort, '127.0.0.1', () => {
+        squatter.off('error', reject);
+        resolve();
+      });
+    });
+    try {
+      const result = await ensure('compute');
+      const resultPort = Number(new URL(result.url).port);
+      expect(resultPort).toBeGreaterThan(squatPort);
+
+      const entry = readEntry('compute');
+      expect(entry.port).toBe(resultPort);
+      expect(isPidAlive(entry.pid)).toBe(true);
+
+      // Exactly one successful spawn — the failed squatPort attempt never
+      // reported healthy, so it never wrote a listening line either.
+      const logText = fs.readFileSync(entry.logPath, 'utf8');
+      const startupLines = logText
+        .split('\n')
+        .filter((line) => line.includes('listening on 127.0.0.1:'));
+      expect(startupLines).toHaveLength(1);
+      expect(startupLines[0]).toContain(`127.0.0.1:${String(resultPort)}`);
+    } finally {
+      squatter.close();
+    }
+  }, 15_000);
+
+  test('a persisted port occupied at spawn never moves — the pinned failure, no retry', async () => {
+    const squatter = http.createServer();
+    await new Promise<void>((resolve) => squatter.listen(0, '127.0.0.1', resolve));
+    const address = squatter.address();
+    if (typeof address !== 'object' || address === null) {
+      throw new Error('expected the squatter to report an AddressInfo');
+    }
+    const port = address.port;
+    try {
+      // A dead pid recorded against this (persisted) port: ensureDaemon
+      // classifies it "dead-or-unhealthy" and reuses the SAME port rather
+      // than allocating fresh — the scenario the port-retry protocol must
+      // NOT apply to.
+      const scratch = spawnScratchProcess('process.exit(0)');
+      await waitForExit(scratch);
+      const deadPid = scratch.pid;
+      if (deadPid === undefined)
+        throw new Error('failed to spawn a scratch process for a dead pid');
+
+      fs.mkdirSync(registryRoot, { recursive: true });
+      const logPath = path.join(registryRoot, 'compute.log');
+      fs.writeFileSync(
+        registryFilePath(registryRoot, 'compute'),
+        JSON.stringify({ pid: deadPid, port, version: readOwnVersion(), logPath }),
+      );
+
+      await expect(ensureDaemon('compute', { registryRoot })).rejects.toThrow(
+        new RegExp(
+          `compute emulator failed to start on port ${String(port)} — see .*compute\\.log`,
+        ),
+      );
+
+      // No stray registry entry left pointing at the dead spawn attempt.
+      expect(fs.existsSync(registryFilePath(registryRoot, 'compute'))).toBe(false);
+    } finally {
+      squatter.close();
     }
   }, 15_000);
 });
@@ -261,6 +352,21 @@ describe('loopback clients', () => {
 
 describe('concurrent-ensure protocol', () => {
   test('two concurrent ensureDaemon calls from separate processes produce exactly one daemon and agree on its URL', async () => {
+    // Steer this test's own allocation away from 4300 itself: on a shared
+    // machine, an unrelated real daemon (another local dev-emulators
+    // instance, another test run) may already hold it, which would make
+    // the very first spawn attempt race a process this test doesn't
+    // control at all — a different failure mode than the one under test
+    // here (see the "fresh-allocation port retry" tests for that one).
+    const freePort = await findFreePort(4300);
+    fs.mkdirSync(registryRoot, { recursive: true });
+    for (let p = 4300; p < freePort; p++) {
+      fs.writeFileSync(
+        path.join(registryRoot, `fake-occupant-${String(p)}.json`),
+        JSON.stringify({ pid: process.pid, port: p, version: 'fake', logPath: '/dev/null' }),
+      );
+    }
+
     // Truly concurrent: both processes are spawned before either is
     // awaited, so the race is real, not just two promises in one event
     // loop — the mutex under test is an inter-process lock.

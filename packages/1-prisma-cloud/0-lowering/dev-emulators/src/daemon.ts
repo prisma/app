@@ -41,6 +41,8 @@ const TERMINATE_GRACE_MS = 5000;
 const TERMINATE_POLL_INTERVAL_MS = 150;
 const LOCK_POLL_INTERVAL_MS = 250;
 const LOCK_WAIT_BUDGET_MS = 10_000;
+/** Spec § 2 step 5: a FRESH allocation (no persisted port) tries at most this many distinct port candidates before the pinned failure error. */
+const MAX_FRESH_PORT_CANDIDATES = 5;
 
 function isErrnoException(err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && 'code' in err;
@@ -167,19 +169,48 @@ async function probeHealth(
   }
 }
 
-async function pollUntilHealthy(
+interface HealthOutcome {
+  readonly healthy: boolean;
+  /** The child process exited before the health budget produced a healthy daemon — a bind failure, not a slow-to-start one. */
+  readonly exitedBeforeHealthy: boolean;
+}
+
+/**
+ * Polls the health path up to `budgetMs`, but returns immediately once the
+ * child exits — a dead child can never become healthy, and the port-retry
+ * protocol (spec § 2 step 5) needs to move to the next candidate right
+ * away rather than exhausting a live-process budget on one that isn't
+ * live. Only a child that stays alive without becoming healthy consumes
+ * the full budget.
+ *
+ * Verifies the health response's OWN version, not just that something
+ * answered: if our child failed to bind (a foreign process already held
+ * the port) that foreign process may itself answer `/health` successfully
+ * — a version mismatch there is exactly the "port taken" case, not a false
+ * "healthy", and must not be reported as such.
+ */
+async function awaitHealthy(
+  child: ChildProcess,
   port: number,
   healthPath: string,
+  ownVersion: string,
   budgetMs: number,
-): Promise<boolean> {
+): Promise<HealthOutcome> {
+  let exited = false;
+  child.once('exit', () => {
+    exited = true;
+  });
   const deadline = Date.now() + budgetMs;
   do {
+    if (exited) return { healthy: false, exitedBeforeHealthy: true };
     const remaining = deadline - Date.now();
     const health = await probeHealth(port, healthPath, Math.max(200, Math.min(1000, remaining)));
-    if (health) return true;
+    if (health && health.version === ownVersion)
+      return { healthy: true, exitedBeforeHealthy: false };
+    if (exited) return { healthy: false, exitedBeforeHealthy: true };
     await sleep(HEALTH_POLL_INTERVAL_MS);
   } while (Date.now() < deadline);
-  return false;
+  return { healthy: false, exitedBeforeHealthy: exited };
 }
 
 /** SIGTERM, wait up to `graceMs` for the pid to exit, then SIGKILL. A no-op if the pid is already gone. */
@@ -226,6 +257,27 @@ function smallestUnused(used: ReadonlySet<number>, min: number): number {
   let port = min;
   while (used.has(port)) port++;
   return port;
+}
+
+/** Spawns the daemon binary detached, stdio appended to `logPath`. Doesn't wait for health. */
+function spawnDaemonProcess(
+  entryPath: string,
+  port: number,
+  stateDir: string,
+  logPath: string,
+): ChildProcess {
+  const logFd = fs.openSync(logPath, 'a');
+  let child: ChildProcess;
+  try {
+    child = spawn(process.execPath, [entryPath, '--port', String(port), '--state-dir', stateDir], {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+    });
+  } finally {
+    fs.closeSync(logFd);
+  }
+  child.unref();
+  return child;
 }
 
 type ObserveResult =
@@ -359,48 +411,63 @@ export async function ensureDaemon(
     }
 
     // Port allocation happens inside the lock, so two daemons can never
-    // claim one port.
-    const port = reusablePort ?? smallestUnused(await usedPorts(registryRoot), MIN_PORT);
+    // claim one port. A FRESH allocation (no persisted port) has handed out
+    // no endpoint yet, so it's safe to try up to MAX_FRESH_PORT_CANDIDATES
+    // distinct ports if the daemon can't bind one; a persisted port never
+    // moves — deploy state may already reference it as a frozen endpoint.
+    const isFreshAllocation = reusablePort === undefined;
+    const maxAttempts = isFreshAllocation ? MAX_FRESH_PORT_CANDIDATES : 1;
+    let port = reusablePort ?? smallestUnused(await usedPorts(registryRoot), MIN_PORT);
     const stateDir = daemonStateDir(registryRoot, name);
     const logPath = daemonLogPath(registryRoot, name);
     await fsp.mkdir(stateDir, { recursive: true });
     await fsp.mkdir(path.dirname(logPath), { recursive: true });
+    const entryPath = fileURLToPath(import.meta.resolve(`@internal/dev-emulators/${name}-main`));
 
-    const entry = fileURLToPath(import.meta.resolve(`@internal/dev-emulators/${name}-main`));
-    const logFd = fs.openSync(logPath, 'a');
-    let child: ChildProcess;
-    try {
-      child = spawn(process.execPath, [entry, '--port', String(port), '--state-dir', stateDir], {
-        detached: true,
-        stdio: ['ignore', logFd, logFd],
+    for (let attempt = 1; ; attempt++) {
+      const child = spawnDaemonProcess(entryPath, port, stateDir, logPath);
+      if (child.pid === undefined) {
+        throw new Error(`failed to spawn the ${name} emulator — see ${logPath}.`);
+      }
+
+      await new StateFile<RegistryEntry>(registryFile).write({
+        pid: child.pid,
+        port,
+        version: ownVersion,
+        logPath,
       });
-    } finally {
-      fs.closeSync(logFd);
-    }
-    child.unref();
-    if (child.pid === undefined) {
-      throw new Error(`failed to spawn the ${name} emulator — see ${logPath}.`);
-    }
 
-    await new StateFile<RegistryEntry>(registryFile).write({
-      pid: child.pid,
-      port,
-      version: ownVersion,
-      logPath,
-    });
+      const outcome = await awaitHealthy(
+        child,
+        port,
+        healthPath,
+        ownVersion,
+        START_HEALTH_BUDGET_MS,
+      );
+      if (outcome.healthy) {
+        return { url: `http://127.0.0.1:${port}` };
+      }
 
-    const healthy = await pollUntilHealthy(port, healthPath, START_HEALTH_BUDGET_MS);
-    if (!healthy) {
-      // Never leave an unsupervised, never-healthy process running: a spawn
-      // that didn't come up (a squatted port, a broken build) must not
-      // leak, even though the happy-path child is deliberately detached to
-      // outlive this call. Drop the registry entry too — it would
-      // otherwise point at a pid we just killed.
-      await terminate(child.pid, TERMINATE_GRACE_MS);
+      const canRetryNextPort =
+        isFreshAllocation && outcome.exitedBeforeHealthy && attempt < maxAttempts;
+      if (!canRetryNextPort) {
+        // Never leave an unsupervised, never-healthy process running: a
+        // spawn that didn't come up (a squatted port, a broken build) must
+        // not leak, even though the happy-path child is deliberately
+        // detached to outlive this call. Drop the registry entry too — it
+        // would otherwise point at a pid we just killed.
+        await terminate(child.pid, TERMINATE_GRACE_MS);
+        await fsp.rm(registryFile, { force: true });
+        throw new Error(`${name} emulator failed to start on port ${port} — see ${logPath}.`);
+      }
+
+      // Port taken at spawn on a fresh allocation: try the next free
+      // candidate, still holding the lock. Never retry the exact port that
+      // just failed (start the scan past it) and never re-persist a dead
+      // entry that could mislead a concurrent reader.
       await fsp.rm(registryFile, { force: true });
-      throw new Error(`${name} emulator failed to start on port ${port} — see ${logPath}.`);
+      port = smallestUnused(await usedPorts(registryRoot), port + 1);
     }
-    return { url: `http://127.0.0.1:${port}` };
   } finally {
     await releaseLock(registryRoot, name);
   }

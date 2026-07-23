@@ -7,9 +7,10 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { computeClient, type ServiceInfo } from '../client.ts';
-import { ensureDaemon, stopDaemon } from '../daemon.ts';
+import { stopDaemon } from '../daemon.ts';
 import {
   CRASHING_BOOTSTRAP,
+  ensureFreshDaemon,
   servingBootstrap,
   tempDir,
   waitFor,
@@ -22,7 +23,7 @@ let daemonUrl: string;
 
 beforeEach(async () => {
   registryRoot = tempDir('compute-deploy-registry');
-  const { url } = await ensureDaemon('compute', { registryRoot });
+  const { url } = await ensureFreshDaemon('compute', registryRoot);
   daemonUrl = url;
 });
 

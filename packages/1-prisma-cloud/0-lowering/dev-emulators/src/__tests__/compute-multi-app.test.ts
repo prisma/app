@@ -7,13 +7,20 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { computeClient } from '../client.ts';
 import { ensureDaemon, stopDaemon } from '../daemon.ts';
-import { servingBootstrap, tempDir, waitFor, waitForHttp, writeBootstrap } from './helpers.ts';
+import {
+  ensureFreshDaemon,
+  servingBootstrap,
+  tempDir,
+  waitFor,
+  waitForHttp,
+  writeBootstrap,
+} from './helpers.ts';
 
 let registryRoot: string;
 
 beforeEach(async () => {
   registryRoot = tempDir('compute-multi-app-registry');
-  await ensureDaemon('compute', { registryRoot });
+  await ensureFreshDaemon('compute', registryRoot);
 });
 
 afterEach(async () => {

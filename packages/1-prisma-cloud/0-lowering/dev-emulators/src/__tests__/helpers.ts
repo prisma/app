@@ -1,7 +1,9 @@
 /** Shared test-only helpers: temp dirs, fixture bootstraps, small async waits. */
 import * as fs from 'node:fs';
+import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { type DaemonName, ensureDaemon } from '../daemon.ts';
 
 export function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `dev-emulators-${prefix}-`));
@@ -57,4 +59,52 @@ export async function waitForHttp(url: string, timeoutMs: number): Promise<Respo
       await sleep(100);
     }
   }
+}
+
+const DEFAULT_MIN_PORT = 4300;
+
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = http.createServer();
+    probe.once('error', () => resolve(false));
+    probe.listen(port, '127.0.0.1', () => {
+      probe.close(() => resolve(true));
+    });
+  });
+}
+
+/** The first genuinely free port at or above `startFrom` — a shared machine may have unrelated processes already bound near the default port range. */
+export async function findFreePort(startFrom: number = DEFAULT_MIN_PORT): Promise<number> {
+  for (let port = startFrom; port < startFrom + 200; port++) {
+    if (await isPortFree(port)) return port;
+  }
+  throw new Error(
+    `findFreePort: no free port found in [${String(startFrom)}, ${String(startFrom + 200)})`,
+  );
+}
+
+/**
+ * Starts a daemon on a FRESH `registryRoot`, steered away from any port near
+ * the default range occupied by a process this test doesn't control —
+ * another local dev-emulators daemon on this machine, another concurrent
+ * test run. Those are invisible to both this test's own registry and to
+ * ensureDaemon's port-uniqueness bookkeeping (each is scoped to its own
+ * registryRoot), so left unhandled they make an unrelated external bind
+ * failure look like this suite's own flake. Only for a registryRoot with no
+ * daemon started yet — later calls on the same root should use
+ * `ensureDaemon` directly.
+ */
+export async function ensureFreshDaemon(
+  name: DaemonName,
+  registryRoot: string,
+): Promise<{ url: string }> {
+  const freePort = await findFreePort(DEFAULT_MIN_PORT);
+  fs.mkdirSync(registryRoot, { recursive: true });
+  for (let port = DEFAULT_MIN_PORT; port < freePort; port++) {
+    fs.writeFileSync(
+      path.join(registryRoot, `fake-occupant-${String(port)}.json`),
+      JSON.stringify({ pid: process.pid, port, version: 'fake', logPath: '/dev/null' }),
+    );
+  }
+  return ensureDaemon(name, { registryRoot });
 }
