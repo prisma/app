@@ -873,7 +873,12 @@ New control-plane files (all under `src/`, plane `control` in
     class we hand-fixed once already and the cross-platform recursive-watch
     differences; v4 is pure JS, no native code, no glob surface). The
     hand-rolled parent-directory workaround is deleted; its delete+recreate
-    regression test STAYS as a behavior test. Debounce 300 ms per burst, coalescing across
+    regression test STAYS as a behavior test. `startWatch` returns
+    `{ ready, stop }`: chokidar attaches its OS-level watches
+    asynchronously, so a change made before attachment is missed entirely —
+    `ready` resolves on chokidar's own 'ready' (and on `stop()`, so an
+    awaiting caller can never hang), and the dev loop awaits it before
+    handing over to the session. Debounce 300 ms per burst, coalescing across
     services. On fire: re-run assemble for ALL services (correctness over
     cleverness; optimization is a recorded follow-up) → rewrite the dev stack
     file → re-run converge (`--stage dev`) — the emulator restarts exactly
