@@ -11,6 +11,10 @@ import pnPostgresRuntime, { type PostgresClient } from '@prisma-next/postgres/ru
 import type { SqlStorage } from '@prisma-next/sql-contract/types';
 import pg from 'pg';
 import { normalizeSslMode, retryTransientConnect } from './pg-connection.ts';
+import { type PnPackRequirement, packRequirementOf } from './pn-pack-requirement.ts';
+
+export type { PnPackRequirement } from './pn-pack-requirement.ts';
+export { packRequirementOf, pnPackRequirement } from './pn-pack-requirement.ts';
 
 /**
  * Any Prisma Next contract this primitive can carry — the bound both
@@ -98,48 +102,6 @@ export function pnContract(contract: unknown): unknown {
     },
   };
   return Object.freeze(value);
-}
-
-/** A dependency's claim that its pn database carries extension pack `packId` at `headHash`. */
-export interface PnPackRequirement {
-  readonly packId: string;
-  readonly headHash: string;
-}
-
-/**
- * A `prisma-next`-kind required contract carrying an extension-pack claim
- * instead of a contract value. Wireable to any `pnContract()` provider
- * (wireability only); the deploy preflight enforces that the wired resource's
- * PN config lists the pack at the required head.
- */
-export function pnPackRequirement(req: PnPackRequirement): PnPostgresContract {
-  const value: PnPostgresContract = {
-    kind: 'prisma-next',
-    __cmp: { contractJson: undefined, packRequirement: req },
-    // A requirement never provides; core only calls `satisfies` on the
-    // provider side of a wiring. Answer honestly anyway: another requirement
-    // for the exact same pack head is the only thing this value could stand
-    // in for.
-    satisfies: (required) => {
-      const other = packRequirementOf(required);
-      return other !== undefined && other.packId === req.packId && other.headHash === req.headHash;
-    },
-  };
-  return Object.freeze(value);
-}
-
-/** Reads `__cmp.packRequirement` off a Contract, defensively — `__cmp` is opaque to core, so nothing guarantees its shape without a runtime check. */
-export function packRequirementOf(
-  contract: Contract<string, unknown> | undefined,
-): PnPackRequirement | undefined {
-  if (contract === undefined) return undefined;
-  const cmp = contract.__cmp;
-  if (typeof cmp !== 'object' || cmp === null || !('packRequirement' in cmp)) return undefined;
-  const req = cmp.packRequirement;
-  if (typeof req !== 'object' || req === null) return undefined;
-  if (!('packId' in req) || typeof req.packId !== 'string') return undefined;
-  if (!('headHash' in req) || typeof req.headHash !== 'string') return undefined;
-  return { packId: req.packId, headHash: req.headHash };
 }
 
 /**

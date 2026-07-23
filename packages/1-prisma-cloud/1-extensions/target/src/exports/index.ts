@@ -13,6 +13,8 @@ export { ComputeService, compute } from '../compute.ts';
 export type { HttpClient } from '../http.ts';
 export { http } from '../http.ts';
 export { envParam, paramName } from '../param.ts';
+export type { PnPackRequirement, PnPackRequirementCmp } from '../pn-pack-requirement.ts';
+export { packRequirementOf, pnPackRequirement } from '../pn-pack-requirement.ts';
 export type { PostgresConfig } from '../postgres.ts';
 export { postgres, postgresContract } from '../postgres.ts';
 export type { ProvisionedEdge } from '../provisioned-edges.ts';

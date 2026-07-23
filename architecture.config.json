@@ -133,6 +133,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/1-prisma-cloud/1-extensions/target/src/pn-pack-requirement.ts",
+      "domain": "prisma-cloud",
+      "layer": "extensions",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/1-prisma-cloud/1-extensions/target/src/testing.ts",
       "domain": "prisma-cloud",
       "layer": "extensions",
@@ -386,6 +392,48 @@
     },
     {
       "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/pack/**",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/contract.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/auth-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/auth-module.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/auth-service.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/handlers.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/pg-auth-store.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "execution"
+    },
+    {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/exports/auth-service.ts",
       "domain": "prisma-cloud",
       "layer": "modules",
       "plane": "shared"
