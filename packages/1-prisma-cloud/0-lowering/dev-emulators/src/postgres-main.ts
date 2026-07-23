@@ -28,9 +28,9 @@ const MAX_DATABASE_PORT = 65_535;
 const APPS_STATE_MODE = 0o600;
 /** Spec § 2 step 5's pattern, applied to a fresh database-port allocation. */
 const MAX_FRESH_PORT_CANDIDATES = 5;
-/** Adoption patience for a name whose live lock holder is still mid-boot. */
-const MAX_ADOPT_ATTEMPTS = 8;
-const ADOPT_RETRY_DELAY_MS = 400;
+/** Adoption patience: a cold server boot takes seconds, and a crashed holder's lock only goes stale after proper-lockfile's ~10s threshold — the window must outlast both. */
+const MAX_ADOPT_ATTEMPTS = 30;
+const ADOPT_RETRY_DELAY_MS = 500;
 
 const NOT_INSTALLED_MESSAGE =
   'local dev needs @prisma/dev for its local Postgres emulator — add "prisma" to your app\'s devDependencies.';
