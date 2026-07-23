@@ -393,10 +393,31 @@ vocabularies. New package `@internal/local-target` at
 hosted providers, its own name: it IS the local deploy target's provider
 suite), plane `control`, importing `@internal/dev-emulators` and
 `@internal/s3-protocol`. Everything previously specced under
-`@internal/lowering`'s `src/dev/` lives here instead; `artifact-extract`
-stays beside the artifact writer it mirrors (in `@internal/lowering`'s
-compute dir) and is imported downward. No floating module-level doc
-comments that attach to nothing (repo style).
+`@internal/lowering`'s `src/dev/` lives here instead — INCLUDING
+`artifact-extract` (operator: emulation code is physically separated from
+production source, full stop; the tar reader exists only for dev, so it
+and its `tar` dependency live here, not in `@internal/lowering`).
+Format-drift protection comes from a round-trip test in this package that
+imports the WRITER (`packageComputeArtifact`, a downward import) and
+asserts extraction fidelity — co-location is not the mechanism. No
+floating module-level doc comments that attach to nothing (repo style).
+
+**Physical-separation rule (operator, 2026-07-23), applied everywhere:**
+dev/emulation code lives in dev-only packages (`@internal/local-target`,
+`@internal/dev-emulators`) or dev-only modules/entry points — never
+intermixed with production logic. In core, the dev aggregator
+(`devProviders`) and `DEV_DIR` are exported via a NEW control-plane
+subpath `@prisma/composer/dev` (its own `src/exports/dev.ts`; the
+generated dev stack module imports from it) — nothing dev-flavored is
+exported from `/deploy` or the root. The seam TYPES
+(`DevExtensionDescriptor` and its inputs) remain in `app-config.ts`
+because `ExtensionDescriptor.dev` must reference them — they are contract,
+not emulation logic. Known remaining co-packaging point, recorded: the
+prisma-cloud extension's dev-hook IMPLEMENTATIONS are bundled into its
+shipped control entry (the `dev` field is constructed there); they never
+reach app runtime bundles (control/execution split). Excluding them from
+the shipped control bundle entirely would need a lazy dev-descriptor
+reference on the seam — not done unless the operator asks.
 
 #### `src/dev/dev-store.ts` — the shared dev-instance store
 
@@ -448,15 +469,15 @@ scope, not v1.
   1. Unpack `news.artifactPath` (tar.gz, the ustar format
      `packageComputeArtifact` writes) into
      `<devDir>/artifacts/<artifactHash>/` if absent — extraction uses the
-     maintained `tar` package (node-tar; dependency razor — reading tar is
-     commodity even though we write our own deterministic subset), with
-     entry filtering pinned: regular files only, reject links/devices,
-     reject path escapes. Temp-then-rename at the directory level. (WHY an
-     extractor exists at all: on the platform, the artifact is uploaded and
-     the platform unpacks it; locally the Compute emulator runs from a
-     directory, so the unpack step that was platform-side needs a local
-     counterpart. Unpacking the real tar keeps the strongest parity: what
-     runs is byte-for-byte what ships.)
+     maintained `tar` package (dependency razor), implemented IN
+     `@internal/local-target` (physical-separation rule: the reader exists
+     only for dev), with entry filtering pinned: regular files only,
+     reject links/devices, reject path escapes. Temp-then-rename at the
+     directory level. (WHY an extractor exists at all: on the platform the
+     artifact is uploaded and the platform unpacks it; locally the Compute
+     emulator runs from a directory, so the platform-side unpack step
+     needs a local counterpart. Unpacking the real tar keeps the strongest
+     parity: what runs is byte-for-byte what ships.)
   2. Fetch the service's port: `PUT /apps/<app>/services/<id>` (idempotent)
      where `id` = the ComputeService's name resolved from
      `news.computeServiceId`. Resolve the address from
