@@ -509,7 +509,10 @@ export interface AuthOptionsInputs {
   readonly databaseUrl: string;
   readonly secret: string;
   readonly baseUrl: string;                       // public app origin (D11)
-  readonly sendEmail: AuthEmailSender;            // § Templates; S1: absent (see below)
+  readonly email: EmailSender<AuthTemplates>;     // § Templates; S1: absent (see below)
+  // (amended 2026-07-23, S2: was `sendEmail: AuthEmailSender` — a stale
+  // paragraph from before the rename; every other section already said
+  // `email: EmailSender<AuthTemplates>`, and the implementation matches.)
 }
 export function buildAuthOptions(inputs: AuthOptionsInputs): BetterAuthOptions;
 ```
@@ -568,7 +571,13 @@ export type AuthTemplates = typeof authTemplates;
 - Every render: interpolations pass through `escapeHtml()` (`& < > " '`);
   the link additionally passes `safeLink(url, baseUrl)` which parses with
   `new URL` and throws unless `url.origin === new URL(baseUrl).origin` —
-  a thrown render is a failed send, surfaced by the email module's result.
+  a thrown check is a failed send, surfaced by the email module's result.
+  (Amended 2026-07-23, S2: `safeLink` runs in `auth-options.ts`'s send
+  wrapper immediately before the send, not inside `render` — template
+  `data` carries no `baseUrl`, so the render functions cannot perform the
+  check themselves. The invariant is unchanged: no link reaches a rendered
+  email without passing the origin check, and a mismatch fails that send
+  without throwing out of the Better Auth callback.)
   Bodies: minimal semantic HTML (one heading, one paragraph, one `<a>`),
   plus a plain-text part with the bare URL. No external assets.
 - Send callbacks (in `auth-options.ts`): each Better Auth callback
