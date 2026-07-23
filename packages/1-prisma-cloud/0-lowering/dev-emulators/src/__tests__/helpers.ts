@@ -17,6 +17,17 @@ export function entryFor(name: DaemonName): string {
   return fileURLToPath(import.meta.resolve(`@internal/dev-emulators/${name}-main`));
 }
 
+/**
+ * The `@prisma/dev` module path a real app would resolve from its own
+ * `node_modules` and pass as `prismaDevModulePath` — resolved here from
+ * this workspace's own `node_modules`, where it's a devDependency of this
+ * package for tests only (the daemon itself has no dependency on it; see
+ * `postgres-main.ts`'s module doc).
+ */
+export function prismaDevModulePath(): string {
+  return fileURLToPath(import.meta.resolve('@prisma/dev'));
+}
+
 export function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `dev-emulators-${prefix}-`));
 }

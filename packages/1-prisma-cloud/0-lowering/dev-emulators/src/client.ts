@@ -302,3 +302,98 @@ export function bucketsClient(opts: DaemonRootOptions = {}): BucketsClient {
     },
   };
 }
+
+export interface DatabaseInfo {
+  readonly id: string;
+  readonly url: string;
+  readonly instanceName: string;
+  readonly databasePort: number;
+}
+
+function isDatabaseInfo(value: unknown): value is DatabaseInfo {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'url' in value &&
+    typeof value.url === 'string' &&
+    'instanceName' in value &&
+    typeof value.instanceName === 'string' &&
+    'databasePort' in value &&
+    typeof value.databasePort === 'number'
+  );
+}
+
+function isDatabaseInfoArray(value: unknown): value is DatabaseInfo[] {
+  return Array.isArray(value) && value.every(isDatabaseInfo);
+}
+
+interface EnsuredDatabase {
+  readonly url: string;
+}
+
+function isEnsuredDatabase(value: unknown): value is EnsuredDatabase {
+  return (
+    typeof value === 'object' && value !== null && 'url' in value && typeof value.url === 'string'
+  );
+}
+
+export interface PostgresClient {
+  readonly baseUrl: string;
+  health(): Promise<{ version: string }>;
+  /** `PUT /apps/<app>/databases/<id>` — ensure a named, persistent `@prisma/dev` server. Idempotent. */
+  ensureDatabase(app: string, id: string, prismaDevModulePath: string): Promise<{ url: string }>;
+  /** `GET /apps/<app>/databases`. */
+  listDatabases(app: string): Promise<DatabaseInfo[]>;
+  /** `DELETE /apps/<app>` — closes the app's servers and deletes their persisted data. */
+  deleteApp(app: string): Promise<void>;
+}
+
+export function postgresClient(opts: DaemonRootOptions = {}): PostgresClient {
+  const baseUrl = resolveBaseUrl('postgres', opts);
+
+  return {
+    baseUrl,
+
+    async health() {
+      const res = await expectOk(await fetch(`${baseUrl}/health`));
+      const body: unknown = await res.json();
+      if (!isHealthBody(body)) {
+        throw new Error('malformed /health response from the postgres emulator');
+      }
+      return body;
+    },
+
+    async ensureDatabase(app, id, prismaDevModulePath) {
+      const url = `${baseUrl}/apps/${encodeSegment(app)}/databases/${encodeSegment(id)}`;
+      const res = await expectOk(
+        await fetch(url, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ prismaDevModulePath }),
+        }),
+      );
+      const body: unknown = await res.json();
+      if (!isEnsuredDatabase(body)) {
+        throw new Error('malformed database-ensure response from the postgres emulator');
+      }
+      return body;
+    },
+
+    async listDatabases(app) {
+      const url = `${baseUrl}/apps/${encodeSegment(app)}/databases`;
+      const res = await expectOk(await fetch(url));
+      const body: unknown = await res.json();
+      if (!isDatabaseInfoArray(body)) {
+        throw new Error('malformed databases listing from the postgres emulator');
+      }
+      return body;
+    },
+
+    async deleteApp(app) {
+      const url = `${baseUrl}/apps/${encodeSegment(app)}`;
+      await expectOk(await fetch(url, { method: 'DELETE' }));
+    },
+  };
+}

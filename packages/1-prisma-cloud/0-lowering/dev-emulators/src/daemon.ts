@@ -21,7 +21,7 @@ import getPort, { portNumbers } from 'get-port';
 import * as properLockfile from 'proper-lockfile';
 import { readJsonFile, StateFile } from './state-file.ts';
 
-export type DaemonName = 'compute' | 'buckets';
+export type DaemonName = 'compute' | 'buckets' | 'postgres';
 
 export interface RegistryEntry {
   readonly pid: number;
@@ -121,9 +121,9 @@ export function daemonLogPath(registryRoot: string, name: DaemonName): string {
   return path.join(registryRoot, `${name}.log`);
 }
 
-/** Compute's root namespace is its own JSON admin API; buckets' root namespace is the S3 wire, so its health lives under `/_pcdev/`. */
+/** Compute's and postgres's root namespace is their own JSON admin API; buckets' root namespace is the S3 wire, so its health lives under `/_pcdev/`. */
 export function healthPathFor(name: DaemonName): string {
-  return name === 'compute' ? '/health' : '/_pcdev/health';
+  return name === 'buckets' ? '/_pcdev/health' : '/health';
 }
 
 /** `@internal/dev-emulators`'s own `package.json` version — what "version" means everywhere in this package. */

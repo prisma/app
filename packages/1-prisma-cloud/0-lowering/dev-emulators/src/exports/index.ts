@@ -5,8 +5,15 @@
  * subpaths — `@internal/dev-emulators/compute-main` and `/buckets-main`.
  */
 
-export type { BucketsClient, ComputeClient, DeploymentRequest, ServiceInfo } from '../client.ts';
-export { bucketsClient, computeClient } from '../client.ts';
+export type {
+  BucketsClient,
+  ComputeClient,
+  DatabaseInfo,
+  DeploymentRequest,
+  PostgresClient,
+  ServiceInfo,
+} from '../client.ts';
+export { bucketsClient, computeClient, postgresClient } from '../client.ts';
 export type { DaemonName, DaemonRootOptions, RegistryEntry } from '../daemon.ts';
 export {
   daemonLogPath,
