@@ -152,9 +152,18 @@ plus the shared daemon layer and typed loopback clients.
      timeout → kill the spawned child (it must not outlive a failed
      ensure), then
      `Error: <name> emulator failed to start on port <port> — see <logPath>.`
-  5. Foreign process on the port → same error; `--fresh` does NOT touch the
-     daemons (they are machine-global, shared by other apps); recovering a
-     stolen port is manual (delete the registry entry).
+  5. Port taken at spawn (the daemon exits with a bind error before
+     reporting healthy): if the registry entry is being created FRESH — no
+     previously persisted port — the ensure, still holding the lock,
+     allocates the next free candidate (≥ 4300, skipping registry-used
+     ports), persists it, and retries the spawn, up to 5 candidates before
+     the pinned failure error. A fresh allocation has handed out no
+     endpoint, so moving it is safe — and this also makes ensure robust
+     when isolated registries (tests) or foreign processes race for the
+     same port. With a PREVIOUSLY persisted port, never retry elsewhere:
+     endpoints frozen in deploy state reference it — fail with the pinned
+     error; recovery is manual (`--fresh` does NOT touch the daemons — they
+     are machine-global, shared by other apps).
 - **Concurrent-ensure protocol:** the observe→spawn→persist critical
   section is serialized ACROSS PROCESSES per daemon name with an atomic
   directory lock: `mkdir <registryRoot>/.lock-<name>` (atomic creation IS
