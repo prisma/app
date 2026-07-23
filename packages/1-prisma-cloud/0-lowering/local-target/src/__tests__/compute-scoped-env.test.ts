@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { scopedEnvRows } from '../dev/compute.ts';
+import { scopedEnvRows } from '../compute.ts';
 
 /**
  * Local-dev spec § 4's pinned parity note: the hosted platform diffs a
