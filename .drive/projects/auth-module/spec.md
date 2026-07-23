@@ -102,8 +102,10 @@ Planes (`architecture.config.json`, non-overlapping globs, email's pattern):
 `src/*.ts` → shared; `src/pack/**` → shared (descriptor + JSON only — the
 pack's `index.ts` must not import `@internal/lowering`/`effect`/PN control);
 `src/execution/**` → execution; `src/exports/index.ts`, `src/exports/pack.ts`,
-`src/exports/embedded.ts` → shared; `src/exports/auth-service.ts`,
-`src/exports/auth-entrypoint.ts`, `src/exports/testing.ts` → execution.
+`src/exports/embedded.ts`, `src/exports/auth-service.ts` → shared (the
+service shim is re-exported from the authoring barrel — email's exact
+classification; amended 2026-07-23, D4); `src/exports/auth-entrypoint.ts`,
+`src/exports/testing.ts` → execution.
 `embedded.ts` is shared-plane: it imports `better-auth` (pure library) and
 `auth-options.ts`, never the runtime engine. Runtime dependencies of the
 authoring barrel must stay free of `node:`/`bun` tokens (invariant tests, § Test
@@ -431,7 +433,9 @@ export function authService(): ServiceNode<...> {
   return compute({
     name: 'auth',
     deps: { db: authDb(), email: emailSender(authTemplates), secret: authSecret() },
-    params: { baseUrl: param(type('string'), {}), port: param(type('number'), { default: 8787 }) },
+    params: { baseUrl: param(type('string'), {}) },
+    // no `port` param: `port` is compute()'s reserved service param
+    // (platform-injected; declaring it throws) — amended 2026-07-23, D4
     build: node({ module: './execution/auth-service-node.mjs', entry: './auth-entrypoint.mjs' }),
     expose: { api: authApiContract, session: authSessionContract, admin: authAdminContract },
   });
