@@ -22,6 +22,7 @@
 
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -65,6 +66,62 @@ function readLog(logPath: string): string {
   } catch {
     return '';
   }
+}
+
+/** `~/.prisma-composer/emulators/` — the one real, machine-global root, same as `defaultRegistryRoot()` resolves. */
+function emulatorRegistryRoot(): string {
+  return path.join(os.homedir(), '.prisma-composer', 'emulators');
+}
+
+function resolveBin(name: string): string | undefined {
+  let dir = integrationDir;
+  for (;;) {
+    const candidate = path.join(dir, 'node_modules', '.bin', name);
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+function tailOf(filePath: string, n = 60): string {
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    return `<could not read ${filePath}: ${error instanceof Error ? error.message : String(error)}>`;
+  }
+  const lines = content.split('\n');
+  return lines.slice(-n).join('\n');
+}
+
+/**
+ * Everything a failure needs to be diagnosable from CI's own log output
+ * alone — the teed session logs (carrying the CLI's inherited `alchemy`
+ * converge output inline) are on the runner, gone the moment the job ends.
+ * Bounded, never throws.
+ */
+function dumpDiagnostics(): void {
+  console.error('\n=== diagnostics ===');
+  for (let i = 1; i <= sessionCount; i += 1) {
+    const logPath = path.join(logDir, `session-${i}.log`);
+    console.error(`\n--- session-${i}.log (tail) ---`);
+    console.error(tailOf(logPath));
+  }
+  for (const name of ['compute', 'buckets'] as const) {
+    console.error(`\n--- ${name} emulator log (tail) ---`);
+    console.error(tailOf(path.join(emulatorRegistryRoot(), `${name}.log`)));
+  }
+  console.error('\n--- prisma dev ls ---');
+  const prismaBin = resolveBin('prisma');
+  if (prismaBin === undefined) {
+    console.error('<no node_modules/.bin/prisma found above the integration package>');
+  } else {
+    const result = spawnSync(prismaBin, ['dev', 'ls'], { encoding: 'utf8' });
+    console.error(result.stdout ?? '');
+    if (result.stderr) console.error(result.stderr);
+  }
+  console.error('=== end diagnostics ===\n');
 }
 
 function parseFrontDoor(log: string): readonly Endpoint[] | undefined {
@@ -319,5 +376,6 @@ main()
   })
   .catch((error: unknown) => {
     console.error(error instanceof Error ? (error.stack ?? error.message) : error);
+    dumpDiagnostics();
     process.exitCode = 1;
   });

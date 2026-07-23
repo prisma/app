@@ -107,17 +107,66 @@ const ALCHEMY_TIMEOUT_MS = 60_000;
 
 let convergeCount = 0;
 
-function alchemyBin(): string {
+function resolveBin(name: string): string | undefined {
   let dir = integrationDir;
   for (;;) {
-    const candidate = path.join(dir, 'node_modules', '.bin', 'alchemy');
+    const candidate = path.join(dir, 'node_modules', '.bin', name);
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);
-    if (parent === dir) {
-      throw new Error(`could not find node_modules/.bin/alchemy above ${integrationDir}`);
-    }
+    if (parent === dir) return undefined;
     dir = parent;
   }
+}
+
+function alchemyBin(): string {
+  const bin = resolveBin('alchemy');
+  if (bin === undefined) {
+    throw new Error(`could not find node_modules/.bin/alchemy above ${integrationDir}`);
+  }
+  return bin;
+}
+
+/** Last `n` lines of a file, or a note explaining why there's nothing to show — never throws. */
+function tailOf(filePath: string, n = 60): string {
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    return `<could not read ${filePath}: ${error instanceof Error ? error.message : String(error)}>`;
+  }
+  const lines = content.split('\n');
+  return lines.slice(-n).join('\n');
+}
+
+/**
+ * Prints everything a failure needs to be diagnosable from CI's own log
+ * output alone — the teed files a failed run left behind are on the runner,
+ * gone the moment the job ends, so their content has to reach stdout/stderr
+ * BEFORE the process exits, not just live on disk. Bounded (tails only),
+ * never throws (a missing file/daemon is itself diagnostic, not fatal to
+ * the diagnostic dump).
+ */
+function dumpDiagnostics(): void {
+  console.error('\n=== diagnostics ===');
+  for (let i = 1; i <= convergeCount; i += 1) {
+    const logFile = path.join(logDir, `converge-${i}.log`);
+    console.error(`\n--- converge-${i}.log (tail) ---`);
+    console.error(tailOf(logFile));
+  }
+  for (const name of ['compute', 'buckets'] as const) {
+    console.error(`\n--- ${name} emulator log (tail) ---`);
+    console.error(tailOf(path.join(emulatorRegistryRoot(), `${name}.log`)));
+  }
+  console.error('\n--- prisma dev ls ---');
+  const prismaBin = resolveBin('prisma');
+  if (prismaBin === undefined) {
+    console.error('<no node_modules/.bin/prisma found above the integration package>');
+  } else {
+    const result = spawnSync(prismaBin, ['dev', 'ls'], { encoding: 'utf8' });
+    console.error(result.stdout ?? '');
+    if (result.stderr) console.error(result.stderr);
+  }
+  console.error('=== end diagnostics ===\n');
 }
 
 function relImportSpecifier(fromDir: string, toFile: string): string {
@@ -662,5 +711,6 @@ main()
   })
   .catch((error: unknown) => {
     console.error(error instanceof Error ? (error.stack ?? error.message) : error);
+    dumpDiagnostics();
     process.exitCode = 1;
   });
