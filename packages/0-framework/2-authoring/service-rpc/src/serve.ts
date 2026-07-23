@@ -18,6 +18,7 @@
 import type { Contract, Expose, RunnableServiceNode } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
+import { isRpcContract } from './rpc.ts';
 import { standardValidate } from './standard-schema.ts';
 
 // The ambient environment of whatever runtime hosts the bundle. Declared
@@ -274,7 +275,7 @@ function methodTable(
     // Only rpc ports carry dispatchable methods; a non-rpc exposed port
     // (its __cmp is connection config, not a function map) is not serve()'s
     // to handle — the type-level mirror is RpcPortKeys in Handlers<S>.
-    if (contract.kind !== 'rpc') continue;
+    if (!isRpcContract(contract)) continue;
     const portHandlers = handlers[port] ?? {};
     for (const [method, fn] of Object.entries(contract.__cmp)) {
       if (table.has(method)) {

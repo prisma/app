@@ -5,13 +5,12 @@
 // framework accessors, and NO schema work at boot: the deploy migrated and
 // marker-signed the auth space before this process exists.
 
-import { serve } from '@internal/service-rpc';
+import { composeServiceFetch, serve } from '@internal/service-rpc';
 import { betterAuth } from 'better-auth';
 import { buildAuthOptions } from '../auth-options.ts';
 import { authService } from '../auth-service.ts';
 import { createAuthHandlers } from '../handlers.ts';
 import { createPgAuthStore } from '../pg-auth-store.ts';
-import { composeAuthFetch } from './fetch-router.ts';
 
 const service = authService();
 
@@ -31,6 +30,11 @@ const auth = betterAuth(
 const handlers = createAuthHandlers(createPgAuthStore(db.url));
 const rpcHandler = serve(service, { session: handlers.session, admin: handlers.admin });
 
-const fetchHandler = composeAuthFetch({ authHandler: auth.handler, rpcHandler });
+// The public Better Auth surface rides under /api/auth (it IS the
+// authentication, so no bearer); /rpc/* stays key-checked inside serve().
+const fetchHandler = composeServiceFetch({
+  rpcHandler,
+  publicHandler: { pathPrefix: '/api/auth', handler: auth.handler },
+});
 
 Bun.serve({ port, hostname: '0.0.0.0', fetch: fetchHandler });

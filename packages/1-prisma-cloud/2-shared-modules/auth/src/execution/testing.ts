@@ -13,7 +13,7 @@
  */
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
-import { serve } from '@internal/service-rpc';
+import { composeServiceFetch, serve } from '@internal/service-rpc';
 import { betterAuth } from 'better-auth';
 import pg from 'pg';
 import { type AuthEmailSender, buildAuthOptions } from '../auth-options.ts';
@@ -21,7 +21,6 @@ import { authAdminContract, authApiContract, authSessionContract } from '../cont
 import { createAuthHandlers } from '../handlers.ts';
 import { AUTH_SCHEMA_SQL } from '../pack/schema-sql.ts';
 import { createPgAuthStore } from '../pg-auth-store.ts';
-import { composeAuthFetch } from './fetch-router.ts';
 
 /** One captured email touchpoint — `url` is the live link (verification/reset/magic). */
 export interface CapturedAuthEmail {
@@ -105,7 +104,10 @@ export async function startLocalAuthServer(opts: {
       sendEmail,
     }),
   );
-  fetchHandler = composeAuthFetch({ authHandler: auth.handler, rpcHandler });
+  fetchHandler = composeServiceFetch({
+    rpcHandler,
+    publicHandler: { pathPrefix: '/api/auth', handler: auth.handler },
+  });
 
   return {
     url,

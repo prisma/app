@@ -14,8 +14,10 @@
 
 export type { Transport } from '../client.ts';
 export { makeClient } from '../client.ts';
+export type { ServiceFetchParts } from '../compose-fetch.ts';
+export { composeServiceFetch } from '../compose-fetch.ts';
 export { contract } from '../contract.ts';
 export type { Client } from '../rpc.ts';
-export { perBindingToken, RPC_PEER_KEY, rpc } from '../rpc.ts';
+export { isRpcContract, perBindingToken, RPC_PEER_KEY, rpc } from '../rpc.ts';
 export type { Handlers, RpcHandlerContext } from '../serve.ts';
 export { RPC_ACCEPTED_KEYS_ENV, serve } from '../serve.ts';

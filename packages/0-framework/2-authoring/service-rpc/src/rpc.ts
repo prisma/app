@@ -52,7 +52,8 @@ export function rpc(
   });
 }
 
-function isRpcContract(value: unknown): value is Contract<'rpc', RpcFns> {
+/** True iff `value` is an RPC-kind Contract (a function-map `__cmp`, dispatchable by serve()). */
+export function isRpcContract(value: unknown): value is Contract<'rpc', RpcFns> {
   return (
     typeof value === 'object' &&
     value !== null &&
