@@ -1,0 +1,64 @@
+{
+  "name": "@internal/auth",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Signup, login, sessions, and JWT verification as a composed module wrapping Better Auth; ships the auth contract space as a Prisma Next extension pack.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./auth-service": {
+      "types": "./dist/auth-service.d.mts",
+      "default": "./dist/auth-service.mjs"
+    },
+    "./auth-entrypoint": {
+      "types": "./dist/auth-entrypoint.d.mts",
+      "default": "./dist/auth-entrypoint.mjs"
+    },
+    "./pack": {
+      "types": "./dist/pack.d.mts",
+      "default": "./dist/pack.mjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "default": "./dist/testing.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src",
+    "build": "tsdown",
+    "generate:schema": "bun scripts/generate-schema.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@internal/core": "workspace:0.2.0",
+    "@internal/foundation": "workspace:0.2.0",
+    "@internal/node": "workspace:0.2.0",
+    "@internal/prisma-cloud": "workspace:0.2.0",
+    "@internal/service-rpc": "workspace:0.2.0",
+    "arktype": "^2.2.3",
+    "jose": "^6.1.3",
+    "pg": "8.22.0",
+    "@prisma-next/adapter-postgres": "0.15.0",
+    "@prisma-next/contract": "0.15.0",
+    "@prisma-next/family-sql": "0.15.0",
+    "@prisma-next/migration-tools": "0.15.0",
+    "@prisma-next/sql-contract": "0.15.0",
+    "@prisma-next/target-postgres": "0.15.0",
+    "better-auth": "1.6.24"
+  },
+  "devDependencies": {
+    "@internal/tsdown-config": "workspace:0.2.0",
+    "@prisma-next/cli": "0.15.0",
+    "@prisma-next/postgres": "0.15.0",
+    "@types/bun": "^1.3.13",
+    "@types/pg": "8.20.0",
+    "tsdown": "^0.22.7",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

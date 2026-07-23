@@ -13,7 +13,7 @@
  * in the CLI parent, so it builds its own Management API client from env — the
  * same credential path `container.ts`'s `ensure`/`locate` use.
  */
-import { paramManifest, provisionManifest } from '@internal/core';
+import { type Graph, paramManifest, provisionManifest } from '@internal/core';
 import type { PreflightInput } from '@internal/core/config';
 import { blindCast } from '@internal/foundation/casts';
 import {
@@ -26,6 +26,8 @@ import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import { prismaCloudContainerOf } from './container.ts';
 import { isEnvParamSource, paramName } from './param.ts';
+import { resolvePnProject } from './pn-config.ts';
+import { isPnPostgresResourceNode, packRequirementOf } from './prisma-next.ts';
 import { secretName } from './secret.ts';
 
 type EnvClass = 'production' | 'preview';
@@ -223,4 +225,60 @@ export async function runPreflight(
     missing.push(meta);
   }
   if (missing.length > 0) throw missingError(missing, branchId, input.stage);
+}
+
+/**
+ * The extension-pack half of the deploy preflight (auth module D5): every
+ * dependency edge whose required contract carries a `packRequirement` must be
+ * wired to a `pnPostgres` resource whose `prisma-next.config.ts` lists that
+ * pack at the required head hash. Enforced HERE — at deploy time, before the
+ * migration step constructs — because wireability (`pnContract().satisfies`)
+ * deliberately says yes to every pack requirement: the authoring-side
+ * contract value cannot see the resource's config. Invoked from the
+ * `prisma-next` descriptor's lowering, beside the migration-step
+ * construction.
+ */
+export async function runPackPreflight(graph: Graph): Promise<void> {
+  for (const edge of graph.edges) {
+    if (edge.kind !== 'dependency') continue;
+    const consumer = graph.nodes.find((n) => n.id === edge.to)?.node;
+    if (consumer === undefined || consumer.kind !== 'service') continue;
+    const slot = consumer.inputs[edge.input];
+    if (slot === undefined) continue;
+    const requirement = packRequirementOf(slot.required);
+    if (requirement === undefined) continue;
+
+    const node = graph.nodes.find((n) => n.id === edge.from)?.node;
+    const provider =
+      node !== undefined &&
+      (node.kind === 'resource' || node.kind === 'service') &&
+      isPnPostgresResourceNode(node)
+        ? node
+        : undefined;
+    if (provider === undefined) {
+      throw new Error(
+        `service "${edge.to}" requires extension pack "${requirement.packId}", which only a ` +
+          'pnPostgres resource can carry.',
+      );
+    }
+
+    const { extensionPacks } = await resolvePnProject(provider.config);
+    const pack = extensionPacks.find((p) => p.id === requirement.packId);
+    if (pack === undefined) {
+      throw new Error(
+        `prisma-next database "${provider.name}" does not list extension pack ` +
+          `"${requirement.packId}" in its prisma-next.config.ts extensionPacks — service ` +
+          `"${edge.to}" requires it. Add the pack and run migration plan.`,
+      );
+    }
+
+    const found = pack.contractSpace?.headRef.hash;
+    if (found !== requirement.headHash) {
+      throw new Error(
+        `extension pack "${requirement.packId}" in "${provider.config}" is at head ${found}, ` +
+          `but the installed package requires ${requirement.headHash}. Re-run migration plan ` +
+          "so the pack's shipped migrations are materialised, then redeploy.",
+      );
+    }
+  }
 }

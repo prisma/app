@@ -39,6 +39,7 @@ import {
 } from '@prisma-next/migration-tools/spaces';
 import { createPostgresControlClient } from '@prisma-next/postgres/control';
 import { normalizeSslMode, withConnectionRetry } from './pg-connection.ts';
+import type { PnExtensionPack } from './pn-config.ts';
 
 /** Which authored path the migration step took. */
 export type PnMigrationAction = 'noop' | 'init' | 'migrate';
@@ -176,13 +177,23 @@ export async function applyPnMigration(opts: {
   readonly migrationsDir: string;
   readonly ref: PnTargetRef;
   readonly refName?: string;
+  /** The project's declared extension packs — threaded into PN's aggregate (multi-space) pipeline. */
+  readonly extensionPacks?: readonly PnExtensionPack[];
 }): Promise<PnMigrationOutcome> {
   const connection = normalizeSslMode(opts.url);
   // Retry the connect+operation past PPG's cold-start (see withConnectionRetry).
   // A real migration failure (no-path / runner) is a PnMigrationError — never a
   // connection transient — so it surfaces immediately, never retried.
   return withConnectionRetry(
-    () => runMigration(connection, opts.contractJson, opts.migrationsDir, opts.ref, opts.refName),
+    () =>
+      runMigration(
+        connection,
+        opts.contractJson,
+        opts.migrationsDir,
+        opts.ref,
+        opts.refName,
+        opts.extensionPacks ?? [],
+      ),
     { shouldRetry: (error) => !(error instanceof PnMigrationError) },
   );
 }
@@ -193,17 +204,24 @@ async function runMigration(
   migrationsDir: string,
   ref: PnTargetRef,
   refName: string | undefined,
+  extensionPacks: readonly PnExtensionPack[],
 ): Promise<PnMigrationOutcome> {
-  const client = createPostgresControlClient({ connection });
+  const client = createPostgresControlClient({ connection, extensionPacks });
   await client.connect();
   try {
     const marker = await client.readMarker();
     const markerHashBefore = marker?.storageHash ?? null;
-    const action = decideMigrationAction(marker, ref);
+    let action = decideMigrationAction(marker, ref);
 
-    // At the target ref (hash + invariants) — idempotent redeploy.
+    // At the target ref (hash + invariants) — idempotent redeploy. The marker
+    // only speaks for the APP space, so this short-circuit is honest only when
+    // no extension packs are declared; with packs, fall through to `migrate`,
+    // whose per-space path resolution no-ops each space already at its head.
     if (action === 'noop') {
-      return { action, targetHash: ref.hash, markerHashBefore };
+      if (extensionPacks.length === 0) {
+        return { action, targetHash: ref.hash, markerHashBefore };
+      }
+      action = 'migrate';
     }
 
     // Fresh/empty DB, no required invariants — first apply. `dbInit` is

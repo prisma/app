@@ -14,7 +14,13 @@ import { describe, expect, test } from 'bun:test';
 import type { Contract, ResourceNode } from '@internal/core';
 import { isNode, Load, module, string } from '@internal/core';
 import { blindCast } from '@internal/foundation/casts';
-import { isPnPostgresResourceNode, pnContract, pnPostgres } from '../exports/prisma-next.ts';
+import {
+  isPnPostgresResourceNode,
+  packRequirementOf,
+  pnContract,
+  pnPackRequirement,
+  pnPostgres,
+} from '../exports/prisma-next.ts';
 import { postgres } from '../postgres.ts';
 import type { Contract as GadgetContract } from './fixtures/gadget-contract/emitted/contract.d.ts';
 import gadgetContractJson from './fixtures/gadget-contract/emitted/contract.json' with {
@@ -69,6 +75,52 @@ describe('pnContract().satisfies()', () => {
     const widget = pnContract<WidgetContract>(widgetContractJson);
     expect(widget.kind).toBe('prisma-next');
     expect(Object.isFrozen(widget)).toBe(true);
+  });
+});
+
+describe('pnPackRequirement() — the extension-pack claim (wireability only, D5)', () => {
+  const requirement = pnPackRequirement({ packId: 'auth', headHash: 'sha256:auth-head' });
+
+  test('is a frozen prisma-next-kind contract carrying the requirement in __cmp', () => {
+    expect(requirement.kind).toBe('prisma-next');
+    expect(Object.isFrozen(requirement)).toBe(true);
+    expect(packRequirementOf(requirement)).toEqual({
+      packId: 'auth',
+      headHash: 'sha256:auth-head',
+    });
+  });
+
+  test('ANY pnContract() satisfies a pack requirement — before hash comparison', () => {
+    // The widget contract's hash has nothing to do with the pack's head hash:
+    // wireability deliberately says yes (the contract value cannot see the
+    // resource's config); the deploy preflight is the enforcement point.
+    const widget = pnContract<WidgetContract>(widgetContractJson);
+    const gadget = pnContract<GadgetContract>(gadgetContractJson);
+    expect(widget.satisfies(requirement)).toBe(true);
+    expect(gadget.satisfies(requirement)).toBe(true);
+  });
+
+  test('the pack branch does not loosen hash comparison for non-requirement contracts', () => {
+    const widget = pnContract<WidgetContract>(widgetContractJson);
+    const gadget = pnContract<GadgetContract>(gadgetContractJson);
+    expect(widget.satisfies(gadget)).toBe(false);
+  });
+
+  test('packRequirementOf reads defensively — malformed shapes yield undefined', () => {
+    expect(packRequirementOf(undefined)).toBeUndefined();
+    const widget = pnContract<WidgetContract>(widgetContractJson);
+    expect(packRequirementOf(widget)).toBeUndefined();
+    const malformed = (cmp: unknown) =>
+      ({ kind: 'prisma-next', __cmp: cmp, satisfies: () => false }) as Contract<
+        'prisma-next',
+        unknown
+      >;
+    expect(packRequirementOf(malformed(null))).toBeUndefined();
+    expect(packRequirementOf(malformed({ packRequirement: null }))).toBeUndefined();
+    expect(packRequirementOf(malformed({ packRequirement: { packId: 'auth' } }))).toBeUndefined();
+    expect(
+      packRequirementOf(malformed({ packRequirement: { packId: 42, headHash: 'x' } })),
+    ).toBeUndefined();
   });
 });
 

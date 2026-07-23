@@ -5,12 +5,16 @@
  * nothing else. Pure barrel — implementations live in the named modules.
  */
 
+export type { AuthSecretConfig, AuthSecretContract } from '../auth-secret.ts';
+export { authSecret, authSecretContract } from '../auth-secret.ts';
 export type { BucketConfig } from '../bucket.ts';
 export { bucket, bucketContract } from '../bucket.ts';
 export { ComputeService, compute } from '../compute.ts';
 export type { HttpClient } from '../http.ts';
 export { http } from '../http.ts';
 export { envParam, paramName } from '../param.ts';
+export type { PnPackRequirement, PnPackRequirementCmp } from '../pn-pack-requirement.ts';
+export { packRequirementOf, pnPackRequirement } from '../pn-pack-requirement.ts';
 export type { PostgresConfig } from '../postgres.ts';
 export { postgres, postgresContract } from '../postgres.ts';
 export type { ProvisionedEdge } from '../provisioned-edges.ts';
