@@ -243,10 +243,44 @@ function isStringKeyedRecord(value: unknown): value is StringKeyedRecord {
 
 interface PrismaDevInternalStateModule {
   deleteServer(name: string, debug?: boolean): Promise<void>;
+  /** `{ status, pid, ... }`; `status` is `"running"`/`"starting_up"` for a live server (verified live: while up it reports `running` with THIS process's pid, after `close()` it reports `not_running`). */
+  getServerStatus(name: string, opts?: unknown): Promise<unknown>;
 }
 
 function isPrismaDevInternalStateModule(value: unknown): value is PrismaDevInternalStateModule {
-  return isStringKeyedRecord(value) && typeof value['deleteServer'] === 'function';
+  return (
+    isStringKeyedRecord(value) &&
+    typeof value['deleteServer'] === 'function' &&
+    typeof value['getServerStatus'] === 'function'
+  );
+}
+
+function isLiveStatus(status: unknown): boolean {
+  if (!isStringKeyedRecord(status)) return false;
+  return status['status'] === 'running' || status['status'] === 'starting_up';
+}
+
+const CLOSE_SETTLE_ATTEMPTS = 40;
+const CLOSE_SETTLE_DELAY_MS = 250;
+
+/** True once the named server's persisted state no longer claims it is live — the precondition for `deleteServer`, whose kill path targets the pid in that state, which for an in-daemon server is THIS DAEMON's own pid. */
+async function settledAfterClose(
+  internalState: PrismaDevInternalStateModule,
+  instanceName: string,
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= CLOSE_SETTLE_ATTEMPTS; attempt += 1) {
+    let live = false;
+    try {
+      live = isLiveStatus(await internalState.getServerStatus(instanceName));
+    } catch {
+      return true;
+    }
+    if (!live) return true;
+    if (attempt < CLOSE_SETTLE_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, CLOSE_SETTLE_DELAY_MS));
+    }
+  }
+  return false;
 }
 
 /**
@@ -564,8 +598,24 @@ function main(): void {
     // any one of those already-observed paths works; DELETE itself carries
     // no body, so there is nothing more specific to prefer.
     if (entries.length > 0 && prismaDevModulePathHint) {
-      const { deleteServer } = await importPrismaDevInternalState(prismaDevModulePathHint);
-      for (const db of entries) await deleteServer(db.instanceName);
+      const internalState = await importPrismaDevInternalState(prismaDevModulePathHint);
+      for (const db of entries) {
+        // `deleteServer`'s kill path targets the pid in the server's persisted
+        // state — for an in-daemon server that pid is THIS DAEMON's own. The
+        // close above marks the state stopped, but the write is asynchronous:
+        // deleting while the state still says "running" makes the daemon kill
+        // itself (observed on CI as the daemon dying silently mid-teardown).
+        // Wait for the close to settle; if it never does, leave the data on
+        // disk rather than die — the next --fresh gets another chance.
+        const settled = await settledAfterClose(internalState, db.instanceName);
+        if (!settled) {
+          console.error(
+            `postgres-main: server "${db.instanceName}" still reports running after close — leaving its persisted data in place instead of risking a self-kill.`,
+          );
+          continue;
+        }
+        await internalState.deleteServer(db.instanceName);
+      }
     }
 
     delete state[app];
