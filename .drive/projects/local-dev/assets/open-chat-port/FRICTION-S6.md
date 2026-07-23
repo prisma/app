@@ -10,9 +10,9 @@ mechanism), on top of `claude/local-dev-s5-dev-command`.
 Mode: the port repo (`/Users/wmadden/Projects/prisma/open-chat`) is owned by
 a different user and not writable from this session (`touch` there returned
 `Permission denied`). Worked on a full copy (including `.git`) in the
-scratchpad, producing real commits there; `git format-patch` output for
-those commits is saved alongside this file
-(`.drive/projects/local-dev/assets/open-chat-port/patches/`).
+scratchpad, producing real commits there. What the commit changed is
+summarized in [PORT.md](PORT.md) beside this file (the raw diff stays in
+the copy — a patch blob is not reviewable material).
 
 ## 1. `defineConfig`'s `state` field is a descriptor, not a thunk
 
