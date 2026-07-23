@@ -672,6 +672,48 @@ existed (`0.2.0-dev.6`); this only afflicts the preview-pin workflow.
 repo's workflow, prefer npm dev releases over pkg.pr.new pairs whenever the
 change is already merged.
 
+## D7 — nativization: open-chat as an idiomatic Composer app
+
+Framework version: npm `0.2.0-dev.7` (unchanged from D6's re-alignment).
+Date: 2026-07-23. The port's original "app code unchanged" constraint was
+dropped by operator decision: the deliverable became a showcase of idiomatic
+Composer usage. The `src/composer/` directory, the launcher, and the
+env-name mapping shim — all scaffolding that constraint had forced — were
+deleted; the app now consumes `service.load()`/`config()`/`secrets()`/
+`origin()` directly at each natural site, the node() build entry is the
+app's own server entry (no more two-tree `build:pack` dance from finding
+#8), and the deploy story is one command. Re-proven end to end on a fresh
+stack. One capability gap prevented full nativization:
+
+### 14. `StreamsClient` has no routing-key support — an app multiplexing one stream cannot use the hydrated binding
+
+**Where hit:** replacing open-chat's own streams client with the
+`durableStreams()` dependency's hydrated `StreamsClient` during
+nativization.
+
+**Symptom.** The app keeps one append-only stream per user and multiplexes
+chats over it with a routing key: a `stream-key` header on append and a
+`key=` query filter (with `live=true&timeout=4s` long-poll) on read. The
+hydrated `StreamsClient`/`StreamHandle` expose only
+`create`/`append(event)`/`read({ offset })`/`tail({ offset, timeoutMs,
+signal })` — no routing-key parameter on any of them — and the client's
+`url`/`apiKey` are private fields with no public accessor. The binding can
+neither express the app's read/write pattern nor hand over the raw
+connection values so the app's own client can.
+
+**Workaround.** The app builds its own HTTP client and obtains the
+dependency's resolved `url`/`apiKey` through the `configKey()` address-free
+env rows — the reach-around first recorded in D3, now the single remaining
+non-native seam in the app (housed in `src/server/streams.ts` with a
+comment naming this gap).
+
+**Recommendation.** Either close (a): routing-key support on
+`StreamHandle.append/read/tail` (it is part of the streams wire protocol —
+the server honors `stream-key`/`key=` today), or (b): a public accessor for
+a dependency binding's raw connection values, the general escape hatch that
+also retires the `configKey()` idiom. (a) serves this app best; (b) serves
+every app whose client the framework hasn't wrapped yet.
+
 ## Referenced elsewhere
 
 The following are recorded in the slice spec's "Chosen design" and
