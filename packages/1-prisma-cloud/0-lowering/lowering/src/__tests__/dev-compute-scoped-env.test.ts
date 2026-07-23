@@ -56,4 +56,19 @@ describe('scopedEnvRows()', () => {
   test('an empty env store scopes to an empty object', () => {
     expect(scopedEnvRows({}, 'web')).toEqual({});
   });
+
+  test('an address that is a string-prefix of another address never matches its rows (underscore boundary)', () => {
+    // "web" is a literal string prefix of "web2" — without the trailing
+    // underscore on the match prefix, "web"'s scope would also swallow
+    // "web2"'s own rows. COMPOSER_WEB_PORT vs COMPOSER_WEB2_PORT: the
+    // prefix "COMPOSER_WEB_" (with its trailing underscore) does not match
+    // "COMPOSER_WEB2_PORT" — the characters diverge at "WEB" + "_" vs "2".
+    const all = {
+      COMPOSER_WEB_PORT: '3000',
+      COMPOSER_WEB2_PORT: '3001',
+    };
+
+    expect(scopedEnvRows(all, 'web')).toEqual({ COMPOSER_WEB_PORT: '3000' });
+    expect(scopedEnvRows(all, 'web2')).toEqual({ COMPOSER_WEB2_PORT: '3001' });
+  });
 });
