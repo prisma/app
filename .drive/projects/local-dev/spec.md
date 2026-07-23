@@ -152,9 +152,18 @@ plus the shared daemon layer and typed loopback clients.
      timeout → kill the spawned child (it must not outlive a failed
      ensure), then
      `Error: <name> emulator failed to start on port <port> — see <logPath>.`
-  5. Foreign process on the port → same error; `--fresh` does NOT touch the
-     daemons (they are machine-global, shared by other apps); recovering a
-     stolen port is manual (delete the registry entry).
+  5. Port taken at spawn (the daemon exits with a bind error before
+     reporting healthy): if the registry entry is being created FRESH — no
+     previously persisted port — the ensure, still holding the lock,
+     allocates the next free candidate (≥ 4300, skipping registry-used
+     ports), persists it, and retries the spawn, up to 5 candidates before
+     the pinned failure error. A fresh allocation has handed out no
+     endpoint, so moving it is safe — and this also makes ensure robust
+     when isolated registries (tests) or foreign processes race for the
+     same port. With a PREVIOUSLY persisted port, never retry elsewhere:
+     endpoints frozen in deploy state reference it — fail with the pinned
+     error; recovery is manual (`--fresh` does NOT touch the daemons — they
+     are machine-global, shared by other apps).
 - **Concurrent-ensure protocol:** the observe→spawn→persist critical
   section is serialized ACROSS PROCESSES per daemon name with an atomic
   directory lock: `mkdir <registryRoot>/.lock-<name>` (atomic creation IS
@@ -427,11 +436,24 @@ scope, not v1.
      where `id` = the ComputeService's name resolved from
      `news.computeServiceId`. Resolve the address from
      `news.serviceAddress` (see § lowering handoff change).
-  3. Materialize env: `{ ...allOf(env.json) }`, then override
-     `configKey(address, { owner: 'service', name: 'port' })` =
-     `JSON.stringify(port)` (the serializer's service-own literal encoding),
-     then merge `secrets.json` entries verbatim (raw platform names), then
-     `PATH` and `HOME` from the current process env.
+  3. Materialize env SCOPED to the service: every `env.json` row whose key
+     is prefixed `COMPOSER_<address>_` (the address of the row's OWNER —
+     `configKey`'s convention) plus every row OUTSIDE the `COMPOSER_`
+     namespace (the poison `DATABASE_URL(_POOLED)` rows are deliberately
+     unprefixed and app-wide); then override `configKey(address, { owner:
+     'service', name: 'port' })` = `JSON.stringify(port)`, then merge
+     `secrets.json` entries verbatim (raw platform names), then `PATH` and
+     `HOME` from the current process env.
+     **Pinned parity note:** the hosted platform materializes the app-wide
+     row set into every deployment but DIFFS a deployment only on its own
+     referenced rows — an app-wide local materialization therefore
+     restart-amplifies (an early-deployed service's snapshot is incomplete
+     on the first converge, "completes" on the second, and diffs as
+     changed; observed live, three-converge byte evidence). Scoping the
+     content aligns local restart behavior with the platform's diff scope;
+     the dropped sibling rows have no sanctioned reader (`run()`/`load()`
+     consume only own-address rows, and ambient sibling reads are exactly
+     what the poison rows exist to punish).
   4. `PUT /apps/<app>/services/<id>/deployment` with `{ address,
      artifactDir, artifactHash, env, port }` — the emulator (re)starts the
      child only when the hash or env changed.
@@ -580,10 +602,13 @@ New control-plane files (all under `src/`, plane `control` in
     restart shows a gap, never a dead session).
   - `stopServices()` → `POST /apps/<app>/stop`.
 - `src/dev/teardown.ts` — `runDevTeardown(input: TeardownInput)`:
-  1. `<prisma-bin> dev stop 'pcdev-<app>-*'` then
-     `<prisma-bin> dev rm 'pcdev-<app>-*'` (glob per the CLI's stop/rm NAME
-     pattern support; tolerate nonzero exit when no instance matches — match
-     on the CLI's "not found"-style output, otherwise rethrow with output).
+  1. `<prisma-bin> dev stop 'pcdev-<slug(app)>-*'` then
+     `<prisma-bin> dev rm 'pcdev-<slug(app)>-*'` — the glob applies the SAME
+     name slugging § 4's instance derivation uses (one shared `slug`
+     implementation), or an app name containing slugged characters would
+     orphan its instances (glob per the CLI's stop/rm NAME pattern support;
+     tolerate nonzero exit when no instance matches — match on the CLI's
+     "not found"-style output, otherwise rethrow with output).
   2. Compute emulator: `DELETE /apps/<app>` (stops children, removes records
      and logs). Bucket emulator: `DELETE /_pcdev/apps/<app>` (removes
      registrations + credentials). Both tolerate an unreachable or absent
@@ -697,31 +722,27 @@ New control-plane files (all under `src/`, plane `control` in
     watching (a broken build must not take down the running app). After
     every successful converge, re-print the front door from `endpoints()`.
 
-### 7. `dir()` build adapter (`packages/0-framework/2-authoring/node/src/dir.ts` — NEW entry)
+### 7. Directory-shaped builds (REVISED — no new adapter)
 
-Prerequisite for the open-chat proof (its runnable is a directory —
-friction #3's shape) and independently useful.
+**Correction (operator catch):** `node()`'s directory form —
+`node({ module, dir, entry })` — already exists on `main` and IS friction
+#3's fix, implemented before this project's design pass; the original § 7
+pinned a duplicate `dir()` surface against a stale friction-log premise.
+There is no `dir()` adapter and no `@prisma/composer/dir` subpath. S2's
+real scope:
 
-- Package `@prisma/composer-dir`? NO — PIN: it ships inside the existing
-  node-adapter package as a sibling entry: `packages/0-framework/2-authoring/
-  node/src/dir.ts`, public subpath `@prisma/composer/dir` (via `9-public`
-  mapping, exactly how `node` is mapped today).
-- Authoring surface: `dir({ module: import.meta.url, dir: string, entry:
-  string })` — `dir` is the user-built output directory, `entry` the runnable
-  file within it, both resolved relative to `dirname(module)` (ADR-0004).
-- `assemble()`: validate `dir` exists (else deploy's "run your build" error
-  shape), validate `entry` exists inside it, **copy the tree verbatim**
-  (`fs.cp recursive`, symlink = hard error with ADR-0005's message shape,
-  reusing the walk/validation from `artifact.ts`'s conventions), plus the
-  standard wrapper bundling exactly as `node()`'s control does (the wrapper
-  `main.mjs` is what `bootstrap.js` imports). Returns
-  `{ dir: <workDir>, entry: bundle/<entry>, watch: [<the resolved input dir>] }`
-  — the same Bundle shape `node()` produces (the wrapper `main.mjs` sits at
-  the workdir root so the packaged bootstrap can import it; `entry` points
-  into the copied tree). (§ 3's `Bundle.watch`.)
-- No filename guessing, no tree walking beyond the verbatim copy: the author
-  states the directory and the entry (ADR-0005; the friction #3
-  recommendation, verbatim).
+- `Bundle.watch` (§ 3) and its population: `node()` single-file form →
+  `[resolved entry file]`; `node()` directory form → `[the resolved dir]`
+  (the WHOLE tree — a rebuild may touch only sibling files); `nextjs()` →
+  `[the standalone output dir]`.
+- The symlink-as-`dir` hole: `node()`'s directory form on `main`
+  dereferences a symlink passed AS `dir` itself (`statSync` follows links;
+  the no-symlink walk only checks children) — `lstat` the directory before
+  the walk, ADR-0005's error shape, tests through the directory form.
+- Doc corrections wherever the guide/deploy docs still describe `node()`
+  as single-file-only.
+
+The open-chat proof (S6) uses `node({ module, dir, entry })`.
 
 ### 8. Docs & rules
 

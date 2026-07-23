@@ -342,6 +342,7 @@ describe('assemble() — the directory form', () => {
       'index.html': '<link rel="stylesheet" href="/assets/app.css">\n',
       'assets/app.css': 'body { color: red }\n',
       'assets/logo.png': logo,
+      'nested/deep/marker.txt': 'deep file\n',
     });
     writeServiceModule(serviceDir);
 
@@ -358,6 +359,7 @@ describe('assemble() — the directory form', () => {
       'assets/app.css',
       'assets/logo.png',
       'index.html',
+      'nested/deep/marker.txt',
       'start.js',
     ]);
     expect(fs.readFileSync(path.join(result.dir, 'bundle', 'assets', 'logo.png'), 'utf8')).toBe(
@@ -366,9 +368,9 @@ describe('assemble() — the directory form', () => {
     // The wrapper still sits at the working-dir root, outside the copied tree.
     expect(fs.existsSync(path.join(result.dir, 'main.mjs'))).toBe(true);
     expect(fs.existsSync(path.join(result.dir, 'bundle', 'main.mjs'))).toBe(false);
-    // Bundle.watch names the resolved entry file, not the whole dir — unlike
-    // dir()'s watch, which names the dir (ADR-0041; see assemble-dir.test.ts).
-    expect(result.watch).toEqual([path.join(serviceDir, 'dist', 'server', 'start.js')]);
+    // Bundle.watch names the whole dir, not just the entry file — a rebuild
+    // may touch only a sibling entry doesn't import (ADR-0041).
+    expect(result.watch).toEqual([path.join(serviceDir, 'dist', 'server')]);
   }, 20_000);
 
   test('boots an entry nested inside the tree, reported relative to bundle/', async () => {
@@ -558,7 +560,7 @@ describe('assemble() — the directory form', () => {
     ).rejects.toThrow(/contains symlinks.*server\/vendor/s);
   });
 
-  test('rejects a dir that is itself a symlink — hard-errors instead of dereferencing it and copying the target', async () => {
+  test('rejects a dir that is itself a symlink to a directory — hard-errors instead of dereferencing it and copying the target', async () => {
     // ADR-0005: a symlink is never dereferenced, including when it's the
     // build adapter's `dir` value itself, not just something nested inside
     // it. `statSync` (used to confirm dir is a directory) follows a symlink,
@@ -569,6 +571,29 @@ describe('assemble() — the directory form', () => {
       'start.js': 'export default "app-entry";\n',
     });
     fs.symlinkSync(path.join(serviceDir, 'dist', 'real'), path.join(serviceDir, 'dist', 'server'));
+    writeServiceModule(serviceDir);
+
+    await expect(
+      assemble({
+        build: node({ module: moduleUrl(serviceDir), dir: '../dist/server', entry: 'start.js' }),
+        address: 'svc',
+        cwd: makeCwd(),
+      }),
+    ).rejects.toThrow(/contains symlinks.*dist\/server/s);
+  });
+
+  test('rejects a dir that is itself a symlink to a FILE — the same hard error, not "not a directory"', async () => {
+    // The lstat check must run before any dereferencing stat decides
+    // directory-ness, so a symlink pointing at a file gets the same symlink
+    // error as one pointing at a directory — never "is not a directory",
+    // which would mean the symlink was silently followed to find that out.
+    const serviceDir = makeServiceDir();
+    fs.writeFileSync(path.join(serviceDir, 'dist-real-file.js'), 'export default "not a dir";\n');
+    fs.mkdirSync(path.join(serviceDir, 'dist'), { recursive: true });
+    fs.symlinkSync(
+      path.join(serviceDir, 'dist-real-file.js'),
+      path.join(serviceDir, 'dist', 'server'),
+    );
     writeServiceModule(serviceDir);
 
     await expect(
