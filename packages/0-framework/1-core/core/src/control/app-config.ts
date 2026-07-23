@@ -145,6 +145,8 @@ export interface LocalTargetAttachInput {
 }
 
 export interface LocalTargetAttachment {
+  /** Start every stopped service from its last deployment (the session-resume signal — a no-op converge cannot start anything). */
+  startServices(): Promise<void>;
   /** Every service's local endpoint, for the front door. */
   endpoints(): Promise<readonly { readonly address: string; readonly url: string }[]>;
   /** Merged, line-oriented log stream across the app's services (including services that appear after later converges). Ends when `signal` aborts. */

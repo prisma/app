@@ -143,9 +143,63 @@ function isPrismaDevModule(value: unknown): value is PrismaDevModule {
  * number matching the candidate we just tried — is what actually survives
  * that boundary.
  */
-function isPortConflict(err: unknown, port: number): boolean {
-  if (typeof err !== 'object' || err === null || !('port' in err)) return false;
-  return err.port === port;
+/**
+ * The port a start refusal is about, when it is one of THIS attempt's ports.
+ * Duck-typed (`instanceof` fails across the dynamic-import boundary): every
+ * `@prisma/dev` port refusal — not-available, requested-twice, and
+ * belongs-to-another-server (its registry can claim a port no bind probe
+ * sees) — carries the offending port as `.port`, and any of the four ports
+ * we requested (database + the three aux listeners) can be the one refused.
+ */
+function portConflictOf(err: unknown, ports: readonly number[]): number | undefined {
+  if (typeof err !== 'object' || err === null || !('port' in err)) return undefined;
+  const port = err.port;
+  return typeof port === 'number' && ports.includes(port) ? port : undefined;
+}
+
+function isPrismaDevServer(value: unknown): value is PrismaDevServer {
+  if (!isStringKeyedRecord(value) || typeof value['close'] !== 'function') return false;
+  const database = value['database'];
+  return isStringKeyedRecord(database) && typeof database['connectionString'] === 'string';
+}
+
+/**
+ * The live server behind a "name is already running" refusal, when there is
+ * one. A start that fails mid-boot (e.g. on a port another server's
+ * registry claims) can leave its state entry behind, so OUR OWN next
+ * attempt for the same name is refused. `@prisma/dev`'s
+ * `ServerAlreadyRunningError` carries the running server as a `.server`
+ * getter (duck-typed — `instanceof` fails across the dynamic-import
+ * boundary); its parent class (state entry exists but nothing actually
+ * runs) has no such getter, and a dead ghost resolves to null — both mean
+ * "nothing to adopt".
+ */
+async function adoptableServerOf(err: unknown): Promise<PrismaDevServer | undefined> {
+  if (!isStringKeyedRecord(err) || !('server' in err)) return undefined;
+  if (err['name'] !== 'ServerAlreadyRunningError') return undefined;
+  try {
+    const server: unknown = await err['server'];
+    return isPrismaDevServer(server) ? server : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isNameAlreadyTaken(err: unknown): boolean {
+  return (
+    isStringKeyedRecord(err) &&
+    (err['name'] === 'ServerAlreadyRunningError' || err['name'] === 'ServerStateAlreadyExistsError')
+  );
+}
+
+/** The port of a postgres connection URL, when it parses as one. */
+function databasePortOf(connectionString: string): number | undefined {
+  try {
+    const port = Number(new URL(connectionString).port);
+    return Number.isInteger(port) && port > 0 ? port : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -324,8 +378,14 @@ function main(): void {
     return ports;
   }
 
-  async function smallestUnusedDatabasePort(min: number): Promise<number> {
-    return getPort({ port: portNumbers(min, MAX_DATABASE_PORT), exclude: usedDatabasePorts() });
+  async function smallestUnusedDatabasePort(
+    min: number,
+    alsoExclude: ReadonlySet<number> = new Set(),
+  ): Promise<number> {
+    return getPort({
+      port: portNumbers(min, MAX_DATABASE_PORT),
+      exclude: [...usedDatabasePorts(), ...alsoExclude],
+    });
   }
 
   /** Three fresh, mutually distinct ports for a server's own HTTP/shadow-database/streams listeners — never persisted, only unique right now. */
@@ -352,13 +412,31 @@ function main(): void {
     return { httpPort, shadowDatabasePort, streamsPort };
   }
 
-  async function ensureDatabase(
+  const inflightEnsures = new Map<string, Promise<{ url: string }>>();
+
+  /** Concurrent PUTs for the same database coalesce onto one start — a second `startPrismaDevServer` for a name whose first start is still booting fails as "already running". */
+  function ensureDatabase(
     app: string,
     id: string,
     prismaDevModulePath: string,
   ): Promise<{ url: string }> {
-    const appRec = getOrCreateApp(app);
     const instanceName = instanceNameFor(app, id);
+    const inflight = inflightEnsures.get(instanceName);
+    if (inflight) return inflight;
+    const run = ensureDatabaseSerialized(app, id, prismaDevModulePath, instanceName).finally(() => {
+      inflightEnsures.delete(instanceName);
+    });
+    inflightEnsures.set(instanceName, run);
+    return run;
+  }
+
+  async function ensureDatabaseSerialized(
+    app: string,
+    id: string,
+    prismaDevModulePath: string,
+    instanceName: string,
+  ): Promise<{ url: string }> {
+    const appRec = getOrCreateApp(app);
     const existingRecord = appRec.databases[id];
 
     // Already live in THIS process — idempotent, nothing to do.
@@ -369,12 +447,12 @@ function main(): void {
 
     const prismaDev = await importPrismaDev(prismaDevModulePath);
     const isFreshAllocation = existingRecord === undefined;
-    const maxAttempts = isFreshAllocation ? MAX_FRESH_PORT_CANDIDATES : 1;
     let dbPort =
       existingRecord?.databasePort ?? (await smallestUnusedDatabasePort(MIN_DATABASE_PORT));
 
+    const conflicted = new Set<number>();
     for (let attempt = 1; ; attempt++) {
-      const aux = await allocateAuxPorts(new Set([dbPort]));
+      const aux = await allocateAuxPorts(new Set([dbPort, ...conflicted]));
       try {
         const server = await prismaDev.startPrismaDevServer({
           name: instanceName,
@@ -398,15 +476,55 @@ function main(): void {
         schedulePersist();
         return { url };
       } catch (err) {
+        if (isNameAlreadyTaken(err)) {
+          // Our own earlier attempt (this loop's, or a crashed run's) left the
+          // name behind — the name is namespaced to this app+database, so it
+          // is ours by construction. A live server is simply the goal already
+          // reached: adopt it. A dead state entry is cleared and the start
+          // retried.
+          const ghost = await adoptableServerOf(err);
+          if (ghost !== undefined) {
+            const url = ghost.database.connectionString;
+            runtimes.set(instanceName, ghost);
+            appRec.databases[id] = {
+              id,
+              instanceName,
+              databasePort: databasePortOf(url) ?? dbPort,
+              url,
+            };
+            schedulePersist();
+            return { url };
+          }
+          if (attempt < MAX_FRESH_PORT_CANDIDATES) {
+            const internalState = await importPrismaDevInternalState(prismaDevModulePath);
+            await internalState.deleteServer(instanceName);
+            continue;
+          }
+        }
+        const conflictPort = portConflictOf(err, [
+          dbPort,
+          aux.httpPort,
+          aux.shadowDatabasePort,
+          aux.streamsPort,
+        ]);
+        // The aux listener ports are never persisted, so a refusal of one is
+        // always retryable with fresh candidates. The DATABASE port is frozen
+        // once a record exists (endpoints in deploy state reference it) —
+        // only a fresh allocation may move it.
         const canRetryNextPort =
-          isFreshAllocation && isPortConflict(err, dbPort) && attempt < maxAttempts;
+          conflictPort !== undefined &&
+          attempt < MAX_FRESH_PORT_CANDIDATES &&
+          (conflictPort !== dbPort || isFreshAllocation);
         if (!canRetryNextPort) {
           const reason = err instanceof Error ? err.message : String(err);
           throw new Error(
             `postgres emulator failed to start database "${instanceName}" on port ${String(dbPort)}: ${maskCredentials(firstLine(reason))}`,
           );
         }
-        dbPort = await smallestUnusedDatabasePort(dbPort + 1);
+        conflicted.add(conflictPort);
+        if (conflictPort === dbPort) {
+          dbPort = await smallestUnusedDatabasePort(dbPort + 1, conflicted);
+        }
       }
     }
   }
@@ -419,16 +537,19 @@ function main(): void {
     if (!appRec) return;
     const entries = Object.values(appRec.databases);
 
-    await Promise.all(
-      entries.map(async (db) => {
-        const server = runtimes.get(db.instanceName);
-        if (server) {
-          await server.close();
-          runtimes.delete(db.instanceName);
-          releaseAuxPorts(db.instanceName);
-        }
-      }),
-    );
+    // Closed one at a time, never concurrently: the servers run pglite's
+    // native/WASM runtime in THIS process, and the daemon has died silently
+    // (no JS error, no guard output — a native abort) during exactly this
+    // teardown window under CI load. Sequential closes remove the only
+    // concurrency we control there.
+    for (const db of entries) {
+      const server = runtimes.get(db.instanceName);
+      if (server) {
+        await server.close().catch(() => undefined);
+        runtimes.delete(db.instanceName);
+        releaseAuxPorts(db.instanceName);
+      }
+    }
 
     // Deleting the persisted PGlite data needs SOME resolved `@prisma/dev`
     // module — the app that owns the databases being deleted is the same
@@ -437,7 +558,7 @@ function main(): void {
     // no body, so there is nothing more specific to prefer.
     if (entries.length > 0 && prismaDevModulePathHint) {
       const { deleteServer } = await importPrismaDevInternalState(prismaDevModulePathHint);
-      await Promise.all(entries.map((db) => deleteServer(db.instanceName)));
+      for (const db of entries) await deleteServer(db.instanceName);
     }
 
     delete state[app];
@@ -545,15 +666,35 @@ function main(): void {
   // children (a separate OS process the OS reclaims on its own) or
   // buckets' plain filesystem store.
   async function shutdown(): Promise<void> {
-    await Promise.all(
-      [...runtimes.values()].map((server) => server.close().catch(() => undefined)),
-    );
+    for (const server of runtimes.values()) {
+      await server.close().catch(() => undefined);
+    }
     await stateFile.flush();
     server.close();
     process.exit(0);
   }
   process.on('SIGTERM', () => void shutdown());
   process.on('SIGINT', () => void shutdown());
+
+  // This daemon hosts `@prisma/dev`'s runtime in-process, and a failed or
+  // abandoned start attempt can leave background async work behind whose
+  // eventual rejection would otherwise kill the process (bun and node both
+  // exit on an unhandled rejection). A machine-shared daemon serving every
+  // app's databases must not die because one attempt's debris rejected —
+  // log it (the daemon's stdio is teed to its registry log) and keep
+  // serving; every REQUEST path still reports its own errors as 500s.
+  process.on('unhandledRejection', (reason) => {
+    console.error(
+      'postgres-main: unhandled rejection from background work:',
+      reason instanceof Error ? maskCredentials(reason.stack ?? reason.message) : reason,
+    );
+  });
+  process.on('uncaughtException', (err) => {
+    console.error(
+      'postgres-main: uncaught exception from background work:',
+      err instanceof Error ? maskCredentials(err.stack ?? err.message) : err,
+    );
+  });
 
   readJsonFile(appsJsonPath, isAppsState)
     .then((loaded) => {

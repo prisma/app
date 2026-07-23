@@ -22,7 +22,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import type { LocalTargetProvidersInput } from '@internal/core/config';
-import { instanceNameFor, postgresClient } from '@internal/dev-emulators';
+import { instanceNameFor, postgresClient, slug } from '@internal/dev-emulators';
 import { Connection, Database } from '@internal/lowering/postgres';
 import * as Provider from 'alchemy/Provider';
 import * as Effect from 'effect/Effect';
@@ -75,9 +75,18 @@ export function LocalDatabaseProvider(
         try: async () => {
           const app = appNameOf(input.container);
           const prismaDevModulePath = resolvePrismaDevModulePath(process.cwd());
+          // The daemon's `<id>` path segment must match
+          // /^[a-z0-9][a-z0-9-]*$/ (spec § 2's API hygiene rule) — but a
+          // Database resource's name is hierarchical and dot-separated for
+          // a nested module (e.g. "catalog.database"). Same seam as
+          // compute.ts's `slugServiceId`: the daemon-facing id is the slug;
+          // `slug` is idempotent, so the daemon's own
+          // `instanceNameFor(app, slug(name))` equals
+          // `instanceNameFor(app, name)` — the very name the attributes
+          // below record and `Connection` looks up.
           const { url } = await postgresClient().ensureDatabase(
             app,
-            news.name,
+            slug(news.name),
             prismaDevModulePath,
           );
           const attributes = { id: instanceNameFor(app, news.name), name: news.name, url };

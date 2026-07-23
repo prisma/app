@@ -39,6 +39,43 @@ function servicePortEnvKey(address: string): string {
   return ['COMPOSER', ...segments, 'PORT'].join('_').toUpperCase();
 }
 
+/** The `COMPOSER_<ADDRESS SEGMENTS>_` prefix every env row this address OWNS carries — `configKey`'s convention (see `servicePortEnvKey`'s doc comment). */
+function ownEnvKeyPrefix(address: string): string {
+  const segments = address.split('.').filter((s) => s.length > 0);
+  return `${['COMPOSER', ...segments].join('_').toUpperCase()}_`;
+}
+
+const COMPOSER_NAMESPACE_PREFIX = 'COMPOSER_';
+
+/**
+ * Scopes `env.json` to what THIS service is allowed to see: rows it owns
+ * (`COMPOSER_<its address>_*`) plus every row OUTSIDE the `COMPOSER_`
+ * namespace entirely — the poison `DATABASE_URL(_POOLED)` rows are
+ * deliberately unprefixed and app-wide (local-dev spec § 4's pinned parity
+ * note). The hosted platform materializes the app-wide row set into every
+ * deployment but DIFFS a deployment only on its own referenced rows; an
+ * app-wide LOCAL materialization restart-amplifies instead — an
+ * early-deployed service's snapshot is incomplete on the first converge,
+ * "completes" on the second, and diffs as changed. Scoping the content here
+ * aligns local restart behavior with the platform's diff scope. The dropped
+ * sibling rows have no sanctioned reader: `run()`/`load()` consume only
+ * own-address rows, and ambient sibling reads are exactly what the poison
+ * rows exist to punish.
+ */
+export function scopedEnvRows(
+  allRows: Readonly<Record<string, string>>,
+  address: string,
+): Record<string, string> {
+  const ownPrefix = ownEnvKeyPrefix(address);
+  const scoped: Record<string, string> = {};
+  for (const [key, value] of Object.entries(allRows)) {
+    if (key.startsWith(ownPrefix) || !key.startsWith(COMPOSER_NAMESPACE_PREFIX)) {
+      scoped[key] = value;
+    }
+  }
+  return scoped;
+}
+
 function manifestMissingAddressError(): Error {
   return new Error(
     'artifact manifest carries no address — repackage with a current @prisma/composer.',
@@ -83,12 +120,32 @@ function readManifestAddress(artifactDir: string): string {
   return parsed.address;
 }
 
+/**
+ * The Compute emulator's `<id>` path segment must match
+ * `/^[a-z0-9][a-z0-9-]*$/` (its API hygiene rule, local-dev spec § 2) — but a
+ * service's own address (`news.name`/`news.computeServiceId`) is
+ * hierarchical and dot-separated (e.g. `"orders.service"`, a nested
+ * module's service). This is the seam: every dot (or other disallowed char)
+ * becomes a dash, runs collapse, and the result is what both `ensureService`
+ * and `putDeployment` address the emulator with — the REAL address still
+ * rides the deployment body's `address` field untouched, so the front door
+ * and every listing still show it verbatim (compute-main.ts's `svc.address`
+ * is set from that field, not from the id).
+ */
+function slugServiceId(address: string): string {
+  const slug = address
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug.length > 0 ? slug : 'svc';
+}
+
 async function materializeEnv(
   devDir: string,
   address: string,
   port: number,
 ): Promise<Record<string, string>> {
-  const env: Record<string, string> = { ...(await envStore(devDir).read()) };
+  const env: Record<string, string> = scopedEnvRows(await envStore(devDir).read(), address);
   env[servicePortEnvKey(address)] = JSON.stringify(port);
   const secrets = await secretsStore(devDir).read();
   for (const [key, value] of Object.entries(secrets)) env[key] = value;
@@ -111,7 +168,7 @@ export function LocalComputeServiceProvider(
       Effect.tryPromise({
         try: async () => {
           const app = appNameOf(input.container);
-          const { url } = await computeClient().ensureService(app, news.name);
+          const { url } = await computeClient().ensureService(app, slugServiceId(news.name));
           return { id: news.name, name: news.name, endpointDomain: url };
         },
         catch: (cause) => cause,
@@ -170,6 +227,7 @@ export function LocalDeploymentProvider(
         try: async (): Promise<DeploymentAttributes> => {
           const app = appNameOf(input.container);
           const id = news.computeServiceId;
+          const emulatorId = slugServiceId(id);
 
           const artifactDir = path.join(input.devDir, 'artifacts', news.artifactHash);
           if (!fs.existsSync(artifactDir)) {
@@ -177,9 +235,9 @@ export function LocalDeploymentProvider(
           }
           const address = readManifestAddress(artifactDir);
 
-          const { port } = await computeClient().ensureService(app, id);
+          const { port } = await computeClient().ensureService(app, emulatorId);
           const env = await materializeEnv(input.devDir, address, port);
-          await computeClient().putDeployment(app, id, {
+          await computeClient().putDeployment(app, emulatorId, {
             address,
             artifactDir,
             artifactHash: news.artifactHash,

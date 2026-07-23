@@ -107,17 +107,65 @@ const ALCHEMY_TIMEOUT_MS = 60_000;
 
 let convergeCount = 0;
 
-function alchemyBin(): string {
+function resolveBin(name: string): string | undefined {
   let dir = integrationDir;
   for (;;) {
-    const candidate = path.join(dir, 'node_modules', '.bin', 'alchemy');
+    const candidate = path.join(dir, 'node_modules', '.bin', name);
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);
-    if (parent === dir) {
-      throw new Error(`could not find node_modules/.bin/alchemy above ${integrationDir}`);
-    }
+    if (parent === dir) return undefined;
     dir = parent;
   }
+}
+
+function alchemyBin(): string {
+  const bin = resolveBin('alchemy');
+  if (bin === undefined) {
+    throw new Error(`could not find node_modules/.bin/alchemy above ${integrationDir}`);
+  }
+  return bin;
+}
+
+/** Last `n` lines of a file, or a note explaining why there's nothing to show — never throws. */
+function tailOf(filePath: string, n = 60): string {
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    return `<could not read ${filePath}: ${error instanceof Error ? error.message : String(error)}>`;
+  }
+  const lines = content.split('\n');
+  return lines.slice(-n).join('\n');
+}
+
+/**
+ * Prints everything a failure needs to be diagnosable from CI's own log
+ * output alone — the teed files a failed run left behind are on the runner,
+ * gone the moment the job ends, so their content has to reach stdout/stderr
+ * BEFORE the process exits, not just live on disk. Bounded (tails only),
+ * never throws (a missing file/daemon is itself diagnostic, not fatal to
+ * the diagnostic dump).
+ */
+async function dumpDiagnostics(): Promise<void> {
+  console.error('\n=== diagnostics ===');
+  for (let i = 1; i <= convergeCount; i += 1) {
+    const logFile = path.join(logDir, `converge-${i}.log`);
+    console.error(`\n--- converge-${i}.log (tail) ---`);
+    console.error(tailOf(logFile));
+  }
+  for (const name of ['compute', 'buckets', 'postgres'] as const) {
+    console.error(`\n--- ${name} emulator log (tail) ---`);
+    console.error(tailOf(path.join(emulatorRegistryRoot(), `${name}.log`)));
+  }
+  console.error(`\n--- postgres-main databases (app ${APP_NAME}) ---`);
+  try {
+    console.error(JSON.stringify(await listPostgresDatabases(), null, 2));
+  } catch (error) {
+    console.error(
+      `<postgres-main listing unavailable: ${error instanceof Error ? error.message : String(error)}>`,
+    );
+  }
+  console.error('=== end diagnostics ===\n');
 }
 
 function relImportSpecifier(fromDir: string, toFile: string): string {
@@ -377,6 +425,16 @@ async function main(): Promise<void> {
   bucketsPreExisting = readEmulatorEntry('buckets') !== undefined;
   postgresPreExisting = readEmulatorEntry('postgres') !== undefined;
 
+  // dev.preflight() (unlike every other dev hook here) computes its own
+  // state directory from `process.cwd()` rather than accepting one — every
+  // other call in this script is handed `devDir` explicitly (fixtureDir-
+  // based). This script runs from the package root (test/integration), not
+  // the fixture dir, so preflight must be run with cwd temporarily pointed
+  // at the fixture — otherwise its secrets.json write (S5's secret/env-param
+  // proof) lands somewhere this script never looks. Restored in `finally`.
+  const originalCwd = process.cwd();
+  process.chdir(fixtureDir);
+
   try {
     // 1. Construct the extension with NO PRISMA_* present — proves the
     // scrubbed-env construction requirement through the real factory.
@@ -413,10 +471,16 @@ async function main(): Promise<void> {
     // 4. Assemble both services (real build adapter, hand-written "built" entries).
     const bundles = await assembleFixture();
 
-    // 5. Preflight — this fixture binds no secrets/env-params; must be a no-op.
+    // 5. Preflight — the fixture's secret/env-param proof lives in the
+    // dedicated S5 script (local-dev-criteria-4-5.integration.ts), which
+    // deliberately runs WITHOUT these set; this script sets both so its own
+    // (unrelated) proofs keep passing regardless of shell state.
+    process.env['LOCALDEV_FIXTURE_API_KEY'] = 'test-api-key';
+    process.env['LOCALDEV_FIXTURE_GREETING'] = 'hello';
     if (dev.preflight !== undefined) {
       await dev.preflight({ graph, container: devContainer, stage: undefined });
     }
+    process.chdir(originalCwd);
 
     // 6. Emulators — ensures compute always, buckets because the graph has
     // an `s3`-kinded resource, postgres because the graph has a
@@ -492,12 +556,21 @@ async function main(): Promise<void> {
       'the deployed web child carries COMPOSER_WEB_PORT = the emulator-assigned port, JSON-encoded',
     );
 
-    // secrets.json: no secrets/params in this fixture, so it is either
-    // absent or empty — never populated.
-    const secrets = readJson(path.join(devDir, 'secrets.json'));
-    assert(
-      secrets === undefined || Object.keys(secrets as object).length === 0,
-      'secrets.json must be absent or empty for this fixture',
+    // secrets.json: the shell-sourced secret + env-param this run set above,
+    // verbatim (S5 addition — the placeholder/hard-error paths have their
+    // own dedicated script).
+    const secrets = readJson(path.join(devDir, 'secrets.json')) as Record<string, string>;
+    // Compared as a boolean so the secret's value never rides an assertion
+    // error into the harness's failure log (CodeQL js/clear-text-logging).
+    assertEqual(
+      secrets['LOCALDEV_FIXTURE_API_KEY'] === 'test-api-key',
+      true,
+      'secrets.json carries the shell-sourced secret verbatim',
+    );
+    assertEqual(
+      secrets['LOCALDEV_FIXTURE_GREETING'],
+      'hello',
+      'secrets.json carries the shell-sourced env-param',
     );
 
     // 11. The postgres-main daemon's own listing (REVISED — operator review
@@ -589,6 +662,7 @@ async function main(): Promise<void> {
 
     console.log('PASS: local dev (S4) integration proof');
   } finally {
+    process.chdir(originalCwd);
     await attachment?.stopServices().catch(() => undefined);
 
     // App-scoped teardown through the extension's own public
@@ -636,7 +710,11 @@ main()
   .then(() => {
     process.exitCode = 0;
   })
-  .catch((error: unknown) => {
-    console.error(error instanceof Error ? (error.stack ?? error.message) : error);
+  .catch(async (error: unknown) => {
+    // Mask credentialed URLs (spec's masking contract) — a converge error can
+    // embed a live connection string, and this line reaches CI's public log.
+    const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error(text.replace(/:\/\/([^:@/\s]+):[^@/\s]+@/g, '://$1:***@'));
+    await dumpDiagnostics();
     process.exitCode = 1;
   });
