@@ -581,7 +581,10 @@ the http/shadow/streams aux listeners), since `@prisma/dev`'s registry can
 claim a port no bind probe sees ("belongs to another Prisma Dev server");
 every one of its port-refusal errors carries the offending port as
 `.port`, conflicted ports are excluded from re-allocation, and the
-database port only advances when it was itself the refused one. A start
+database port only advances when it was itself the refused one. The aux
+listener ports (http/shadow/streams) are never persisted, so a refusal
+of one retries with fresh candidates even for an EXISTING record; only
+the database port is frozen once a record exists. A start
 that fails mid-boot can leave its name registered ("A Prisma Dev server
 with the name ... is already running") — the name is namespaced to this
 app+database, so the ghost is ours: adopt the live server when the
