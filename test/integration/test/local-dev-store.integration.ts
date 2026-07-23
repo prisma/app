@@ -201,8 +201,17 @@ function readCatalogDbUrl(): string {
 }
 
 /** Runs `bun`'s built-in SQL client against the real local Postgres URL — the storage layer, never the app's own RPC. */
+/**
+ * `prepare: false` — this script opens a fresh `Bun.SQL` client per call
+ * against the same URL; Bun's prepared-statement cache is keyed by query
+ * TEXT, and a rapid open/close/reopen cycle against the same connection
+ * string can race the previous connection's prepare cleanup, surfacing as
+ * `prepared statement "..." already exists` — confirmed live. This is a
+ * storage-layer proof, not a prepared-statement-caching one, so caching is
+ * simply off.
+ */
 async function withSql<T>(url: string, fn: (sql: Bun.SQL) => Promise<T>): Promise<T> {
-  const sql = new Bun.SQL(url);
+  const sql = new Bun.SQL({ url, prepare: false });
   try {
     return await fn(sql);
   } finally {

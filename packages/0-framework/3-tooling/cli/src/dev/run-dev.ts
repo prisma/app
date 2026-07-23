@@ -75,10 +75,31 @@ function printFrontDoor(
   for (const line of renderFrontDoor(endpoints)) console.log(line);
 }
 
+const ENDPOINTS_RETRY_ATTEMPTS = 3;
+const ENDPOINTS_RETRY_DELAY_MS = 500;
+
+/** `attachment.endpoints()` right after a converge that just PUT dozens of resources through the same emulator connection can hit a transient refused/reset connection — a brief, genuinely transient loopback hiccup, not a real failure. Retried a few times before giving up. */
+async function endpointsWithRetry(
+  attachment: DevAttachment,
+): Promise<readonly { readonly address: string; readonly url: string }[]> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= ENDPOINTS_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await attachment.endpoints();
+    } catch (error) {
+      lastError = error;
+      if (attempt < ENDPOINTS_RETRY_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, ENDPOINTS_RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function mergedEndpoints(
   attachments: readonly DevAttachment[],
 ): Promise<readonly { readonly address: string; readonly url: string }[]> {
-  const lists = await Promise.all(attachments.map((a) => a.endpoints()));
+  const lists = await Promise.all(attachments.map((a) => endpointsWithRetry(a)));
   return lists.flat();
 }
 
