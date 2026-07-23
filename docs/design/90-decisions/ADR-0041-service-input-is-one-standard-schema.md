@@ -149,6 +149,14 @@ document instead of hand-writing the row protocol.
    binding; `service.input()` replaces `config()` and `secrets()`. The
    reserved `port` param and `origin()` (ADR-0039) keep their existing
    channels. Examples and consuming apps migrate mechanically.
+
+   That the framework's own per-service values stay on per-key rows is a
+   limit on this ADR's scope, not a judgement that they belong there — the
+   argument against per-key rows applies to them just as it does to the
+   user's config. Moving them onto a framework-owned document, alongside
+   this one and serialized by the same code, is tracked as its own project
+   ("framework configuration rides the same document as user input") and
+   would supersede this paragraph along with ADR-0031's separate channel.
 2. **Serializer change.** One JSON document row per service plus per-secret
    platform variables, replacing per-key config rows and per-slot pointer
    rows. The `$secret` key is reserved: user data containing it is escaped
