@@ -24,7 +24,7 @@ const RESTART_PROBE_BUDGET_MS = 10_000;
 const RESTART_PROBE_INTERVAL_MS = 500;
 
 /** Lowercases and collapses every run of non-`[a-z0-9]` chars to a single `-`. */
-function slug(value: string): string {
+export function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
