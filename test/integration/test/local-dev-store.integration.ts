@@ -1,19 +1,47 @@
 /**
  * The plan-S5 proving script (plan.md's S5 outcome; local-dev spec's
- * acceptance criteria 1, 3, 6): drives the REAL, published `prisma-composer`
- * binary — `examples/store/node_modules/.bin/prisma-composer` — as a real
- * child process against `examples/store`, a real multi-module app (four
- * services, two Postgres-backed modules, cron), exactly as an operator would
- * run it. Every other integration script in this package drives the
- * pipeline's own functions directly; this one is deliberately at arm's
- * length — the CLI's argv parsing, its own SIGINT handling, and its own
- * process lifetime are themselves what's under test.
+ * acceptance criteria 1, 2, 3, 6): drives the REAL, published
+ * `prisma-composer` binary — `examples/store/node_modules/.bin/prisma-composer`
+ * — as a real child process against `examples/store`, a real multi-module
+ * app (four services, two Postgres-backed modules, cron), exactly as an
+ * operator would run it. Every other integration script in this package
+ * drives the pipeline's own functions directly; this one is deliberately at
+ * arm's length — the CLI's argv parsing, its own SIGINT handling, its own
+ * watch loop, and its own process lifetime are themselves what's under
+ * test.
  *
  * Criteria proved here:
  *   1. Credential-free bring-up: PRISMA_WORKSPACE_ID/PRISMA_SERVICE_TOKEN/
  *      PRISMA_REGION are stripped from the child's env; the front door
  *      (`[dev] ready:` + one line per service) is parsed from real stdout;
  *      an HTTP round-trip against the storefront's URL succeeds.
+ *   2. Rebuild restarts exactly one service: touching ONLY catalog's built
+ *      artifact (so its hash moves, nothing else's) and re-converging
+ *      restarts `catalog.service` alone — every other service's pid is
+ *      unchanged, including its own RPC consumers (`orders.service`,
+ *      `cron.runner`) and everything unrelated (`storefront`,
+ *      `cron.scheduler`). Run twice in a row against the same live session
+ *      — this is the regression proof for the restart-amplification defect
+ *      fixed in compute.ts's `materializeEnv` (see its `scopedEnv` doc
+ *      comment): before that fix, the FIRST rebuild after a cold start
+ *      restarted catalog's RPC consumers too, even though nothing about
+ *      them had changed.
+ *
+ *      NOT driven through the CLI's own file-watch loop: `Bundle` doesn't
+ *      declare `watch` on this branch yet (spec § 3, S2 slice — watch.ts's
+ *      own doc comment), so every service is currently "unwatchable" and a
+ *      file edit is never detected. Session 1's own dev command still
+ *      writes the real dev stack file and sets up containers/emulators
+ *      exactly as a real session would; the artifact is touched, then the
+ *      SAME stack file is re-converged directly with the real `alchemy`
+ *      binary (matching local-dev.integration.ts's own pattern) — this
+ *      re-hashes catalog's now-different bundle bytes and PUTs a fresh
+ *      deployment for every service, letting the emulator's own (untouched)
+ *      hash/env diffing decide which one(s) actually restart. Session 1's
+ *      services are NEVER stopped in between (SIGINT is app-scoped and
+ *      unconditionally restarts every service on the next redeploy — S3's
+ *      own pinned "a stopped service always starts on redeploy" behavior —
+ *      which would defeat this proof entirely).
  *   3. Postgres persistence: a row is written directly against the real
  *      `prisma dev` URL (read from `.prisma-composer/dev/postgres.json`,
  *      never through the app's own RPC surface — this is a storage-layer
@@ -22,9 +50,7 @@
  *   6. Warm restart: the second start's front-door ports match the first's
  *      exactly — no re-provisioning.
  *
- * Not proved here (see the S5 report): criterion 2 (rebuild restarts one
- * service) needs `Bundle.watch`, which isn't on this branch (S2, a sibling
- * slice — see spec.md's Open Questions); criteria 4/5 (bucket, placeholder/
+ * Not proved here (see the S5 report): criteria 4/5 (bucket, placeholder/
  * env-param) are proved against the S4 fixture instead — store declares
  * neither a bucket nor a secret/env-param.
  *
@@ -36,7 +62,11 @@
 
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
+import { containerEnv } from '@prisma/composer/config';
+import { nodeBuild } from '@prisma/composer/node/control';
+import { prismaCloud } from '@prisma/composer-prisma-cloud/control';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`assertion failed: ${message}`);
@@ -104,6 +134,49 @@ function parseFrontDoor(log: string): readonly Endpoint[] | undefined {
     endpoints.push({ address: m[1] as string, url: m[2] as string });
   }
   return endpoints.length > 0 ? endpoints : undefined;
+}
+
+interface EmulatorRegistryEntry {
+  readonly pid: number;
+  readonly port: number;
+}
+
+function isRegistryEntry(value: unknown): value is EmulatorRegistryEntry {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'pid' in value &&
+    typeof value.pid === 'number' &&
+    'port' in value &&
+    typeof value.port === 'number'
+  );
+}
+
+/** The documented on-disk registry contract (spec § 2 daemon.ts) — read directly, same as local-dev.integration.ts. */
+function readComputeEntry(): EmulatorRegistryEntry | undefined {
+  const parsed = readJson(path.join(os.homedir(), '.prisma-composer', 'emulators', 'compute.json'));
+  return isRegistryEntry(parsed) ? parsed : undefined;
+}
+
+interface ServiceInfo {
+  readonly address: string;
+  readonly status: string;
+  readonly pid?: number;
+}
+
+/** The documented Compute-emulator wire protocol (spec § 2 compute-main.ts) — plain fetch, never a typed client. */
+async function listComputeServices(app: string): Promise<readonly ServiceInfo[]> {
+  const entry = readComputeEntry();
+  if (entry === undefined) throw new Error('compute emulator registry entry not found');
+  const res = await fetch(`http://127.0.0.1:${entry.port}/apps/${app}/services`);
+  if (!res.ok) throw new Error(`compute emulator listServices failed: ${res.status}`);
+  return (await res.json()) as ServiceInfo[];
+}
+
+/** Every address's pid, keyed by address — undefined for a stopped/absent service. */
+async function pidsByAddress(app: string): Promise<Record<string, number | undefined>> {
+  const services = await listComputeServices(app);
+  return Object.fromEntries(services.map((s) => [s.address, s.pid]));
 }
 
 async function waitForAsync<T>(
@@ -220,6 +293,81 @@ async function withSql<T>(url: string, fn: (sql: Bun.SQL) => Promise<T>): Promis
 }
 
 const PROVING_PRODUCT_ID = 'proving-row';
+const APP_NAME = 'store';
+const catalogDist = path.join(storeDir, 'modules', 'catalog', 'dist', 'server.mjs');
+const DEV_STACK_FILE = path.join(storeDir, '.prisma-composer', 'dev', 'alchemy.run.ts');
+
+/** Walks up from `startDir` looking for `node_modules/.bin/alchemy` — same as local-dev.integration.ts's own helper. */
+function alchemyBin(startDir: string): string {
+  let dir = startDir;
+  for (;;) {
+    const candidate = path.join(dir, 'node_modules', '.bin', 'alchemy');
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir)
+      throw new Error(`could not find node_modules/.bin/alchemy above ${startDir}`);
+    dir = parent;
+  }
+}
+
+/**
+ * Touches ONLY catalog's built artifact (append a harmless comment — its
+ * content hash moves, nothing else's does), re-runs the node build
+ * adapter's OWN `assemble()` for catalog specifically (it copies the built
+ * runnable into `.prisma-composer/artifacts/catalog.service/bundle/` —
+ * touching the source alone does not move anything alchemy actually reads;
+ * the copy must be refreshed), then re-converges the SAME dev stack file
+ * session 1's own `prisma-composer dev` already wrote, directly with the
+ * real `alchemy` binary — no CLI re-invocation, no SIGINT, session 1's
+ * services stay running throughout. The stack file's `bundles` map needs no
+ * edit: `assemble()`'s output directory is a deterministic function of the
+ * address, so it already points at the freshly-copied bytes. Re-hashing
+ * catalog's now-different bundle and PUTting a fresh deployment for every
+ * service lets the emulator's own (untouched) hash/env diffing decide which
+ * one(s) restart. Returns every service's pid AFTER the converge.
+ */
+async function rebuildCatalogAndReconverge(): Promise<Record<string, number | undefined>> {
+  fs.appendFileSync(catalogDist, `\n// proving-script touch ${Date.now()}\n`);
+
+  const catalogServiceModule = path.join(storeDir, 'modules', 'catalog', 'src', 'service.ts');
+  const buildDescriptor = nodeBuild().nodes['node'];
+  assert(
+    buildDescriptor !== undefined && buildDescriptor.kind === 'build',
+    'nodeBuild() must declare a "node" build descriptor',
+  );
+  await buildDescriptor.assemble({
+    build: {
+      extension: '@prisma/composer/node',
+      type: 'node',
+      module: `file://${catalogServiceModule}`,
+      entry: '../dist/server.mjs',
+    },
+    address: 'catalog.service',
+    cwd: storeDir,
+  });
+
+  const descriptor = prismaCloud();
+  if (descriptor.dev === undefined) throw new Error('no dev descriptor');
+  const container = await descriptor.dev.container.ensure({ appName: APP_NAME, stage: undefined });
+  const envVars = containerEnv(new Map([[descriptor.id, container]]));
+
+  const result = spawnSync(
+    alchemyBin(storeDir),
+    ['deploy', path.relative(storeDir, DEV_STACK_FILE), '--yes', '--stage', 'dev'],
+    { cwd: storeDir, stdio: 'inherit', env: { ...process.env, ...envVars } },
+  );
+  assert(
+    result.status === 0,
+    `re-converge (alchemy deploy) failed with status ${String(result.status)}`,
+  );
+
+  // The pid the emulator reports settles a moment after the converge
+  // completes (the restarted child still needs to actually start).
+  return waitForAsync(async () => {
+    const pids = await pidsByAddress(APP_NAME);
+    return pids['catalog.service'] !== undefined ? pids : undefined;
+  }, 15_000);
+}
 
 async function main(): Promise<void> {
   console.log('local dev (S5 proving): examples/store via the real prisma-composer dev binary');
@@ -248,6 +396,44 @@ async function main(): Promise<void> {
     const firstPortsByAddress = Object.fromEntries(
       session.endpoints.map((e) => [e.address, new URL(e.url).port]),
     );
+
+    // ——— Criterion 2: rebuild restarts exactly one service ———
+    // Regression proof for the restart-amplification defect: run it TWICE
+    // against the SAME live session — the defect this fixes was specific to
+    // the FIRST rebuild after a cold start (env.json's per-service snapshot
+    // was complete only from the second converge onward), so a single
+    // rebuild alone would not have caught it.
+    const ADDRESSES = [
+      'catalog.service',
+      'storefront',
+      'cron.runner',
+      'orders.service',
+      'cron.scheduler',
+    ];
+    const pidsBaseline = await waitForAsync(async () => {
+      const pids = await pidsByAddress(APP_NAME);
+      return ADDRESSES.every((a) => pids[a] !== undefined) ? pids : undefined;
+    }, 15_000);
+
+    let pidsBefore = pidsBaseline;
+    for (const attempt of [1, 2] as const) {
+      const pidsAfter = await rebuildCatalogAndReconverge();
+      assert(
+        pidsAfter['catalog.service'] !== pidsBefore['catalog.service'],
+        `criterion 2 (attempt ${attempt}): catalog.service must restart (new pid)`,
+      );
+      for (const address of ['storefront', 'cron.runner', 'orders.service', 'cron.scheduler']) {
+        assertEqual(
+          pidsAfter[address],
+          pidsBefore[address],
+          `criterion 2 (attempt ${attempt}): ${address}'s pid must NOT change — only catalog.service was rebuilt`,
+        );
+      }
+      console.log(
+        `[proving] PASS criterion 2 (attempt ${attempt}): exactly catalog.service restarted, all four others unchanged`,
+      );
+      pidsBefore = pidsAfter;
+    }
 
     // ——— Criterion 3 (write half): a row through the real local Postgres URL ———
     const dbUrl = readCatalogDbUrl();
@@ -315,18 +501,30 @@ async function main(): Promise<void> {
     );
     console.log('[proving] PASS criterion 3 (--fresh): the prior instance and its data are gone');
 
-    console.log('PASS: local dev (S5 proving) — examples/store, criteria 1/3/6');
+    console.log('PASS: local dev (S5 proving) — examples/store, criteria 1/2/3/6');
   } finally {
     if (session !== undefined) {
       await stopDev(session).catch(() => undefined);
     }
     // Final app-scoped teardown, mirroring local-dev.integration.ts: never
     // touch the machine-global emulator daemons, only this app's own
-    // records — `--fresh` then Ctrl-C leaves nothing running and no data
-    // behind for the next run.
+    // records. `--fresh` teardown only runs BEFORE that session's own
+    // (mandatory) converge, never after — so `startDev(true)` + `stopDev`
+    // alone still leaves the `prisma dev` postgres instances THIS cleanup
+    // session's own converge just recreated. Call `dev.teardown` directly
+    // afterward to actually remove them (`--fresh` then Ctrl-C then
+    // teardown leaves nothing running and no data behind for the next run).
     try {
       const cleanup = await startDev(true);
       await stopDev(cleanup);
+      const descriptor = prismaCloud();
+      if (descriptor.dev?.teardown !== undefined) {
+        const container = await descriptor.dev.container.ensure({
+          appName: APP_NAME,
+          stage: undefined,
+        });
+        await descriptor.dev.teardown({ container, stage: undefined });
+      }
     } catch (error) {
       console.error(
         `[proving] final --fresh cleanup did not complete cleanly: ${error instanceof Error ? error.message : String(error)}`,
