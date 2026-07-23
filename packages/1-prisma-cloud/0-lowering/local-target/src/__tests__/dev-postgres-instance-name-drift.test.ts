@@ -116,7 +116,7 @@ describe('instance-name drift (delta review finding A, #160)', () => {
     // `invalid path segment "catalog.database"` before the request ever
     // left the process — observed live against examples/store.
     const DOTTED_ID = 'catalog.database';
-    const input: DevProvidersInput = {
+    const input: LocalTargetProvidersInput = {
       container: fakeContainer(APP),
       devDir: '/dev/null/unused',
     };

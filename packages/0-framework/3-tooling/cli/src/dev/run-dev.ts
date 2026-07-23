@@ -9,8 +9,8 @@ import * as path from 'node:path';
 import type { RunAssembler } from '@internal/assemble';
 import type { ContainerInstance, PrismaAppConfig } from '@internal/core/config';
 import { containerEnv } from '@internal/core/config';
-import type { DevAttachment, DevExtensionDescriptor } from '@internal/core/dev';
-import { DEV_DIR, resolveDevDescriptors } from '@internal/core/dev';
+import type { LocalTargetAttachment, LocalTargetDescriptor } from '@internal/core/local-target';
+import { DEV_DIR, resolveLocalTargets } from '@internal/core/local-target';
 import { CliError } from '../cli-error.ts';
 import { type PipelineDeps, runPipeline } from '../pipeline.ts';
 import { type RunAlchemyInput, runAlchemy } from '../run-alchemy.ts';
@@ -61,7 +61,7 @@ const ENDPOINTS_RETRY_DELAY_MS = 500;
 
 /** `attachment.endpoints()` right after a converge that just PUT dozens of resources through the same emulator connection can hit a transient refused/reset connection — a brief, genuinely transient loopback hiccup, not a real failure. Retried a few times before giving up. */
 async function endpointsWithRetry(
-  attachment: DevAttachment,
+  attachment: LocalTargetAttachment,
 ): Promise<readonly { readonly address: string; readonly url: string }[]> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= ENDPOINTS_RETRY_ATTEMPTS; attempt += 1) {
@@ -78,14 +78,14 @@ async function endpointsWithRetry(
 }
 
 async function mergedEndpoints(
-  attachments: readonly DevAttachment[],
+  attachments: readonly LocalTargetAttachment[],
 ): Promise<readonly { readonly address: string; readonly url: string }[]> {
   const lists = await Promise.all(attachments.map((a) => endpointsWithRetry(a)));
   return lists.flat();
 }
 
 /** Pumps every attachment's merged log stream to stdout, each line prefixed `[<service>] `, until `signal` aborts. */
-function pumpLogs(attachments: readonly DevAttachment[], signal: AbortSignal): void {
+function pumpLogs(attachments: readonly LocalTargetAttachment[], signal: AbortSignal): void {
   for (const attachment of attachments) {
     void (async () => {
       try {
@@ -120,12 +120,13 @@ export async function runDev(args: DevArgs, deps: DevRunDeps = {}): Promise<numb
   );
 
   // 2. Dev-capability check — resolve every non-build-only extension's lazy
-  // `dev` thunk ONCE (ADR-0041's lazy dev reference); its pinned error names
-  // any extension without dev support, and build-only extensions are exempt
-  // inside it. Every subsequent hook call runs off this resolved map.
-  let resolved: ReadonlyMap<string, DevExtensionDescriptor>;
+  // `localTarget` thunk ONCE (ADR-0041's lazy reference); its pinned error
+  // names any extension without local-target support, and build-only
+  // extensions are exempt inside it. Every subsequent hook call runs off
+  // this resolved map.
+  let resolved: ReadonlyMap<string, LocalTargetDescriptor>;
   try {
-    resolved = await resolveDevDescriptors(config);
+    resolved = await resolveLocalTargets(config);
   } catch (error) {
     throw toCliError(error);
   }
@@ -204,7 +205,7 @@ export async function runDev(args: DevArgs, deps: DevRunDeps = {}): Promise<numb
   // 8. Attach: start every stopped service (session resume — a no-op converge
   // cannot restart what a previous session's Ctrl-C stopped), then print the
   // front door and pump merged logs.
-  const attachments: DevAttachment[] = [];
+  const attachments: LocalTargetAttachment[] = [];
   for (const [id, dev] of resolved) {
     attachments.push(await dev.attach({ container: containers.get(id), devDir }));
   }

@@ -453,8 +453,8 @@ async function rebuildCatalogAndReconverge(): Promise<Record<string, number | un
   });
 
   const descriptor = prismaCloud();
-  if (descriptor.dev === undefined) throw new Error('no dev descriptor');
-  const dev = await descriptor.dev();
+  if (descriptor.localTarget === undefined) throw new Error('no localTarget descriptor');
+  const dev = await descriptor.localTarget();
   const container = await dev.container.ensure({ appName: APP_NAME, stage: undefined });
   const envVars = containerEnv(new Map([[descriptor.id, container]]));
 
@@ -657,7 +657,7 @@ async function main(): Promise<void> {
       const cleanup = await startDev(true);
       await stopDev(cleanup);
       const descriptor = prismaCloud();
-      const dev = descriptor.dev === undefined ? undefined : await descriptor.dev();
+      const dev = descriptor.localTarget === undefined ? undefined : await descriptor.localTarget();
       if (dev?.teardown !== undefined) {
         const container = await dev.container.ensure({
           appName: APP_NAME,

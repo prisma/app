@@ -5,9 +5,10 @@
  * door (run-dev.ts), so core's presentation-free lower() gets nothing to
  * call back into. The generated module IS the one orchestration point where
  * dev provenance is resolved (spec § 3 REVISED): it deserializes the
- * containers, top-level-awaits `resolveDevDescriptors(config)` (the lazy
- * dev thunks, ADR-0041), and passes `providers: devProviders(...)` +
- * `state: localState()` explicitly — `lower()` learns nothing about dev.
+ * containers, top-level-awaits `resolveLocalTargets(config)` (the lazy
+ * `localTarget` thunks, ADR-0041), and passes
+ * `providers: localTargetProviders(...)` + `state: localState()` explicitly
+ * — `lower()` learns nothing about dev.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -51,7 +52,7 @@ function renderOptions(input: DevStackFileInput): string {
   }
   lines.push('  },');
 
-  lines.push('  providers: devProviders(resolved, containers, devDir),');
+  lines.push('  providers: localTargetProviders(resolved, containers, devDir),');
   lines.push('  state: localState(),');
 
   return lines.join('\n');
@@ -72,13 +73,13 @@ export function renderDevStackFile(input: DevStackFileInput): string {
 import * as path from 'node:path';
 import { deserializeContainers } from '@prisma/composer/config';
 import { lower } from '@prisma/composer/deploy';
-import { DEV_DIR, devProviders, resolveDevDescriptors } from '@prisma/composer/dev';
+import { DEV_DIR, localTargetProviders, resolveLocalTargets } from '@prisma/composer/local-target';
 import { localState } from 'alchemy/State/LocalState';
 import config from ${quote(configImport)};
 import app from ${quote(appImport)};
 
 const containers = deserializeContainers(config.extensions, process.env);
-const resolved = await resolveDevDescriptors(config);
+const resolved = await resolveLocalTargets(config);
 const devDir = path.join(process.cwd(), DEV_DIR);
 
 export default lower(app, config, {
