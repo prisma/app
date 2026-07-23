@@ -36,6 +36,58 @@ function servicePortEnvKey(address: string): string {
   return ['COMPOSER', ...segments, 'PORT'].join('_').toUpperCase();
 }
 
+/**
+ * The `COMPOSER_<ADDRESS SEGMENTS>_` prefix every env.json row this address
+ * owns starts with — mirrors `serializer.ts`'s `configKey`: "every generated
+ * key lives in the framework's reserved COMPOSER_ namespace", segmented by
+ * the OWNING node's own address (never the address of whatever it happens
+ * to reference — a consumer's own "producerUrl" row is prefixed with the
+ * CONSUMER's address, not the producer's). Same layer-order duplication as
+ * `servicePortEnvKey` above.
+ */
+function addressEnvPrefix(address: string): string {
+  const segments = address.split('.').filter((s) => s.length > 0);
+  return `${['COMPOSER', ...segments].join('_').toUpperCase()}_`;
+}
+
+/**
+ * Restricts `env` to the rows a service at `address` could ever read at
+ * boot: its own `COMPOSER_<address>_...` rows, plus every row OUTSIDE the
+ * `COMPOSER_` namespace entirely (the poison `DATABASE_URL(_POOLED)` rows,
+ * deliberately unprefixed and app-wide — serializer.ts's own comment: "so
+ * they stay unprefixed, they are the platform's own names"). A row prefixed
+ * for some OTHER address (e.g. `COMPOSER_ORDERS_SERVICE_CATALOG_URL`,
+ * cron-runner's or orders' own "where is catalog" row) is invisible to this
+ * service's own `deserialize()` regardless — it never constructs that key,
+ * so dropping it from the materialized env changes nothing observable.
+ *
+ * This is what makes a service's own deployed env byte-stable across
+ * converges: unscoped, `materializeEnv` spread env.json's WHOLE, growing
+ * file — on the very first converge, a service deployed early in
+ * topological order (e.g. an RPC provider like catalog, ahead of its own
+ * consumers) sees an env.json that doesn't yet hold rows a LATER-deployed
+ * service in the SAME converge is about to write (a consumer's own
+ * "producerUrl"/"serviceKey" row can only exist once the consumer's own
+ * serialize step has run, which is ordered after the producer's). From the
+ * second converge onward those rows already persist from the prior run, so
+ * the same early-deployed service's snapshot is suddenly complete —
+ * genuinely different bytes with nothing about the service itself having
+ * changed, which the emulator's (correct, unweakened) hash/env diffing
+ * reads as "this deployment changed" and restarts it. Scoping removes the
+ * dependency on unrelated services' completion order entirely: a service's
+ * own rows are always fully written before ITS OWN Deployment reconcile
+ * runs (same-node pipeline order), so its filtered env is complete and
+ * stable starting from the very first converge.
+ */
+function scopedEnv(env: Readonly<Record<string, string>>, address: string): Record<string, string> {
+  const prefix = addressEnvPrefix(address);
+  const scoped: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (key.startsWith(prefix) || !key.startsWith('COMPOSER_')) scoped[key] = value;
+  }
+  return scoped;
+}
+
 function missingServiceAddressError(computeServiceId: string): Error {
   return new Error(
     `Deployment for "${computeServiceId}" carries no serviceAddress — the lowering predates ` +
@@ -68,7 +120,7 @@ async function materializeEnv(
   address: string,
   port: number,
 ): Promise<Record<string, string>> {
-  const env: Record<string, string> = { ...(await envStore(devDir).read()) };
+  const env = scopedEnv(await envStore(devDir).read(), address);
   env[servicePortEnvKey(address)] = JSON.stringify(port);
   const secrets = await secretsStore(devDir).read();
   for (const [key, value] of Object.entries(secrets)) env[key] = value;
