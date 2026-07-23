@@ -1,15 +1,14 @@
-/** The local providers' shared read of the resolved dev container's app name (local-dev spec § 4). */
 import type { ContainerInstance } from '@internal/core/config';
 
 function containerNotResolvedError(): Error {
   return new Error(
-    "local dev: no container was resolved for this provider — the extension's `dev.container` " +
-      'descriptor did not run before converge.',
+    "local dev: no container was resolved for this provider — the extension's " +
+      '`localTarget.container` descriptor did not run before converge.',
   );
 }
 
 /**
- * Every local provider's emulator app namespace is its resolved dev
+ * Every local provider's emulator app namespace is its resolved local
  * container's `input.appName` — a field already on core's generic
  * `ContainerInstance` (no narrowing to a target-specific container class
  * needed for it). Narrowing to e.g. the prisma-cloud target's
