@@ -84,13 +84,15 @@ tests; README embedded + SPA-alternative sections complete.
 **Builds on:** S1 (S2's `email` input lands in whichever of S2/S4 merges
 second — coordinate at pickup). **Parallel with:** S2, S3.
 
-### S5 (proposed) — `rpc-port-isolation`
+### ~~S5~~ → branched out: the `wired-egress` project
 
-**Status: pending operator confirmation** (raised from D5's dispatch
-collision + the service-level key-acceptance gap). Draft spec:
-`slices/rpc-port-isolation/spec.md`. If confirmed: sequence before S3's
-deployed consumer example (the admin port should be transport-isolated
-before it ships anywhere real); Linear issue created on confirmation.
+Will's call (2026-07-23): this outgrew the auth project. Design record
+lives at `.drive/projects/wired-egress/` on branch
+`claude/wired-egress-project` (spec, design notes, origin/cross-refs).
+The superseded local draft remains at `slices/rpc-port-isolation/spec.md`
+for history. Open dependency: the S3 sequencing decision (ship the
+consumer example on flat dispatch vs wait for wired-egress slice 1) is
+taken at S3 pickup, with the platform team's multi-port answer in hand.
 
 ## Sequencing
 
