@@ -302,7 +302,7 @@ function resolveOptions(opts: PrismaCloudOptions): ResolvedCloudOptions {
  * (inside a node descriptor's `provision`/`serialize`), never at `prismaCloud()`
  * construction. The node descriptors take this thunk, not a resolved value
  * (local-dev spec § 5): `prismaCloud()` itself must construct with no
- * environment present, since it also builds the `dev` descriptor, which must
+ * environment present, since it also builds the `localTarget` descriptor, which must
  * never require `PRISMA_WORKSPACE_ID`/`PRISMA_REGION`/`PRISMA_SERVICE_TOKEN`.
  */
 function lazyOptions(opts: PrismaCloudOptions): () => ResolvedCloudOptions {
@@ -387,11 +387,14 @@ export const prismaCloud = (opts: PrismaCloudOptions = {}): ExtensionDescriptor 
     },
 
     // A lazy reference, not the descriptor (ADR-0041, operator directive):
-    // this control entry must carry no dev implementation code, so the ONE
-    // line here is a dynamic import of this extension's own SEPARATE dev
-    // entry (`src/exports/dev.ts` → `@prisma/composer-prisma-cloud/dev`) —
-    // never a static import. `resolveDevDescriptors` (core) is the only
-    // caller.
-    dev: () => import('@prisma/composer-prisma-cloud/dev').then((m) => m.devDescriptor()),
+    // this control entry must carry no local-target implementation code, so
+    // the ONE line here is a dynamic import of this extension's own
+    // SEPARATE local-target entry (`src/exports/local-target.ts` →
+    // `@prisma/composer-prisma-cloud/local-target`) — never a static
+    // import. `resolveLocalTargets` (core) is the only caller. "dev" names
+    // the user-facing feature only (naming, operator 2026-07-23) — the seam
+    // itself is `localTarget`.
+    localTarget: () =>
+      import('@prisma/composer-prisma-cloud/local-target').then((m) => m.localTargetDescriptor()),
   };
 };

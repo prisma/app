@@ -32,26 +32,35 @@ const leanTokens = [
   '"node:', // a node:-scheme import always appears quoted in a bundle
 ];
 
-describe('entry map: core splits into authoring + deploy + dev — no runtime entry', () => {
-  test("package.json exports '.', './deploy', './config', './dev', and './testing' (casts/assertions live in @internal/foundation)", () => {
+describe('entry map: core splits into authoring + deploy + local-target — no runtime entry', () => {
+  test("package.json exports '.', './deploy', './config', './local-target', and './testing' (casts/assertions live in @internal/foundation)", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
     // `./package.json` is a conventional manifest export, not a code entry.
     const codeEntries = Object.keys(pkg.exports).filter((k) => k !== './package.json');
-    expect(codeEntries.sort()).toEqual(['.', './config', './deploy', './dev', './testing']);
+    expect(codeEntries.sort()).toEqual([
+      '.',
+      './config',
+      './deploy',
+      './local-target',
+      './testing',
+    ]);
   });
 
   // ADR-0041's own firewall: `/deploy` and the root `.` entry must never
-  // carry anything dev-flavored — `lower()` is provenance-ignorant (REVISED,
-  // operator review of #162), so nothing in its own module or the authoring
-  // barrel should mention dev's own vocabulary at all.
-  test("'./deploy' and '.' export no dev-flavored name — dev's own subpath is the only door to it", () => {
+  // carry anything local-target-flavored — `lower()` is provenance-ignorant
+  // (REVISED, operator review of #162), so nothing in its own module or the
+  // authoring barrel should mention the local target's own vocabulary at
+  // all. "dev" names the user-facing feature only (naming, operator
+  // 2026-07-23); DEV_DIR is exempt from that check since it's the
+  // user-facing state dir, not seam vocabulary.
+  test("'./deploy' and '.' export no local-target-flavored name — /local-target is the only door to it", () => {
     const deployText = fs.readFileSync(path.join(srcDir, 'exports', 'deploy.ts'), 'utf8');
     const indexText = fs.readFileSync(path.join(srcDir, 'exports', 'index.ts'), 'utf8');
     const devTokens = [
-      'devProviders',
-      'resolveDevDescriptors',
-      'DevExtensionDescriptor',
-      'DevProvidersInput',
+      'localTargetProviders',
+      'resolveLocalTargets',
+      'LocalTargetDescriptor',
+      'LocalTargetProvidersInput',
       'DEV_DIR',
     ];
     for (const token of devTokens) {

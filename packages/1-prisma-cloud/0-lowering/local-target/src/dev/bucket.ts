@@ -1,11 +1,11 @@
 /**
  * Local bucket-cluster providers (local-dev spec § 4): both `Bucket` and
  * `BucketKey` are clients of the machine-global bucket emulator — already up
- * by the time these run, since the extension's `dev.emulators` hook ensures
- * it before converge.
+ * by the time these run, since the extension's `localTarget.emulators` hook
+ * ensures it before converge.
  */
 import * as path from 'node:path';
-import type { DevProvidersInput } from '@internal/core/config';
+import type { LocalTargetProvidersInput } from '@internal/core/config';
 import { bucketsClient } from '@internal/dev-emulators';
 import { Bucket, BucketKey } from '@internal/lowering/buckets';
 import { mintKeyPair } from '@internal/s3-protocol';
@@ -17,7 +17,7 @@ import { appNameOf } from './app-name.ts';
 
 /** `Bucket` → registers `<app>--<news.name>` with the bucket emulator, backed by an in-project data root. */
 export function LocalBucketProvider(
-  input: DevProvidersInput,
+  input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<Bucket>> {
   const service: Provider.ProviderService<Bucket> = {
     list: () => Effect.succeed([]),
@@ -46,7 +46,7 @@ export function LocalBucketProvider(
  * next converge.
  */
 export function LocalBucketKeyProvider(
-  input: DevProvidersInput,
+  input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<BucketKey>> {
   const service: Provider.ProviderService<BucketKey> = {
     list: () => Effect.succeed([]),

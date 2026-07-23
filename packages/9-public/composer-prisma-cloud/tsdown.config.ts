@@ -45,7 +45,7 @@ export default defineConfig([
     entry: {
       index: 'src/exports/index.ts',
       control: 'src/exports/control.ts',
-      dev: 'src/exports/dev.ts',
+      'local-target': 'src/exports/local-target.ts',
       'prisma-next': 'src/exports/prisma-next.ts',
       testing: 'src/exports/testing.ts',
     },
@@ -86,10 +86,11 @@ export default defineConfig([
     // `@internal/dev-emulators` package is never installed standalone.
     // outDir is the DEFAULT `dist` (not a subdirectory): `readOwnVersion()`
     // (baked into every one of these programs AND into this package's own
-    // `dev.mjs`, which calls `ensureDaemon`) resolves `../package.json`
-    // relative to its own file — both sides must sit at the SAME depth
-    // under `dist/` or they read different package.json files and disagree
-    // on "own version", breaking `ensureDaemon`'s staleness check.
+    // `local-target.mjs`, which calls `ensureDaemon`) resolves
+    // `../package.json` relative to its own file — both sides must sit at
+    // the SAME depth under `dist/` or they read different package.json
+    // files and disagree on "own version", breaking `ensureDaemon`'s
+    // staleness check.
     ...baseConfig,
     dts: false,
     entry: {

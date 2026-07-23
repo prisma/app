@@ -7,7 +7,7 @@
     ".": "./dist/index.mjs",
     "./connection": "./dist/connection.mjs",
     "./control": "./dist/control.mjs",
-    "./dev": "./dist/dev.mjs",
+    "./local-target": "./dist/local-target.mjs",
     "./prisma-next": "./dist/prisma-next.mjs",
     "./testing": "./dist/testing.mjs",
     "./package.json": "./package.json"

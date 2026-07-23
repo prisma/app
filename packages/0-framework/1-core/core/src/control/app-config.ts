@@ -65,15 +65,18 @@ export interface ExtensionDescriptor {
    */
   readonly container?: ContainerDescriptor;
   /**
-   * Local dev counterparts (ADR-0041) — a LAZY reference: an async thunk,
-   * never the descriptor object itself. This keeps the production control
-   * entry's static import graph free of dev implementation code (operator
+   * The extension's LOCAL TARGET counterpart (ADR-0041; naming, operator
+   * 2026-07-23 — "dev" names the user-facing feature only, the seam takes
+   * the concept's real noun) — a LAZY reference: an async thunk, never the
+   * descriptor object itself. This keeps the production control entry's
+   * static import graph free of local-target implementation code (operator
    * directive) — the thunk is one line, dynamically importing the
-   * extension's own dev entry by bare specifier
-   * (e.g. `() => import('@prisma/composer-prisma-cloud/dev').then((m) => m.devDescriptor())`),
-   * so nothing dev-flavored is bundled into, or loaded by, any deploy path.
+   * extension's own local-target entry by bare specifier
+   * (e.g. `() => import('@prisma/composer-prisma-cloud/local-target').then((m) => m.localTargetDescriptor())`),
+   * so nothing local-target-flavored is bundled into, or loaded by, any
+   * deploy path.
    */
-  readonly dev?: () => Promise<DevExtensionDescriptor>;
+  readonly localTarget?: () => Promise<LocalTargetDescriptor>;
 }
 
 /**
@@ -105,30 +108,30 @@ export interface TeardownInput {
   readonly stage: string | undefined;
 }
 
-/** The extension's dev-mode counterpart (ADR-0041) — the dev variant OF ExtensionDescriptor, hence the full qualifier. An extension without one is not dev-capable. */
-export interface DevExtensionDescriptor {
+/** The extension's LOCAL TARGET counterpart (ADR-0041) — the local-target variant OF ExtensionDescriptor, hence the full qualifier. An extension without one is not local-target-capable (cannot back the "dev" feature). */
+export interface LocalTargetDescriptor {
   /** Local providers for the SAME resource types this extension's lowering emits. Receives the app identity — unlike deploy's env-arg-free `providers()`, local providers are emulator clients and must know which app they provision for. */
-  providers(input: DevProvidersInput): Layer.Layer<never>;
+  providers(input: LocalTargetProvidersInput): Layer.Layer<never>;
   /** A stable local identity — resolved without any platform call. */
   readonly container: ContainerDescriptor;
-  /** Dev value sourcing (secrets/env-params) — runs where deploy's preflight runs. */
+  /** Value sourcing (secrets/env-params) — runs where deploy's preflight runs. */
   preflight?(input: PreflightInput): Promise<void>;
   /** Ensure the emulator daemons this topology's node kinds need are running (idempotent; they persist across sessions). */
-  emulators?(input: DevEmulatorsInput): Promise<void>;
+  emulators?(input: LocalTargetEmulatorsInput): Promise<void>;
   /** The dev session's view of the running app. Core renders it and never learns an emulator's API. */
-  attach(input: DevAttachInput): Promise<DevAttachment>;
+  attach(input: LocalTargetAttachInput): Promise<LocalTargetAttachment>;
   /** `--fresh`: remove every local trace of the dev instance — emulator instances, state, data. */
   teardown?(input: TeardownInput): Promise<void>;
 }
 
-export interface DevProvidersInput {
-  /** This extension's resolved dev container (its `input.appName` is the emulator app namespace). */
+export interface LocalTargetProvidersInput {
+  /** This extension's resolved local-target container (its `input.appName` is the emulator app namespace). */
   readonly container: ContainerInstance | undefined;
   /** Absolute path of the dev state directory (`<cwd>/.prisma-composer/dev`). */
   readonly devDir: string;
 }
 
-export interface DevEmulatorsInput {
+export interface LocalTargetEmulatorsInput {
   /** The loaded application graph — inspected for which node kinds need an emulator. */
   readonly graph: Graph;
   readonly container: ContainerInstance | undefined;
@@ -136,12 +139,12 @@ export interface DevEmulatorsInput {
   readonly devDir: string;
 }
 
-export interface DevAttachInput {
+export interface LocalTargetAttachInput {
   readonly container: ContainerInstance | undefined;
   readonly devDir: string;
 }
 
-export interface DevAttachment {
+export interface LocalTargetAttachment {
   /** Every service's local endpoint, for the front door. */
   endpoints(): Promise<readonly { readonly address: string; readonly url: string }[]>;
   /** Merged, line-oriented log stream across the app's services (including services that appear after later converges). Ends when `signal` aborts. */
@@ -150,15 +153,16 @@ export interface DevAttachment {
   stopServices(): Promise<void>;
 }
 
-/** `<cwd>/.prisma-composer/dev` — the dev instance's app-scoped state directory (ADR-0041, ADR-0004's tool-state rule). */
+/** `<cwd>/.prisma-composer/dev` — the dev instance's app-scoped state directory (ADR-0041, ADR-0004's tool-state rule). "dev" names the user-facing feature/dir (naming, operator 2026-07-23) — this constant's name and value are unchanged by the localTarget rename. */
 export const DEV_DIR = '.prisma-composer/dev';
 
 /**
  * True when an extension only participates in assembly (every `nodes` entry
  * is `kind: 'build'`, and it declares none of `providers`/`application`/
  * `provisions`/`container`) — it owns no resources or services, so it has
- * nothing to emulate and is exempt from dev-capability requirements
- * (ADR-0041). Shared by `mergedDevProviders` and every dev hook iteration.
+ * nothing to emulate and is exempt from local-target-capability requirements
+ * (ADR-0041). Shared by `localTargetProviders` and every local-target hook
+ * iteration.
  */
 export function isBuildOnlyExtension(extension: ExtensionDescriptor): boolean {
   return (

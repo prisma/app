@@ -19,9 +19,10 @@
  * redirect them to an isolated registry from here: `ensureDaemon`'s own
  * `{registryRoot}` override is real, but reaching it would mean importing
  * `@internal/dev-emulators` directly, which a test importing only 9-public
- * cannot do, and `DevEmulatorsInput`/`DevProvidersInput` (the public surface)
- * carry no such field by design — dev's local providers are never meant to
- * target anything but the one real registry. (A `$HOME` redirect was tried
+ * cannot do, and `LocalTargetEmulatorsInput`/`LocalTargetProvidersInput`
+ * (the public surface) carry no such field by design — the local
+ * providers are never meant to target anything but the one real registry.
+ * (A `$HOME` redirect was tried
  * and does NOT work: bun's `os.homedir()` does not observe an in-process
  * `process.env.HOME` mutation made after startup, and a spawned child's
  * `os.homedir()` was confirmed — by checking the real
@@ -65,8 +66,8 @@ import * as path from 'node:path';
 import { Load } from '@prisma/composer';
 import type {
   ContainerInstance,
-  DevAttachment,
   ExtensionDescriptor,
+  LocalTargetAttachment,
 } from '@prisma/composer/config';
 import { containerEnv, DEV_DIR } from '@prisma/composer/config';
 import { nodeBuild } from '@prisma/composer/node/control';
@@ -159,26 +160,26 @@ function renderDevStackFile(bundles: Record<string, FixtureBundle>): string {
     .join('\n');
   // Hand-written for the S4 integration proof — S5 owns generate-dev-stack.ts.
   // This module IS the one orchestration point (deploy.ts's REVISED —
-  // operator review of #162): `lower()` itself learns nothing about dev;
-  // this file resolves the app's dev descriptors and containers itself and
-  // passes `providers:` + `state:` explicitly, exactly like the real
-  // generated dev stack module will.
+  // operator review of #162): `lower()` itself learns nothing about the
+  // local target; this file resolves the app's local-target descriptors
+  // and containers itself and passes `providers:` + `state:` explicitly,
+  // exactly like the real generated dev stack module will.
   return `import { deserializeContainers } from '@prisma/composer/config';
 import { lower } from '@prisma/composer/deploy';
-import { DEV_DIR, devProviders, resolveDevDescriptors } from '@prisma/composer/dev';
+import { DEV_DIR, localTargetProviders, resolveLocalTargets } from '@prisma/composer/local-target';
 import { localState } from 'alchemy/State/LocalState';
 import config from ${JSON.stringify(configImport)};
 import app from ${JSON.stringify(appImport)};
 
 const containers = deserializeContainers(config.extensions, process.env);
-const resolved = await resolveDevDescriptors(config);
+const resolved = await resolveLocalTargets(config);
 
 export default lower(app, config, {
   name: ${JSON.stringify(APP_NAME)},
   bundles: {
 ${bundleLines}
   },
-  providers: devProviders(resolved, containers, \`\${process.cwd()}/\${DEV_DIR}\`),
+  providers: localTargetProviders(resolved, containers, \`\${process.cwd()}/\${DEV_DIR}\`),
   state: localState(),
 });
 `;
@@ -360,7 +361,7 @@ async function main(): Promise<void> {
 
   let descriptor: ExtensionDescriptor | undefined;
   let devContainer: ContainerInstance | undefined;
-  let attachment: DevAttachment | undefined;
+  let attachment: LocalTargetAttachment | undefined;
   // Baseline, read BEFORE this test touches anything — only a daemon this
   // test itself caused to start gets stopped at the end; a daemon another
   // real session already had running is left alone (D4/D12: --fresh, and by
@@ -392,15 +393,18 @@ async function main(): Promise<void> {
       if (savedServiceToken !== undefined) process.env['PRISMA_SERVICE_TOKEN'] = savedServiceToken;
       if (savedRegion !== undefined) process.env['PRISMA_REGION'] = savedRegion;
     }
-    assert(descriptor.dev !== undefined, 'prismaCloud() must declare a dev descriptor');
+    assert(
+      descriptor.localTarget !== undefined,
+      'prismaCloud() must declare a localTarget descriptor',
+    );
 
     // 2. The dev container — a purely local identity, no platform call. The
-    // `dev` field is a lazy thunk (ADR-0041's lazy dev reference) — resolve
-    // it once, mirroring what `resolveDevDescriptors` does for the stack
-    // module above.
-    const devThunk = descriptor.dev;
-    if (devThunk === undefined) throw new Error('expected a dev descriptor');
-    const dev = await devThunk();
+    // `localTarget` field is a lazy thunk (ADR-0041's lazy local-target
+    // reference) — resolve it once, mirroring what `resolveLocalTargets`
+    // does for the stack module above.
+    const localTargetThunk = descriptor.localTarget;
+    if (localTargetThunk === undefined) throw new Error('expected a localTarget descriptor');
+    const dev = await localTargetThunk();
     devContainer = await dev.container.ensure({ appName: APP_NAME, stage: undefined });
 
     // 3. Load the graph (mirrors the CLI pipeline's own Load step).
@@ -587,14 +591,15 @@ async function main(): Promise<void> {
   } finally {
     await attachment?.stopServices().catch(() => undefined);
 
-    // App-scoped teardown through the extension's own public dev.teardown —
-    // never stops the daemons themselves (D4/D12), just this app's records
-    // on each daemon (postgres's own DELETE closes its servers and deletes
-    // their persisted data) and its dev state directory.
-    if (descriptor?.dev !== undefined) {
-      const resolvedDev = await descriptor.dev().catch(() => undefined);
-      if (resolvedDev?.teardown !== undefined) {
-        await resolvedDev
+    // App-scoped teardown through the extension's own public
+    // localTarget.teardown — never stops the daemons themselves (D4/D12),
+    // just this app's records on each daemon (postgres's own DELETE closes
+    // its servers and deletes their persisted data) and its dev state
+    // directory.
+    if (descriptor?.localTarget !== undefined) {
+      const resolvedLocalTarget = await descriptor.localTarget().catch(() => undefined);
+      if (resolvedLocalTarget?.teardown !== undefined) {
+        await resolvedLocalTarget
           .teardown({ container: devContainer, stage: undefined })
           .catch(() => undefined);
       }

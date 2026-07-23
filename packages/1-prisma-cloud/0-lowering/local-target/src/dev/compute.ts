@@ -3,13 +3,13 @@
  * `Deployment` become clients of the machine-scoped Compute emulator;
  * `EnvironmentVariable` becomes a row in the dev env store; `Project` is a
  * total-but-unused identity stand-in (no lowering yields one today). Every
- * factory takes `DevProvidersInput` — the app name is
+ * factory takes `LocalTargetProvidersInput` — the app name is
  * `input.container`'s `input.appName` (see `app-name.ts`), `devDir` is
  * `input.devDir`; nothing here reads `process.cwd()` or the environment.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { DevProvidersInput } from '@internal/core/config';
+import type { LocalTargetProvidersInput } from '@internal/core/config';
 import { computeClient } from '@internal/dev-emulators';
 import {
   ComputeService,
@@ -103,7 +103,7 @@ async function materializeEnv(
  * `teardown` (`DELETE /apps/<app>`), not per-resource Alchemy deletes.
  */
 export function LocalComputeServiceProvider(
-  input: DevProvidersInput,
+  input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<ComputeService>> {
   const service: Provider.ProviderService<ComputeService> = {
     list: () => Effect.succeed([]),
@@ -124,7 +124,7 @@ export function LocalComputeServiceProvider(
 
 /** `EnvironmentVariable` → a key/value row in `<devDir>/env.json`. Parity with deploy: the poison `DATABASE_URL` rows land here like any other. */
 export function LocalEnvironmentVariableProvider(
-  input: DevProvidersInput,
+  input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<EnvironmentVariable>> {
   const service: Provider.ProviderService<EnvironmentVariable> = {
     list: () => Effect.succeed([]),
@@ -161,7 +161,7 @@ export function LocalEnvironmentVariableProvider(
  * (re)starts the child only when the hash or env actually changed.
  */
 export function LocalDeploymentProvider(
-  input: DevProvidersInput,
+  input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<Deployment>> {
   const service: Provider.ProviderService<Deployment> = {
     list: () => Effect.succeed([]),
@@ -204,7 +204,7 @@ export function LocalDeploymentProvider(
  * `Project` provider, which is also never exercised — see postgres.ts).
  */
 export function LocalProjectProvider(
-  _input: DevProvidersInput,
+  _input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<Project>> {
   const service: Provider.ProviderService<Project> = {
     list: () => Effect.succeed([]),

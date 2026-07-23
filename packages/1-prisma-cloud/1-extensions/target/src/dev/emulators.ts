@@ -12,22 +12,22 @@
  * Entry resolution (spec § 2's publish note): `ensureDaemon` does not
  * resolve its own daemon program — it takes the resolved `entry` path from
  * its caller. This extension resolves against the PUBLIC
- * `@prisma/composer-prisma-cloud/dev/*-main` subpaths (not the private
- * `@internal/dev-emulators` ones), so a published install's `dev` command
- * finds its daemon programs in its own dependency tree. Resolution itself
- * is delegated to `@internal/local-target` (this extension's own source
- * stays free of `node:`/`bun:` imports — invariant 5).
+ * `@prisma/composer-prisma-cloud/local-target/*-main` subpaths (not the
+ * private `@internal/dev-emulators` ones), so a published install's `dev`
+ * command finds its daemon programs in its own dependency tree. Resolution
+ * itself is delegated to `@internal/local-target` (this extension's own
+ * source stays free of `node:`/`bun:` imports — invariant 5).
  */
-import type { DevEmulatorsInput } from '@internal/core/config';
+import type { LocalTargetEmulatorsInput } from '@internal/core/config';
 import type { DaemonName } from '@internal/dev-emulators';
 import { ensureDaemon } from '@internal/dev-emulators';
 import { resolvePackageEntry } from '@internal/local-target';
 
-function usesBuckets(input: DevEmulatorsInput): boolean {
+function usesBuckets(input: LocalTargetEmulatorsInput): boolean {
   return input.graph.nodes.some((n) => n.node.kind === 'resource' && n.node.type === 's3');
 }
 
-function usesPostgres(input: DevEmulatorsInput): boolean {
+function usesPostgres(input: LocalTargetEmulatorsInput): boolean {
   return input.graph.nodes.some(
     (n) =>
       n.node.kind === 'resource' && (n.node.type === 'postgres' || n.node.type === 'prisma-next'),
@@ -36,10 +36,10 @@ function usesPostgres(input: DevEmulatorsInput): boolean {
 
 /** The resolved absolute path to this daemon's published entrypoint. */
 function daemonEntry(name: DaemonName): string {
-  return resolvePackageEntry(`@prisma/composer-prisma-cloud/dev/${name}-main`);
+  return resolvePackageEntry(`@prisma/composer-prisma-cloud/local-target/${name}-main`);
 }
 
-export async function runDevEmulators(input: DevEmulatorsInput): Promise<void> {
+export async function runDevEmulators(input: LocalTargetEmulatorsInput): Promise<void> {
   const { url: computeUrl } = await ensureDaemon('compute', daemonEntry('compute'));
   console.log(`[dev] compute emulator ready at ${computeUrl}`);
 

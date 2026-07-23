@@ -1,10 +1,11 @@
 /**
- * The dev provider bundle (local-dev spec § 4): the SAME `Providers`
- * collection tag `providers()` uses, backed by the eight local providers
- * instead of the hosted Management-API-backed ones. No `ManagementClient`,
- * no credentials layer — the dev bundle must typecheck without either.
+ * The local-target provider bundle (local-dev spec § 4): the SAME
+ * `Providers` collection tag `providers()` uses, backed by the eight local
+ * providers instead of the hosted Management-API-backed ones. No
+ * `ManagementClient`, no credentials layer — this bundle must typecheck
+ * without either.
  */
-import type { DevProvidersInput } from '@internal/core/config';
+import type { LocalTargetProvidersInput } from '@internal/core/config';
 import { Providers } from '@internal/lowering';
 import { Bucket, BucketKey } from '@internal/lowering/buckets';
 import { ComputeService, Deployment, EnvironmentVariable } from '@internal/lowering/compute';
@@ -20,7 +21,7 @@ import {
 } from './compute.ts';
 import { LocalConnectionProvider, LocalDatabaseProvider } from './postgres.ts';
 
-export const devProviders = (input: DevProvidersInput): Layer.Layer<never> =>
+export const localTargetProviders = (input: LocalTargetProvidersInput): Layer.Layer<never> =>
   Layer.effect(
     Providers,
     Provider.collection([

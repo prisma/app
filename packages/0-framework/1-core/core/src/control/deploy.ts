@@ -200,7 +200,7 @@ export interface LowerOptions {
   readonly stage?: string;
   /** Alchemy state store for the stack. Defaults to the config's own state layer. */
   readonly state?: AlchemyStateLayer;
-  /** Explicit provider set for the stack. Defaults to the config's own merged `providers()` (`mergedProviders`) — the same override precedence as `state`. The dev stack module passes `devProviders(...)` here (ADR-0041); `lower()` itself learns nothing about dev. */
+  /** Explicit provider set for the stack. Defaults to the config's own merged `providers()` (`mergedProviders`) — the same override precedence as `state`. The dev stack module passes `localTargetProviders(...)` here (ADR-0041); `lower()` itself learns nothing about the local target. */
   readonly providers?: Layer.Layer<never>;
   /**
    * Invoked once per deploy, during apply, with the Deploy operation's result

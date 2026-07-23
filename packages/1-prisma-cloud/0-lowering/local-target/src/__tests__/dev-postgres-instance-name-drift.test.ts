@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { fileURLToPath } from 'node:url';
-import type { ContainerInstance, DevProvidersInput } from '@internal/core/config';
+import type { ContainerInstance, LocalTargetProvidersInput } from '@internal/core/config';
 import { ensureDaemon, instanceNameFor, postgresClient } from '@internal/dev-emulators';
 import { Connection, Database } from '@internal/lowering/postgres';
 import * as Effect from 'effect/Effect';
@@ -50,7 +50,7 @@ afterAll(async () => {
 
 describe('instance-name drift (delta review finding A, #160)', () => {
   test('a database id and app name with leading/trailing non-alphanumerics: Database ensures, Connection resolves the SAME server', async () => {
-    const input: DevProvidersInput = {
+    const input: LocalTargetProvidersInput = {
       container: fakeContainer(APP),
       devDir: '/dev/null/unused',
     };

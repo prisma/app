@@ -52,9 +52,10 @@ describe('prismaCloud() — constructs with NO environment present (local-dev sp
         's3',
         's3-store',
       ]);
-      // The dev descriptor is present unconditionally — an extension without
-      // one is not dev-capable, and this one always is (ADR-0041).
-      expect(descriptor.dev).toBeDefined();
+      // The localTarget descriptor is present unconditionally — an
+      // extension without one is not local-target-capable, and this one
+      // always is (ADR-0041).
+      expect(descriptor.localTarget).toBeDefined();
     });
   });
 

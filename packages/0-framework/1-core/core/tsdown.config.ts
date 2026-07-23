@@ -8,7 +8,7 @@ export default defineConfig({
     index: 'src/exports/index.ts',
     deploy: 'src/exports/deploy.ts',
     config: 'src/exports/app-config.ts',
-    dev: 'src/exports/dev.ts',
+    'local-target': 'src/exports/local-target.ts',
     testing: 'src/exports/testing.ts',
   },
 });

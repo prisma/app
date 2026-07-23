@@ -15,7 +15,9 @@
       "@internal/tsdown-config": ["./packages/0-framework/0-foundation/tsdown-config/base.ts"],
       "@internal/core/config": ["./packages/0-framework/1-core/core/src/exports/app-config.ts"],
       "@internal/core/deploy": ["./packages/0-framework/1-core/core/src/exports/deploy.ts"],
-      "@internal/core/dev": ["./packages/0-framework/1-core/core/src/exports/dev.ts"],
+      "@internal/core/local-target": [
+        "./packages/0-framework/1-core/core/src/exports/local-target.ts"
+      ],
       "@internal/core/testing": ["./packages/0-framework/1-core/core/src/exports/testing.ts"],
       "@internal/core": ["./packages/0-framework/1-core/core/src/exports/index.ts"],
       "@internal/service-rpc": [
@@ -64,8 +66,8 @@
       "@internal/prisma-cloud/control": [
         "./packages/1-prisma-cloud/1-extensions/target/src/exports/control.ts"
       ],
-      "@internal/prisma-cloud/dev": [
-        "./packages/1-prisma-cloud/1-extensions/target/src/exports/dev.ts"
+      "@internal/prisma-cloud/local-target": [
+        "./packages/1-prisma-cloud/1-extensions/target/src/exports/local-target.ts"
       ],
       "@internal/prisma-cloud/prisma-next": [
         "./packages/1-prisma-cloud/1-extensions/target/src/exports/prisma-next.ts"
@@ -104,7 +106,7 @@
       "@internal/cron": ["./packages/1-prisma-cloud/2-shared-modules/cron/src/exports/index.ts"],
       "@prisma/composer/config": ["./packages/9-public/composer/src/exports/config.ts"],
       "@prisma/composer/deploy": ["./packages/9-public/composer/src/exports/deploy.ts"],
-      "@prisma/composer/dev": ["./packages/9-public/composer/src/exports/dev.ts"],
+      "@prisma/composer/local-target": ["./packages/9-public/composer/src/exports/local-target.ts"],
       "@prisma/composer/testing": ["./packages/9-public/composer/src/exports/testing.ts"],
       "@prisma/composer/casts": ["./packages/9-public/composer/src/exports/casts.ts"],
       "@prisma/composer/assertions": ["./packages/9-public/composer/src/exports/assertions.ts"],
@@ -118,8 +120,8 @@
       "@prisma/composer-prisma-cloud/control": [
         "./packages/9-public/composer-prisma-cloud/src/exports/control.ts"
       ],
-      "@prisma/composer-prisma-cloud/dev": [
-        "./packages/9-public/composer-prisma-cloud/src/exports/dev.ts"
+      "@prisma/composer-prisma-cloud/local-target": [
+        "./packages/9-public/composer-prisma-cloud/src/exports/local-target.ts"
       ],
       "@prisma/composer-prisma-cloud/prisma-next": [
         "./packages/9-public/composer-prisma-cloud/src/exports/prisma-next.ts"

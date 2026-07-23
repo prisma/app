@@ -21,7 +21,7 @@
  */
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
-import type { DevProvidersInput } from '@internal/core/config';
+import type { LocalTargetProvidersInput } from '@internal/core/config';
 import { instanceNameFor, postgresClient } from '@internal/dev-emulators';
 import { Connection, Database } from '@internal/lowering/postgres';
 import * as Provider from 'alchemy/Provider';
@@ -66,7 +66,7 @@ export function resolvePrismaDevModulePath(cwd: string): string {
  * the daemon's returned `url` on its own attributes.
  */
 export function LocalDatabaseProvider(
-  input: DevProvidersInput,
+  input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<Database>> {
   const service: Provider.ProviderService<Database> = {
     list: () => Effect.succeed([]),
@@ -99,7 +99,7 @@ function noRecordedInstanceError(databaseId: string): Error {
 
 /** `Connection` → the daemon's live listing, matched by instance name (the Database attributes' `id` IS the instance name). */
 export function LocalConnectionProvider(
-  input: DevProvidersInput,
+  input: LocalTargetProvidersInput,
 ): Layer.Layer<Provider.Provider<Connection>> {
   const service: Provider.ProviderService<Connection> = {
     list: () => Effect.succeed([]),

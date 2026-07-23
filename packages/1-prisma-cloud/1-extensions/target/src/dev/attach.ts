@@ -4,7 +4,7 @@
  * `logs()`/`stopServices()` and never learns the emulator's HTTP API
  * (ADR-0038's opacity pattern).
  */
-import type { DevAttachInput, DevAttachment } from '@internal/core/config';
+import type { LocalTargetAttachInput, LocalTargetAttachment } from '@internal/core/config';
 import { computeClient } from '@internal/dev-emulators';
 import { prismaCloudContainerOf } from '../container.ts';
 
@@ -86,7 +86,7 @@ async function* mergedLogs(app: string, signal: AbortSignal): AsyncIterable<LogL
   }
 }
 
-export async function devAttach(input: DevAttachInput): Promise<DevAttachment> {
+export async function devAttach(input: LocalTargetAttachInput): Promise<LocalTargetAttachment> {
   const app = prismaCloudContainerOf(input.container).input.appName;
   const client = computeClient();
 
