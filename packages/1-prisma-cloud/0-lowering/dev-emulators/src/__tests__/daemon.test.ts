@@ -4,7 +4,7 @@
  * test uses a temp `registryRoot` and stops every daemon it started.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,7 +47,7 @@ function readEntry(name: DaemonName): RegistryEntry {
 }
 
 /** Runs the `ensure-and-print` fixture as a real, separate OS process and resolves with what it printed. */
-function ensureInSeparateProcess(name: DaemonName): Promise<{ url: string }> {
+function ensureInSeparateProcess(name: DaemonName): Promise<{ url: string; pid: number }> {
   const fixture = fileURLToPath(new URL('./fixtures/ensure-and-print.ts', import.meta.url));
   return new Promise((resolve, reject) => {
     const child = spawn('bun', [fixture, name, registryRoot], {
@@ -68,7 +68,7 @@ function ensureInSeparateProcess(name: DaemonName): Promise<{ url: string }> {
         return;
       }
       try {
-        resolve(JSON.parse(out.trim()) as { url: string });
+        resolve(JSON.parse(out.trim()) as { url: string; pid: number });
       } catch (parseErr) {
         reject(parseErr);
       }
@@ -270,30 +270,30 @@ describe('concurrent-ensure protocol', () => {
     ]);
     started.add('compute');
 
+    // Both callers agree on exactly one daemon: same URL, same pid — no OS
+    // process inspection, just what each caller's own ensureDaemon call
+    // observed in the registry (portable evidence: `pgrep`/`ps` flags and
+    // command-line rendering differ enough between BSD and GNU that a
+    // process-table check isn't a reliable cross-platform assertion — see
+    // the concurrent-ensure CI incident this replaced).
     expect(a.url).toBe(b.url);
+    expect(a.pid).toBe(b.pid);
+    expect(isPidAlive(a.pid)).toBe(true);
 
     const entry = readEntry('compute');
-    expect(isPidAlive(entry.pid)).toBe(true);
+    expect(entry.pid).toBe(a.pid);
     expect(`http://127.0.0.1:${String(entry.port)}`).toBe(a.url);
+    expect(fs.existsSync(registryFilePath(registryRoot, 'compute'))).toBe(true);
 
-    // Exactly one compute-main process is actually running for this
-    // registryRoot — not two racing spawns that both happened to land on
-    // the daemon eventually reporting the same (winning) URL. `-fl`
-    // (not `-af` — macOS's `pgrep -a` means "include ancestors", unlike
-    // GNU pgrep) matches the full argument list and prints it, so we can
-    // filter by this test's own registryRoot. Polled briefly: under a
-    // heavily loaded machine (many other daemons from concurrent test
-    // files) a bare snapshot can transiently race the OS reporting the
-    // just-spawned process, which is a verification-timing gap, not
-    // evidence of a double-spawn.
-    function matchCount(): number {
-      const pgrep = spawnSync('pgrep', ['-fl', 'compute-main.mjs']);
-      return (pgrep.stdout?.toString() ?? '')
-        .split('\n')
-        .filter((line) => line.includes(registryRoot)).length;
-    }
-    await waitFor(() => matchCount() === 1, 3000, 100);
-    expect(matchCount()).toBe(1);
+    // Exactly one daemon was ever spawned: it logs its own listening line
+    // exactly once into its own stdio log. A lock that failed to serialize
+    // the two racing calls would show a second spawn's listening line here
+    // too, even after the losing process was since killed.
+    const logText = fs.readFileSync(entry.logPath, 'utf8');
+    const startupLines = logText
+      .split('\n')
+      .filter((line) => line.includes('listening on 127.0.0.1:'));
+    expect(startupLines).toHaveLength(1);
   }, 20_000);
 
   test('a stale lock dir (dead holder pid) is broken and ensure proceeds', async () => {

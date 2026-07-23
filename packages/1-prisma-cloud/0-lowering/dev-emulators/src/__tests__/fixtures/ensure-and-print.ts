@@ -1,12 +1,14 @@
 /**
- * Test fixture: calls `ensureDaemon` and prints the result as JSON on
- * stdout, so a test driving TWO of these as separate OS processes can
- * compare what each one observed — the concurrent-ensure protocol is an
- * inter-process lock, so the mutex under test only exists across real
- * processes, never across two promises in one. Run standalone via
+ * Test fixture: calls `ensureDaemon` and prints the result — the URL AND
+ * the registry entry's pid this call observed — as JSON on stdout, so a
+ * test driving TWO of these as separate OS processes can compare what each
+ * one observed. Portable by design: no OS process inspection, just the
+ * daemon's own registry. The concurrent-ensure protocol is an inter-process
+ * lock, so the mutex under test only exists across real processes, never
+ * across two promises in one. Run standalone via
  * `bun <this file> <compute|buckets> <registryRoot>`.
  */
-import { type DaemonName, ensureDaemon } from '../../daemon.ts';
+import { type DaemonName, ensureDaemon, readRegistryEntry } from '../../daemon.ts';
 
 function isDaemonName(value: string | undefined): value is DaemonName {
   return value === 'compute' || value === 'buckets';
@@ -21,4 +23,8 @@ if (!registryRoot) {
 }
 
 const result = await ensureDaemon(name, { registryRoot });
-console.log(JSON.stringify(result));
+const entry = await readRegistryEntry(registryRoot, name);
+if (!entry) {
+  throw new Error('ensure-and-print fixture: ensureDaemon resolved but the registry entry is gone');
+}
+console.log(JSON.stringify({ url: result.url, pid: entry.pid }));

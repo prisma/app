@@ -710,7 +710,14 @@ function main(): void {
         }
         state = loaded;
       }
-      server.listen(port, '127.0.0.1');
+      // A single, unambiguous line into the daemon's own stdio log once
+      // actually bound and accepting connections — the daemon's own
+      // portable evidence that exactly one instance is listening (tests
+      // count occurrences of this line rather than inspecting OS processes,
+      // whose command-line rendering/flags differ across platforms).
+      server.listen(port, '127.0.0.1', () => {
+        console.log(`[dev-emulators] compute-main listening on 127.0.0.1:${String(port)}`);
+      });
     })
     .catch((err: unknown) => {
       console.error('compute-main: failed to load state', err);
