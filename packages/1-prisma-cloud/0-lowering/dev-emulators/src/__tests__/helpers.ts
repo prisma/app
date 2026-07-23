@@ -39,10 +39,22 @@ export function writeBootstrap(source: string): string {
   return dir;
 }
 
-/** A tiny HTTP server on `process.env['PORT']` that answers with `body`. */
-export function servingBootstrap(body: string): string {
-  const literal = JSON.stringify(body);
-  return `Bun.serve({ port: Number(process.env['PORT']), fetch: () => new Response(${literal}) });\nconsole.log('booted: ' + ${literal});\n`;
+/**
+ * A tiny HTTP server on `process.env['PORT']` that answers with
+ * `process.env['FIXTURE_BODY']`. Fixed source, no interpolation of any
+ * kind — the response body is never baked into generated code at all; it
+ * travels to the child at spawn time via its own `env`, the same way
+ * `PORT` already does. Pair with `servingBootstrapEnv(body)` to supply the
+ * value.
+ */
+export const SERVING_BOOTSTRAP =
+  "const body = process.env['FIXTURE_BODY'] ?? '';\n" +
+  "Bun.serve({ port: Number(process.env['PORT']), fetch: () => new Response(body) });\n" +
+  "console.log('booted: ' + body);\n";
+
+/** The env entry `SERVING_BOOTSTRAP` reads its response body from. */
+export function servingBootstrapEnv(body: string): { FIXTURE_BODY: string } {
+  return { FIXTURE_BODY: body };
 }
 
 /** Exits immediately with a nonzero code — a fast-crashing service. */

@@ -10,7 +10,8 @@ import { ensureDaemon, stopDaemon } from '../daemon.ts';
 import {
   ensureFreshDaemon,
   entryFor,
-  servingBootstrap,
+  SERVING_BOOTSTRAP,
+  servingBootstrapEnv,
   skipContendedServicePorts,
   tempDir,
   waitFor,
@@ -52,8 +53,8 @@ test('two apps with the same service id get distinct ports, both ≥ 3000', asyn
 
 test('deploying and serving the same service id under two apps never collides', async () => {
   const client = computeClient({ registryRoot });
-  const oneDir = writeBootstrap(servingBootstrap('from tenant one'));
-  const twoDir = writeBootstrap(servingBootstrap('from tenant two'));
+  const oneDir = writeBootstrap(SERVING_BOOTSTRAP);
+  const twoDir = writeBootstrap(SERVING_BOOTSTRAP);
 
   const one = await client.ensureService('tenant-one', 'web');
   const two = await client.ensureService('tenant-two', 'web');
@@ -62,14 +63,14 @@ test('deploying and serving the same service id under two apps never collides', 
     address: 'tenant-one.web',
     artifactDir: oneDir,
     artifactHash: 'h1',
-    env: baseEnv({ PORT: String(one.port) }),
+    env: baseEnv({ PORT: String(one.port), ...servingBootstrapEnv('from tenant one') }),
     port: one.port,
   });
   await client.putDeployment('tenant-two', 'web', {
     address: 'tenant-two.web',
     artifactDir: twoDir,
     artifactHash: 'h1',
-    env: baseEnv({ PORT: String(two.port) }),
+    env: baseEnv({ PORT: String(two.port), ...servingBootstrapEnv('from tenant two') }),
     port: two.port,
   });
 
@@ -81,8 +82,8 @@ test('deploying and serving the same service id under two apps never collides', 
 
 test("stopping one app's services leaves the other app's services running", async () => {
   const client = computeClient({ registryRoot });
-  const oneDir = writeBootstrap(servingBootstrap('one'));
-  const twoDir = writeBootstrap(servingBootstrap('two'));
+  const oneDir = writeBootstrap(SERVING_BOOTSTRAP);
+  const twoDir = writeBootstrap(SERVING_BOOTSTRAP);
   const one = await client.ensureService('tenant-one', 'web');
   const two = await client.ensureService('tenant-two', 'web');
 
@@ -90,14 +91,14 @@ test("stopping one app's services leaves the other app's services running", asyn
     address: 'tenant-one.web',
     artifactDir: oneDir,
     artifactHash: 'h',
-    env: baseEnv({ PORT: String(one.port) }),
+    env: baseEnv({ PORT: String(one.port), ...servingBootstrapEnv('one') }),
     port: one.port,
   });
   await client.putDeployment('tenant-two', 'web', {
     address: 'tenant-two.web',
     artifactDir: twoDir,
     artifactHash: 'h',
-    env: baseEnv({ PORT: String(two.port) }),
+    env: baseEnv({ PORT: String(two.port), ...servingBootstrapEnv('two') }),
     port: two.port,
   });
   await waitFor(async () => {

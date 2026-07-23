@@ -11,7 +11,8 @@ import { isPidAlive, stopDaemon } from '../daemon.ts';
 import {
   CRASHING_BOOTSTRAP,
   ensureFreshDaemon,
-  servingBootstrap,
+  SERVING_BOOTSTRAP,
+  servingBootstrapEnv,
   skipContendedServicePorts,
   sleep,
   tempDir,
@@ -55,14 +56,14 @@ async function deployedService(app: string, id: string): Promise<ServiceInfo> {
 describe('deployment lifecycle', () => {
   test('a deployment spawns bun bootstrap.js and the service actually serves HTTP', async () => {
     const client = computeClient({ registryRoot });
-    const artifactDir = writeBootstrap(servingBootstrap('hello from v1'));
+    const artifactDir = writeBootstrap(SERVING_BOOTSTRAP);
     const reserved = await client.ensureService('app-a', 'web');
 
     await client.putDeployment('app-a', 'web', {
       address: 'app-a.web',
       artifactDir,
       artifactHash: 'hash-v1',
-      env: baseEnv({ PORT: String(reserved.port) }),
+      env: baseEnv({ PORT: String(reserved.port), ...servingBootstrapEnv('hello from v1') }),
       port: reserved.port,
     });
 
@@ -77,9 +78,9 @@ describe('deployment lifecycle', () => {
 
   test('an identical redeploy (same hash and env) does not restart the running child', async () => {
     const client = computeClient({ registryRoot });
-    const artifactDir = writeBootstrap(servingBootstrap('v1'));
+    const artifactDir = writeBootstrap(SERVING_BOOTSTRAP);
     const reserved = await client.ensureService('app-b', 'web');
-    const env = baseEnv({ PORT: String(reserved.port) });
+    const env = baseEnv({ PORT: String(reserved.port), ...servingBootstrapEnv('v1') });
 
     await client.putDeployment('app-b', 'web', {
       address: 'app-b.web',
@@ -104,9 +105,9 @@ describe('deployment lifecycle', () => {
 
   test('a redeploy with a changed artifactHash restarts the child (new pid)', async () => {
     const client = computeClient({ registryRoot });
-    const artifactDir = writeBootstrap(servingBootstrap('v1'));
+    const artifactDir = writeBootstrap(SERVING_BOOTSTRAP);
     const reserved = await client.ensureService('app-c', 'web');
-    const env = baseEnv({ PORT: String(reserved.port) });
+    const env = baseEnv({ PORT: String(reserved.port), ...servingBootstrapEnv('v1') });
 
     await client.putDeployment('app-c', 'web', {
       address: 'app-c.web',
@@ -133,14 +134,14 @@ describe('deployment lifecycle', () => {
 
   test('a redeploy with a changed env (same hash) also restarts the child', async () => {
     const client = computeClient({ registryRoot });
-    const artifactDir = writeBootstrap(servingBootstrap('v1'));
+    const artifactDir = writeBootstrap(SERVING_BOOTSTRAP);
     const reserved = await client.ensureService('app-d', 'web');
 
     await client.putDeployment('app-d', 'web', {
       address: 'app-d.web',
       artifactDir,
       artifactHash: 'stable-hash',
-      env: baseEnv({ PORT: String(reserved.port), EXTRA: 'a' }),
+      env: baseEnv({ PORT: String(reserved.port), EXTRA: 'a', ...servingBootstrapEnv('v1') }),
       port: reserved.port,
     });
     await waitFor(async () => (await deployedService('app-d', 'web')).status === 'running', 5000);
@@ -150,7 +151,7 @@ describe('deployment lifecycle', () => {
       address: 'app-d.web',
       artifactDir,
       artifactHash: 'stable-hash',
-      env: baseEnv({ PORT: String(reserved.port), EXTRA: 'b' }),
+      env: baseEnv({ PORT: String(reserved.port), EXTRA: 'b', ...servingBootstrapEnv('v1') }),
       port: reserved.port,
     });
     await waitFor(async () => {
@@ -161,9 +162,9 @@ describe('deployment lifecycle', () => {
 
   test('a stopped service always starts on redeploy, even with an identical hash and env', async () => {
     const client = computeClient({ registryRoot });
-    const artifactDir = writeBootstrap(servingBootstrap('v1'));
+    const artifactDir = writeBootstrap(SERVING_BOOTSTRAP);
     const reserved = await client.ensureService('app-e', 'web');
-    const env = baseEnv({ PORT: String(reserved.port) });
+    const env = baseEnv({ PORT: String(reserved.port), ...servingBootstrapEnv('v1') });
     const deployment = {
       address: 'app-e.web',
       artifactDir,
@@ -233,12 +234,12 @@ describe('crash supervision', () => {
       250,
     );
 
-    const stableDir = writeBootstrap(servingBootstrap('recovered'));
+    const stableDir = writeBootstrap(SERVING_BOOTSTRAP);
     await client.putDeployment('app-g', 'crasher', {
       address: 'app-g.crasher',
       artifactDir: stableDir,
       artifactHash: 'h2',
-      env: baseEnv({ PORT: String(reserved.port) }),
+      env: baseEnv({ PORT: String(reserved.port), ...servingBootstrapEnv('recovered') }),
       port: reserved.port,
     });
 
@@ -254,16 +255,14 @@ describe('crash supervision', () => {
 describe('stop truthfulness', () => {
   test('a child that ignores SIGTERM is only listed stopped once SIGKILL has actually landed', async () => {
     const client = computeClient({ registryRoot });
-    const artifactDir = writeBootstrap(
-      "process.on('SIGTERM', () => {});\n" + servingBootstrap('stubborn'),
-    );
+    const artifactDir = writeBootstrap(`process.on('SIGTERM', () => {});\n${SERVING_BOOTSTRAP}`);
     const reserved = await client.ensureService('app-i', 'stubborn');
 
     await client.putDeployment('app-i', 'stubborn', {
       address: 'app-i.stubborn',
       artifactDir,
       artifactHash: 'h',
-      env: baseEnv({ PORT: String(reserved.port) }),
+      env: baseEnv({ PORT: String(reserved.port), ...servingBootstrapEnv('stubborn') }),
       port: reserved.port,
     });
     await waitFor(
@@ -312,8 +311,8 @@ describe('stop truthfulness', () => {
 describe('session resume (POST /apps/<app>/start)', () => {
   test('stop then start brings children back up on the same ports with new pids', async () => {
     const client = computeClient({ registryRoot });
-    const oneDir = writeBootstrap(servingBootstrap('one'));
-    const twoDir = writeBootstrap(servingBootstrap('two'));
+    const oneDir = writeBootstrap(SERVING_BOOTSTRAP);
+    const twoDir = writeBootstrap(SERVING_BOOTSTRAP);
     const one = await client.ensureService('app-j', 'web');
     const two = await client.ensureService('app-j', 'worker');
 
@@ -321,14 +320,14 @@ describe('session resume (POST /apps/<app>/start)', () => {
       address: 'app-j.web',
       artifactDir: oneDir,
       artifactHash: 'h',
-      env: baseEnv({ PORT: String(one.port) }),
+      env: baseEnv({ PORT: String(one.port), ...servingBootstrapEnv('one') }),
       port: one.port,
     });
     await client.putDeployment('app-j', 'worker', {
       address: 'app-j.worker',
       artifactDir: twoDir,
       artifactHash: 'h',
-      env: baseEnv({ PORT: String(two.port) }),
+      env: baseEnv({ PORT: String(two.port), ...servingBootstrapEnv('two') }),
       port: two.port,
     });
     await waitFor(async () => (await deployedService('app-j', 'web')).status === 'running', 5000);
@@ -370,7 +369,7 @@ describe('session resume (POST /apps/<app>/start)', () => {
 
   test('a service with no stored deployment is skipped without error', async () => {
     const client = computeClient({ registryRoot });
-    const deployedDir = writeBootstrap(servingBootstrap('deployed'));
+    const deployedDir = writeBootstrap(SERVING_BOOTSTRAP);
     const deployed = await client.ensureService('app-k', 'web');
     await client.ensureService('app-k', 'never-deployed');
 
@@ -378,7 +377,7 @@ describe('session resume (POST /apps/<app>/start)', () => {
       address: 'app-k.web',
       artifactDir: deployedDir,
       artifactHash: 'h',
-      env: baseEnv({ PORT: String(deployed.port) }),
+      env: baseEnv({ PORT: String(deployed.port), ...servingBootstrapEnv('deployed') }),
       port: deployed.port,
     });
     await waitFor(async () => (await deployedService('app-k', 'web')).status === 'running', 5000);
@@ -428,14 +427,14 @@ describe('session resume (POST /apps/<app>/start)', () => {
 
   test('start on an already-running app is a no-op — pids unchanged', async () => {
     const client = computeClient({ registryRoot });
-    const dir = writeBootstrap(servingBootstrap('steady'));
+    const dir = writeBootstrap(SERVING_BOOTSTRAP);
     const reserved = await client.ensureService('app-m', 'web');
 
     await client.putDeployment('app-m', 'web', {
       address: 'app-m.web',
       artifactDir: dir,
       artifactHash: 'h',
-      env: baseEnv({ PORT: String(reserved.port) }),
+      env: baseEnv({ PORT: String(reserved.port), ...servingBootstrapEnv('steady') }),
       port: reserved.port,
     });
     await waitFor(async () => (await deployedService('app-m', 'web')).status === 'running', 5000);
