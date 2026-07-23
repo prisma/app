@@ -43,6 +43,26 @@ function missingServiceAddressError(computeServiceId: string): Error {
   );
 }
 
+/**
+ * The Compute emulator's `<id>` path segment must match
+ * `/^[a-z0-9][a-z0-9-]*$/` (its API hygiene rule, local-dev spec § 2) — but a
+ * service's own address (`news.name`/`news.computeServiceId`) is
+ * hierarchical and dot-separated (e.g. `"orders.service"`, a nested
+ * module's service). This is the seam: every dot (or other disallowed char)
+ * becomes a dash, runs collapse, and the result is what both `ensureService`
+ * and `putDeployment` address the emulator with — the REAL address still
+ * rides the deployment body's `address` field untouched, so the front door
+ * and every listing still show it verbatim (compute-main.ts's `svc.address`
+ * is set from that field, not from the id).
+ */
+function slugServiceId(address: string): string {
+  const slug = address
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug.length > 0 ? slug : 'svc';
+}
+
 async function materializeEnv(
   devDir: string,
   address: string,
@@ -71,7 +91,7 @@ export function LocalComputeServiceProvider(
       Effect.tryPromise({
         try: async () => {
           const app = appNameOf(input.container);
-          const { url } = await computeClient().ensureService(app, news.name);
+          const { url } = await computeClient().ensureService(app, slugServiceId(news.name));
           return { id: news.name, name: news.name, endpointDomain: url };
         },
         catch: (cause) => cause,
@@ -132,15 +152,16 @@ export function LocalDeploymentProvider(
           const id = news.computeServiceId;
           if (news.serviceAddress === undefined) throw missingServiceAddressError(id);
           const address = news.serviceAddress;
+          const emulatorId = slugServiceId(id);
 
           const artifactDir = path.join(input.devDir, 'artifacts', news.artifactHash);
           if (!fs.existsSync(artifactDir)) {
             extractComputeArtifact(news.artifactPath, artifactDir);
           }
 
-          const { port } = await computeClient().ensureService(app, id);
+          const { port } = await computeClient().ensureService(app, emulatorId);
           const env = await materializeEnv(input.devDir, address, port);
-          await computeClient().putDeployment(app, id, {
+          await computeClient().putDeployment(app, emulatorId, {
             address,
             artifactDir,
             artifactHash: news.artifactHash,
