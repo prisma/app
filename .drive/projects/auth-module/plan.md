@@ -100,6 +100,22 @@ taken at S3 pickup, with the platform team's multi-port answer in hand.
 - Parallel: S4 alongside S2/S3 once S1 merges.
 - S1 starts immediately; nothing in it waits on #146.
 
+## Open items (recorded during S2, 2026-07-23)
+
+- **envParam value changes never reach running services (framework gap).**
+  The Deployment lowering claims a new deployment "when any upstream value
+  changes", but `EnvironmentVariable` attributes carry only `{id, key}` —
+  the value never enters the diff, so changing an env param and redeploying
+  is a no-op. Surfaced by the S2 deployed smoke (`AUTH_BASE_URL`). Fix needs
+  a design decision (fold a value hash into deployment props, or derive
+  `baseUrl` from the api service's own origin like `COMPOSER_*_ORIGIN`).
+  Not an auth-project change — route to a framework ticket/design pass.
+- **`AUTH_BASE_URL` chicken-and-egg on first deploy.** The platform assigns
+  the api domain at first deploy, so the deployed smoke needs two passes
+  (deploy with placeholder → read real URL → update var → roll the auth
+  service). If S3 keeps this shape, script it as an explicit example step.
+  Decide at S3 pickup.
+
 ## Close-out (required)
 
 - [ ] Verify every Project-DoD item in `spec.md`.

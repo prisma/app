@@ -139,10 +139,36 @@ keyless. No cloud credentials anywhere.
 
 ## Email flows
 
-Arrives with slice S2 (the email module wiring): real verification, reset,
-and magic-link delivery via consumer-declared templates. In S1 the send
-callbacks log `auth: email delivery not wired (slice S2): …` in deployed
-mode; the local server captures the live links instead.
+Verification, password reset, and magic-link emails deliver through the
+[email module](../email/README.md), wired as a boundary dependency:
+
+```ts
+const mail = provision(email(), { id: 'mail', params: /* … */, secrets: /* … */ });
+const identity = provision(auth(), {
+  id: 'auth',
+  deps: { db, email: mail.send },
+  params: { baseUrl: envParam('AUTH_BASE_URL') },
+});
+```
+
+Signup requires verification (`requireEmailVerification: true`; the
+verification send fires on signup, and verifying auto-signs-in). Magic
+links expire after 5 minutes. The three templates ship with the module —
+minimal semantic HTML plus a plain-text part; every interpolation is
+HTML-escaped, and a link whose origin differs from `baseUrl` fails the
+send rather than going out.
+
+Delivery is fire-and-forget from auth's perspective: a failed send is
+logged, never thrown (a down mail path must not brick signup), and each
+send carries a deterministic idempotency key, so Better Auth retries
+can't double-deliver. The email module's outbox is the operational
+record — read delivery state back through its `outbox` port.
+
+Locally, `startLocalAuthServer` captures sends in `capturedEmails` by
+default, or accepts an `email` sender hydrated against the email module's
+own local server so the outbox-readback path is the one production uses.
+`examples/auth` runs the full loop both ways: signup → verification link
+read back from the outbox → verify → login → magic link.
 
 ## Embedded mode
 
