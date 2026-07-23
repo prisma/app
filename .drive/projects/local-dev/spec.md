@@ -580,10 +580,13 @@ New control-plane files (all under `src/`, plane `control` in
     restart shows a gap, never a dead session).
   - `stopServices()` → `POST /apps/<app>/stop`.
 - `src/dev/teardown.ts` — `runDevTeardown(input: TeardownInput)`:
-  1. `<prisma-bin> dev stop 'pcdev-<app>-*'` then
-     `<prisma-bin> dev rm 'pcdev-<app>-*'` (glob per the CLI's stop/rm NAME
-     pattern support; tolerate nonzero exit when no instance matches — match
-     on the CLI's "not found"-style output, otherwise rethrow with output).
+  1. `<prisma-bin> dev stop 'pcdev-<slug(app)>-*'` then
+     `<prisma-bin> dev rm 'pcdev-<slug(app)>-*'` — the glob applies the SAME
+     name slugging § 4's instance derivation uses (one shared `slug`
+     implementation), or an app name containing slugged characters would
+     orphan its instances (glob per the CLI's stop/rm NAME pattern support;
+     tolerate nonzero exit when no instance matches — match on the CLI's
+     "not found"-style output, otherwise rethrow with output).
   2. Compute emulator: `DELETE /apps/<app>` (stops children, removes records
      and logs). Bucket emulator: `DELETE /_pcdev/apps/<app>` (removes
      registrations + credentials). Both tolerate an unreachable or absent
