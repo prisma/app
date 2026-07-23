@@ -3,6 +3,7 @@
  * prove the daemon it started survives this (its parent) process exiting.
  * Run standalone via `bun <this file> <compute|buckets> <registryRoot>`.
  */
+import { fileURLToPath } from 'node:url';
 import { type DaemonName, ensureDaemon } from '../../daemon.ts';
 
 function isDaemonName(value: string | undefined): value is DaemonName {
@@ -17,5 +18,6 @@ if (!registryRoot) {
   throw new Error('spawn-and-exit fixture: registryRoot argument is required');
 }
 
-await ensureDaemon(name, { registryRoot });
+const entryPath = fileURLToPath(import.meta.resolve(`@internal/dev-emulators/${name}-main`));
+await ensureDaemon(name, entryPath, { registryRoot });
 process.exit(0);

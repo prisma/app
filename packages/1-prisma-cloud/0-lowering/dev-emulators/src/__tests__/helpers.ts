@@ -1,10 +1,21 @@
 /** Shared test-only helpers: temp dirs, fixture bootstraps, small async waits. */
 import * as fs from 'node:fs';
-import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import getPort, { portNumbers } from 'get-port';
 import type { ComputeClient } from '../client.ts';
 import { type DaemonName, ensureDaemon } from '../daemon.ts';
+
+/**
+ * `ensureDaemon` no longer resolves its own entry (spec § 2's publish note —
+ * the caller does, so the published dist can point at its own public
+ * subpaths). In-repo tests resolve the in-repo `@internal/dev-emulators/*-main`
+ * subpaths directly — the same resolution `daemon.ts` used to do internally.
+ */
+export function entryFor(name: DaemonName): string {
+  return fileURLToPath(import.meta.resolve(`@internal/dev-emulators/${name}-main`));
+}
 
 export function tempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `dev-emulators-${prefix}-`));
@@ -64,76 +75,6 @@ export async function waitForHttp(url: string, timeoutMs: number): Promise<Respo
 
 const DEFAULT_MIN_PORT = 4300;
 
-interface BindAttempt {
-  readonly free: boolean;
-  readonly code?: string;
-}
-
-/**
- * Binding is the only reliable way to ask "is this port free" — attempt it
- * and read the OS's own verdict rather than guessing. `EADDRINUSE` (someone
- * else is listening) and `EACCES` (privileged port, permission denied) both
- * mean "taken" for our purposes. Any other errno is a genuine surprise —
- * rethrow it loudly rather than silently treating it as "taken", which is
- * exactly the bug that made `findFreePort` fail closed on every port on a
- * CI runner that raised an errno this function didn't expect.
- */
-function attemptBind(port: number, host: string): Promise<BindAttempt> {
-  return new Promise((resolve, reject) => {
-    const probe = http.createServer();
-    probe.once('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
-        resolve({ free: false, code: err.code });
-        return;
-      }
-      reject(err);
-    });
-    probe.listen(port, host, () => {
-      probe.close(() => resolve({ free: true }));
-    });
-  });
-}
-
-/**
- * A process already bound to `0.0.0.0` (all interfaces — e.g. `Bun.serve`'s
- * own default, unlike this package's own daemons, which always bind
- * `127.0.0.1` explicitly) does not stop a SEPARATE, narrower `127.0.0.1`
- * bind on the same port from succeeding — the two sockets coexist, and
- * which one actually receives an incoming request becomes ambiguous. A
- * port only counts as free here when NEITHER bind scope is already taken.
- *
- * The two attempts run SEQUENTIALLY, not concurrently: binding both
- * `127.0.0.1` and `0.0.0.0` to the very same port at the same time makes
- * the two probe sockets themselves overlap, and the kernel can refuse the
- * second bind with `EADDRINUSE` even though nothing else was ever using
- * the port — a self-inflicted collision, not a real one. Concurrent probes
- * happened to not collide on macOS but did on Linux CI, which is what
- * produced "no free port found in [4300, 4500)" on a runner where
- * virtually every port is genuinely free.
- */
-async function checkPort(port: number): Promise<BindAttempt> {
-  const loopback = await attemptBind(port, '127.0.0.1');
-  if (!loopback.free) return loopback;
-  return attemptBind(port, '0.0.0.0');
-}
-
-/** The first genuinely free port at or above `startFrom` — a shared machine may have unrelated processes already bound near the default port range. */
-export async function findFreePort(startFrom: number = DEFAULT_MIN_PORT): Promise<number> {
-  const codeCounts = new Map<string, number>();
-  for (let port = startFrom; port < startFrom + 200; port++) {
-    const result = await checkPort(port);
-    if (result.free) return port;
-    const code = result.code ?? 'unknown';
-    codeCounts.set(code, (codeCounts.get(code) ?? 0) + 1);
-  }
-  const observed = [...codeCounts.entries()]
-    .map(([code, count]) => `${code}=${String(count)}`)
-    .join(', ');
-  throw new Error(
-    `findFreePort: no free port found in [${String(startFrom)}, ${String(startFrom + 200)}) — observed errnos: ${observed}`,
-  );
-}
-
 /**
  * Starts a daemon on a FRESH `registryRoot`, steered away from any port near
  * the default range occupied by a process this test doesn't control —
@@ -149,7 +90,7 @@ export async function ensureFreshDaemon(
   name: DaemonName,
   registryRoot: string,
 ): Promise<{ url: string }> {
-  const freePort = await findFreePort(DEFAULT_MIN_PORT);
+  const freePort = await getPort({ port: portNumbers(DEFAULT_MIN_PORT, DEFAULT_MIN_PORT + 200) });
   fs.mkdirSync(registryRoot, { recursive: true });
   for (let port = DEFAULT_MIN_PORT; port < freePort; port++) {
     fs.writeFileSync(
@@ -157,7 +98,7 @@ export async function ensureFreshDaemon(
       JSON.stringify({ pid: process.pid, port, version: 'fake', logPath: '/dev/null' }),
     );
   }
-  return ensureDaemon(name, { registryRoot });
+  return ensureDaemon(name, entryFor(name), { registryRoot });
 }
 
 const DEFAULT_MIN_SERVICE_PORT = 3000;
@@ -175,7 +116,7 @@ export async function skipContendedServicePorts(
   client: Pick<ComputeClient, 'ensureService'>,
   minPort: number = DEFAULT_MIN_SERVICE_PORT,
 ): Promise<void> {
-  const freePort = await findFreePort(minPort);
+  const freePort = await getPort({ port: portNumbers(minPort, minPort + 200) });
   for (let i = 0; i < freePort - minPort; i++) {
     await client.ensureService('port-skip', `dummy-${String(i)}`);
   }

@@ -8,6 +8,7 @@
  * across two promises in one. Run standalone via
  * `bun <this file> <compute|buckets> <registryRoot>`.
  */
+import { fileURLToPath } from 'node:url';
 import { type DaemonName, ensureDaemon, readRegistryEntry } from '../../daemon.ts';
 
 function isDaemonName(value: string | undefined): value is DaemonName {
@@ -22,7 +23,8 @@ if (!registryRoot) {
   throw new Error('ensure-and-print fixture: registryRoot argument is required');
 }
 
-const result = await ensureDaemon(name, { registryRoot });
+const entryPath = fileURLToPath(import.meta.resolve(`@internal/dev-emulators/${name}-main`));
+const result = await ensureDaemon(name, entryPath, { registryRoot });
 const entry = await readRegistryEntry(registryRoot, name);
 if (!entry) {
   throw new Error('ensure-and-print fixture: ensureDaemon resolved but the registry entry is gone');

@@ -17,6 +17,8 @@ import * as fsp from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import getPort, { portNumbers } from 'get-port';
+import * as properLockfile from 'proper-lockfile';
 import { readJsonFile, StateFile } from './state-file.ts';
 
 export type DaemonName = 'compute' | 'buckets';
@@ -34,13 +36,15 @@ export interface DaemonRootOptions {
 }
 
 const MIN_PORT = 4300;
+const MAX_PORT = 65_535;
 const EXISTING_HEALTH_TIMEOUT_MS = 2000;
 const START_HEALTH_BUDGET_MS = 10_000;
 const HEALTH_POLL_INTERVAL_MS = 200;
 const TERMINATE_GRACE_MS = 5000;
 const TERMINATE_POLL_INTERVAL_MS = 150;
-const LOCK_POLL_INTERVAL_MS = 250;
+const LOCK_RETRY_INTERVAL_MS = 250;
 const LOCK_WAIT_BUDGET_MS = 10_000;
+const LOCK_STALE_MS = 10_000;
 /** Spec § 2 step 5: a FRESH allocation (no persisted port) tries at most this many distinct port candidates before the pinned failure error. */
 const MAX_FRESH_PORT_CANDIDATES = 5;
 
@@ -253,10 +257,16 @@ async function usedPorts(registryRoot: string): Promise<Set<number>> {
   return ports;
 }
 
-function smallestUnused(used: ReadonlySet<number>, min: number): number {
-  let port = min;
-  while (used.has(port)) port++;
-  return port;
+/**
+ * The smallest genuinely free port at or above `min`, skipping every port
+ * already recorded in the registry — persistence and the range policy
+ * (`min`, "skip registry-used ports") stay ours; whether a given candidate
+ * is actually bindable is `get-port`'s (spec § 2's dependency razor — a
+ * hand-rolled probe already produced a real cross-platform bug: a Linux-only
+ * self-collision from checking two bind scopes concurrently).
+ */
+async function smallestUnused(used: ReadonlySet<number>, min: number): Promise<number> {
+  return getPort({ port: portNumbers(min, MAX_PORT), exclude: used });
 }
 
 /** Spawns the daemon binary detached, stdio appended to `logPath`. Doesn't wait for health. */
@@ -306,64 +316,50 @@ async function observeExisting(
   return { kind: 'dead-or-unhealthy', entry };
 }
 
-/** `<registryRoot>/.lock-<name>` — the concurrent-ensure protocol's atomic directory lock. */
-function lockDirPath(registryRoot: string, name: DaemonName): string {
-  return path.join(registryRoot, `.lock-${name}`);
-}
-
-/** The pid the lock's directory records, or `undefined` when the pid file doesn't exist yet (still mid-acquire) or is unreadable. */
-async function readLockHolderPid(lockDir: string): Promise<number | undefined> {
-  let raw: string;
-  try {
-    raw = await fsp.readFile(path.join(lockDir, 'pid'), 'utf8');
-  } catch {
-    return undefined;
-  }
-  const pid = Number(raw.trim());
-  return Number.isInteger(pid) ? pid : undefined;
+/**
+ * `<registryRoot>/.<name>.lock-target` — the file `proper-lockfile` locks
+ * for the concurrent-ensure protocol (it marks the lock as a sibling
+ * `<file>.lock` directory it manages itself). A stable, never-deleted file:
+ * unlike the registry JSON, which this module removes and rewrites
+ * repeatedly while ensuring, the lock target must exist continuously for
+ * `proper-lockfile`'s `realpath` resolution.
+ */
+export function lockFilePath(registryRoot: string, name: DaemonName): string {
+  return path.join(registryRoot, `.${name}.lock-target`);
 }
 
 /**
- * Acquires `<registryRoot>/.lock-<name>` (spec § 2 "Concurrent-ensure
- * protocol"): atomic `mkdir` IS acquisition. On `EEXIST`, a dead holder's
- * lock is stale and removed for an immediate retry; a live (or
- * still-being-written) holder is polled every 250 ms up to a 10 s budget,
- * after which the pinned timeout error is thrown.
+ * Acquires the concurrent-ensure protocol's inter-process lock (spec § 2)
+ * via `proper-lockfile` — its staleness/compromise semantics are adopted
+ * wholesale rather than re-implementing pid liveness checking on top (the
+ * dependency razor: commodity locking is exactly where unforeseen edge
+ * cases hide). Polls roughly every 250 ms for up to a 10 s budget; on
+ * exhaustion (`ELOCKED`, meaning a live, non-stale holder never let go),
+ * throws the pinned timeout error. Any other failure propagates as-is.
  */
-async function acquireLock(registryRoot: string, name: DaemonName): Promise<void> {
+async function acquireLock(registryRoot: string, name: DaemonName): Promise<() => Promise<void>> {
   await fsp.mkdir(registryRoot, { recursive: true });
-  const lockDir = lockDirPath(registryRoot, name);
-  const deadline = Date.now() + LOCK_WAIT_BUDGET_MS;
-  for (;;) {
-    try {
-      await fsp.mkdir(lockDir);
-      await fsp.writeFile(path.join(lockDir, 'pid'), String(process.pid));
-      return;
-    } catch (err) {
-      if (!isErrnoException(err) || err.code !== 'EEXIST') throw err;
-
-      const holderPid = await readLockHolderPid(lockDir);
-      if (holderPid !== undefined && !isPidAlive(holderPid)) {
-        // A dead holder's lock is stale — remove it and retry immediately,
-        // no budget consumed.
-        await fsp.rm(lockDir, { recursive: true, force: true });
-        continue;
-      }
-      // Alive holder, or the pid file hasn't been written yet (another
-      // process is mid-acquire) — never remove a lock we can't prove is
-      // stale. Poll within the budget.
-      if (Date.now() >= deadline) {
-        throw new Error(
-          `timed out waiting for another process ensuring the ${name} emulator — remove ${lockDir} if stale.`,
-        );
-      }
-      await sleep(LOCK_POLL_INTERVAL_MS);
+  const target = lockFilePath(registryRoot, name);
+  await fsp.writeFile(target, '', { flag: 'a' }); // create if missing; never truncates existing content
+  const retries = Math.max(1, Math.floor(LOCK_WAIT_BUDGET_MS / LOCK_RETRY_INTERVAL_MS));
+  try {
+    return await properLockfile.lock(target, {
+      stale: LOCK_STALE_MS,
+      retries: {
+        retries,
+        minTimeout: LOCK_RETRY_INTERVAL_MS,
+        maxTimeout: LOCK_RETRY_INTERVAL_MS,
+        factor: 1,
+      },
+    });
+  } catch (err) {
+    if (isErrnoException(err) && err.code === 'ELOCKED') {
+      throw new Error(
+        `timed out waiting for another process ensuring the ${name} emulator — remove ${target}.lock if stale.`,
+      );
     }
+    throw err;
   }
-}
-
-async function releaseLock(registryRoot: string, name: DaemonName): Promise<void> {
-  await fsp.rm(lockDirPath(registryRoot, name), { recursive: true, force: true });
 }
 
 /**
@@ -372,10 +368,19 @@ async function releaseLock(registryRoot: string, name: DaemonName): Promise<void
  * safe to call repeatedly, including across unrelated processes on the same
  * machine, and safe under concurrent callers across processes: the
  * observe→spawn→persist critical section is serialized per daemon name by
- * an atomic directory lock (the "Concurrent-ensure protocol").
+ * an inter-process lock (the "Concurrent-ensure protocol").
+ *
+ * `entry` is the resolved absolute path to the daemon program to spawn —
+ * the CALLER resolves it (local-dev spec § 2's publish note). This module
+ * used to resolve it itself via `import.meta.resolve('@internal/dev-emulators/…')`,
+ * which only works in-repo: `@internal/*` are private workspace packages a
+ * published npm consumer never receives. In-repo callers (including tests)
+ * still resolve `@internal/dev-emulators/*-main` the same way; a published
+ * consumer resolves its own public subpaths instead.
  */
 export async function ensureDaemon(
   name: DaemonName,
+  entry: string,
   opts: DaemonRootOptions = {},
 ): Promise<{ url: string }> {
   const registryRoot = opts.registryRoot ?? defaultRegistryRoot();
@@ -390,7 +395,7 @@ export async function ensureDaemon(
     return { url: `http://127.0.0.1:${quick.entry.port}` };
   }
 
-  await acquireLock(registryRoot, name);
+  const release = await acquireLock(registryRoot, name);
   try {
     // Re-read under the lock — the previous holder may have already
     // finished the job while we were waiting to acquire it.
@@ -417,15 +422,14 @@ export async function ensureDaemon(
     // moves — deploy state may already reference it as a frozen endpoint.
     const isFreshAllocation = reusablePort === undefined;
     const maxAttempts = isFreshAllocation ? MAX_FRESH_PORT_CANDIDATES : 1;
-    let port = reusablePort ?? smallestUnused(await usedPorts(registryRoot), MIN_PORT);
+    let port = reusablePort ?? (await smallestUnused(await usedPorts(registryRoot), MIN_PORT));
     const stateDir = daemonStateDir(registryRoot, name);
     const logPath = daemonLogPath(registryRoot, name);
     await fsp.mkdir(stateDir, { recursive: true });
     await fsp.mkdir(path.dirname(logPath), { recursive: true });
-    const entryPath = fileURLToPath(import.meta.resolve(`@internal/dev-emulators/${name}-main`));
 
     for (let attempt = 1; ; attempt++) {
-      const child = spawnDaemonProcess(entryPath, port, stateDir, logPath);
+      const child = spawnDaemonProcess(entry, port, stateDir, logPath);
       if (child.pid === undefined) {
         throw new Error(`failed to spawn the ${name} emulator — see ${logPath}.`);
       }
@@ -466,10 +470,10 @@ export async function ensureDaemon(
       // just failed (start the scan past it) and never re-persist a dead
       // entry that could mislead a concurrent reader.
       await fsp.rm(registryFile, { force: true });
-      port = smallestUnused(await usedPorts(registryRoot), port + 1);
+      port = await smallestUnused(await usedPorts(registryRoot), port + 1);
     }
   } finally {
-    await releaseLock(registryRoot, name);
+    await release();
   }
 }
 

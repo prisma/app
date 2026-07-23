@@ -9,17 +9,19 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import getPort, { portNumbers } from 'get-port';
 import { bucketsClient, computeClient } from '../client.ts';
 import {
   type DaemonName,
   ensureDaemon,
   isPidAlive,
+  lockFilePath,
   type RegistryEntry,
   readOwnVersion,
   registryFilePath,
   stopDaemon,
 } from '../daemon.ts';
-import { ensureFreshDaemon, findFreePort, tempDir, waitFor } from './helpers.ts';
+import { ensureFreshDaemon, entryFor, tempDir, waitFor } from './helpers.ts';
 
 let registryRoot: string;
 const started = new Set<DaemonName>();
@@ -100,7 +102,7 @@ describe('ensureDaemon', () => {
   test('is idempotent — a second call returns the same daemon without restarting it', async () => {
     const first = await ensure('compute');
     const before = readEntry('compute');
-    const second = await ensureDaemon('compute', { registryRoot });
+    const second = await ensureDaemon('compute', entryFor('compute'), { registryRoot });
     expect(second.url).toBe(first.url);
     const after = readEntry('compute');
     expect(after.pid).toBe(before.pid);
@@ -132,7 +134,7 @@ describe('ensureDaemon', () => {
     const fixture = fileURLToPath(new URL('./fixtures/fake-versioned-daemon.ts', import.meta.url));
     // A real free port, not a hardcoded 4300 — this machine may already
     // have an unrelated daemon bound there.
-    const port = await findFreePort(4300);
+    const port = await getPort({ port: portNumbers(4300, 4500) });
     const logPath = path.join(registryRoot, 'compute.log');
     const fake = spawn('bun', [fixture, '--port', String(port), '--version', '0.0.0-stale'], {
       stdio: 'ignore',
@@ -155,7 +157,7 @@ describe('ensureDaemon', () => {
       JSON.stringify({ pid: fakePid, port, version: '0.0.0-stale', logPath }),
     );
 
-    const second = await ensureDaemon('compute', { registryRoot });
+    const second = await ensureDaemon('compute', entryFor('compute'), { registryRoot });
     started.add('compute');
 
     expect(isPidAlive(fakePid)).toBe(false);
@@ -186,7 +188,7 @@ describe('ensureDaemon', () => {
               logPath: path.join(registryRoot, 'compute.log'),
             }),
           );
-          return ensureDaemon('compute', { registryRoot });
+          return ensureDaemon('compute', entryFor('compute'), { registryRoot });
         })(),
       ).rejects.toThrow(
         new RegExp(
@@ -208,7 +210,7 @@ describe('fresh-allocation port retry (spec § 2 step 5)', () => {
     // to be, fake-occupy every port below it in THIS test's own registry
     // so ensureDaemon's own "smallest unused" calculation lands on the
     // exact same port this test is about to squat.
-    const squatPort = await findFreePort(4300);
+    const squatPort = await getPort({ port: portNumbers(4300, 4500) });
     fs.mkdirSync(registryRoot, { recursive: true });
     for (let p = 4300; p < squatPort; p++) {
       fs.writeFileSync(
@@ -273,7 +275,7 @@ describe('fresh-allocation port retry (spec § 2 step 5)', () => {
         JSON.stringify({ pid: deadPid, port, version: readOwnVersion(), logPath }),
       );
 
-      await expect(ensureDaemon('compute', { registryRoot })).rejects.toThrow(
+      await expect(ensureDaemon('compute', entryFor('compute'), { registryRoot })).rejects.toThrow(
         new RegExp(
           `compute emulator failed to start on port ${String(port)} — see .*compute\\.log`,
         ),
@@ -358,7 +360,7 @@ describe('concurrent-ensure protocol', () => {
     // the very first spawn attempt race a process this test doesn't
     // control at all — a different failure mode than the one under test
     // here (see the "fresh-allocation port retry" tests for that one).
-    const freePort = await findFreePort(4300);
+    const freePort = await getPort({ port: portNumbers(4300, 4500) });
     fs.mkdirSync(registryRoot, { recursive: true });
     for (let p = 4300; p < freePort; p++) {
       fs.writeFileSync(
@@ -402,17 +404,17 @@ describe('concurrent-ensure protocol', () => {
     expect(startupLines).toHaveLength(1);
   }, 20_000);
 
-  test('a stale lock dir (dead holder pid) is broken and ensure proceeds', async () => {
-    const lockDir = path.join(registryRoot, '.lock-compute');
+  test('a stale lock is broken and ensure proceeds', async () => {
+    // `proper-lockfile`'s own staleness mechanism (spec § 2's "Concurrent-
+    // ensure protocol"): it marks a lock's directory with an old enough
+    // mtime, well past its `stale` threshold, as abandoned and takes over
+    // rather than waiting out the full budget — no pid involved at all,
+    // unlike the earlier hand-rolled protocol this replaced.
+    fs.mkdirSync(registryRoot, { recursive: true });
+    const lockDir = `${lockFilePath(registryRoot, 'compute')}.lock`;
     fs.mkdirSync(lockDir, { recursive: true });
-
-    // A real pid, guaranteed dead: spawn a scratch process and wait for it
-    // to exit before recording its (now-reaped) pid as the lock holder.
-    const scratch = spawnScratchProcess('process.exit(0)');
-    await waitForExit(scratch);
-    const deadPid = scratch.pid;
-    if (deadPid === undefined) throw new Error('failed to spawn a scratch process for a dead pid');
-    fs.writeFileSync(path.join(lockDir, 'pid'), String(deadPid));
+    const old = new Date(Date.now() - 20_000);
+    fs.utimesSync(lockDir, old, old);
 
     const result = await ensure('compute');
     expect(result.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
@@ -421,18 +423,27 @@ describe('concurrent-ensure protocol', () => {
   });
 
   test('a held lock with a live holder times out with the pinned error', async () => {
-    const lockDir = path.join(registryRoot, '.lock-compute');
-    fs.mkdirSync(lockDir, { recursive: true });
+    fs.mkdirSync(registryRoot, { recursive: true });
+    const target = lockFilePath(registryRoot, 'compute');
+    const lockDir = `${target}.lock`;
 
-    // A real, long-lived scratch process standing in as the lock holder.
-    const holder = spawnScratchProcess('setInterval(() => {}, 1000);');
-    const holderPid = holder.pid;
-    if (holderPid === undefined) throw new Error('failed to spawn a scratch holder process');
-    fs.writeFileSync(path.join(lockDir, 'pid'), String(holderPid));
+    // A real, separate process genuinely holding the SAME lock via
+    // `proper-lockfile` itself — its own periodic mtime refresh keeps the
+    // lock from ever looking stale, so `ensureDaemon`'s wait budget is what
+    // must time it out, not a staleness shortcut.
+    const holder = spawnScratchProcess(`
+      const fs = require('node:fs');
+      const lockfile = require('proper-lockfile');
+      fs.writeFileSync(${JSON.stringify(target)}, '', { flag: 'a' });
+      lockfile.lock(${JSON.stringify(target)}, { stale: 10000 }).then(() => {
+        setInterval(() => {}, 1000);
+      });
+    `);
 
     try {
-      await expect(ensureDaemon('compute', { registryRoot })).rejects.toThrow(
-        `timed out waiting for another process ensuring the compute emulator — remove ${lockDir} if stale.`,
+      await waitFor(() => Promise.resolve(fs.existsSync(lockDir)), 5000);
+      await expect(ensureDaemon('compute', entryFor('compute'), { registryRoot })).rejects.toThrow(
+        `timed out waiting for another process ensuring the compute emulator — remove ${target}.lock if stale.`,
       );
     } finally {
       holder.kill('SIGKILL');
