@@ -12,6 +12,7 @@
  * takes the pinned "not watched" fallback.
  */
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { Bundle } from '@internal/core/deploy';
 import { blindCast } from '@internal/foundation/casts';
 
@@ -72,8 +73,26 @@ export function startWatch(targets: readonly WatchTarget[], onChange: () => void
       } catch {
         continue;
       }
-      const watcher = fs.watch(watchPath, { recursive: stat.isDirectory() }, () => trigger());
-      watchers.push(watcher);
+      if (stat.isDirectory()) {
+        watchers.push(fs.watch(watchPath, { recursive: true }, () => trigger()));
+        continue;
+      }
+      // A FILE target is watched via its PARENT directory, filtered to its
+      // own basename — not `fs.watch(watchPath)` directly. A build that
+      // replaces the file via delete+recreate or an atomic rename (both
+      // common — `rm -rf dist && bun build --outfile`, or any writer that
+      // writes to a temp path and renames over the target) changes the
+      // underlying inode; a watch bound to the original file's inode goes
+      // silently dead after that first replacement and never fires again.
+      // Watching the directory survives every rebuild, no matter how the
+      // build tool replaces the file.
+      const dir = path.dirname(watchPath);
+      const base = path.basename(watchPath);
+      watchers.push(
+        fs.watch(dir, { recursive: false }, (_event, filename) => {
+          if (filename === null || filename === base) trigger();
+        }),
+      );
     }
   }
 

@@ -78,4 +78,38 @@ describe('startWatch()', () => {
     expect(calls).toBe(0);
     fs.rmSync(dir, { recursive: true, force: true });
   }, 10_000);
+
+  test('survives a delete-then-recreate rebuild of the watched file (rm -rf && bun build --outfile)', async () => {
+    // A single-file `fs.watch` bound to the original inode goes silently
+    // dead after the file is unlinked and a new one created at the same
+    // path — exactly what `rm -rf dist && bun build --outfile dist/x.mjs`
+    // does on every rebuild. Watching the file's PARENT directory instead
+    // (this module's actual strategy) survives it — found live against
+    // examples/store's catalog service during the S5 proving pass.
+    const dir = tempDir();
+    const file = path.join(dir, 'server.mjs');
+    fs.writeFileSync(file, 'v1');
+
+    let calls = 0;
+    const stop = startWatch([{ address: 'catalog', paths: [file] }], () => {
+      calls += 1;
+    });
+
+    try {
+      fs.rmSync(file);
+      fs.writeFileSync(file, 'v2');
+      await sleep(400);
+      expect(calls).toBe(1);
+
+      // A SECOND delete+recreate — the exact case that broke a
+      // file-bound (not directory-bound) watch.
+      fs.rmSync(file);
+      fs.writeFileSync(file, 'v3');
+      await sleep(400);
+      expect(calls).toBe(2);
+    } finally {
+      stop();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, 10_000);
 });
