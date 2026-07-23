@@ -22,12 +22,20 @@ function shippedSources(): { file: string; text: string }[] {
   return out;
 }
 
-describe('entry map: @prisma/composer/service-rpc ships a single entry', () => {
-  test("package.json exports exactly '.'", () => {
+describe('entry map: @prisma/composer/service-rpc publishes the root barrel only', () => {
+  test("package.json exports '.' plus the first-party-only ./compose-fetch", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
     // `./package.json` is a conventional manifest export, not a code entry.
     const codeEntries = Object.keys(pkg.exports).filter((k) => k !== './package.json');
-    expect(codeEntries).toEqual(['.']);
+    expect(codeEntries).toEqual(['.', './compose-fetch']);
+  });
+
+  test('the root barrel does not re-export compose-fetch, so it stays off the published API', () => {
+    // `@prisma/composer/service-rpc` is `export * from '@internal/service-rpc'`
+    // — the root barrel and nothing else. Keeping compose-fetch out of the
+    // barrel is what keeps it off the published surface.
+    const barrel = fs.readFileSync(path.join(srcDir, 'exports', 'index.ts'), 'utf8');
+    expect(barrel).not.toContain('compose-fetch');
   });
 });
 

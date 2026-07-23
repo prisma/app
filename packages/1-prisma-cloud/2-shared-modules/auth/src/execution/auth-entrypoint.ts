@@ -5,7 +5,8 @@
 // framework accessors, and NO schema work at boot: the deploy migrated and
 // marker-signed the auth space before this process exists.
 
-import { composeServiceFetch, serve } from '@internal/service-rpc';
+import { serve } from '@internal/service-rpc';
+import { composeServiceFetch } from '@internal/service-rpc/compose-fetch';
 import { betterAuth } from 'better-auth';
 import { buildAuthOptions } from '../auth-options.ts';
 import { authService } from '../auth-service.ts';

@@ -17,6 +17,9 @@
       "@internal/core/deploy": ["./packages/0-framework/1-core/core/src/exports/deploy.ts"],
       "@internal/core/testing": ["./packages/0-framework/1-core/core/src/exports/testing.ts"],
       "@internal/core": ["./packages/0-framework/1-core/core/src/exports/index.ts"],
+      "@internal/service-rpc/compose-fetch": [
+        "./packages/0-framework/2-authoring/service-rpc/src/exports/compose-fetch.ts"
+      ],
       "@internal/service-rpc": [
         "./packages/0-framework/2-authoring/service-rpc/src/exports/index.ts"
       ],

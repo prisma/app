@@ -14,7 +14,8 @@
  */
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
-import { composeServiceFetch, serve } from '@internal/service-rpc';
+import { serve } from '@internal/service-rpc';
+import { composeServiceFetch } from '@internal/service-rpc/compose-fetch';
 import { betterAuth } from 'better-auth';
 import { type AuthEmailSender, buildAuthOptions } from '../auth-options.ts';
 import { authAdminContract, authApiContract, authSessionContract } from '../contract.ts';

@@ -10,6 +10,9 @@
  * Deliberately minimal: one public prefix, fixed routing order. Everything
  * runs on ONE port — first-class multi-port routing is a separate concern
  * this helper does not attempt.
+ *
+ * Not on the published API: this is shared between first-party packages
+ * through the `@internal/service-rpc/compose-fetch` subpath only.
  */
 
 export interface ServiceFetchParts {

@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./compose-fetch": "./dist/compose-fetch.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
