@@ -1,13 +1,19 @@
 /**
  * `buildAuthOptions()`'s pinned values (spec § Better Auth configuration) —
  * asserted field by field so a drift in any pinned option fails HERE with
- * its name, plus the email seam: absent sender → the pinned no-op log;
- * present sender → `{ purpose, to, url }` forwarded (what the testing
- * export's capture rides on).
+ * its name, plus the email posture: every send callback calls the
+ * matching `email` template method with a deterministic idempotency key,
+ * `requireEmailVerification: true`, a `failed` result is logged (never
+ * thrown), a rejecting/throwing send is caught (never thrown), and a
+ * cross-origin link never reaches `email` at all.
  */
+
 import { describe, expect, test } from 'bun:test';
+import { createHash } from 'node:crypto';
+import type { EmailSender } from '@internal/email';
 import pg from 'pg';
-import { type AuthEmailEvent, buildAuthOptions } from '../auth-options.ts';
+import { buildAuthOptions } from '../auth-options.ts';
+import type { AuthTemplates } from '../templates.ts';
 
 const inputs = {
   databaseUrl: 'postgres://user:pass@db.example:5432/app',
@@ -15,8 +21,50 @@ const inputs = {
   baseUrl: 'https://app.example',
 };
 
+interface SendCall {
+  readonly template: keyof AuthTemplates;
+  readonly to: string;
+  readonly data: { url: string; appName: string };
+  readonly idempotencyKey: string;
+}
+
+function fakeEmailSender(
+  result: { status: 'sent' | 'failed'; error?: string } = { status: 'sent' },
+): { email: EmailSender<AuthTemplates>; calls: SendCall[] } {
+  const calls: SendCall[] = [];
+  const method =
+    (template: keyof AuthTemplates) =>
+    async (input: {
+      readonly to: string | readonly string[];
+      readonly data: { url: string; appName: string };
+      readonly idempotencyKey?: string | undefined;
+    }) => {
+      const to = Array.isArray(input.to) ? (input.to[0] ?? '') : input.to;
+      calls.push({
+        template,
+        to,
+        data: input.data,
+        idempotencyKey: input.idempotencyKey ?? '',
+      });
+      return { id: 'send-id', ...result };
+    };
+  return {
+    email: {
+      verification: method('verification'),
+      passwordReset: method('passwordReset'),
+      magicLink: method('magicLink'),
+    },
+    calls,
+  };
+}
+
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 describe('buildAuthOptions — pinned values', () => {
-  const options = buildAuthOptions(inputs);
+  const { email } = fakeEmailSender();
+  const options = buildAuthOptions({ ...inputs, email });
 
   test('identity: appName, baseURL, basePath, secret, trustedOrigins', () => {
     expect(options.appName).toBe('auth');
@@ -36,9 +84,9 @@ describe('buildAuthOptions — pinned values', () => {
     expect(pool.listenerCount('error')).toBe(1);
   });
 
-  test('emailAndPassword: enabled, verification off until email is wired, reset revokes sessions', () => {
+  test('emailAndPassword: enabled, verification required, reset revokes sessions', () => {
     expect(options.emailAndPassword?.enabled).toBe(true);
-    expect(options.emailAndPassword?.requireEmailVerification).toBe(false);
+    expect(options.emailAndPassword?.requireEmailVerification).toBe(true);
     expect(options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
     expect(typeof options.emailAndPassword?.sendResetPassword).toBe('function');
   });
@@ -68,45 +116,142 @@ describe('buildAuthOptions — pinned values', () => {
   });
 });
 
-describe('the email seam', () => {
-  test('with a sender: the three callbacks forward { purpose, to, url }', async () => {
-    const events: AuthEmailEvent[] = [];
-    const options = buildAuthOptions({ ...inputs, sendEmail: (e) => void events.push(e) });
+describe('the email touchpoints', () => {
+  test('sendVerificationEmail calls email.verification with the link, appName, and a deterministic key', async () => {
+    const { email, calls } = fakeEmailSender();
+    const options = buildAuthOptions({ ...inputs, email });
 
     await options.emailVerification?.sendVerificationEmail?.(
-      verificationArgs('v@example.com', 'https://app.example/verify?token=t1'),
+      verificationArgs('v@example.com', 'https://app.example/verify?token=t1', 't1'),
     );
-    await options.emailAndPassword?.sendResetPassword?.(
-      resetArgs('r@example.com', 'https://app.example/reset?token=t2'),
-    );
-    expect(events).toEqual([
-      { purpose: 'verification', to: 'v@example.com', url: 'https://app.example/verify?token=t1' },
-      { purpose: 'passwordReset', to: 'r@example.com', url: 'https://app.example/reset?token=t2' },
+
+    expect(calls).toEqual([
+      {
+        template: 'verification',
+        to: 'v@example.com',
+        data: { url: 'https://app.example/verify?token=t1', appName: 'auth' },
+        idempotencyKey: sha256Hex('verification:v@example.com:t1'),
+      },
     ]);
   });
 
-  test('without a sender: callbacks log the pinned not-wired line and resolve', async () => {
-    const options = buildAuthOptions(inputs);
-    const logged: string[] = [];
-    const realLog = console.log;
-    console.log = (...args: unknown[]) => void logged.push(args.join(' '));
+  test('sendResetPassword calls email.passwordReset the same way', async () => {
+    const { email, calls } = fakeEmailSender();
+    const options = buildAuthOptions({ ...inputs, email });
+
+    await options.emailAndPassword?.sendResetPassword?.(
+      resetArgs('r@example.com', 'https://app.example/reset?token=t2', 't2'),
+    );
+
+    expect(calls).toEqual([
+      {
+        template: 'passwordReset',
+        to: 'r@example.com',
+        data: { url: 'https://app.example/reset?token=t2', appName: 'auth' },
+        idempotencyKey: sha256Hex('passwordReset:r@example.com:t2'),
+      },
+    ]);
+  });
+
+  // magicLink's own send callback is exercised end to end in
+  // local-server.integration.test.ts: the magic-link plugin closes over its
+  // `sendMagicLink` option internally and does not expose it on the built
+  // `BetterAuthOptions.plugins` entry, so it cannot be invoked directly here
+  // the way `emailVerification`/`emailAndPassword`'s callbacks can — those
+  // two prove the shared `send()` closure (idempotency, failure handling,
+  // safeLink) that `sendMagicLink` is a one-line call into.
+
+  test('idempotency key is deterministic per (purpose, email, token) and distinct across each', async () => {
+    const { email, calls } = fakeEmailSender();
+    const options = buildAuthOptions({ ...inputs, email });
+
+    // Same event, called twice (a Better Auth retry) — same key both times.
+    await options.emailVerification?.sendVerificationEmail?.(
+      verificationArgs('v@example.com', 'https://app.example/verify?token=t1', 't1'),
+    );
+    await options.emailVerification?.sendVerificationEmail?.(
+      verificationArgs('v@example.com', 'https://app.example/verify?token=t1', 't1'),
+    );
+    expect(calls[0]?.idempotencyKey).toBe(calls[1]?.idempotencyKey);
+
+    // A different token (a genuinely new event) — a different key.
+    await options.emailVerification?.sendVerificationEmail?.(
+      verificationArgs('v@example.com', 'https://app.example/verify?token=t9', 't9'),
+    );
+    expect(calls[2]?.idempotencyKey).not.toBe(calls[0]?.idempotencyKey);
+
+    // The same token but a different purpose — still a different key (the
+    // purpose is folded into the hash input).
+    await options.emailAndPassword?.sendResetPassword?.(
+      resetArgs('v@example.com', 'https://app.example/reset?token=t1', 't1'),
+    );
+    expect(calls[3]?.idempotencyKey).not.toBe(calls[0]?.idempotencyKey);
+  });
+
+  test('a failed send result is logged, never thrown', async () => {
+    const { email } = fakeEmailSender({ status: 'failed', error: 'provider down' });
+    const options = buildAuthOptions({ ...inputs, email });
+    const logged: unknown[][] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
+    try {
+      await expect(
+        options.emailVerification?.sendVerificationEmail?.(
+          verificationArgs('v@example.com', 'https://app.example/verify?token=t1', 't1'),
+        ),
+      ).resolves.toBeUndefined();
+    } finally {
+      console.error = realError;
+    }
+    expect(logged.some((args) => String(args[0]).includes('failed to send'))).toBe(true);
+  });
+
+  test('a send that throws is caught, logged, never thrown — a down mail path must not brick signup', async () => {
+    const email: EmailSender<AuthTemplates> = {
+      verification: () => Promise.reject(new Error('network unreachable')),
+      passwordReset: () => Promise.reject(new Error('unused')),
+      magicLink: () => Promise.reject(new Error('unused')),
+    };
+    const options = buildAuthOptions({ ...inputs, email });
+    const logged: unknown[][] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
+    try {
+      await expect(
+        options.emailVerification?.sendVerificationEmail?.(
+          verificationArgs('v@example.com', 'https://app.example/verify?token=t1', 't1'),
+        ),
+      ).resolves.toBeUndefined();
+    } finally {
+      console.error = realError;
+    }
+    expect(logged.length).toBeGreaterThan(0);
+  });
+
+  test('a cross-origin link is rejected by safeLink before email is ever called', async () => {
+    const { email, calls } = fakeEmailSender();
+    const options = buildAuthOptions({ ...inputs, email });
+    const logged: unknown[][] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
     try {
       await options.emailVerification?.sendVerificationEmail?.(
-        verificationArgs('x@example.com', 'https://app.example/verify'),
+        verificationArgs('v@example.com', 'https://evil.example/verify?token=t1', 't1'),
       );
     } finally {
-      console.log = realLog;
+      console.error = realError;
     }
-    expect(logged).toEqual(['auth: email delivery not wired: verification for x@example.com']);
+    expect(calls).toEqual([]);
+    expect(logged.length).toBeGreaterThan(0);
   });
 });
 
 // Better Auth's callback argument shapes, reduced to what the callbacks read.
-function verificationArgs(email: string, url: string) {
+function verificationArgs(email: string, url: string, token: string) {
   return {
     user: baUser(email),
     url,
-    token: 't',
+    token,
   } as Parameters<
     NonNullable<
       NonNullable<ReturnType<typeof buildAuthOptions>['emailVerification']>['sendVerificationEmail']
@@ -114,11 +259,11 @@ function verificationArgs(email: string, url: string) {
   >[0];
 }
 
-function resetArgs(email: string, url: string) {
+function resetArgs(email: string, url: string, token: string) {
   return {
     user: baUser(email),
     url,
-    token: 't',
+    token,
   } as Parameters<
     NonNullable<
       NonNullable<ReturnType<typeof buildAuthOptions>['emailAndPassword']>['sendResetPassword']

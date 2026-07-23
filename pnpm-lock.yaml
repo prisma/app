@@ -812,6 +812,9 @@ importers:
       '@internal/core':
         specifier: workspace:0.2.0
         version: link:../../../0-framework/1-core/core
+      '@internal/email':
+        specifier: workspace:0.2.0
+        version: link:../email
       '@internal/foundation':
         specifier: workspace:0.2.0
         version: link:../../../0-framework/0-foundation/foundation

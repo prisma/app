@@ -1,7 +1,8 @@
 /**
  * The auth compute service (spec § Service): the pack-carrying `db`
- * dependency, the platform-minted instance `secret` slot, the public
- * `baseUrl` param (the consumer app's origin — what browsers see and
+ * dependency, the `email` boundary dependency (real verification, reset and
+ * magic-link delivery), the platform-minted instance `secret` slot, the
+ * public `baseUrl` param (the consumer app's origin — what browsers see and
  * `trustedOrigins` allows), and the three exposed ports backed by one
  * process. Build/entry mechanics copied from email's service file:
  * `build.module` points at this file's own built output so the deploy
@@ -9,15 +10,17 @@
  * entrypoint pass in the same dist directory.
  */
 import { param, secret } from '@internal/core';
+import { emailSender } from '@internal/email';
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
 import { type } from 'arktype';
 import { authAdminContract, authApiContract, authDb, authSessionContract } from './contract.ts';
+import { authTemplates } from './templates.ts';
 
 export function authService() {
   return compute({
     name: 'auth',
-    deps: { db: authDb() },
+    deps: { db: authDb(), email: emailSender(authTemplates) },
     // An ORDINARY secret slot: `auth()` binds it to `mintedSecret()`, so the
     // platform mints a stable value at deploy and nobody ever supplies one.
     secrets: { secret: secret() },

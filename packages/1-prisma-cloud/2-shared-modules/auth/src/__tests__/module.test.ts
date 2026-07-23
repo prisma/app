@@ -1,13 +1,15 @@
 /**
- * The `auth()` module Loads into a wired graph: the db is a BOUNDARY dep the
- * root supplies (dedicated vs shared is the root's call), the instance
- * secret is the service's ordinary slot bound to `mintedSecret()` inside the
- * factory (consumers see no secret slot), the `baseUrl` boundary param
- * forwards down, and the three ports wire to consumers independently
+ * The `auth()` module Loads into a wired graph: the db AND the email sender
+ * are BOUNDARY deps the root supplies (dedicated vs shared db, and which
+ * email module instance, are the root's call), the instance secret is the
+ * service's ordinary slot bound to `mintedSecret()` inside the factory
+ * (consumers see no secret slot), the `baseUrl` boundary param forwards
+ * down, and the three ports wire to consumers independently
  * (least-privilege by wiring).
  */
 import { describe, expect, test } from 'bun:test';
 import { isParamSource, Load, module, paramSource } from '@internal/core';
+import { emailSendContract } from '@internal/email';
 import node from '@internal/node';
 import { compute, isMintedSecretBinding } from '@internal/prisma-cloud';
 import { pnContract, pnPostgres } from '@internal/prisma-cloud/prisma-next';
@@ -26,6 +28,10 @@ const database = () =>
     config: './prisma-next.config.ts',
   });
 
+/** A minimal provider of the `email` boundary dep — exposes only `send`, satisfying `emailSender(authTemplates)`'s required contract. */
+const mailProvider = () =>
+  compute({ name: 'mailProvider', deps: {}, build, expose: { send: emailSendContract } });
+
 const apiConsumer = () =>
   compute({ name: 'apiConsumer', deps: { authApi: authApi(), verifier: jwtVerifier() }, build });
 const sessionConsumer = () =>
@@ -36,9 +42,10 @@ const opsConsumer = () =>
 function rootWithAuth() {
   return module('root', {}, ({ provision }) => {
     const db = provision(database(), { id: 'database' });
+    const mail = provision(mailProvider(), { id: 'mail' });
     const authRef = provision(auth(), {
       id: 'auth',
-      deps: { db },
+      deps: { db, email: mail.send },
       params: { baseUrl: paramSource('AUTH_BASE_URL') },
     });
     provision(apiConsumer(), { id: 'app', deps: { authApi: authRef.api, verifier: authRef.api } });
@@ -49,7 +56,7 @@ function rootWithAuth() {
 }
 
 describe('auth()', () => {
-  test('Loads the service with a minted secret slot; the db stays a boundary dep wired through', () => {
+  test('Loads the service with a minted secret slot; db and email stay boundary deps wired through', () => {
     const graph = Load(rootWithAuth());
     const byId = new Map(graph.nodes.map((n) => [n.id, n.node]));
     const typeOf = (id: string): string | undefined => {
@@ -58,12 +65,20 @@ describe('auth()', () => {
     };
 
     expect(typeOf('auth.service')).toBe('compute');
-    // The database is the ROOT's node — the module provisions no db of its own.
+    // The database and the mail provider are the ROOT's nodes — the module
+    // provisions no db or email service of its own.
     expect(typeOf('database')).toBe('prisma-next');
+    expect(typeOf('mail')).toBe('compute');
     expect(graph.edges).toContainEqual({
       from: 'database',
       to: 'auth.service',
       input: 'db',
+      kind: 'dependency',
+    });
+    expect(graph.edges).toContainEqual({
+      from: 'mail',
+      to: 'auth.service',
+      input: 'email',
       kind: 'dependency',
     });
     // The instance secret is the service's ordinary slot, bound to
@@ -116,9 +131,10 @@ describe('auth()', () => {
     const graph = Load(
       module('root', {}, ({ provision }) => {
         const db = provision(database(), { id: 'database' });
+        const mail = provision(mailProvider(), { id: 'mail' });
         provision(auth({ name: 'identity' }), {
           id: 'identity',
-          deps: { db },
+          deps: { db, email: mail.send },
           params: { baseUrl: paramSource('AUTH_BASE_URL') },
         });
         return {};
