@@ -6,7 +6,7 @@ import { createJobsApp } from './app.ts';
 import service from './service.ts';
 
 const { events } = service.load(); // { jobs: StreamHandle }, ready to call
-const { port } = service.config();
+const port = Number(process.env['PORT']); // set by run() (and bootstrapService) before boot (ADR-0041)
 
 process.on('uncaughtException', (err) => console.error('uncaughtException', err));
 process.on('unhandledRejection', (err) => console.error('unhandledRejection', err));

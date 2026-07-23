@@ -6,7 +6,7 @@
 import { serve } from '@prisma/composer/service-rpc';
 import service from './service.ts';
 
-const { port } = service.config();
+const port = Number(process.env['PORT']); // set by run() (and bootstrapService) before boot (ADR-0041)
 
 // The trivial target the schedule fires: both jobs just prove they were
 // reached (the real work — an ingest job, an MRR refresh, whatever — is the

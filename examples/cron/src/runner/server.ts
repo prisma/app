@@ -15,7 +15,7 @@ const handler = serveSchedule(service, schedule, {
 });
 export default handler;
 
-const { port } = service.config();
+const port = Number(process.env['PORT']); // set by run() (and bootstrapService) before boot (ADR-0041)
 
 // Bind all interfaces — Compute routes external HTTP to the VM, so a
 // loopback-only listener would be unreachable.
