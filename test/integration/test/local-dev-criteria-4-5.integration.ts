@@ -24,6 +24,7 @@ import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { prismaCloud } from '@prisma/composer-prisma-cloud/control';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`assertion failed: ${message}`);
@@ -324,13 +325,24 @@ async function main(): Promise<void> {
     // local-dev-store.integration.ts does — removes the postgres-main-hosted
     // server this fixture's `postgres({ name: 'appdb' })` created, the
     // emulators' app-scoped records, and the local state dir, never the
-    // machine-global daemons.
+    // machine-global daemons. `--fresh` teardown runs BEFORE that session's
+    // own (mandatory) converge, so a direct `dev.teardown` afterwards removes
+    // what the cleanup session's converge itself just recreated.
     try {
       const cleanup = await startDevUntilReady(
         baseEnv({ LOCALDEV_FIXTURE_API_KEY: 'cleanup-key', LOCALDEV_FIXTURE_GREETING: 'cleanup' }),
         { fresh: true },
       );
       await stopDev(cleanup);
+      const descriptor = prismaCloud();
+      const dev = descriptor.localTarget === undefined ? undefined : await descriptor.localTarget();
+      if (dev?.teardown !== undefined) {
+        const container = await dev.container.ensure({
+          appName: 'localdevs4fixture',
+          stage: undefined,
+        });
+        await dev.teardown({ container, stage: undefined });
+      }
     } catch (error) {
       console.error(
         `[proving] final cleanup did not complete cleanly: ${error instanceof Error ? error.message : String(error)}`,

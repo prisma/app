@@ -91,8 +91,14 @@ function pumpLogs(attachments: readonly LocalTargetAttachment[], signal: AbortSi
           if (signal.aborted) return;
           console.log(`[${service}] ${line}`);
         }
-      } catch {
-        // signal aborted mid-iteration — nothing else to do
+      } catch (error) {
+        // Quiet only for the abort that ends every session; a genuinely
+        // broken stream is said out loud instead of logs just going silent.
+        if (!signal.aborted) {
+          console.error(
+            `[dev] log stream failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
     })();
   }
@@ -207,10 +213,16 @@ export async function runDev(args: DevArgs, deps: DevRunDeps = {}): Promise<numb
   for (const [id, dev] of resolved) {
     attachments.push(await dev.attach({ container: containers.get(id), devDir }));
   }
+  // On a partial failure, put the already-started attachments back to
+  // stopped — a session that never began should leave the machine exactly as
+  // the previous Ctrl-C did, not half-running.
+  const started: LocalTargetAttachment[] = [];
   for (const attachment of attachments) {
     try {
       await withEmulatorRetry(() => attachment.startServices());
+      started.push(attachment);
     } catch (error) {
+      await Promise.all(started.map((a) => a.stopServices().catch(() => undefined)));
       throw toCliError(error);
     }
   }
@@ -227,35 +239,37 @@ export async function runDev(args: DevArgs, deps: DevRunDeps = {}): Promise<numb
   }
 
   const watch = startWatch(targets, () => {
+    // The whole rebuild is inside one try/catch: this runs fire-and-forget,
+    // so anything escaping it would be an unhandled rejection killing the
+    // process — the exact opposite of "a converge failure keeps the running
+    // app and keeps watching".
     void (async () => {
-      const rePipeline = await runPipeline(args.entry, args.name, cwd, pipelineDeps).catch(
-        (error: unknown) => {
-          console.error(
-            `[dev] rebuild failed: ${error instanceof Error ? error.message : String(error)}`,
-          );
-          return undefined;
-        },
-      );
-      if (rePipeline === undefined) return;
-      writeDevStackFile({
-        entryPath: rePipeline.entryModule.path,
-        cwd,
-        configPath: rePipeline.configPath,
-        name: rePipeline.name,
-        assembled: rePipeline.assembled,
-      });
-      const status = (deps.alchemy ?? runAlchemy)({
-        command: 'deploy',
-        stackFileRelativePath: DEV_STACK_RELATIVE_PATH,
-        cwd,
-        stage: 'dev',
-        containerEnv: containerEnv(containers),
-      });
-      if (status !== 0) {
-        console.error('[dev] converge failed — the running app is untouched; still watching.');
-        return;
+      try {
+        const rePipeline = await runPipeline(args.entry, args.name, cwd, pipelineDeps);
+        writeDevStackFile({
+          entryPath: rePipeline.entryModule.path,
+          cwd,
+          configPath: rePipeline.configPath,
+          name: rePipeline.name,
+          assembled: rePipeline.assembled,
+        });
+        const status = (deps.alchemy ?? runAlchemy)({
+          command: 'deploy',
+          stackFileRelativePath: DEV_STACK_RELATIVE_PATH,
+          cwd,
+          stage: 'dev',
+          containerEnv: containerEnv(containers),
+        });
+        if (status !== 0) {
+          console.error('[dev] converge failed — the running app is untouched; still watching.');
+          return;
+        }
+        printFrontDoor(await mergedEndpoints(attachments));
+      } catch (error) {
+        console.error(
+          `[dev] rebuild failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
-      printFrontDoor(await mergedEndpoints(attachments));
     })();
   });
   // A rebuild finishing before the OS-level watches attach would otherwise
