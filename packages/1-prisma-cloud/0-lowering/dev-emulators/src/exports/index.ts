@@ -26,3 +26,4 @@ export {
   registryFilePath,
   stopDaemon,
 } from '../daemon.ts';
+export { instanceNameFor, slug } from '../instance-name.ts';

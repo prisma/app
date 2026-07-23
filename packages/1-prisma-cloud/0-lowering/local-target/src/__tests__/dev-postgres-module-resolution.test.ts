@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { instanceName, resolvePrismaDevModulePath, slug } from '../dev/postgres.ts';
+import { resolvePrismaDevModulePath } from '../dev/postgres.ts';
 
 /**
  * `resolvePrismaDevModulePath`'s two-step resolution (local-dev spec § 4,
@@ -66,15 +66,5 @@ describe('resolvePrismaDevModulePath', () => {
     expect(() => resolvePrismaDevModulePath(cwd)).toThrow(
       'local dev needs @prisma/dev for its local Postgres emulator — add "prisma" to your app\'s devDependencies.',
     );
-  });
-});
-
-describe('instanceName', () => {
-  test('slugs both halves independently and trims to 63 chars', () => {
-    expect(instanceName('My.App', 'orders-db')).toBe('pcdev-my-app-orders-db');
-  });
-
-  test('matches slug applied piecewise', () => {
-    expect(instanceName('a b', 'c.d')).toBe(`pcdev-${slug('a b')}-${slug('c.d')}`);
   });
 });

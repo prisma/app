@@ -7,27 +7,28 @@
  * parsing, no `prisma dev stop/rm` glob teardown. `PgWarm` and
  * `PnMigration` are NOT here; the hosted ones run unchanged against
  * whichever URL they are handed.
+ *
+ * Instance-name derivation is NOT duplicated here (delta review finding A,
+ * #160): a locally re-derived slug drifted from the daemon's own
+ * `instanceNameFor` (no leading/trailing-dash trim), so a database id or
+ * app name with a leading/trailing non-alphanumeric character (e.g.
+ * `_orders`) produced a DIFFERENT name here than the one the daemon
+ * actually created the server under — `Connection`'s lookup by that
+ * drifted name then threw `noRecordedInstanceError` even though the
+ * server existed. `instanceNameFor` is imported directly from
+ * `@internal/dev-emulators` instead, so there is exactly one
+ * implementation.
  */
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import type { DevProvidersInput } from '@internal/core/config';
-import { postgresClient } from '@internal/dev-emulators';
+import { instanceNameFor, postgresClient } from '@internal/dev-emulators';
 import { Connection, Database } from '@internal/lowering/postgres';
 import * as Provider from 'alchemy/Provider';
 import * as Effect from 'effect/Effect';
 import type * as Layer from 'effect/Layer';
 import * as Redacted from 'effect/Redacted';
 import { appNameOf } from './app-name.ts';
-
-/** Lowercases and collapses every run of non-`[a-z0-9]` chars to a single `-`. */
-export function slug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-}
-
-/** `pcdev-<app>-<database-id>`, each piece slugged independently, trimmed to 63 chars — the SAME derivation `postgres-main`'s own `instanceNameFor` uses. */
-export function instanceName(app: string, databaseId: string): string {
-  return `pcdev-${slug(app)}-${slug(databaseId)}`.slice(0, 63);
-}
 
 function noPrismaDevError(): Error {
   return new Error(
@@ -79,7 +80,7 @@ export function LocalDatabaseProvider(
             news.name,
             prismaDevModulePath,
           );
-          const attributes = { id: instanceName(app, news.name), name: news.name, url };
+          const attributes = { id: instanceNameFor(app, news.name), name: news.name, url };
           return attributes;
         },
         catch: (cause) => cause,
