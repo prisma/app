@@ -65,6 +65,33 @@ function encodeSegment(segment: string): string {
   return encodeURIComponent(segment);
 }
 
+const ADMIN_FETCH_ATTEMPTS = 3;
+const ADMIN_FETCH_RETRY_DELAY_MS = 150;
+
+/**
+ * `fetch` for the loopback admin calls, retried on transient socket errors:
+ * a keep-alive reuse race (the runtime re-uses a pooled connection the
+ * daemon's HTTP server just closed idle — surfaces as "fetch failed" /
+ * "other side closed") or a briefly overloaded daemon. Every admin call is
+ * idempotent by design, so a short blind retry is safe. A caller-driven
+ * abort is never retried.
+ */
+async function adminFetch(url: string, init?: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= ADMIN_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      if (init?.signal?.aborted === true) throw error;
+      lastError = error;
+      if (attempt < ADMIN_FETCH_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, ADMIN_FETCH_RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function expectOk(res: Response): Promise<Response> {
   if (!res.ok) {
     const body = await res.text();
@@ -174,7 +201,7 @@ export function computeClient(opts: DaemonRootOptions = {}): ComputeClient {
     baseUrl,
 
     async health() {
-      const res = await expectOk(await fetch(`${baseUrl}/health`));
+      const res = await expectOk(await adminFetch(`${baseUrl}/health`));
       const body: unknown = await res.json();
       if (!isHealthBody(body)) {
         throw new Error('malformed /health response from the compute emulator');
@@ -184,7 +211,7 @@ export function computeClient(opts: DaemonRootOptions = {}): ComputeClient {
 
     async ensureService(app, id) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/services/${encodeSegment(id)}`;
-      const res = await expectOk(await fetch(url, { method: 'PUT' }));
+      const res = await expectOk(await adminFetch(url, { method: 'PUT' }));
       const body: unknown = await res.json();
       if (!isServiceReservation(body)) {
         throw new Error('malformed service-reservation response from the compute emulator');
@@ -195,7 +222,7 @@ export function computeClient(opts: DaemonRootOptions = {}): ComputeClient {
     async putDeployment(app, id, deployment) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/services/${encodeSegment(id)}/deployment`;
       await expectOk(
-        await fetch(url, {
+        await adminFetch(url, {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(deployment),
@@ -205,7 +232,7 @@ export function computeClient(opts: DaemonRootOptions = {}): ComputeClient {
 
     async listServices(app) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/services`;
-      const res = await expectOk(await fetch(url));
+      const res = await expectOk(await adminFetch(url));
       const body: unknown = await res.json();
       if (!isServiceInfoArray(body)) {
         throw new Error('malformed services listing from the compute emulator');
@@ -215,7 +242,7 @@ export function computeClient(opts: DaemonRootOptions = {}): ComputeClient {
 
     async *followLogs(app, id, signal) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/services/${encodeSegment(id)}/logs?follow=1`;
-      const res = await expectOk(await fetch(url, signal ? { signal } : undefined));
+      const res = await expectOk(await adminFetch(url, signal ? { signal } : undefined));
       const body = res.body;
       if (!body) return;
       const reader = body.getReader();
@@ -233,17 +260,17 @@ export function computeClient(opts: DaemonRootOptions = {}): ComputeClient {
 
     async stopApp(app) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/stop`;
-      await expectOk(await fetch(url, { method: 'POST' }));
+      await expectOk(await adminFetch(url, { method: 'POST' }));
     },
 
     async startApp(app) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/start`;
-      await expectOk(await fetch(url, { method: 'POST' }));
+      await expectOk(await adminFetch(url, { method: 'POST' }));
     },
 
     async deleteApp(app) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}`;
-      await expectOk(await fetch(url, { method: 'DELETE' }));
+      await expectOk(await adminFetch(url, { method: 'DELETE' }));
     },
   };
 }
@@ -266,7 +293,7 @@ export function bucketsClient(opts: DaemonRootOptions = {}): BucketsClient {
     baseUrl,
 
     async health() {
-      const res = await expectOk(await fetch(`${baseUrl}/_pcdev/health`));
+      const res = await expectOk(await adminFetch(`${baseUrl}/_pcdev/health`));
       const body: unknown = await res.json();
       if (!isHealthBody(body)) {
         throw new Error('malformed /_pcdev/health response from the buckets emulator');
@@ -277,7 +304,7 @@ export function bucketsClient(opts: DaemonRootOptions = {}): BucketsClient {
     async putBucket(app, name, dir) {
       const url = `${baseUrl}/_pcdev/apps/${encodeSegment(app)}/buckets/${encodeSegment(name)}`;
       await expectOk(
-        await fetch(url, {
+        await adminFetch(url, {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ dir }),
@@ -288,7 +315,7 @@ export function bucketsClient(opts: DaemonRootOptions = {}): BucketsClient {
     async putCredentials(app, accessKeyId, secretAccessKey) {
       const url = `${baseUrl}/_pcdev/apps/${encodeSegment(app)}/credentials`;
       await expectOk(
-        await fetch(url, {
+        await adminFetch(url, {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ accessKeyId, secretAccessKey }),
@@ -298,7 +325,7 @@ export function bucketsClient(opts: DaemonRootOptions = {}): BucketsClient {
 
     async deleteApp(app) {
       const url = `${baseUrl}/_pcdev/apps/${encodeSegment(app)}`;
-      await expectOk(await fetch(url, { method: 'DELETE' }));
+      await expectOk(await adminFetch(url, { method: 'DELETE' }));
     },
   };
 }
@@ -357,7 +384,7 @@ export function postgresClient(opts: DaemonRootOptions = {}): PostgresClient {
     baseUrl,
 
     async health() {
-      const res = await expectOk(await fetch(`${baseUrl}/health`));
+      const res = await expectOk(await adminFetch(`${baseUrl}/health`));
       const body: unknown = await res.json();
       if (!isHealthBody(body)) {
         throw new Error('malformed /health response from the postgres emulator');
@@ -368,7 +395,7 @@ export function postgresClient(opts: DaemonRootOptions = {}): PostgresClient {
     async ensureDatabase(app, id, prismaDevModulePath) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/databases/${encodeSegment(id)}`;
       const res = await expectOk(
-        await fetch(url, {
+        await adminFetch(url, {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ prismaDevModulePath }),
@@ -383,7 +410,7 @@ export function postgresClient(opts: DaemonRootOptions = {}): PostgresClient {
 
     async listDatabases(app) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}/databases`;
-      const res = await expectOk(await fetch(url));
+      const res = await expectOk(await adminFetch(url));
       const body: unknown = await res.json();
       if (!isDatabaseInfoArray(body)) {
         throw new Error('malformed databases listing from the postgres emulator');
@@ -393,7 +420,7 @@ export function postgresClient(opts: DaemonRootOptions = {}): PostgresClient {
 
     async deleteApp(app) {
       const url = `${baseUrl}/apps/${encodeSegment(app)}`;
-      await expectOk(await fetch(url, { method: 'DELETE' }));
+      await expectOk(await adminFetch(url, { method: 'DELETE' }));
     },
   };
 }
