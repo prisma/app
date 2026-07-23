@@ -20,6 +20,7 @@ import {
   type ContainerInstance,
   DEV_DIR,
   type ExtensionDescriptor,
+  isBuildOnlyExtension,
   type NodeDescriptor,
   type PrismaAppConfig,
 } from './app-config.ts';
@@ -542,18 +543,22 @@ function noDevSupportError(id: string): LowerError {
 
 /**
  * All configured extensions' DEV providers merged, config array order (ADR-0041).
- * Unlike `mergedProviders`, an extension with no `dev` descriptor is not
- * skipped — every configured extension must be dev-capable, or dev cannot
- * bring the app up at all, so this throws naming the extension.
+ * A build-only extension (`isBuildOnlyExtension`) owns no resources or
+ * services, so it is skipped like `mergedProviders` skips an extension with
+ * no `providers`. Every other configured extension must be dev-capable, or
+ * dev cannot bring the app up at all, so this throws naming the extension.
  */
 export function mergedDevProviders(
   config: PrismaAppConfig,
   containers: ReadonlyMap<string, ContainerInstance>,
   devDir: string,
 ): Layer.Layer<never> {
-  const layers = config.extensions.map((extension) => {
-    if (extension.dev === undefined) throw noDevSupportError(extension.id);
-    return extension.dev.providers({ container: containers.get(extension.id), devDir });
+  const layers = config.extensions.flatMap((extension) => {
+    if (extension.dev === undefined) {
+      if (isBuildOnlyExtension(extension)) return [];
+      throw noDevSupportError(extension.id);
+    }
+    return [extension.dev.providers({ container: containers.get(extension.id), devDir })];
   });
   const [first, ...rest] = layers;
   return first === undefined ? Layer.empty : Layer.mergeAll(first, ...rest);
