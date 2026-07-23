@@ -1,65 +1,86 @@
-# Slice S5 (proposed): rpc-port-isolation — spec draft
+# Slice S5 (proposed): wired egress — spec draft v2
 
-> Status: **draft, pending operator confirmation** (fork raised 2026-07-23;
-> operator asked for the isolation story, hasn't yet picked S1-scope vs
-> own-slice). Grounding items below are deliberately open — they resolve at
-> slice pickup, not in this draft.
+> Status: **draft, pending operator confirmation of scope/sequencing.**
+> Shape settled with Will 2026-07-23: listening is a wired capability, not
+> an ambient right. This v2 replaces the v1 draft (path-scoped dispatch +
+> per-port key partitioning), which is now the recorded rejected
+> alternative — it hardened the flat listener instead of removing its
+> ambient existence.
 
-## At a glance
+## The model
 
-Make a service's ports real at the transport level. Today rpc dispatch is
-flat (`POST /rpc/<method>`) and the ADR-0030 bearer check accepts any key
-minted for the service against any method — port-level least privilege is
-enforced only by the typed client. Two coupled changes:
+A service's exposed surfaces reach the network only through wiring:
 
-1. **Port-scoped dispatch**: `POST /rpc/<port>/<method>`. The generated
-   client derives the port segment from the binding (the wired edge targets
-   a specific exposed port). Kills the cross-port method-name collision
-   class (D5's `getUser` collision).
-2. **Per-port key acceptance**: accepted keys partition by exposed port
-   (keys are already minted per binding; the mint side knows the edge's
-   target port). `serve()` checks the presented key against the addressed
-   port's set — a `session`-wired consumer's key no longer passes for
-   `/rpc/admin/*`.
+1. **rpc ports: mount-iff-wired, zero new authoring.** A consumer edge is
+   the justification for a port to exist on the network. The lowering
+   mounts an rpc port iff ≥1 consumer wired it; the mount's accepted keys
+   are exactly that port's edge keys (already minted per binding). An
+   unwired admin port is not 401-protected — it is **absent**. The rpc
+   binding itself carries the egress information (address/port + key land
+   in the consumer's connection params, as today).
+2. **Public egress: the one new representation.** "Expose publicly" is the
+   boundary to the world outside our topology — the only consumer that has
+   no in-graph edge. It becomes an explicit binding the root supplies at
+   `provision()` (need/source split, same rail family as
+   `envSecret`/`envParam`; source is target-owned). A non-rpc surface
+   (auth's `api`) with no binding — public or in-graph — is not served.
+3. **Per-surface listeners.** Each mounted surface gets its own port on
+   the service's address if the platform supports multiple ports per
+   service (ignite grounding in progress); otherwise the v1-lowering is
+   per-mount path prefixes on the single listener, with the authoring
+   model unchanged and the lowering upgraded later. Either way the mount
+   set and key sets derive from wiring.
 
-## Why now
+Strongest available wiring for auth (to be the example's recommended
+shape): do NOT bind `api` to public egress at all — wire it only to the
+consumer app's `authApi()` edge, key-checked like any edge (carried on a
+non-`Authorization` header so Better Auth's bearer plugin keeps its own).
+The auth service then has zero public surface; public exposure happens at
+the storefront, which mounts the proxy on its own origin.
 
-Auth is the first module whose admin port mutates (revoke/ban). "Isolation
-by politeness" is the wrong trust model for it, and S3 deploys it into the
-flagship consumer example. This is also the first concrete slice of the
-admin-path authz story ("wiring is the access control") — done here, the
-admin-path design pass inherits a settled convention instead of a deferral.
+## Consequences
+
+- Cross-port method-name collisions stop mattering (per-surface mounts);
+  `serve()`'s cross-port uniqueness restriction is lifted. `findUser`
+  stays (clearer name; zero churn).
+- Email inherits the same semantics on redeploy: its `outbox` port
+  becomes absent unless wired — the least-privilege claim in its D4
+  becomes transport-true.
+- The admin path's "admin ports are reachable only if wired" stops being
+  a deferral and becomes the literal mechanism — feed to the admin-path
+  design pass as its first settled convention.
+- The entrypoint no longer assumes the reserved `port`: it serves what
+  its bindings tell it (this is the "no globals" principle reaching the
+  listen socket).
 
 ## Scope
 
-**In:** `@internal/service-rpc` (`serve()`, `makeClient`, path scheme),
-the target's key provisioning rail (per-port accepted-key storage —
-today's single `COMPOSER_RPC_ACCEPTED_KEYS`), redeploy notes for existing
-rpc services (email), auth + email test updates, a wire-format note in the
-service-rpc README/ADR territory (likely a new ADR amending ADR-0030).
+**In:** `@internal/service-rpc` (mount derivation, serve construction),
+target lowering (mount set from edges; public-egress source + need; key
+sets per mount; listener allocation per the ignite answer), entrypoint
+contract for multi-surface services (auth, email), examples updated, ADR
+amending ADR-0030 (+ possibly a new egress ADR).
 
-**Out:** per-METHOD authz (stays deferred per ADR-0030), any admin-web-UI
-work, `session.getUser`/`admin.findUser` re-rename (keep `findUser` — the
-names are clearer apart even without the collision; zero churn).
+**Out:** per-method authz (still deferred), admin UI tiers.
 
-## Grounding needed at pickup (not improvised here)
+## Grounding needed at pickup
 
-1. Does the dependency edge carry the target-port identity through the
-   provisioning rail today (rpc's `perBindingToken` provision need is
-   declared on the binding's connection params — confirm the provisioner's
-   `edge` exposes the port), or does the edge need to grow it?
-2. Accepted-set storage shape: one JSON object `{ [port]: keys[] }` in the
-   existing env var vs per-port vars — decide against the serializer's
-   provider-param machinery, not aesthetics.
-3. Back-compat: pre-1.0, all consumers in-repo — confirm no deployed
-   environment needs a dual-accept window; if one does, serve() accepts
-   both path forms for one release.
-4. ADR: amend ADR-0030 or new ADR referencing it.
+1. **Ignite:** multiple ports per service at one address — supported
+   today? (exploration running; answer lands here.)
+2. Whether the platform distinguishes in-workspace reachability from
+   public ingress (private services) — determines whether "absent" means
+   not-routed-publicly or not-listening at all.
+3. The provisioner edge's target-port identity (rpc rail) — confirm
+   `edge` exposes it or grow it.
+4. Public-egress source naming + which ADR shape (amend 0030 vs new).
 
 ## Slice DoD
 
-- A consumer wired only to a non-admin port presents its key to an admin
-  port's route and gets 401/404 — proven by an integration test through
-  real `serve()` + `makeClient`.
-- Email + auth suites green with no semantic test changes beyond paths.
-- The cross-port duplicate-method restriction in `serve()` is lifted.
+- An unwired port's route/listener does not exist on the deployed
+  service (proven by the smoke: connection refused or 404-at-router, per
+  the ignite answer — not 401).
+- A consumer wired to one port cannot reach another port with its key
+  (real serve()+makeClient integration test).
+- Auth example runs with the proxy-only wiring (auth service has no
+  public binding); email example redeploys with no authoring change.
+- serve()'s cross-port duplicate-method restriction lifted.

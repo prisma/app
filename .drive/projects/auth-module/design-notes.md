@@ -141,7 +141,15 @@ origin and HTML-escaped before interpolation.
   admin-port idiom.
 - Flat rpc dispatch (`POST /rpc/<method>`) imposes **cross-port method-name
   uniqueness** (found D5: `session.getUser` vs `admin.getUser` throws at
-  `serve()` construction). Renamed the admin op `findUser` rather than
-  adding port-scoped dispatch in S1. Tier-1 conventions must either
-  standardize a naming scheme (runtime ops plain, admin ops prefixed/verb-
-  distinct) or decide port-scoped dispatch is worth the wire change.
+  `serve()` construction). Renamed the admin op `findUser` in S1.
+- **Wired egress (Will, 2026-07-23), superseding the first isolation
+  draft.** The orchestrator's path-scoped-dispatch + per-port-key-
+  partitioning proposal was rejected: it hardens the flat listener but
+  keeps serving as ambient authority. Settled model: listening is a wired
+  capability — rpc ports mount iff a consumer edge exists (the binding
+  carries the egress information; unwired = absent, not 401), and only
+  "expose publicly" (the boundary outside the topology) gets a new
+  explicit representation, supplied by the root at provision. See
+  `slices/rpc-port-isolation/spec.md` v2. For the admin path: "admin
+  ports are reachable only if wired" becomes the literal mechanism, not
+  a deferral.
