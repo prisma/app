@@ -15,6 +15,8 @@
  * through the `@internal/service-rpc/compose-fetch` subpath only.
  */
 
+const RPC_ROUTE = '/rpc/';
+
 export interface ServiceFetchParts {
   /** serve()'s generated handler for the service's rpc ports. */
   readonly rpcHandler: (request: Request) => Promise<Response>;
@@ -28,6 +30,15 @@ export interface ServiceFetchParts {
 export function composeServiceFetch(
   parts: ServiceFetchParts,
 ): (request: Request) => Promise<Response> {
+  const pub = parts.publicHandler;
+  if (pub !== undefined && overlapsRpcRoute(pub.pathPrefix)) {
+    throw new Error(
+      `composeServiceFetch: the public path prefix "${pub.pathPrefix}" overlaps the rpc route "${RPC_ROUTE}". ` +
+        'The public handler is matched first, so every rpc request would reach it instead of the ' +
+        'service-key-checked rpc handler. Choose a prefix that neither contains nor sits under ' +
+        `"${RPC_ROUTE}".`,
+    );
+  }
   return async (request) => {
     const { pathname } = new URL(request.url);
     if (pathname === '/health') {
@@ -36,9 +47,12 @@ export function composeServiceFetch(
         headers: { 'content-type': 'application/json' },
       });
     }
-    const pub = parts.publicHandler;
     if (pub !== undefined && pathname.startsWith(pub.pathPrefix)) return pub.handler(request);
-    if (pathname.startsWith('/rpc/')) return parts.rpcHandler(request);
+    if (pathname.startsWith(RPC_ROUTE)) return parts.rpcHandler(request);
     return new Response('Not found', { status: 404 });
   };
+}
+
+function overlapsRpcRoute(pathPrefix: string): boolean {
+  return RPC_ROUTE.startsWith(pathPrefix) || pathPrefix.startsWith(RPC_ROUTE);
 }

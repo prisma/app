@@ -1,9 +1,9 @@
 /**
  * `composeServiceFetch` — the one fetch topology a service's entrypoint and
  * its local test server share: health probe, optional public prefix, rpc
- * dispatch, 404 for the rest. Routing order matters: the public prefix wins
- * over /rpc/* only when they overlap by construction (they don't here), and
- * /health answers before anything else.
+ * dispatch, 404 for the rest. /health answers before anything else, and the
+ * public prefix is matched before /rpc/*, so a prefix that would swallow rpc
+ * requests is rejected when the handler is composed rather than at runtime.
  */
 import { describe, expect, test } from 'bun:test';
 import { composeServiceFetch } from '../compose-fetch.ts';
@@ -47,5 +47,27 @@ describe('composeServiceFetch', () => {
     expect((await fetchHandler(request('/api/auth/session'))).status).toBe(404);
     // /rpc without the trailing segment separator is not an rpc route.
     expect((await fetchHandler(request('/rpc'))).status).toBe(404);
+  });
+
+  test('a public prefix that would swallow /rpc/ is rejected at composition time', () => {
+    for (const pathPrefix of ['/', '', '/r', '/rp', '/rpc', '/rpc/', '/rpc/getUser']) {
+      expect(() =>
+        composeServiceFetch({
+          rpcHandler: tag('rpc'),
+          publicHandler: { pathPrefix, handler: tag('public') },
+        }),
+      ).toThrow(`the public path prefix "${pathPrefix}" overlaps the rpc route "/rpc/"`);
+    }
+  });
+
+  test('a public prefix that cannot reach an rpc path is accepted', () => {
+    for (const pathPrefix of ['/api/auth', '/rpx', '/public/rpc/']) {
+      expect(() =>
+        composeServiceFetch({
+          rpcHandler: tag('rpc'),
+          publicHandler: { pathPrefix, handler: tag('public') },
+        }),
+      ).not.toThrow();
+    }
   });
 });
