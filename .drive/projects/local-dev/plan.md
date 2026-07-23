@@ -123,22 +123,39 @@ scripts. Implementer dispatches use Sonnet-4.6-mid, reviewers Opus-4.8-mid
 
 ## Known items blocking close-out (found in S5 proving, 2026-07-23)
 
-- **Restart amplification (defect):** rebuilding one service restarts its
-  RPC dependents too (observed: catalog rebuild → catalog + cron.runner +
-  orders.service restarted; storefront + cron.scheduler correctly
-  untouched). Something in the dependents' materialized deployment env
-  recomputes as changed on every converge. Root-cause and fix in the local
-  providers (S4 code) before S6 sign-off — acceptance criterion 2 requires
-  exactly-one-service restarts.
-- **Criteria 4/5 scripting pending:** `examples/store` has neither a bucket
-  nor a secret/env-param; the S4 fixture needs both to script the bucket
-  file-drop round-trip and the placeholder-warning / env-param-error
-  criteria at the CLI level.
+- ~~Restart amplification~~ — **resolved on the S5 branch**: root-caused
+  (app-wide env materialization completing between converges) with
+  three-converge byte evidence; fixed by the pinned scoped materialization;
+  proven by the store-level exactly-one-restart assertion, run twice.
+- ~~Criteria 4/5 scripting~~ — **resolved on the S5 branch**: the S4
+  fixture gained a bucket flow, a secret, and an envParam;
+  `local-dev-criteria-4-5.integration.ts` proves all four sub-criteria at
+  the CLI level as a required gate.
 - ~~Emulator stop/reap honesty~~ — **resolved, no bug**: `killChild`
   already awaits SIGTERM → 5 s grace → SIGKILL → exit before state flips;
   the observation was the grace period itself. Locked in by a regression
   test (an ignores-SIGTERM fixture: the listing never says `stopped` while
   the pid lives, and the stop measurably takes the grace period).
+
+### S7 — MERGED INTO THE #162 REWORK WAVE (operator review, 2026-07-23)
+
+Will's #162 review mandated the programmatic adoption in-place ("replace
+it with programmatic use of prisma dev") — the section below is executed
+as part of the rework, not post-stack.
+
+### (was S7) — adopt @prisma/dev programmatically
+
+Operator decision (2026-07-23): replace the Postgres CLI shell-out with
+`@prisma/dev`'s programmatic API, hosted in our own `postgres-main`
+emulator daemon beside compute/buckets — `startPrismaDevServer({ name,
+databasePort, persistenceMode })` per `Database` resource, ports from our
+registry, persistence on. Deletes: bin walk-up, last-stdout-line URL
+parsing, `prisma dev start/stop/rm` coupling, the probe/start recovery
+sequence. Sub-decision to settle at pickup: version ownership (lean:
+resolve `@prisma/dev` from the app's node_modules so the app owns the
+version, consistent with runtime ownership). The CLI shell-out in the
+shipped slices is transitional and marked so here. Not started until the
+current stack merges.
 
 ## Close-out (required)
 

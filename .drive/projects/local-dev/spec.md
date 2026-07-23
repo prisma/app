@@ -27,7 +27,7 @@ construction above the Alchemy provider boundary.
 | # | Decision | Where recorded |
 |---|---|---|
 | D1 | Dev = the deploy pipeline retargeted at the Alchemy **provider** boundary; never an HTTP Management-API emulation, never a bespoke per-kind dev harness | ADR-0041 |
-| D2 | The seam is `ExtensionDescriptor.dev?: DevDescriptor` — `providers`, `container`, `preflight`, `emulators`, `attach`, `teardown`; **no `nodes`, no `provisions`, no `state`** | ADR-0041 |
+| D2 | The seam is `ExtensionDescriptor.dev?: DevExtensionDescriptor` — `providers`, `container`, `preflight`, `emulators`, `attach`, `teardown`; **no `nodes`, no `provisions`, no `state`** | ADR-0041 |
 | D3 | Dev Alchemy state = alchemy's own `localState()` via the existing `LowerOptions.state` override, always at Alchemy stage `dev` | ADR-0041 |
 | D4 | One machine-scoped, multi-tenant emulator **per node kind**, ensured by the topology-aware `dev.emulators` hook; providers provision isolated instances by communicating with them; converge terminates and the Compute emulator keeps serving | ADR-0041 |
 | D5 | The dev command owns no processes: it is a view through `dev.attach` (endpoints, merged logs, stop control). Ctrl-C stops the app's service instances; emulators + data persist; `--fresh` removes; detached mode is a designed extension, not v1 | ADR-0041, local-dev.md |
@@ -142,8 +142,10 @@ plus the shared daemon layer and typed loopback clients.
      `version` === this package's version → return `http://127.0.0.1:<port>`.
   3. Version mismatch → SIGTERM (5 s grace, SIGKILL), fall through. Dead
      pid / failed health → clean the entry, fall through.
-  4. Start: port = persisted port if any, else smallest ≥ 4300 unused across
-     registry entries, persisted immediately. Spawn `process.execPath
+  4. Start: port = persisted port if any, else allocated via `get-port`
+     (preferred range ≥ 4300, excluding registry-used ports — the free-port
+     PROBE is the library's, our persistence and range policy stay ours),
+     persisted immediately. Spawn `process.execPath
      <entry> --port <n> --state-dir <registryRoot>/<name>/` with
      `detached: true`, stdio appended to `<registryRoot>/<name>.log`,
      `unref()` — the `registryRoot` override governs the registry file, the
@@ -164,17 +166,19 @@ plus the shared daemon layer and typed loopback clients.
      endpoints frozen in deploy state reference it — fail with the pinned
      error; recovery is manual (`--fresh` does NOT touch the daemons — they
      are machine-global, shared by other apps).
-- **Concurrent-ensure protocol:** the observe→spawn→persist critical
-  section is serialized ACROSS PROCESSES per daemon name with an atomic
-  directory lock: `mkdir <registryRoot>/.lock-<name>` (atomic creation IS
-  acquisition; the holder writes its pid to `<lockDir>/pid`). On `EEXIST`:
-  if the recorded holder pid is dead, remove the lock dir and retry
-  immediately; else poll every 250 ms up to 10 s, then
-  `Error: timed out waiting for another process ensuring the <name> emulator — remove <lockDir> if stale.`
-  After acquiring, RE-READ the registry before deciding to spawn — the
-  previous holder may have already done the job. Port allocation happens
-  inside the lock, so two daemons can never claim one port. Release
-  (rm the dir) in a finally.
+- **Concurrent-ensure protocol (REVISED — operator decision, 2026-07-23):**
+  the observe→spawn→persist critical section is serialized ACROSS
+  PROCESSES per daemon name using `proper-lockfile` (maintained library;
+  its staleness/compromise semantics are adopted wholesale rather than our
+  earlier hand-rolled mkdir/pid protocol — commodity locking is exactly
+  where unforeseen edge cases hide). Our wrapper pins only: the lock path
+  is per-daemon under `<registryRoot>`; the bounded wait is ~10 s and its
+  exhaustion throws
+  `Error: timed out waiting for another process ensuring the <name> emulator — remove <lockDir> if stale.`;
+  the registry is RE-READ after acquiring (the previous holder may have
+  already done the job); port allocation happens inside the lock; release
+  runs in a finally on every path. The existing inter-process tests stand
+  unchanged — they validate behavior, not the engine.
 - `stopDaemon(name)`: SIGTERM/SIGKILL + registry cleanup. Not called by any
   v1 command — an operator escape hatch, exported for tests.
 - **Publish note (S5 scope):** `import.meta.resolve('@internal/dev-emulators/…')`
@@ -218,6 +222,14 @@ service child processes. Loopback `node:http` JSON admin API; state under its
   log file's current tail, then live lines while open.
 - `POST /apps/<app>/stop` → stop every child of the app (records kept,
   status `stopped`) → `204`.
+- `POST /apps/<app>/start` → start every service that has a stored
+  deployment spec and is not `running`, from that spec (a service with no
+  deployment recorded is skipped) → `204`. The symmetric inverse of
+  `/stop`, and the reason it must exist: Alchemy correctly skips a
+  provider's reconcile when nothing diffed, so a no-op converge can never
+  restart services a previous session stopped — the dev SESSION is the
+  explicit resume signal (found live on the open-chat proof: warm restart
+  printed ready while every service stayed stopped).
 - `DELETE /apps/<app>` → stop + remove the app's records and logs → `204`.
 
 Supervision policy (emulator-owned): unexpected exit → restart with backoff
@@ -284,8 +296,8 @@ Used by the local providers (§ 4) and the extension's `emulators`/`attach`/
 `src/control/app-config.ts` — add, exported through `exports/app-config.ts`:
 
 ```ts
-/** Local counterparts for `prisma-composer dev` (ADR-0041). An extension without one is not dev-capable. */
-export interface DevDescriptor {
+/** The extension's dev-mode counterpart (ADR-0041) — the dev variant OF ExtensionDescriptor, hence the full qualifier. An extension without one is not dev-capable. */
+export interface DevExtensionDescriptor {
   /** Local providers for the SAME resource types this extension's lowering emits. Receives the app identity — unlike deploy's env-arg-free `providers()`, local providers are emulator clients and must know which app they provision for. */
   providers(input: DevProvidersInput): Layer.Layer<never>;
   /** A stable local identity — resolved without any platform call. */
@@ -321,6 +333,8 @@ export interface DevAttachInput {
 }
 
 export interface DevAttachment {
+  /** Start every stopped service from its last deployment (the session-resume signal — a no-op converge cannot start anything). */
+  startServices(): Promise<void>;
   /** Every service's local endpoint, for the front door. */
   endpoints(): Promise<readonly { readonly address: string; readonly url: string }[]>;
   /** Merged, line-oriented log stream across the app's services (including services that appear after later converges). Ends when `signal` aborts. */
@@ -336,7 +350,7 @@ and on `ExtensionDescriptor`:
 
 ```ts
   /** Local dev counterparts (ADR-0041). */
-  readonly dev?: DevDescriptor;
+  readonly dev?: DevExtensionDescriptor;
 ```
 
 `src/control/deploy.ts`:
@@ -350,37 +364,39 @@ and on `ExtensionDescriptor`:
   `[dev] <address> has no watchable inputs` note at startup).
 - Adapters populate `watch`: `node()` → `[resolved entry file]`; `nextjs()`
   → `[the standalone output dir]`; `dir()` (§ 7) → `[the resolved dir]`.
-- `LowerOptions` gains `readonly dev?: boolean`.
-- New `export function mergedDevProviders(config: PrismaAppConfig,
-  containers: ReadonlyMap<string, ContainerInstance>, devDir: string):
-  Layer.Layer<never>` — like `mergedProviders` but calling
-  `extension.dev.providers({ container: containers.get(extension.id),
-  devDir })`; an extension with `dev === undefined` throws `LowerError` with
-  message exactly:
-  `extension "<id>" has no dev support — it declares no \`dev\` descriptor (ADR-0041).`
-  **Build-only exemption:** an extension participating in assembly only —
-  every `nodes` entry is `kind: 'build'` AND it declares none of
-  `providers`/`application`/`provisions`/`container` — has nothing to
-  emulate and is exempt: `mergedDevProviders` skips it silently, and every
-  dev hook iteration (containers, preflight, emulators, attach, teardown —
-  § 6) applies the same rule. Export the predicate as
-  `isBuildOnlyExtension(extension)` in `app-config.ts` so the CLI and
-  `mergedDevProviders` share one definition.
-- `lower()`: when `opts.dev === true`, use `mergedDevProviders(config,
-  containers, path.join(process.cwd(), DEV_DIR))` — `containers` is the map
-  `lower()` already deserializes from the env transport; state resolution is
-  unchanged (`resolveStateLayer` — dev passes `opts.state`, which already
-  takes precedence).
+- **REVISED (operator review of #162): `lower()` learns nothing about dev.**
+  There is NO `LowerOptions.dev` flag and no dev branch inside the
+  deployment layer. `LowerOptions` gains `readonly providers?:
+  Layer.Layer<never>` (explicit provider set; precedence over the config's,
+  exactly like the existing `state` override). Provenance is resolved at
+  ONE orchestration point: the GENERATED dev stack module (§ 6) itself
+  calls the already-exported `deserializeContainers(config.extensions,
+  process.env)` and passes `providers: devProviders(config, containers,
+  devDir)` + `state: localState()` explicitly. Everything downstream of
+  `lower()` is ignorant of the provenance of its providers.
+- `devProviders(config, containers, devDir)` (the aggregator formerly named
+  `mergedDevProviders`) moves OUT of `deploy.ts` into a dev-specific core
+  control module (`control/dev.ts`, exported via `exports/app-config.ts`),
+  keeping its pinned error string and the build-only exemption
+  (`isBuildOnlyExtension` in `app-config.ts`, shared with the CLI check).
 
 There is no framework-owned process table: service processes belong to the
 Compute emulator (§ 2), and core's whole view of the running app is the
 `DevAttachment` the extension returns.
 
-### 4. `@internal/lowering` (`packages/1-prisma-cloud/0-lowering/lowering`)
+### 4. `@internal/local-target` — NEW package (REVISED — operator review of #162)
 
-New directory `src/dev/`, exported as subpath `@internal/lowering/dev`
-(add to `src/exports/` per `.agents/rules/exports-entrypoints.mdc`; plane
-`control` like the rest of the package).
+The local provider suite does NOT live inside `@internal/lowering` —
+"lowering" is a Composer primitive and a "lowering dev" subtree conflates
+vocabularies. New package `@internal/local-target` at
+`packages/1-prisma-cloud/0-lowering/local-target/` (same layer as the
+hosted providers, its own name: it IS the local deploy target's provider
+suite), plane `control`, importing `@internal/dev-emulators` and
+`@internal/s3-protocol`. Everything previously specced under
+`@internal/lowering`'s `src/dev/` lives here instead; `artifact-extract`
+stays beside the artifact writer it mirrors (in `@internal/lowering`'s
+compute dir) and is imported downward. No floating module-level doc
+comments that attach to nothing (repo style).
 
 #### `src/dev/dev-store.ts` — the shared dev-instance store
 
@@ -404,6 +420,10 @@ registry (§ 2).
 
 Every local provider factory takes `(input: DevProvidersInput)`; `devDir`
 is `input.devDir`; nothing here reads `process.cwd()` or the environment.
+The emulator-facing service id is `slugServiceId(name)` (the same
+lowercase/hyphen slugging as postgres instance names) because a dotted
+address cannot satisfy § 2's id-segment rule; the real dotted address rides
+the deployment body and labels logs/endpoints.
 Two layer-order accommodations are pinned (this package cannot import the
 extensions layer): the app name is read as `input.container.input.appName`
 directly off the generic `ContainerInstance` (the field is on the base
@@ -427,11 +447,16 @@ scope, not v1.
 - `LocalDeploymentProvider(input)`: `reconcile`:
   1. Unpack `news.artifactPath` (tar.gz, the ustar format
      `packageComputeArtifact` writes) into
-     `<devDir>/artifacts/<artifactHash>/` if absent — implemented by a new
-     `src/compute/artifact-extract.ts` (`extractComputeArtifact(tarGzPath,
-     destDir)`), a minimal ustar reader matching exactly what the writer
-     emits: regular files, name+prefix fields, no links (error on any other
-     typeflag). Extraction goes temp-then-rename at the directory level.
+     `<devDir>/artifacts/<artifactHash>/` if absent — extraction uses the
+     maintained `tar` package (node-tar; dependency razor — reading tar is
+     commodity even though we write our own deterministic subset), with
+     entry filtering pinned: regular files only, reject links/devices,
+     reject path escapes. Temp-then-rename at the directory level. (WHY an
+     extractor exists at all: on the platform, the artifact is uploaded and
+     the platform unpacks it; locally the Compute emulator runs from a
+     directory, so the unpack step that was platform-side needs a local
+     counterpart. Unpacking the real tar keeps the strongest parity: what
+     runs is byte-for-byte what ships.)
   2. Fetch the service's port: `PUT /apps/<app>/services/<id>` (idempotent)
      where `id` = the ComputeService's name resolved from
      `news.computeServiceId`. Resolve the address from
@@ -466,15 +491,25 @@ scope, not v1.
   `{ id: 'local', ... }` shapes; present so the provider collection stays
   total, though current lowerings never yield `Project`.
 
-#### `src/dev/postgres.ts` — local postgres cluster providers
+#### Postgres providers — programmatic `@prisma/dev` (REVISED — operator review of #162; the S7 follow-up is pulled INTO this wave)
 
+The CLI shell-out is deleted wholesale: no bin walk-up (`resolve-bin.ts`
+gone), no stdout URL parsing, no `spawn-utils.ts`, no `prisma dev
+stop/rm` glob teardown. Instead, a third emulator daemon `postgres-main`
+(in `@internal/dev-emulators`, § 2's daemon layer) hosts
+`startPrismaDevServer({ name, databasePort, persistenceMode })` from
+`@prisma/dev` — one named persistent server per `Database` resource, port
+allocated from our registry (stable, persisted), admin over the same
+loopback pattern as the other daemons (create/ensure database instance,
+list, remove). The local Database/Connection providers become its clients;
+teardown removes the app's instances through the daemon's admin API.
+Version ownership: `@prisma/dev` resolves from the APP's node_modules
+(passed into the daemon as a resolved path), keeping the app in charge of
+its Prisma version; absent →
+`Error: local dev needs @prisma/dev for its local Postgres emulator — add "prisma" to your app's devDependencies.`
 - Instance name derivation: `pcdev-<app>-<database-id>`, where `<app>` and
   `<database-id>` are lowercased with every char outside `[a-z0-9]` replaced
   by `-`, runs collapsed, trimmed to 63 chars.
-- Bin resolution: walk up from cwd for `node_modules/.bin/prisma` (the
-  `resolveAlchemyBin` pattern, generalized as `resolveLocalBin(startDir,
-  binName)` in `src/dev/resolve-bin.ts`). Missing →
-  `Error: local dev needs the prisma CLI for its local Postgres emulator ('prisma dev') — add "prisma" to your app's devDependencies.`
 - `LocalDatabaseProvider(input)`: `reconcile` ensure sequence:
   1. No `postgres.json` entry → run
      `<prisma-bin> dev --name <instance> --detach`, capture stdout, take the
@@ -549,15 +584,20 @@ export const devProviders = (input: DevProvidersInput) =>
 No `ManagementClient`, no credentials layer — the dev bundle must typecheck
 without either.
 
-#### Lowering handoff change (shared with deploy — compile-checked)
+#### The address rides the artifact, not the platform primitive (REVISED — operator review of #162)
 
-`DeploymentProps` gains `readonly serviceAddress?: string`. The hosted
-provider ignores it (documented on the prop: local-dev only; the hosted
-platform derives nothing from it). `descriptors/compute.ts`: add
-`address: string` to `ComputeSerialized`, populated from `ctx.address` in
-`serialize`, threaded into the `Deployment` call in `deploy` as
-`serviceAddress`. The local provider REQUIRES it:
-`Error: Deployment for "<computeServiceId>" carries no serviceAddress — the lowering predates local dev support.`
+`DeploymentProps.serviceAddress` is REVERTED — dev-only configuration must
+not leak into platform primitives. The address is already intrinsic to the
+packaged artifact (its `bootstrap.js` bakes `run("<address>", …)`), so the
+artifact's OWN manifest carries it: `packageComputeArtifact` writes
+`compute.manifest.json` as `{ manifestVersion: "2", entrypoint:
+"bootstrap.js", address: "<address>" }` (a format this repo owns; version
+bumped, readers of "1" unaffected — the platform reads only `entrypoint`).
+The local Deployment provider reads `address` from the unpacked artifact's
+manifest; a manifest without it →
+`Error: artifact manifest carries no address — repackage with a current @prisma/composer (manifestVersion 2).`
+`ComputeSerialized.address` and the serialize/deploy threading are also
+reverted.
 
 ### 5. Target extension (`packages/1-prisma-cloud/1-extensions/target`)
 
@@ -600,6 +640,7 @@ New control-plane files (all under `src/`, plane `control` in
     attaching followers for services that appeared after a later converge
     and re-attaching any follower whose connection dropped (an emulator
     restart shows a gap, never a dead session).
+  - `startServices()` → `POST /apps/<app>/start`.
   - `stopServices()` → `POST /apps/<app>/stop`.
 - `src/dev/teardown.ts` — `runDevTeardown(input: TeardownInput)`:
   1. `<prisma-bin> dev stop 'pcdev-<slug(app)>-*'` then
@@ -682,7 +723,9 @@ New control-plane files (all under `src/`, plane `control` in
        DEV_STACK_RELATIVE_PATH, cwd, stage: 'dev', containerEnv })`.
        Nonzero exit: print the stack-file reproduction hint (deploy's
        pattern, with `--stage dev`) and exit with that status.
-    8. Attach: `dev.attach({ container, devDir })` per extension; print the
+    8. Attach: `dev.attach({ container, devDir })` per extension; call every
+       attachment's `startServices()` (resume services a previous session's
+       Ctrl-C stopped — converge cannot, when nothing diffed); then print the
        front door from the merged `endpoints()` (ordered by address depth,
        fewest dots first, then lexicographic; first line preceded by
        `[dev] ready:`); pump every attachment's `logs()` to stdout, each
@@ -690,6 +733,15 @@ New control-plane files (all under `src/`, plane `control` in
     9. Watch loop (below) until SIGINT/SIGTERM; on exit call every
        attachment's `stopServices()`, then exit 0 — emulators and data stay
        up by design (machine-scoped daemons; `--fresh` removes instances).
+       Recorded limitation: the dev command becomes the SOLE signal
+       listener at this point (alchemy's transitively imported library code
+       registers exit-on-signal listeners at module load; they are stripped
+       so cleanup can run), so a second Ctrl-C does not force-quit a hung
+       stop — the emulator's kill grace bounds it in practice.
+       Recorded follow-up: `PreflightInput` carries no `devDir`, so the dev
+       preflight derives it from `process.cwd()` — correct under the CLI
+       (which runs from the app dir) but asymmetric with every other dev
+       hook; adding `devDir` to the input is future work, not v1.
   - `generate-dev-stack.ts` — like `generate-stack.ts` but at
     `.prisma-composer/dev/alchemy.run.ts`
     (`DEV_STACK_RELATIVE_PATH`), emitting:
@@ -712,8 +764,13 @@ New control-plane files (all under `src/`, plane `control` in
     as the reproduction line.
   - `watch.ts` — watch each assembled bundle's `watch` paths (the
     adapter-declared user-built inputs — § 3's `Bundle.watch`; a bundle
-    without them is not watched, noted once at startup). `fs.watch`
-    recursive on dirs, plain on files; debounce 300 ms per burst, coalescing across
+    without them is not watched, noted once at startup). The watch ENGINE
+    is `chokidar` v4 (operator decision: don't-reinvent-the-wheel beats the
+    no-new-deps contract here — chokidar absorbs the atomic-rename/inode
+    class we hand-fixed once already and the cross-platform recursive-watch
+    differences; v4 is pure JS, no native code, no glob surface). The
+    hand-rolled parent-directory workaround is deleted; its delete+recreate
+    regression test STAYS as a behavior test. Debounce 300 ms per burst, coalescing across
     services. On fire: re-run assemble for ALL services (correctness over
     cleverness; optimization is a recorded follow-up) → rewrite the dev stack
     file → re-run converge (`--stage dev`) — the emulator restarts exactly
@@ -758,9 +815,15 @@ The open-chat proof (S6) uses `node({ module, dir, entry })`.
 
 ## Behavior contracts (cross-cutting)
 
-- **No new runtime dependencies** in any shipped package. The S3 server,
-  tar reader, watcher, and emulator daemons use node built-ins only. (`alchemy`,
-  `effect`, `clipanion` are already present.)
+- **Dependency razor (operator decision):** commodity infrastructure with
+  latent edge cases uses MAINTAINED LIBRARIES — `chokidar` v4 (watching,
+  § 6), `proper-lockfile` (inter-process locking, § 2), `get-port` (free-
+  port probing, § 2). Hand-rolled code is reserved for wire formats we own
+  — the S3 handler, the ustar reader, the emulator admin APIs — where a
+  dependency is a liability, not a shield. (`alchemy`, `effect`,
+  `clipanion` are already present.) The earlier no-new-deps contract cost
+  real bugs in exactly the commodity code (a Linux port-probe
+  self-collision, a BSD/GNU pgrep detour) and is retired.
 - **Casts**: `.agents/rules/no-bare-casts.mdc` — every cast is `blindCast`
   with a justification, or real narrowing. The provider attribute shapes are
   typed against the hosted providers' exported types, not re-declared.
@@ -791,7 +854,9 @@ The open-chat proof (S6) uses `node({ module, dir, entry })`.
       topology; a missing env-sourced param fails with the listing error.
 - [ ] After Ctrl-C, a second `prisma-composer dev` reaches ready as a warm
       start: same service ports and URLs, no re-provisioning, Postgres and
-      bucket data intact.
+      bucket data intact — and an HTTP round-trip against the front door
+      SUCCEEDS (the services are genuinely serving, not merely listed;
+      port-stability alone missed a live resume bug).
 - [ ] The open-chat port (via the `dir()` adapter) boots through
       `prisma-composer dev` with sign-in, history, and live-tail working —
       replacing its hand-rolled `scripts/dev.ts` (parity proof; port-repo
