@@ -20,6 +20,58 @@ reset, magic links) rides the `email` module (PR #146) through
 consumer-declared templates. The instance secret is platform-minted. Browsers
 reach Better Auth through a proxy route on the consumer app's origin.
 
+## Rework amendments (2026-07-23, from Will's PR #163 review — binding, override the sections below where they conflict)
+
+1. **Instance secret rides the existing ADR-0029 secret-slot model.** The
+   target gains a generic minted secret **source** — `mintedSecret()`,
+   usable wherever `envSecret(name)` is — that resolves a secret slot by
+   minting a stable random value at deploy (reconcile keeps the existing
+   output; same semantics the `authSecret` resource had). The bespoke
+   `authSecret` resource + descriptor + contract are DELETED; `auth()`
+   binds its service's ordinary secret slot to `mintedSecret()` internally,
+   so consumers still see zero secret slots. `s3-credentials` stays as-is
+   (the bucket is a platform primitive). D8's semantics (mint-once, stable,
+   unexposed, no rotation) are unchanged — only the mechanism moves into
+   the platform's existing secret representation.
+2. **Local testing bootstrap uses PN migrations.** `startLocalAuthServer`
+   runs the real PN `dbInit` path (control client, as
+   `prisma-next-migrate.ts` does deploy-side) against the caller's local
+   database instead of applying a rendered `schema.sql`. DELETE
+   `scripts/generate-schema.ts`, `src/pack/schema.sql`,
+   `src/pack/schema-sql.ts`. The schema-conformance test keeps its real
+   assertion (migrate a scratch DB via PN, run Better Auth's schema
+   generation, assert zero pending changes) minus the schema.sql-drift
+   half. Escape hatch: if bundling the PN control client into the testing
+   export genuinely fails, STOP and report — do not silently revert to raw
+   SQL.
+3. **Fetch composition is a framework concern.** `@internal/service-rpc`
+   gains a small generic helper composing a service's fetch surface
+   (health probe + a public non-rpc handler + `serve()`'s rpc handler);
+   auth's module-local `fetch-router.ts` is deleted in favor of it.
+   `serve.ts` uses the (now exported) `isRpcContract` type guard instead
+   of the inline `kind !== 'rpc'` literal. First-class multi-port routing
+   stays wired-egress territory; this is only the composition seam.
+4. **Prisma Next vocabulary.** Renames (types, functions, fields, and
+   prose): `PnProject`/`resolvePnProject` → the loaded thing is a config —
+   `ResolvedPrismaNextConfig`/`resolvePrismaNextConfig`;
+   `packHead`/`packHeads` → `packHeadRefHash`/`packHeadRefHashes` (PN
+   terms: a pack's contract-space *head ref* and its *storage hash*);
+   `PnPackRequirement`/`pnPackRequirement`/`packRequirementOf` →
+   `RequiredPackHead`/`requiredPackHead`/`requiredPackHeadOf` (the concept
+   is compose's own — the name now says what it is instead of
+   masquerading as PN glossary).
+5. **No transient project identifiers in shipped code.** Comments
+   referencing Drive slice/decision IDs (`S1`, `slice S2`, `D5`, `D12`,
+   …) are forbidden in `packages/**` and `examples/**` — replace each
+   with the actual reasoning (or delete). This spec keeps its IDs; they
+   just may not leak into code.
+6. **Examples don't hand-roll servers or port types.** `examples/auth`'s
+   `api` and `ops` apps move to Hono (the email example's precedent) and
+   derive their dependency types from the rpc contracts / binding types
+   instead of hand-declared `SessionPort`/`AdminPort`/`OutboxPort`
+   interfaces. Other examples' hand-rolled servers are out of scope
+   (follow-up filed).
+
 ## Settled decisions (do not relitigate)
 
 | # | Decision | Why |
