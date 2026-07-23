@@ -537,16 +537,19 @@ function main(): void {
     if (!appRec) return;
     const entries = Object.values(appRec.databases);
 
-    await Promise.all(
-      entries.map(async (db) => {
-        const server = runtimes.get(db.instanceName);
-        if (server) {
-          await server.close();
-          runtimes.delete(db.instanceName);
-          releaseAuxPorts(db.instanceName);
-        }
-      }),
-    );
+    // Closed one at a time, never concurrently: the servers run pglite's
+    // native/WASM runtime in THIS process, and the daemon has died silently
+    // (no JS error, no guard output — a native abort) during exactly this
+    // teardown window under CI load. Sequential closes remove the only
+    // concurrency we control there.
+    for (const db of entries) {
+      const server = runtimes.get(db.instanceName);
+      if (server) {
+        await server.close().catch(() => undefined);
+        runtimes.delete(db.instanceName);
+        releaseAuxPorts(db.instanceName);
+      }
+    }
 
     // Deleting the persisted PGlite data needs SOME resolved `@prisma/dev`
     // module — the app that owns the databases being deleted is the same
@@ -555,7 +558,7 @@ function main(): void {
     // no body, so there is nothing more specific to prefer.
     if (entries.length > 0 && prismaDevModulePathHint) {
       const { deleteServer } = await importPrismaDevInternalState(prismaDevModulePathHint);
-      await Promise.all(entries.map((db) => deleteServer(db.instanceName)));
+      for (const db of entries) await deleteServer(db.instanceName);
     }
 
     delete state[app];
@@ -663,9 +666,9 @@ function main(): void {
   // children (a separate OS process the OS reclaims on its own) or
   // buckets' plain filesystem store.
   async function shutdown(): Promise<void> {
-    await Promise.all(
-      [...runtimes.values()].map((server) => server.close().catch(() => undefined)),
-    );
+    for (const server of runtimes.values()) {
+      await server.close().catch(() => undefined);
+    }
     await stateFile.flush();
     server.close();
     process.exit(0);
