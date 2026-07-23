@@ -545,7 +545,9 @@ Pinned option values:
   <cb>, expiresIn: 300, disableSignUp: false })`.
 
 S1 (pre-email): the three send callbacks log
-`auth: email delivery not wired (slice S2): <purpose> for <email>` and
+`auth: email delivery not wired: <purpose> for <email>` (amended
+2026-07-23: the pinned string used to carry "(slice S2)" — a transient
+project identifier, which shipped code must not contain) and
 return; `requireEmailVerification: false`; `magicLink` plugin still enabled
 (its sends no-op). S2 replaces the callbacks with real sends and flips
 `requireEmailVerification: true`.
