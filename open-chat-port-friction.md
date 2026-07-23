@@ -5,10 +5,9 @@ Every workaround, missing capability, or illegible error hit while porting
 onto Prisma Composer. This log lives here, next to `gotchas.md` and
 `dogfood-report.md`, because it is Composer dogfooding output — the port
 branch itself ([prisma/open-chat#1](https://github.com/prisma/open-chat/pull/1))
-carries only the port. Appended by each dispatch (D1–D6); filed as
-`prisma/compose` issues in D5. Framework version under test: the pkg.pr.new
-preview of `prisma/composer`'s `main` at `ac1e7b1` (`@prisma/composer` +
-`@prisma/composer-prisma-cloud`).
+carries only the port. Appended by each dispatch (D1–D7); filed as
+`prisma/compose` issues in D5. The framework version under test is recorded
+in each dispatch section's header.
 
 ## D1 — Topology scaffold
 
@@ -88,7 +87,7 @@ with fabricated `COMPOSER_*` env vars) when it still used `pnPostgres`.
 
 **Symptom (as hit under `pnPostgres`, before D1b removed it):**
 
-```
+```text
 ContractValidationError: Contract structural validation failed:
 execution.mutations.defaults[0].ref.namespace must be a string (was missing);
 ... [8 entries]
@@ -167,7 +166,7 @@ that didn't hold here.
 `dist/server/` — the server bundle plus the client bundle Bun's native HTML-import
 feature emits alongside it:
 
-```
+```text
 start.js                     2.48 MB    (entry point)
 index-<hash>.js               0.98 MB    (entry point)
 client/index.html             3.10 KB    (entry point)
@@ -229,7 +228,7 @@ against the path *relative to the build's working directory*, not the
 specifier as written relative to the importing file.
 
 **Workaround used:** `--external './dist/server/start.js'` (or a
-`*/dist/server/start.js'` glob) — either matches; documented in
+`'*/dist/server/start.js'` glob) — either matches; documented in
 `package.json`'s `build:launcher` script.
 
 ## D2 — Local dev loop
