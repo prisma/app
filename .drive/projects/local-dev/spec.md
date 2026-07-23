@@ -152,9 +152,18 @@ plus the shared daemon layer and typed loopback clients.
      timeout → kill the spawned child (it must not outlive a failed
      ensure), then
      `Error: <name> emulator failed to start on port <port> — see <logPath>.`
-  5. Foreign process on the port → same error; `--fresh` does NOT touch the
-     daemons (they are machine-global, shared by other apps); recovering a
-     stolen port is manual (delete the registry entry).
+  5. Port taken at spawn (the daemon exits with a bind error before
+     reporting healthy): if the registry entry is being created FRESH — no
+     previously persisted port — the ensure, still holding the lock,
+     allocates the next free candidate (≥ 4300, skipping registry-used
+     ports), persists it, and retries the spawn, up to 5 candidates before
+     the pinned failure error. A fresh allocation has handed out no
+     endpoint, so moving it is safe — and this also makes ensure robust
+     when isolated registries (tests) or foreign processes race for the
+     same port. With a PREVIOUSLY persisted port, never retry elsewhere:
+     endpoints frozen in deploy state reference it — fail with the pinned
+     error; recovery is manual (`--fresh` does NOT touch the daemons — they
+     are machine-global, shared by other apps).
 - **Concurrent-ensure protocol:** the observe→spawn→persist critical
   section is serialized ACROSS PROCESSES per daemon name with an atomic
   directory lock: `mkdir <registryRoot>/.lock-<name>` (atomic creation IS
@@ -787,35 +796,14 @@ friction #3's shape) and independently useful.
 
 ## Open questions
 
-- **S5's branch base (`claude/local-dev-s4-dev-target`) does not contain
-  `Bundle.watch`.** Plan.md assigns `Bundle.watch` (the core optional field
-  plus its population in `node()`/`nextjs()`/`dir()`) to S2, and states "S5
-  needs S4" — not S2. `git merge-base --is-ancestor
-  claude/local-dev-s2-dir-adapter claude/local-dev-s4-dev-target` is false:
-  S2 is a sibling branch, not an ancestor of S5's base. Grepping the whole
-  framework tree for `watch` on this branch returns nothing — `Bundle` is
-  still exactly `{ dir, entry }` in
-  `packages/0-framework/1-core/core/src/control/deploy.ts`. But spec § 6's
-  `watch.ts` is specified entirely in terms of `Bundle.watch`
-  ("watch each bundle's `watch` paths"). Per the S5 dispatch instructions,
-  S1–S4 files may not be modified except the one sanctioned
-  `ensureDaemon`/publish-safe-entries change — so `Bundle.watch` cannot be
-  added here.
-  **Resolution taken (documented, not improvised):** the spec itself
-  anticipates a bundle lacking `watch` — "Optional so existing adapters
-  compile... a bundle without it is simply not watched (recorded
-  limitation, surfaced by a one-line `[dev] <address> has no watchable
-  inputs` note at startup)." `watch.ts`/`run-dev.ts` are implemented against
-  a locally-declared structural type (`Bundle & { readonly watch?: readonly
-  string[] }`), read from the assembled bundles with one justified
-  `blindCast` (core's `Bundle` doesn't yet declare the field; a bundle
-  missing it is `undefined`, which is exactly the pinned "not watched"
-  fallback). No behavior is invented — every bundle on this branch takes
-  that fallback today (since no adapter populates `watch` yet), and the
-  watch loop starts genuinely watching the moment S2's `Bundle.watch`
-  lands and S6 combines S2 + S5. This means the "rebuild one service,
-  only it restarts" behavior (acceptance criterion 2) is implemented and
-  correct, but is NOT independently exercisable from S5's branch alone
-  today — S2 must land (or be merged into this branch) before it can be
-  driven for real; the manual/integration verification of that criterion
-  is deferred and noted as such in the S5 report.
+(none currently open — a gap found during implementation is recorded here
+and raised, not improvised around)
+
+**Resolved:** S5's branch base (`claude/local-dev-s4-dev-target`) predates
+`Bundle.watch` (S2 scope, not an ancestor of S4). `watch.ts`/`run-dev.ts`
+read it through a locally-declared structural extension of `Bundle` with one
+justified `blindCast`, so every bundle takes the spec's own pinned "not
+watched" fallback until S2 merges, and the watch loop activates for real the
+moment it does — see `packages/0-framework/3-tooling/cli/src/dev/watch.ts`'s
+doc comment. No spec change needed; recorded here only so the resolution is
+visible next to where the gap used to be.
