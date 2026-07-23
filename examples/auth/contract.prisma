@@ -1,0 +1,8 @@
+// use prisma-next
+//
+// The app space is EMPTY on purpose: this example is the dedicated-database
+// shape — the database exists solely to carry the auth extension pack, and
+// the one deploy migration step creates the auth tables from the pack's
+// shipped migrations. (The shared-DB golden path, where an app contract
+// gains an `auth:User` FK beside its own tables, is the storefront-auth
+// example.)

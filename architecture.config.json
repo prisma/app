@@ -763,6 +763,24 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/auth.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/auth-pack.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/9-public/composer-prisma-cloud/src/exports/auth-testing.ts",
+      "domain": "public",
+      "layer": "public",
+      "plane": "execution"
+    },
+    {
       "glob": "packages/9-public/composer-prisma-cloud/src/exports/email.ts",
       "domain": "public",
       "layer": "public",
