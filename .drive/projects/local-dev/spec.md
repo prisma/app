@@ -952,5 +952,35 @@ The open-chat proof (S6) uses `node({ module, dir, entry })`.
 
 ## Open questions
 
-(none — a gap found during implementation is recorded here and raised, not
-improvised around)
+- **S5's branch base (`claude/local-dev-s4-dev-target`) does not contain
+  `Bundle.watch`.** Plan.md assigns `Bundle.watch` (the core optional field
+  plus its population in `node()`/`nextjs()`/`dir()`) to S2, and states "S5
+  needs S4" — not S2. `git merge-base --is-ancestor
+  claude/local-dev-s2-dir-adapter claude/local-dev-s4-dev-target` is false:
+  S2 is a sibling branch, not an ancestor of S5's base. Grepping the whole
+  framework tree for `watch` on this branch returns nothing — `Bundle` is
+  still exactly `{ dir, entry }` in
+  `packages/0-framework/1-core/core/src/control/deploy.ts`. But spec § 6's
+  `watch.ts` is specified entirely in terms of `Bundle.watch`
+  ("watch each bundle's `watch` paths"). Per the S5 dispatch instructions,
+  S1–S4 files may not be modified except the one sanctioned
+  `ensureDaemon`/publish-safe-entries change — so `Bundle.watch` cannot be
+  added here.
+  **Resolution taken (documented, not improvised):** the spec itself
+  anticipates a bundle lacking `watch` — "Optional so existing adapters
+  compile... a bundle without it is simply not watched (recorded
+  limitation, surfaced by a one-line `[dev] <address> has no watchable
+  inputs` note at startup)." `watch.ts`/`run-dev.ts` are implemented against
+  a locally-declared structural type (`Bundle & { readonly watch?: readonly
+  string[] }`), read from the assembled bundles with one justified
+  `blindCast` (core's `Bundle` doesn't yet declare the field; a bundle
+  missing it is `undefined`, which is exactly the pinned "not watched"
+  fallback). No behavior is invented — every bundle on this branch takes
+  that fallback today (since no adapter populates `watch` yet), and the
+  watch loop starts genuinely watching the moment S2's `Bundle.watch`
+  lands and S6 combines S2 + S5. This means the "rebuild one service,
+  only it restarts" behavior (acceptance criterion 2) is implemented and
+  correct, but is NOT independently exercisable from S5's branch alone
+  today — S2 must land (or be merged into this branch) before it can be
+  driven for real; the manual/integration verification of that criterion
+  is deferred and noted as such in the S5 report.
