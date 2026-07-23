@@ -79,9 +79,29 @@ emulator, which owns the processes:
   and remove.
 - **Ctrl-C on the dev command** → the attachment stops the app's service
   instances and detaches. Every emulator — Compute, Postgres instances, the
-  bucket emulator — stays up with its data; the next start is warm.
-  `--fresh` is what removes instances and data. (A detached mode where
-  services keep serving with no session is a designed extension, not v1.)
+  bucket emulator — stays up with its data; the next start reprovisions the
+  same instances (same ports, same data). `--fresh` is what removes
+  instances and data. (A detached mode where services keep serving with no
+  session is a designed extension, not v1.)
+
+  **Known gap (S6 finding, unresolved):** a service actually only restarts
+  when its `Deployment` resource is re-put — and Alchemy skips calling the
+  provider at all when a resource's props (artifact hash, env) are
+  unchanged from its last recorded apply. A Ctrl-C stop is invisible to that
+  diff: nothing about the resource's *props* changed, only the process's
+  live status, which Alchemy's state file does not track. So a second
+  `prisma-composer dev` after a plain Ctrl-C can converge with everything
+  reported "noop" and leave every previously-stopped service `stopped` —
+  the CLI still prints `[dev] ready:` with each service's URL, but nothing
+  is listening on them. Confirmed against the open-chat port (`.drive/projects/local-dev/assets/open-chat-port/FRICTION-S6.md`
+  finding "warm-restart-noop"); the existing store proving script's own
+  criterion-6 check doesn't catch it because it asserts port *stability*
+  and reads Postgres directly, never an HTTP round-trip against the
+  restarted service. Fix belongs in the dev pipeline (`run-dev.ts`) or the
+  local `Deployment` provider: either force a reconcile every dev start
+  regardless of Alchemy's diff, or give the provider an `observe` step that
+  compares against the emulator's actual reported status, not just stored
+  props.
 
 The env materialization is the one platform-side behavior the local target
 implements itself: the hosted platform joins the branch's config variables
@@ -243,15 +263,32 @@ Deploy's rule holds: every failure names its fix.
 
 ## Open questions
 
-- **Restart latency budget.** Assemble + package + converge per edit is
-  unmeasured. The artifact cache (unpack once per hash) is designed; whether
-  package's tar step needs a dev bypass for very large trees (Next standalone)
-  is a measurement away. Decide with numbers, not in advance.
+(none outstanding from the design phase — see Known limitations below for
+gaps found during implementation.)
 
 (Settled since the first draft: Postgres runs one named `prisma dev` instance
 per `Database` resource; the front door prints every service URL ordered by
 address depth then name, shallowest first; port allocation and the remaining
-mechanics are pinned in the implementation spec.)
+mechanics are pinned in the implementation spec. Restart latency is measured
+— see Known limitations.)
+
+## Known limitations (found in implementation, S6)
+
+- **Restart latency: ~3.2s median** on one edit-rebuild-converge cycle
+  against `examples/store` (Apple M3 Max) — comfortably inside the
+  single-digit-seconds target. Method and full numbers:
+  `.drive/projects/local-dev/assets/latency.md`.
+- **Warm-restart-after-Ctrl-C can leave services stopped** — see the
+  Compute-emulator section above ("Known gap (S6 finding, unresolved)").
+- **`Bundle.watch` isn't populated on every branch yet** (S2 slice); until
+  it lands everywhere, a service reports `[dev] <address> has no watchable
+  inputs` at startup and a rebuild has to be triggered manually (rerun `dev`,
+  or a second converge) rather than picked up by the file-watch loop.
+- **App-owned migrations are not run by `dev`** (by design — ADR-0022, spec
+  § 4's `PnMigration` line is for framework-run migrations only). An app that
+  runs its own migrations (e.g. via `prisma-next db init`, like the
+  open-chat port) needs that as a manual step against the local Postgres URL
+  on a fresh dev instance; `dev` does not know to run it automatically.
 
 ## Related
 

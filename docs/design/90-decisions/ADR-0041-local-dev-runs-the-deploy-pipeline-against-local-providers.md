@@ -91,9 +91,16 @@ streams, a stop control — and runs the watch loop (rebuild → re-assemble →
 re-converge). Core renders what the hook returns and never learns any
 emulator's API (the ADR-0038 opacity pattern). Ctrl-C stops the app's
 service instances through the attachment and exits; the emulators, the
-databases, and the bucket data persist, making the next start warm. A
-detached mode (services keep serving with no session, full platform parity)
-is a designed extension, not v1.
+databases, and the bucket data persist, making the next start warm — the
+data and ports are warm. **What "falls out of Alchemy's own diffing" (above)
+cuts both ways**, found while proving this ADR against a real app (S6): a
+Ctrl-C stop changes a service's live status, not its `Deployment` resource's
+props, so a subsequent `dev` with no source edit can converge as all-noop
+and never re-put the stopped service — it stays down even though the CLI
+reports the app ready. Unresolved as of S6; tracked in
+[local-dev.md](../10-domains/local-dev.md)'s Known limitations. A detached
+mode (services keep serving with no session, full platform parity) is a
+designed extension, not v1.
 
 **Rebuilds stay the user's** (ADR-0005). Dev watches the *built* output that
 assembly consumes, never sources; the user's own watcher (`next dev` is not
@@ -188,7 +195,8 @@ this repo owns.
   every supported app shape; the general directory-runnable build adapter is a
   prerequisite. Restart latency is bounded by assemble + package + converge;
   the local `Deployment` provider owns artifact caching (unpack once per hash).
-  Measure before optimizing further.
+  Measured (S6) at ~3.2s median for one edit-rebuild-converge cycle against
+  `examples/store` — see `.drive/projects/local-dev/assets/latency.md`.
 - **The extension factory must not require platform environment for dev.** The
   hosted factory's required workspace variable stays deploy-only; the `dev`
   path resolves no credentials at all.
