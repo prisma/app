@@ -16,32 +16,35 @@
  *      (`[dev] ready:` + one line per service) is parsed from real stdout;
  *      an HTTP round-trip against the storefront's URL succeeds.
  *   2. Rebuild restarts exactly one service: touching ONLY catalog's built
- *      artifact (so its hash moves, nothing else's) and re-converging
- *      restarts `catalog.service` alone — every other service's pid is
- *      unchanged, including its own RPC consumers (`orders.service`,
- *      `cron.runner`) and everything unrelated (`storefront`,
- *      `cron.scheduler`). Run twice in a row against the same live session
- *      — this is the regression proof for the restart-amplification defect
- *      fixed in compute.ts's `materializeEnv` (see its `scopedEnv` doc
- *      comment): before that fix, the FIRST rebuild after a cold start
- *      restarted catalog's RPC consumers too, even though nothing about
- *      them had changed.
+ *      artifact (so its hash moves, nothing else's) restarts `catalog.service`
+ *      alone — every other service's pid is unchanged, including its own RPC
+ *      consumers (`orders.service`, `cron.runner`) and everything unrelated
+ *      (`storefront`, `cron.scheduler`). Run twice in a row against the same
+ *      live session — this is the regression proof for the
+ *      restart-amplification defect fixed in compute.ts's `materializeEnv`
+ *      (see its `scopedEnv` doc comment): before that fix, the FIRST rebuild
+ *      after a cold start restarted catalog's RPC consumers too, even though
+ *      nothing about them had changed.
  *
- *      NOT driven through the CLI's own file-watch loop: `Bundle` doesn't
- *      declare `watch` on this branch yet (spec § 3, S2 slice — watch.ts's
- *      own doc comment), so every service is currently "unwatchable" and a
- *      file edit is never detected. Session 1's own dev command still
- *      writes the real dev stack file and sets up containers/emulators
- *      exactly as a real session would; the artifact is touched, then the
- *      SAME stack file is re-converged directly with the real `alchemy`
- *      binary (matching local-dev.integration.ts's own pattern) — this
- *      re-hashes catalog's now-different bundle bytes and PUTs a fresh
- *      deployment for every service, letting the emulator's own (untouched)
- *      hash/env diffing decide which one(s) actually restart. Session 1's
- *      services are NEVER stopped in between (SIGINT is app-scoped and
- *      unconditionally restarts every service on the next redeploy — S3's
- *      own pinned "a stopped service always starts on redeploy" behavior —
- *      which would defeat this proof entirely).
+ *      Attempt 1 drives the CLI's own real chokidar-based watch loop: the
+ *      catalog build adapter declares `Bundle.watch: [runnable.source]` —
+ *      the built artifact path itself (build.ts) — so touching
+ *      `modules/catalog/dist/server.mjs` is exactly the file session 1's own
+ *      running `prisma-composer dev` process is already watching. The script
+ *      only touches the file and polls the compute emulator for the new pid
+ *      — it never calls assemble or alchemy itself; the running process's
+ *      own debounce, re-assemble, and re-converge are what's under test.
+ *      Attempt 2 is the direct-converge variant kept as a fallback assertion:
+ *      the artifact is touched, then the SAME dev stack file is re-converged
+ *      directly with the real `alchemy` binary (matching
+ *      local-dev.integration.ts's own pattern), bypassing the watch loop
+ *      entirely — this re-hashes catalog's now-different bundle bytes and
+ *      PUTs a fresh deployment for every service, letting the emulator's own
+ *      (untouched) hash/env diffing decide which one(s) actually restart.
+ *      Session 1's services are NEVER stopped in between (SIGINT is
+ *      app-scoped and unconditionally restarts every service on the next
+ *      redeploy — S3's own pinned "a stopped service always starts on
+ *      redeploy" behavior — which would defeat this proof entirely).
  *   3. Postgres persistence: a row is written directly against the real
  *      `prisma dev` URL (read from `.prisma-composer/dev/postgres.json`,
  *      never through the app's own RPC surface — this is a storage-layer
@@ -382,6 +385,49 @@ function alchemyBin(startDir: string): string {
  * service lets the emulator's own (untouched) hash/env diffing decide which
  * one(s) restart. Returns every service's pid AFTER the converge.
  */
+const REAL_WATCH_TIMEOUT_MS = 30_000;
+
+/**
+ * Touches ONLY catalog's built artifact — the same file the running
+ * `prisma-composer dev` process's own chokidar watch loop is already
+ * watching (`Bundle.watch: [runnable.source]`, build.ts). This does not call
+ * assemble or alchemy itself: the running process's own debounce (300ms),
+ * re-assemble, and re-converge are what's being proved.
+ *
+ * Waits for the watch loop's OWN completion signal — run-dev.ts reprints the
+ * front door (`[dev] ready:` + one line per service) after a successful
+ * reconverge — rather than just for catalog.service's pid to move: the spec
+ * re-runs assemble for EVERY service on a fire (not just the touched one),
+ * so waiting on catalog's pid alone can return while the running process is
+ * still mid-converge for other services, racing this script's own later use
+ * of the same on-disk artifact directories (confirmed live: a direct
+ * fallback reconverge started right after the pid-only wait hit "no
+ * main.js/main.mjs found in bundle dir .../artifacts/storefront" — the real
+ * process's own converge was still writing it). Bounded by
+ * `REAL_WATCH_TIMEOUT_MS`.
+ */
+async function touchCatalogAndAwaitRealWatchLoop(
+  session: DevSession,
+  pidsBefore: Record<string, number | undefined>,
+): Promise<Record<string, number | undefined>> {
+  const beforeLineCount = readLog(session.logPath).split('\n').length;
+
+  fs.appendFileSync(catalogDist, `\n// proving-script touch (real watch loop) ${Date.now()}\n`);
+
+  await waitForAsync(async () => {
+    const newLines = readLog(session.logPath).split('\n').slice(beforeLineCount);
+    return parseFrontDoor(newLines.join('\n'));
+  }, REAL_WATCH_TIMEOUT_MS);
+
+  return waitForAsync(async () => {
+    const pids = await pidsByAddress(APP_NAME);
+    return pids['catalog.service'] !== undefined &&
+      pids['catalog.service'] !== pidsBefore['catalog.service']
+      ? pids
+      : undefined;
+  }, 15_000);
+}
+
 async function rebuildCatalogAndReconverge(): Promise<Record<string, number | undefined>> {
   fs.appendFileSync(catalogDist, `\n// proving-script touch ${Date.now()}\n`);
 
@@ -471,22 +517,34 @@ async function main(): Promise<void> {
       return ADDRESSES.every((a) => pids[a] !== undefined) ? pids : undefined;
     }, 15_000);
 
+    const activeSession = session;
+    assert(activeSession !== undefined, 'session 1 must be running before criterion 2');
+
     let pidsBefore = pidsBaseline;
-    for (const attempt of [1, 2] as const) {
-      const pidsAfter = await rebuildCatalogAndReconverge();
+    const RECONVERGE_STRATEGIES = [
+      {
+        label: 'real watch loop',
+        run: (before: Record<string, number | undefined>) =>
+          touchCatalogAndAwaitRealWatchLoop(activeSession, before),
+      },
+      { label: 'direct converge (fallback)', run: () => rebuildCatalogAndReconverge() },
+    ] as const;
+    for (const [index, strategy] of RECONVERGE_STRATEGIES.entries()) {
+      const attempt = index + 1;
+      const pidsAfter = await strategy.run(pidsBefore);
       assert(
         pidsAfter['catalog.service'] !== pidsBefore['catalog.service'],
-        `criterion 2 (attempt ${attempt}): catalog.service must restart (new pid)`,
+        `criterion 2 (attempt ${attempt}, ${strategy.label}): catalog.service must restart (new pid)`,
       );
       for (const address of ['storefront', 'cron.runner', 'orders.service', 'cron.scheduler']) {
         assertEqual(
           pidsAfter[address],
           pidsBefore[address],
-          `criterion 2 (attempt ${attempt}): ${address}'s pid must NOT change — only catalog.service was rebuilt`,
+          `criterion 2 (attempt ${attempt}, ${strategy.label}): ${address}'s pid must NOT change — only catalog.service was rebuilt`,
         );
       }
       console.log(
-        `[proving] PASS criterion 2 (attempt ${attempt}): exactly catalog.service restarted, all four others unchanged`,
+        `[proving] PASS criterion 2 (attempt ${attempt}, ${strategy.label}): exactly catalog.service restarted, all four others unchanged`,
       );
       pidsBefore = pidsAfter;
     }

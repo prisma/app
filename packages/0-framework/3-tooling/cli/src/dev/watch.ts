@@ -16,7 +16,7 @@
  * one callback," which is what the dev loop actually needs.
  */
 import type { Bundle } from '@internal/core/deploy';
-import { watch as chokidarWatch, type FSWatcher } from 'chokidar';
+import chokidar, { type FSWatcher } from 'chokidar';
 
 const DEBOUNCE_MS = 300;
 
@@ -62,7 +62,7 @@ export function startWatch(targets: readonly WatchTarget[], onChange: () => void
   };
 
   const allPaths = targets.flatMap((target) => target.paths);
-  const watcher: FSWatcher = chokidarWatch(allPaths, { ignoreInitial: true });
+  const watcher: FSWatcher = chokidar.watch(allPaths, { ignoreInitial: true });
   watcher.on('all', () => trigger());
 
   return () => {
