@@ -322,6 +322,7 @@ describe('local dev (S4): compute + postgres + bucket, lowered with dev: true th
       }
       fs.rmSync(path.join(emulatorRegistryRoot(), `${name}.json`), { force: true });
       fs.rmSync(path.join(emulatorRegistryRoot(), name), { recursive: true, force: true });
+      fs.rmSync(path.join(emulatorRegistryRoot(), `${name}.log`), { force: true });
     }
 
     // `.prisma-composer/dev/logs/` is deliberately left in place (wiped by
