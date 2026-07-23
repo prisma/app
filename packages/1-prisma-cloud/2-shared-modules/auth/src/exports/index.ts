@@ -1,7 +1,28 @@
 /**
- * The authoring barrel. Still empty: the module factory, contracts, and
- * proxy land with the module code (contract.ts / auth-module.ts /
- * templates.ts / proxy.ts) — this file re-exports them the moment they
- * exist. The pack has its own subpath (`./pack`).
+ * `@internal/auth`'s authoring barrel: the three port contracts, the wire
+ * record schemas, the consumer dependency factories (`authApi()`,
+ * `jwtVerifier()`), and the `auth()` module. The runtime engine (store,
+ * handlers, entrypoint) stays OUT of this barrel, so a consumer graph that
+ * imports this module never bundles a `node:`/`bun` token. The pack has its
+ * own subpath (`./pack`); `templates`/`proxy` re-exports land with S2/D5.
  */
-export {};
+export { auth } from '../auth-module.ts';
+export type {
+  AuthApiClient,
+  AuthApiConfig,
+  JwtVerifier,
+  SessionRecord,
+  UserRecord,
+  VerifiedSession,
+} from '../contract.ts';
+export {
+  authAdminContract,
+  authApi,
+  authApiContract,
+  authDb,
+  authSessionContract,
+  jwtVerifier,
+  sessionRecord,
+  userRecord,
+} from '../contract.ts';
+export { authService } from './auth-service.ts';
