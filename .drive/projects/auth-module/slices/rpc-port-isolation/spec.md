@@ -63,13 +63,31 @@ amending ADR-0030 (+ possibly a new egress ADR).
 
 **Out:** per-method authz (still deferred), admin UI tiers.
 
-## Grounding needed at pickup
+## Grounding: the ignite answers (2026-07-23)
 
-1. **Ignite:** multiple ports per service at one address — supported
-   today? (exploration running; answer lands here.)
-2. Whether the platform distinguishes in-workspace reachability from
-   public ingress (private services) — determines whether "absent" means
-   not-routed-publicly or not-listening at all.
+1. **Multi-port: NO, and none specced.** The whole shipped chain is
+   one-port-per-version, one-URL-per-service: `--httpPort`/`{ http }` is
+   a scalar (ignite ADR 0006), the build attaches ONE port mapping per
+   `ComputeVersion`, Foundry's `Endpoint` maps one single-label hostname
+   prefix → one version (wildcard-TLS hard-limits nesting, ADR 0008),
+   `ComputeService` carries a single `endpointDomain`. No
+   `ports[]`/named-endpoint construct exists anywhere in the compute
+   API/manifest to build on.
+2. **No private networking / in-workspace addressing for compute** —
+   every service URL is public by default with no opt-out; a "private
+   network provided with every Prisma project" + inter-service invocation
+   appear only in the 2026 product-strategy doc as future work.
+
+**Consequence:** v1 lowering is per-mount path prefixes on the single
+public listener — mount set and per-mount key sets derived from wiring;
+"absent" means not-routed (404 at our router, no handler existing), not
+not-listening. The authoring model is unaffected and the lowering
+upgrades without authored-code changes when multi-port/private
+networking land. The proxy-only `api` wiring stays valid: the listener
+is publicly reachable, but the api mount demands the proxy edge's key.
+Worth filing the platform ask (multi-port or private services) with the
+platform team, referencing their own strategy line about the project
+private network.
 3. The provisioner edge's target-port identity (rpc rail) — confirm
    `edge` exposes it or grow it.
 4. Public-egress source naming + which ADR shape (amend 0030 vs new).
