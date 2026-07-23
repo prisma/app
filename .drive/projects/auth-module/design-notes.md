@@ -139,3 +139,9 @@ origin and HTML-escaped before interpolation.
 - Pagination/filter conventions (keyset cursor, limit 1–200 default 50,
   AND-filters) transfer cleanly from email and should become *the*
   admin-port idiom.
+- Flat rpc dispatch (`POST /rpc/<method>`) imposes **cross-port method-name
+  uniqueness** (found D5: `session.getUser` vs `admin.getUser` throws at
+  `serve()` construction). Renamed the admin op `findUser` rather than
+  adding port-scoped dispatch in S1. Tier-1 conventions must either
+  standardize a naming scheme (runtime ops plain, admin ops prefixed/verb-
+  distinct) or decide port-scoped dispatch is worth the wire change.

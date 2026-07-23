@@ -225,7 +225,9 @@ Semantics (DB-direct, D12; exact SQL contracts in § Store):
 
 ```ts
 export const authAdminContract = contract({
-  getUser: rpc({
+  // named findUser, not getUser: rpc dispatch is flat (POST /rpc/<method>),
+  // so method names must be unique ACROSS ports — amended 2026-07-23, D5
+  findUser: rpc({
     input: type({ 'id?': 'string', 'email?': 'string' }),
     output: type({ user: userRecord.or('null') }),
   }),
@@ -258,8 +260,8 @@ export const authAdminContract = contract({
 ```
 
 Semantics:
-- `getUser`: exactly one of `id`/`email` must be set — both or neither is a
-  handler-thrown error (`auth admin getUser: pass exactly one of id, email`).
+- `findUser`: exactly one of `id`/`email` must be set — both or neither is a
+  handler-thrown error (`auth admin findUser: pass exactly one of id, email`).
   Email match is case-insensitive equality on `lower(email)`.
 - `listUsers`: filters AND-combine. `query` = `ILIKE '%'||query||'%'` against
   `email` OR `name` (query string escaped for `%_\`). `banned` filters on the
@@ -477,11 +479,10 @@ Pinned option values:
 - `session: { expiresIn: 60*60*24*7, updateAge: 60*60*24 }` (Better Auth
   defaults, stated explicitly so they are pinned).
 - `rateLimit: { enabled: true }` (defaults otherwise).
-- `advanced: { database: { generateId: false } }` — ids come from Better
-  Auth's default generator UNLESS the pinned version defaults differently;
-  whatever the generator, the pack's `contract.prisma` column types must
-  match it (`text` ids). (If the pinned version's default id shape conflicts
-  with `text`, record here and ask — do not improvise.)
+- No `advanced.database.generateId` override (amended 2026-07-23, D5:
+  `generateId: false` DISABLES generation at 1.6.24 and breaks signup;
+  omitting it yields the intent — Better Auth's default generator, 32-char
+  text ids, matching the pack's `text` columns; pinned by a unit test).
 - Plugins, in order: `jwt({ jwt: { expirationTime: '15m' }, jwks: {} })`
   (EdDSA/Ed25519 default; `/api/auth/jwks` default path; default
   `definePayload` — full user object; consumers read only the § contract
@@ -532,9 +533,13 @@ Storage/email's pattern: build a bare node, `service.load()` →
 1. `const auth = betterAuth(buildAuthOptions({ databaseUrl, secret, baseUrl, sendEmail }))`.
 2. `const store = createPgAuthStore(db.url)` (own pool, `search_path=auth`).
 3. `const rpcHandler = serve(service, { session: { getSession, getUser },
-   admin: { getUser: adminGetUser, listUsers, listSessions, revokeSession,
+   admin: { findUser, listUsers, listSessions, revokeSession,
    revokeUserSessions, banUser, unbanUser } })` (handlers from
-   `handlers.ts`, closed over `store`).
+   `handlers.ts`, closed over `store`). Framework prerequisite (amended
+   2026-07-23, D5): `serve()`/`Handlers<S>` skip exposed contracts that are
+   not rpc contracts — the `api` port is resource-kind and carries no
+   handlers; a small change in `@internal/service-rpc`, correct for any
+   service mixing a public port with rpc ports.
 4. Fetch composition (exact routing):
    - `pathname === '/health'` → `200 {"ok":true}` (no auth — platform probe).
    - `pathname.startsWith('/api/auth')` → `auth.handler(request)` (public,
