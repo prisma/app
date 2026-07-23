@@ -581,7 +581,14 @@ the http/shadow/streams aux listeners), since `@prisma/dev`'s registry can
 claim a port no bind probe sees ("belongs to another Prisma Dev server");
 every one of its port-refusal errors carries the offending port as
 `.port`, conflicted ports are excluded from re-allocation, and the
-database port only advances when it was itself the refused one; the
+database port only advances when it was itself the refused one. A start
+that fails mid-boot can leave its name registered ("A Prisma Dev server
+with the name ... is already running") — the name is namespaced to this
+app+database, so the ghost is ours: adopt the live server when the
+refusal carries one (`ServerAlreadyRunningError.server`, duck-typed),
+otherwise clear the dead state entry (internal state `deleteServer`) and
+retry. Concurrent ensures for the same instance coalesce onto one
+in-flight start; the
 `@prisma/dev` module is imported from the CALLER-RESOLVED path so the app
 owns the version) → `{ "url": string }`, idempotent; `GET
 /apps/<app>/databases` → listing; `DELETE /apps/<app>` → close the app's
