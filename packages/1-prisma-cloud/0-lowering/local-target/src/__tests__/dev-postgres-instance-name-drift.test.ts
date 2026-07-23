@@ -106,4 +106,60 @@ describe('instance-name drift (delta review finding A, #160)', () => {
     const entry = listed.find((d) => d.instanceName === databaseAttributes.id);
     expect(entry).toBeDefined();
   }, 30_000);
+
+  test('a nested module\'s dotted database name ("catalog.database"): Database ensures, Connection resolves the SAME server', async () => {
+    // A nested module's Database resource name is hierarchical and
+    // dot-separated — but the daemon's `<id>` path segment rule
+    // (/^[a-z0-9][a-z0-9-]*$/) forbids dots, so the provider must slug the
+    // daemon-facing id (compute.ts's `slugServiceId` seam, applied to
+    // postgres). Pre-fix, the client's own `encodeSegment` threw
+    // `invalid path segment "catalog.database"` before the request ever
+    // left the process — observed live against examples/store.
+    const DOTTED_ID = 'catalog.database';
+    const input: DevProvidersInput = {
+      container: fakeContainer(APP),
+      devDir: '/dev/null/unused',
+    };
+
+    const databaseService = await Effect.runPromise(
+      Database.Provider.pipe(Effect.provide(LocalDatabaseProvider(input))),
+    );
+    const databaseAttributes = await Effect.runPromise(
+      databaseService.reconcile({
+        id: 'db',
+        instanceId: 'db',
+        news: { projectId: 'p', name: DOTTED_ID, region: 'us-east-1' },
+        olds: undefined,
+        output: undefined,
+        session: undefined as never,
+        bindings: [],
+      }),
+    );
+
+    // slug() is idempotent, so the daemon's instanceNameFor(app, slug(name))
+    // equals the provider-recorded instanceNameFor(app, name).
+    expect(databaseAttributes.id).toBe(instanceNameFor(APP, DOTTED_ID));
+    expect(databaseAttributes.id).toBe('pcdev-pgdrifttestapp-catalog-database');
+
+    const connectionService = await Effect.runPromise(
+      Connection.Provider.pipe(Effect.provide(LocalConnectionProvider(input))),
+    );
+    const connectionAttributes = await Effect.runPromise(
+      connectionService.reconcile({
+        id: 'conn',
+        instanceId: 'conn',
+        news: { databaseId: databaseAttributes.id, name: 'conn' },
+        olds: undefined,
+        output: undefined,
+        session: undefined as never,
+        bindings: [],
+      }),
+    );
+
+    expect(connectionAttributes.id).toBe(databaseAttributes.id);
+    expect(Redacted.value(connectionAttributes.connectionString)).toMatch(/^postgres:\/\//);
+
+    const listed = await postgresClient().listDatabases(APP);
+    expect(listed.find((d) => d.instanceName === databaseAttributes.id)).toBeDefined();
+  }, 30_000);
 });
