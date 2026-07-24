@@ -7,8 +7,14 @@
  * `@prisma/dev` usage elsewhere on this machine, and every test cleans up
  * via `DELETE /apps/<app>` so it never leaves persisted PGlite data behind.
  */
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { spawn } from 'node:child_process';
+import * as fs from 'node:fs';
 import * as net from 'node:net';
+import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { deleteServer } from '@prisma/dev/internal/state';
 import { Client as PgClient } from 'pg';
 import { postgresClient } from '../client.ts';
 import { stopDaemon } from '../daemon.ts';
@@ -236,4 +242,97 @@ describe('instance name derivation is linear, not polynomial', () => {
     expect(name).toBe('pcdev-a-b-a-b');
     expect(elapsedMs).toBeLessThan(100);
   });
+});
+
+describe("a server that exists in @prisma/dev's records but not the daemon's", () => {
+  test('a live server under the daemon-derived name is adopted, not restarted or deleted', async () => {
+    // The daemon's own state and `@prisma/dev`'s records can disagree: a
+    // daemon replaced for version skew, or a teardown that declined to
+    // delete, leaves a server registered under a name the daemon has no
+    // record of. Starting into that used to surface "already running" as a
+    // 500 — and the recovery that deleted the state took the data (and the
+    // daemon) with it.
+    //
+    // The foreign server runs in its OWN process, exactly as a leftover
+    // from a previous daemon does. That is not incidental: the record names
+    // its host's pid, and teardown stops an adopted server by that pid — so
+    // a server started inside THIS test process would make the teardown
+    // kill the test runner.
+    const app = 'pgtest-adopt';
+    const id = 'db';
+    const instanceName = instanceNameFor(app, id);
+
+    const scriptPath = path.join(tempDir('adopt-host'), 'host.mjs');
+    fs.writeFileSync(
+      scriptPath,
+      `import { startPrismaDevServer } from ${JSON.stringify(pathToFileURL(prismaDevModulePath()).href)};
+const server = await startPrismaDevServer({ name: ${JSON.stringify(instanceName)}, persistenceMode: 'stateful' });
+console.log(server.database.connectionString);
+setInterval(() => {}, 1 << 30);
+`,
+    );
+
+    const host = spawn(process.execPath, [scriptPath], { stdio: ['ignore', 'pipe', 'inherit'] });
+    const foreignUrl = await new Promise<string>((resolve, reject) => {
+      let out = '';
+      host.stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString();
+        const line = out.split('\n')[0];
+        if (line !== undefined && out.includes('\n')) resolve(line.trim());
+      });
+      host.once('error', reject);
+      host.once('exit', (code) => reject(new Error(`host exited early (${String(code)})`)));
+    });
+
+    try {
+      await ensureFreshDaemon('postgres', registryRoot);
+      const client = postgresClient({ registryRoot });
+
+      const ensured = await client.ensureDatabase(app, id, prismaDevModulePath());
+
+      // Adopted: the same live server, reachable — not a second one on a
+      // different port, and not an error.
+      expect(ensured.url).toBe(foreignUrl);
+      const pg = new PgClient({ connectionString: ensured.url });
+      await pg.connect();
+      await pg.query('select 1');
+      await pg.end();
+
+      // And the daemon stayed up — the failure this guards against killed it.
+      expect((await client.health()).version.length).toBeGreaterThan(0);
+
+      await client.deleteApp(app);
+    } finally {
+      host.kill('SIGKILL');
+      await deleteServer(instanceName).catch(() => undefined);
+    }
+  }, 60_000);
+});
+
+describe('concurrent ensures for different databases', () => {
+  test('two databases requested at once both come up — starts are serialized', async () => {
+    // An app converges its databases in parallel, so the daemon receives
+    // simultaneous ensures for different names. `@prisma/dev`'s start is not
+    // concurrency-safe within a process — two at once pick ports without
+    // seeing each other and one fails — so the daemon runs starts one at a
+    // time. Before that, this pair raced and produced the port refusals whose
+    // retries left half-started servers holding their own name's lock.
+    await ensureFreshDaemon('postgres', registryRoot);
+    const client = postgresClient({ registryRoot });
+
+    const [a, b] = await Promise.all([
+      client.ensureDatabase('pgtest-concurrent', 'alpha', prismaDevModulePath()),
+      client.ensureDatabase('pgtest-concurrent', 'beta', prismaDevModulePath()),
+    ]);
+
+    expect(a.url).not.toBe(b.url);
+    for (const url of [a.url, b.url]) {
+      const pg = new PgClient({ connectionString: url });
+      await pg.connect();
+      await pg.query('select 1');
+      await pg.end();
+    }
+
+    await client.deleteApp('pgtest-concurrent');
+  }, 90_000);
 });
