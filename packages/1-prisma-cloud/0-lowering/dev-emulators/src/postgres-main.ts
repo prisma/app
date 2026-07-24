@@ -239,6 +239,48 @@ function isPrismaDevInternalStateModule(value: unknown): value is PrismaDevInter
 }
 
 /**
+ * Every port any `@prisma/dev` server RECORD on this machine claims —
+ * database, http, shadow, and streams. `startPrismaDevServer` validates a
+ * requested port against these records (`ServerState.scan`) and refuses one
+ * that any record claims, even when nothing has it bound — and a record's
+ * aux ports are picked by `@prisma/dev`'s own walking-upward picker, which
+ * over enough servers climbs into this daemon's database range. A fresh
+ * database-port pick that only probed the OS would collide with such a
+ * claim, so fresh picks exclude these too. Best-effort: `scan` is the same
+ * internal surface the rest of this module already binds to, but absent or
+ * failing it degrades to the OS probe alone.
+ */
+async function registryClaimedPorts(
+  internalState: PrismaDevInternalStateModule,
+): Promise<Set<number>> {
+  const ports = new Set<number>();
+  const scanHost = isStringKeyedRecord(internalState) ? internalState['ServerState'] : undefined;
+  const scan = isStringKeyedRecord(scanHost) ? scanHost['scan'] : undefined;
+  if (!isStringKeyedRecord(scanHost) || typeof scan !== 'function') return ports;
+  try {
+    const records: unknown = await scan.call(scanHost, { onlyMetadata: true });
+    if (!Array.isArray(records)) return ports;
+    for (const record of records) {
+      if (!isStringKeyedRecord(record)) continue;
+      for (const key of ['databasePort', 'port', 'shadowDatabasePort', 'streamsPort']) {
+        const port = record[key];
+        if (typeof port === 'number' && Number.isInteger(port) && port > 0) ports.add(port);
+      }
+      const experimental = record['experimental'];
+      const streams = isStringKeyedRecord(experimental) ? experimental['streams'] : undefined;
+      const streamsUrl = isStringKeyedRecord(streams) ? streams['serverUrl'] : undefined;
+      if (typeof streamsUrl === 'string') {
+        const port = databasePortOf(streamsUrl);
+        if (port !== undefined) ports.add(port);
+      }
+    }
+  } catch {
+    // Unreadable registry — fall back to the OS probe alone.
+  }
+  return ports;
+}
+
+/**
  * What `getServerStatus(name)` reports, narrowed to the fields this daemon
  * uses. Verified live against `@prisma/dev`: while a server is up it reports
  * `status: "running"` with the owning process's `pid` and the full
@@ -253,6 +295,8 @@ function isPrismaDevInternalStateModule(value: unknown): value is PrismaDevInter
  */
 interface ServerStatus {
   readonly live: boolean;
+  /** False only when the record affirmatively does not exist (`no_such_server`) — an unreadable status counts as existing, so nothing that deletes acts on a misread. */
+  readonly recordExists: boolean;
   readonly pid: number | undefined;
   readonly url: string | undefined;
   readonly databasePort: number | undefined;
@@ -260,7 +304,13 @@ interface ServerStatus {
 
 function readServerStatus(status: unknown): ServerStatus {
   if (!isStringKeyedRecord(status)) {
-    return { live: false, pid: undefined, url: undefined, databasePort: undefined };
+    return {
+      live: false,
+      recordExists: true,
+      pid: undefined,
+      url: undefined,
+      databasePort: undefined,
+    };
   }
   const exports = status['exports'];
   const database = isStringKeyedRecord(exports) ? exports['database'] : undefined;
@@ -269,6 +319,7 @@ function readServerStatus(status: unknown): ServerStatus {
   const databasePort = status['databasePort'];
   return {
     live: status['status'] === 'running' || status['status'] === 'starting_up',
+    recordExists: status['status'] !== 'no_such_server',
     pid: typeof pid === 'number' ? pid : undefined,
     url: typeof url === 'string' ? url : undefined,
     databasePort: typeof databasePort === 'number' ? databasePort : undefined,
@@ -282,7 +333,13 @@ async function serverStatusOf(
   try {
     return readServerStatus(await internalState.getServerStatus(instanceName));
   } catch {
-    return { live: false, pid: undefined, url: undefined, databasePort: undefined };
+    return {
+      live: false,
+      recordExists: true,
+      pid: undefined,
+      url: undefined,
+      databasePort: undefined,
+    };
   }
 }
 
@@ -461,6 +518,19 @@ function main(): void {
 
   const inflightEnsures = new Map<string, Promise<{ url: string }>>();
 
+  /**
+   * Names whose `startPrismaDevServer` call failed in THIS process for any
+   * reason other than "already running". `@prisma/dev` acquires the name's
+   * lock before it validates the requested ports, and a failure after that
+   * point (a port refusal) propagates WITHOUT releasing the lock — so the
+   * very next start of the same name in this process is refused as "already
+   * running" by a holder that is this daemon's own dead attempt, and no
+   * amount of waiting frees it. Membership here is what makes deleting that
+   * lock provably safe: a name this process leaked cannot have been
+   * acquired by anyone else since (the leak never releases).
+   */
+  const leakedStartNames = new Set<string>();
+
   /** Concurrent PUTs for the same database coalesce onto one start — a second `startPrismaDevServer` for a name whose first start is still booting fails as "already running". */
   function ensureDatabase(
     app: string,
@@ -529,8 +599,15 @@ function main(): void {
     }
 
     const isFreshAllocation = existingRecord === undefined;
+    // Fresh picks avoid every port a `@prisma/dev` record claims, or the
+    // start would be refused (see `registryClaimedPorts`). A persisted port
+    // is pinned regardless — endpoints in deploy state reference it.
+    const registryPorts = isFreshAllocation
+      ? await registryClaimedPorts(internalState)
+      : new Set<number>();
     let dbPort =
-      existingRecord?.databasePort ?? (await smallestUnusedDatabasePort(MIN_DATABASE_PORT));
+      existingRecord?.databasePort ??
+      (await smallestUnusedDatabasePort(MIN_DATABASE_PORT, registryPorts));
 
     const conflicted = new Set<number>();
     let alreadyRunningRetries = 0;
@@ -549,6 +626,7 @@ function main(): void {
           }),
         );
         const url = server.database.connectionString;
+        leakedStartNames.delete(instanceName);
         runtimes.set(instanceName, server);
         appRec.databases[id] = { id, instanceName, databasePort: dbPort, url };
         schedulePersist();
@@ -556,6 +634,17 @@ function main(): void {
       } catch (err) {
         if (isNameAlreadyTaken(err) && alreadyRunningRetries < MAX_ALREADY_RUNNING_RETRIES) {
           alreadyRunningRetries += 1;
+          // A refusal on a name THIS process leaked (see `leakedStartNames`)
+          // with no record behind it is not a foreign holder to wait for —
+          // the holder is our own dead attempt. Delete the orphaned state
+          // (there is no record, so no data) to free the lock, and retry.
+          if (leakedStartNames.has(instanceName)) {
+            const now = await serverStatusOf(internalState, instanceName);
+            if (!now.recordExists) {
+              await internalState.deleteServer(instanceName).catch(() => undefined);
+              continue;
+            }
+          }
           // The refusal means a live process holds this server's lock, but
           // the RECORD it holds can say three different things, and the
           // difference matters (observed on CI: the daemon had no record for
@@ -591,6 +680,13 @@ function main(): void {
           }
           continue;
         }
+        if (!isNameAlreadyTaken(err)) {
+          // The start may have failed AFTER `@prisma/dev` acquired the
+          // name's lock (a port refusal does), which leaks the lock — see
+          // `leakedStartNames`. Every retry below and every later PUT for
+          // this name needs to know that.
+          leakedStartNames.add(instanceName);
+        }
         const conflictPort = portConflictOf(err, [dbPort]);
         // The aux listener ports are never persisted, so a refusal of one is
         // always retryable with fresh candidates. The DATABASE port is frozen
@@ -608,7 +704,10 @@ function main(): void {
         }
         conflicted.add(conflictPort);
         if (conflictPort === dbPort) {
-          dbPort = await smallestUnusedDatabasePort(dbPort + 1, conflicted);
+          dbPort = await smallestUnusedDatabasePort(
+            dbPort + 1,
+            new Set([...conflicted, ...registryPorts]),
+          );
         }
       }
     }

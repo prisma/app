@@ -13,8 +13,9 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { deleteServer } from '@prisma/dev/internal/state';
+import getPort, { portNumbers } from 'get-port';
 import { Client as PgClient } from 'pg';
 import { postgresClient } from '../client.ts';
 import { stopDaemon } from '../daemon.ts';
@@ -307,6 +308,143 @@ setInterval(() => {}, 1 << 30);
       await deleteServer(instanceName).catch(() => undefined);
     }
   }, 60_000);
+});
+
+describe("a stale @prisma/dev record claiming a port in the daemon's database range", () => {
+  test('a fresh allocation skips record-claimed ports instead of starting into a refusal', async () => {
+    // `startPrismaDevServer` refuses a requested port that any server
+    // RECORD on the machine claims, even when nothing has it bound — and
+    // the refusal happens after it acquired the name's lock, which the
+    // failure path never releases, poisoning the name for this daemon
+    // process. A record whose ports sit inside the daemon's own database
+    // range is therefore a trap for any pick that only probes the OS.
+    // Seen on CI in the store test's --fresh cycle: `@prisma/dev`'s own
+    // aux-port picker walks upward from 51213 and after a few servers
+    // crosses 51300.
+    // Unique per run: a failed earlier run on this machine may have left
+    // this very name's lock behind (the phenomenon under test).
+    const squatterName = `pcdev-pgtest-squatter-${String(process.pid)}`;
+    const prismaDev = (await import(pathToFileURL(prismaDevModulePath()).href)) as {
+      startPrismaDevServer(options: {
+        name: string;
+        databasePort: number;
+        persistenceMode: 'stateful';
+      }): Promise<{ close(): Promise<void> }>;
+    };
+    // The developer machine running this test may itself carry stale
+    // records claiming ports in this range, and a refused start would
+    // poison the squatter's own name (the very defect under test) — so the
+    // pick consults the records up front, the same way the fixed daemon
+    // does.
+    const state = (await import('@prisma/dev/internal/state')) as unknown as {
+      ServerState: { scan(opts: { onlyMetadata: boolean }): Promise<Record<string, unknown>[]> };
+    };
+    const claimed: number[] = [];
+    for (const record of await state.ServerState.scan({ onlyMetadata: true })) {
+      for (const key of ['databasePort', 'port', 'shadowDatabasePort']) {
+        const port = record[key];
+        if (typeof port === 'number' && port > 0) claimed.push(port);
+      }
+    }
+    const squatterPort = await getPort({ port: portNumbers(51_300, 65_535), exclude: claimed });
+    const squatter = await prismaDev.startPrismaDevServer({
+      name: squatterName,
+      databasePort: squatterPort,
+      persistenceMode: 'stateful',
+    });
+    // Close WITHOUT deleting: the record survives, still claiming the
+    // port, while the port itself is free again — the trap is armed.
+    await squatter.close();
+
+    try {
+      await ensureFreshDaemon('postgres', registryRoot);
+      const client = postgresClient({ registryRoot });
+
+      const ensured = await client.ensureDatabase('pgtest-stale', 'appdb', prismaDevModulePath());
+
+      const port = Number(new URL(ensured.url.replace('postgres://', 'http://')).port);
+      expect(port).not.toBe(squatterPort);
+      const pg = new PgClient({ connectionString: ensured.url });
+      await pg.connect();
+      await pg.query('select 1');
+      await pg.end();
+
+      await client.deleteApp('pgtest-stale');
+    } finally {
+      await deleteServer(squatterName).catch(() => undefined);
+    }
+  }, 120_000);
+});
+
+describe('a start refusal that leaked the name lock', () => {
+  test('the next ensure recovers the name instead of failing "already running" forever', async () => {
+    // The lock leak (see the previous test) cannot always be prevented —
+    // a record can appear between the daemon's exclusion scan and the
+    // start. This test forces one deliberately: a stand-in @prisma/dev
+    // module whose start requests a port another record claims, which
+    // makes the REAL start acquire the name's lock and then refuse — the
+    // exact leak. The next ensure with the real module must then recover
+    // (the daemon leaked the lock itself and the name has no record, so
+    // deleting the orphaned state is safe) instead of retrying into
+    // "already running" until the daemon dies.
+    const app = 'pgtest-leak';
+    const realIndexUrl = pathToFileURL(prismaDevModulePath()).href;
+    const realStateUrl = pathToFileURL(
+      fileURLToPath(import.meta.resolve('@prisma/dev/internal/state')),
+    ).href;
+
+    const fixtureDir = tempDir('leaky-prisma-dev');
+    fs.writeFileSync(
+      path.join(fixtureDir, 'package.json'),
+      JSON.stringify({
+        name: '@prisma/dev',
+        type: 'module',
+        exports: { '.': './index.mjs', './internal/state': './state.mjs' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(fixtureDir, 'state.mjs'),
+      `export * from ${JSON.stringify(realStateUrl)};\n`,
+    );
+    fs.writeFileSync(
+      path.join(fixtureDir, 'index.mjs'),
+      `import { startPrismaDevServer as realStart } from ${JSON.stringify(realIndexUrl)};
+import { ServerState } from ${JSON.stringify(realStateUrl)};
+export async function startPrismaDevServer(options) {
+  const records = await ServerState.scan({ onlyMetadata: true });
+  const clash = records.find(
+    (r) => r.name !== options.name && typeof r.shadowDatabasePort === 'number' && r.shadowDatabasePort > 0,
+  );
+  if (!clash) throw new Error('fixture: no record to clash with');
+  const server = await realStart({ ...options, databasePort: clash.shadowDatabasePort });
+  await server.close();
+  throw new Error('fixture: expected the real start to refuse the claimed port');
+}
+`,
+    );
+
+    await ensureFreshDaemon('postgres', registryRoot);
+    const client = postgresClient({ registryRoot });
+
+    // A real database first, so a record exists for the fixture to clash with.
+    await client.ensureDatabase(app, 'anchor', prismaDevModulePath());
+
+    // The leak: the real start (behind the fixture) locks the victim's name,
+    // then refuses the claimed port. The PUT fails visibly.
+    await expect(
+      client.ensureDatabase(app, 'victim', path.join(fixtureDir, 'index.mjs')),
+    ).rejects.toThrow(/belongs to another Prisma Dev server/);
+
+    // Recovery: the same name, the real module — must come up, not report
+    // "already running" against the daemon's own dead attempt.
+    const recovered = await client.ensureDatabase(app, 'victim', prismaDevModulePath());
+    const pg = new PgClient({ connectionString: recovered.url });
+    await pg.connect();
+    await pg.query('select 1');
+    await pg.end();
+
+    await client.deleteApp(app);
+  }, 120_000);
 });
 
 describe('concurrent ensures for different databases', () => {
