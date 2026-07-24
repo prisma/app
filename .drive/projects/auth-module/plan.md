@@ -102,6 +102,20 @@ taken at S3 pickup, with the platform team's multi-port answer in hand.
 
 ## Open items (recorded during S2, 2026-07-23)
 
+- **Latent break on a Prisma Next `0.16` bump: the config field flips.**
+  Compose pins `@prisma-next/config-loader@0.15.0`, whose validated field
+  is `extensionPacks` — which is what `pn-config.ts` reads. PN `0.16.0`
+  renames it to `extensions` and rejects `extensionPacks`. The example
+  config already writes `extensions: [authPack]`, which works today only
+  because the pinned `0.15.0` `postgres/defineConfig` wrapper maps
+  user-facing `extensions:` → validated `extensionPacks`. On a bump to
+  `0.16`, `config.extensionPacks` becomes `undefined → []`, silently
+  emptying both the deploy preflight's pack lookup AND the migration
+  resource's `packHeadRefHashes` diff key (a pack upgrade would stop
+  producing a distinct deploy step). Read `config.extensions ?? config.extensionPacks`,
+  or track the rename, before bumping. Verified against installed 0.15.0
+  vs the 0.16.0 source checkout.
+
 - **Pre-commit hooks never fire in most linked worktrees (repo-wide,
   needs an operator decision).** The shared config sets a RELATIVE
   `core.hooksPath = .husky/_`, which is what husky writes and works
