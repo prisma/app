@@ -1,11 +1,16 @@
 /**
- * The full local loop with no cloud credentials (spec § Testing
- * export), against a real local Postgres: signup → login (cookie AND
+ * The full local loop with no cloud credentials (spec § Testing export),
+ * against a real local Postgres: signup → login rejected pre-verification
+ * (`requireEmailVerification: true`) → completing the DEFAULT capture's
+ * verification link verifies the user → login (cookie AND
  * bearer) → `/api/auth/token` → verification through the REAL
  * `jwtVerifier()` hydrate pointed at the local URL → the session and admin
  * ports over real rpc HTTP (`makeClient`) → `/health` and the 404
  * fallthrough → magic-link capture readback. Same topology as production:
  * the same fetch composition, the same handlers, the same options builder.
+ * Uses the default in-memory capture (no `email` option) — the outbox-
+ * readback path against a REAL email module local server is proved
+ * separately in `email-outbox.integration.test.ts`.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { makeClient } from '@internal/service-rpc';
@@ -40,7 +45,19 @@ describe.skipIf(pgServer === undefined)('startLocalAuthServer — the full local
   let bearerToken: string;
   let sessionToken: string;
 
-  const api = (path: string, init?: RequestInit) => fetch(`${server.url}${path}`, init);
+  // Better Auth's default rate limiter keys its (module-global, in-process)
+  // memory store on `${ip}|${path}`, and every local test server resolves
+  // to the SAME ip (127.0.0.1) absent a forwarded-for header — so, within
+  // one `bun test` process, this file's sign-in bucket would otherwise be
+  // shared with every OTHER integration test file's local server. A
+  // synthetic per-file client ip isolates the bucket; it changes nothing
+  // about the pinned `rateLimit: { enabled: true }` behavior itself.
+  const CLIENT_IP = '10.10.0.1';
+  const api = (path: string, init: RequestInit = {}) =>
+    fetch(`${server.url}${path}`, {
+      ...init,
+      headers: { 'x-forwarded-for': CLIENT_IP, ...(init.headers as Record<string, string>) },
+    });
   const json = (body: unknown, headers: Record<string, string> = {}) => ({
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
@@ -57,7 +74,7 @@ describe.skipIf(pgServer === undefined)('startLocalAuthServer — the full local
     pgServer.stop();
   });
 
-  test('signup creates the user and captures the verification email link', async () => {
+  test('signup creates the user and captures the RENDERED verification email', async () => {
     const res = await api(
       '/api/auth/sign-up/email',
       json({ email: EMAIL, password: PASSWORD, name: 'Ada' }),
@@ -67,11 +84,34 @@ describe.skipIf(pgServer === undefined)('startLocalAuthServer — the full local
     expect(body.user.email).toBe(EMAIL);
     userId = body.user.id;
 
-    // sendOnSignUp: true + the capture seam: the live verification link is
-    // readable BEFORE any real email wiring exists.
+    // sendOnSignUp: true + the default capture sender: the live verification
+    // link AND its rendered content are readable, because the capture renders
+    // through the real authTemplates rather than recording a bare url.
     const captured = server.capturedEmails.find((e) => e.template === 'verification');
     expect(captured?.to).toBe(EMAIL);
     expect(captured?.url).toContain(server.url);
+    expect(captured?.subject).toBe('Verify your email address');
+    // The href carries the HTML-escaped link (Better Auth's own url embeds a
+    // `&callbackURL=` query param); the plain-text part carries it bare.
+    expect(captured?.html).toContain(`href="${captured?.url.replaceAll('&', '&amp;')}"`);
+    expect(captured?.text).toBe(captured?.url);
+  });
+
+  test('login is rejected before the email is verified (requireEmailVerification: true)', async () => {
+    const res = await api('/api/auth/sign-in/email', json({ email: EMAIL, password: PASSWORD }));
+    expect(res.status).toBe(403);
+  });
+
+  test('completing the captured verification link verifies the user', async () => {
+    const captured = server.capturedEmails.find((e) => e.template === 'verification');
+    if (captured === undefined) throw new Error('no verification email was captured');
+
+    const res = await fetch(captured.url, { redirect: 'manual' });
+    expect([200, 302]).toContain(res.status);
+
+    const session = makeClient(authSessionContract, server.url);
+    const { user } = await session.getUser({ id: userId });
+    expect(user?.emailVerified).toBe(true);
   });
 
   test('login sets a first-party session cookie AND returns a bearer token', async () => {

@@ -7,6 +7,7 @@
  */
 import type { DependencyEnd, ModuleNode, ParamNeed, RefPort } from '@internal/core';
 import { module, paramSource } from '@internal/core';
+import { emailSendContract, type emailSender } from '@internal/email';
 import node from '@internal/node';
 import { compute, type postgresContract } from '@internal/prisma-cloud';
 import type { PnPostgresContract } from '@internal/prisma-cloud/prisma-next';
@@ -28,13 +29,18 @@ import {
   type VerifiedSession,
 } from '../contract.ts';
 import packContractJson from '../pack/contract.json' with { type: 'json' };
+import type { AuthTemplates } from '../templates.ts';
 
 const build = node({ module: import.meta.url, entry: '../dist/x.mjs' });
 
-test('auth() is a ModuleNode with the db boundary dep, three ports, and the baseUrl param need', () => {
+/** A minimal provider of the `email` boundary dep — exposes only `send`, satisfying `emailSender(authTemplates)`'s required contract. */
+const mailProvider = () =>
+  compute({ name: 'mailProvider', deps: {}, build, expose: { send: emailSendContract } });
+
+test('auth() is a ModuleNode with the db + email boundary deps, three ports, and the baseUrl param need', () => {
   const m = auth();
   const asModule: ModuleNode<
-    { db: ReturnType<typeof authDb> },
+    { db: ReturnType<typeof authDb>; email: ReturnType<typeof emailSender<AuthTemplates>> },
     {
       api: typeof authApiContract;
       session: typeof authSessionContract;
@@ -79,9 +85,10 @@ test('the module ports wire into their consumer slots; a wrong-kind port is reje
       }),
       { id: 'database' },
     );
+    const mail = provision(mailProvider(), { id: 'mail' });
     const identity = provision(auth(), {
       id: 'auth',
-      deps: { db },
+      deps: { db, email: mail.send },
       params: { baseUrl: paramSource('AUTH_BASE_URL') },
     });
     provision(

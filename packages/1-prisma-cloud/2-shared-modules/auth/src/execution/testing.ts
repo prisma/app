@@ -7,27 +7,35 @@
  * already at head), the secret is a fixed dev value, and serve() runs in
  * its no-keys pass-through (nothing provisioned the accepted-keys env).
  *
- * Email: by default the send seam captures `{ template, to, url }` into
- * `capturedEmails`, so a local flow can read its live verification /
- * reset / magic links before real delivery is wired. Supplying
- * `email` replaces the capture.
+ * Email: by default a local in-memory sender renders through the real
+ * `authTemplates` and captures the result into `capturedEmails`, so a local
+ * flow can read its live verification/reset/magic links with no other
+ * service running. Supplying `email` — e.g. `emailSender(authTemplates)`
+ * hydrated against the email module's own `startLocalEmailServer()` —
+ * replaces the capture with the SAME outbox-readback path production uses;
+ * `capturedEmails` then stays empty.
  */
+import type { EmailSender } from '@internal/email';
 import node from '@internal/node';
 import { compute } from '@internal/prisma-cloud';
 import { serve } from '@internal/service-rpc';
 import { composeServiceFetch } from '@internal/service-rpc/compose-fetch';
 import { betterAuth } from 'better-auth';
-import { type AuthEmailSender, buildAuthOptions } from '../auth-options.ts';
+import { buildAuthOptions } from '../auth-options.ts';
 import { authAdminContract, authApiContract, authSessionContract } from '../contract.ts';
 import { createAuthHandlers } from '../handlers.ts';
 import { createPgAuthStore } from '../pg-auth-store.ts';
+import { type AuthTemplates, authTemplates } from '../templates.ts';
 import { ensureLocalAuthSchema } from './local-schema.ts';
 
 /** One captured email touchpoint — `url` is the live link (verification/reset/magic). */
 export interface CapturedAuthEmail {
-  readonly template: 'verification' | 'passwordReset' | 'magicLink';
+  readonly template: keyof AuthTemplates;
   readonly to: string;
   readonly url: string;
+  readonly subject: string;
+  readonly html: string;
+  readonly text: string;
 }
 
 export interface LocalAuthServer {
@@ -40,6 +48,33 @@ export interface LocalAuthServer {
 
 const LOCAL_DEV_SECRET = 'auth-local-dev-secret-not-for-production!';
 
+/** One template method of the default local sender: renders for real, captures the result, never touches a network. */
+function capturingMethod(captured: CapturedAuthEmail[], template: keyof AuthTemplates) {
+  return async (input: {
+    readonly to: string | readonly string[];
+    readonly data: { url: string; appName: string };
+  }): Promise<{ id: string; status: 'sent' }> => {
+    const rendered = await authTemplates[template].render(input.data);
+    captured.push({
+      template,
+      to: Array.isArray(input.to) ? (input.to[0] ?? '') : input.to,
+      url: input.data.url,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text ?? '',
+    });
+    return { id: crypto.randomUUID(), status: 'sent' };
+  };
+}
+
+function createCapturingSender(captured: CapturedAuthEmail[]): EmailSender<AuthTemplates> {
+  return {
+    verification: capturingMethod(captured, 'verification'),
+    passwordReset: capturingMethod(captured, 'passwordReset'),
+    magicLink: capturingMethod(captured, 'magicLink'),
+  };
+}
+
 export async function startLocalAuthServer(opts: {
   /** A caller-supplied local Postgres (e.g. `prisma dev`). */
   databaseUrl: string;
@@ -47,19 +82,15 @@ export async function startLocalAuthServer(opts: {
   port?: number;
   /** Default: the server's own URL. */
   baseUrl?: string;
-  /** Default: capture into `capturedEmails`. */
-  email?: AuthEmailSender;
+  /** Default: a local sender that renders through `authTemplates` and captures into `capturedEmails`. */
+  email?: EmailSender<AuthTemplates>;
 }): Promise<LocalAuthServer> {
   // The real deploy path in miniature: PN dbInit with the auth pack against
   // the caller's database (no-op off the signed marker on repeat boots).
   await ensureLocalAuthSchema(opts.databaseUrl);
 
   const capturedEmails: CapturedAuthEmail[] = [];
-  const sendEmail: AuthEmailSender =
-    opts.email ??
-    (({ purpose, to, url }) => {
-      capturedEmails.push({ template: purpose, to, url });
-    });
+  const email = opts.email ?? createCapturingSender(capturedEmails);
 
   // serve() needs a service node with the right `expose`; this bare
   // compute()'s build is inert (never assembled or deployed) — email's
@@ -97,7 +128,7 @@ export async function startLocalAuthServer(opts: {
       databaseUrl: opts.databaseUrl,
       secret: LOCAL_DEV_SECRET,
       baseUrl: opts.baseUrl ?? url,
-      sendEmail,
+      email,
     }),
   );
   fetchHandler = composeServiceFetch({

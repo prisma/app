@@ -1,9 +1,9 @@
 // The reusable boot module the auth service's build points `entry` at (see
 // authService's `node({ entry: './auth-entrypoint.mjs' })`). Mirrors email's
-// entrypoint: load() hands the hydrated `db` binding, config() the params,
-// secrets() the platform-minted instance secret — no env reads outside the
-// framework accessors, and NO schema work at boot: the deploy migrated and
-// marker-signed the auth space before this process exists.
+// entrypoint: load() hands the hydrated `db` and `email` bindings, config()
+// the params, secrets() the platform-minted instance secret — no env reads
+// outside the framework accessors, and NO schema work at boot: the deploy
+// migrated and marker-signed the auth space before this process exists.
 
 import { serve } from '@internal/service-rpc';
 import { composeServiceFetch } from '@internal/service-rpc/compose-fetch';
@@ -15,14 +15,12 @@ import { createPgAuthStore } from '../pg-auth-store.ts';
 
 const service = authService();
 
-const { db } = service.load();
+const { db, email } = service.load();
 const { baseUrl, port } = service.config();
 const { secret } = service.secrets();
 
-// sendEmail absent for now — the three Better Auth send callbacks log the
-// pinned not-wired line; the email-flows slice wires the email module here.
 const auth = betterAuth(
-  buildAuthOptions({ databaseUrl: db.url, secret: secret.expose(), baseUrl }),
+  buildAuthOptions({ databaseUrl: db.url, secret: secret.expose(), baseUrl, email }),
 );
 
 // DB-direct handlers: the ports authorize via wiring, never via

@@ -4,36 +4,39 @@
  * shapes stay behaviorally identical. Every option value here is pinned by
  * the spec (§ Better Auth configuration); change them there first.
  *
- * Pre-email posture: no real sends. `sendEmail` is the seam — absent (the
- * deployed service), each Better Auth send callback logs the pinned
- * message and returns; present (the testing export), the callback forwards
- * `{ purpose, to, url }` so local flows can read their live links. The
- * email-flows work replaces this seam with the email-module template sender
- * and flips `requireEmailVerification` to true.
+ * Email posture: every Better Auth send callback calls the matching `email`
+ * template method (`email.verification`/`.passwordReset`/`.magicLink`) with a
+ * deterministic idempotency key, so a Better Auth retry of the same event
+ * dedups to one outbox row instead of minting a second one. A callback never
+ * throws: `safeLink`'s origin check, template validation, and the send RPC
+ * itself are all wrapped in one try/catch — Better Auth treats a callback
+ * throw as a request failure, and a down mail path (or an off-origin link)
+ * must not brick signup/reset/magic-link. `requireEmailVerification: true`:
+ * real delivery is what makes that setting usable at all.
  */
+import type { EmailSender } from '@internal/email';
 import type { BetterAuthOptions } from 'better-auth';
 import { admin, bearer, jwt, magicLink } from 'better-auth/plugins';
 import pg from 'pg';
 import { AUTH_SCHEMA } from './pack/constants.ts';
-
-/** One auth email touchpoint, as the send seam reports it. */
-export interface AuthEmailEvent {
-  readonly purpose: 'verification' | 'passwordReset' | 'magicLink';
-  readonly to: string;
-  /** The live link (verification / reset / magic). */
-  readonly url: string;
-}
-
-/** The send seam — the testing export captures through this until real template sends are wired. */
-export type AuthEmailSender = (event: AuthEmailEvent) => void | Promise<void>;
+import type { AuthTemplates } from './templates.ts';
+import { safeLink } from './templates.ts';
 
 export interface AuthOptionsInputs {
   readonly databaseUrl: string;
   readonly secret: string;
   /** The PUBLIC origin of the consumer app (scheme+host, no trailing slash, no path) — what browsers see and `trustedOrigins` allows. */
   readonly baseUrl: string;
-  /** Absent in the deployed service (callbacks log and return); the testing export injects a capturing sender. */
-  readonly sendEmail?: AuthEmailSender;
+  /** The hydrated `emailSender(authTemplates)` boundary dependency — one method per template. */
+  readonly email: EmailSender<AuthTemplates>;
+}
+
+/** sha256 of `input`, lowercase hex — Web Crypto only, no `node:` import, so this file stays reachable from the embedded export's shared plane. */
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -59,14 +62,31 @@ function hardenedPool(databaseUrl: string): pg.Pool {
 }
 
 export function buildAuthOptions(inputs: AuthOptionsInputs): BetterAuthOptions {
-  const send = (purpose: AuthEmailEvent['purpose'], to: string, url: string): Promise<void> => {
-    if (inputs.sendEmail === undefined) {
-      // Delivery is not wired yet — never throw (a down mail path must
-      // not brick signup); the pinned log line is the operational record.
-      console.log(`auth: email delivery not wired: ${purpose} for ${to}`);
-      return Promise.resolve();
+  const send = async (
+    purpose: keyof AuthTemplates,
+    to: string,
+    url: string,
+    token: string,
+  ): Promise<void> => {
+    try {
+      const link = safeLink(url, inputs.baseUrl);
+      const idempotencyKey = await sha256Hex(`${purpose}:${to}:${token}`);
+      const result = await inputs.email[purpose]({
+        to,
+        data: { url: link, appName: 'auth' },
+        idempotencyKey,
+      });
+      if (result.status === 'failed') {
+        console.error(
+          `auth: ${purpose} email to ${to} failed to send: ${result.error ?? 'unknown error'}`,
+        );
+      }
+    } catch (error) {
+      // Better Auth treats a callback throw as a request failure — a down
+      // mail path, or a link safeLink rejected, must not brick
+      // signup/reset/magic-link. The attempt is logged; nothing is thrown.
+      console.error(`auth: ${purpose} email to ${to} did not send`, error);
     }
-    return Promise.resolve(inputs.sendEmail({ purpose, to, url }));
   };
 
   return {
@@ -78,14 +98,12 @@ export function buildAuthOptions(inputs: AuthOptionsInputs): BetterAuthOptions {
     database: hardenedPool(inputs.databaseUrl),
     emailAndPassword: {
       enabled: true,
-      // No real sends yet, so verification cannot complete; the email-flows
-      // work flips this on.
-      requireEmailVerification: false,
-      sendResetPassword: ({ user, url }) => send('passwordReset', user.email, url),
+      requireEmailVerification: true,
+      sendResetPassword: ({ user, url, token }) => send('passwordReset', user.email, url, token),
       revokeSessionsOnPasswordReset: true,
     },
     emailVerification: {
-      sendVerificationEmail: ({ user, url }) => send('verification', user.email, url),
+      sendVerificationEmail: ({ user, url, token }) => send('verification', user.email, url, token),
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
     },
@@ -113,7 +131,7 @@ export function buildAuthOptions(inputs: AuthOptionsInputs): BetterAuthOptions {
       bearer(),
       admin(),
       magicLink({
-        sendMagicLink: ({ email, url }) => send('magicLink', email, url),
+        sendMagicLink: ({ email, url, token }) => send('magicLink', email, url, token),
         expiresIn: 300,
         disableSignUp: false,
       }),

@@ -397,6 +397,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/templates.ts",
+      "domain": "prisma-cloud",
+      "layer": "modules",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/1-prisma-cloud/2-shared-modules/auth/src/proxy.ts",
       "domain": "prisma-cloud",
       "layer": "modules",

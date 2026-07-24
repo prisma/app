@@ -29,6 +29,25 @@ const externalizeFramework = {
   },
 };
 
+// rpc contract satisfaction is nominal (a contract satisfies only itself),
+// so the auth bundles must share the ONE email-module instance the `email()`
+// module ships as — inlining @internal/email into dist/auth would mint a
+// second `emailSendContract` and every `auth()` ← `email()` wiring would
+// fail Load. Rewrites to this package's own ./email subpath (Node/Bun
+// package self-reference).
+const EMAIL_SELF: Record<string, string> = {
+  '@internal/email/testing': '@prisma/composer-prisma-cloud/email/testing',
+  '@internal/email': '@prisma/composer-prisma-cloud/email',
+};
+const externalizeEmailToSelf = {
+  name: 'externalize-email-to-self',
+  resolveId(id: string) {
+    const pub = EMAIL_SELF[id];
+    if (pub) return { id: pub, external: true as const };
+    return null;
+  },
+};
+
 // Three passes, mirroring the pre-consolidation layout: 1. library entries;
 // 2. cron index into dist/cron/ (cronScheduler resolves
 // `./scheduler-service.mjs` relative to the calling code's directory);
@@ -167,7 +186,7 @@ export default defineConfig([
     clean: false,
     skipNodeModulesBundle: false,
     noExternal: [/^@internal\//],
-    plugins: [externalizeFramework],
+    plugins: [externalizeFramework, externalizeEmailToSelf],
   },
   {
     // Re-emitted from @internal/auth's dist, where auth-entrypoint was
@@ -200,7 +219,7 @@ export default defineConfig([
     skipNodeModulesBundle: false,
     external: [/^bun$/, /^bun:/],
     noExternal: [/^@internal\//],
-    plugins: [externalizeFramework],
+    plugins: [externalizeFramework, externalizeEmailToSelf],
   },
   {
     ...baseConfig,
